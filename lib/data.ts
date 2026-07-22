@@ -1,0 +1,167 @@
+import { collection, getDocs, limit, query } from 'firebase/firestore';
+import { db, firebaseReady } from './firebase';
+import type { BusinessListing, BusinessProduct, SpotItem } from './types';
+
+function timestampMillis(value: unknown): number {
+  if (!value) return 0;
+  if (typeof value === 'object' && value !== null && 'toMillis' in value) {
+    const toMillis = (value as { toMillis?: () => number }).toMillis;
+    if (typeof toMillis === 'function') return toMillis.call(value);
+  }
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  return 0;
+}
+
+function newestFirst<T extends { created_at?: unknown }>(items: T[]): T[] {
+  return [...items].sort(
+    (a, b) => timestampMillis(b.created_at) - timestampMillis(a.created_at),
+  );
+}
+
+function ensureFirestore() {
+  if (!firebaseReady || !db) {
+    throw new Error(
+      'Firebase is not configured. Check .env.local and restart npm run dev.',
+    );
+  }
+  return db;
+}
+
+export async function getOffers(): Promise<BusinessListing[]> {
+  const firestore = ensureFirestore();
+  const snapshot = await getDocs(
+    query(collection(firestore, 'BusinessListings'), limit(100)),
+  );
+
+  const items = snapshot.docs.map((item) => ({
+    id: item.id,
+    ref: item.ref,
+    ...item.data(),
+  })) as BusinessListing[];
+
+  return newestFirst(items)
+    .filter((item) => item.isActive !== false)
+    .filter(
+      (item) =>
+        !item.processing_status ||
+        item.processing_status === 'ready',
+    )
+    .slice(0, 30);
+}
+
+export async function getProducts(): Promise<BusinessProduct[]> {
+  const firestore = ensureFirestore();
+
+  // Do not cut this to 40. Offer-linked products can be older than the
+  // newest 40 products and would disappear from the offer feed.
+  const snapshot = await getDocs(
+    query(collection(firestore, 'BusinessProducts'), limit(500)),
+  );
+
+  const items = snapshot.docs.map((item) => ({
+    id: item.id,
+    ref: item.ref,
+    ...item.data(),
+  })) as BusinessProduct[];
+
+  return newestFirst(items)
+    .filter((item) => item.isActive !== false)
+    .filter((item) => item.is_in_stock !== false)
+    .filter(
+      (item) =>
+        item.stock_qty == null ||
+        Number(item.stock_qty) > 0,
+    );
+}
+
+export async function getSpots(): Promise<SpotItem[]> {
+  const firestore = ensureFirestore();
+  const snapshot = await getDocs(
+    query(collection(firestore, 'Spot'), limit(100)),
+  );
+
+  const items = snapshot.docs.map((item) => ({
+    id: item.id,
+    ref: item.ref,
+    ...item.data(),
+  })) as SpotItem[];
+
+  return newestFirst(items)
+    .filter(
+      (item) =>
+        !item.processing_status ||
+        item.processing_status === 'ready',
+    )
+    .filter(
+      (item) =>
+        !item.status ||
+        ['approved', 'active', 'ready'].includes(
+          item.status.toLowerCase(),
+        ),
+    )
+    .slice(0, 30);
+}
+
+export async function getBusinessBySlug(
+  slug: string,
+): Promise<BusinessListing | null> {
+  const offers = await getOffers();
+
+  const normalize = (value: unknown) =>
+    String(value ?? '')
+      .toLowerCase()
+      .replace(/&/g, ' and ')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+
+  return (
+    offers.find(
+      (item) =>
+        normalize(
+          item.business_name ||
+            item.shop_name ||
+            item.id,
+        ) === slug || item.id === slug,
+    ) ?? null
+  );
+}
+
+export async function getBusinessProducts(
+  business: BusinessListing,
+): Promise<BusinessProduct[]> {
+  const products = await getProducts();
+  const businessId = business.id;
+  const owner = String(business.owner_uid ?? '');
+  const name = String(
+    business.business_name || business.shop_name || '',
+  ).toLowerCase();
+
+  return products.filter((product) => {
+    const ref =
+      typeof product.business_ref === 'object' &&
+      product.business_ref !== null &&
+      'id' in product.business_ref
+        ? String(
+            (product.business_ref as { id?: string }).id ?? '',
+          )
+        : String(product.business_ref ?? '');
+
+    const productName = String(
+      product.business_name ?? '',
+    ).toLowerCase();
+
+    return (
+      ref.includes(businessId) ||
+      (owner && product.owner_uid === owner) ||
+      (name && productName === name)
+    );
+  });
+}
+
+export async function getProductById(
+  id: string,
+): Promise<BusinessProduct | null> {
+  const products = await getProducts();
+  return products.find((product) => product.id === id) ?? null;
+}

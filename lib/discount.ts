@@ -1,0 +1,3 @@
+import{collection,doc,getDocs,limit,query,where,type Firestore}from'firebase/firestore';
+import type{User}from'firebase/auth';
+export async function getWelcomeDiscount({db,user,businessId,subtotal}:{db:Firestore;user:User;businessId:string;subtotal:number}){if(!businessId||subtotal<=0)return 0;const snaps=await Promise.all([getDocs(query(collection(db,'Orders'),where('user_uid','==',user.uid),where('business_id','==',businessId),limit(1))).catch(()=>null),getDocs(query(collection(db,'Orders'),where('user_ref','==',doc(db,'Users',user.uid)),where('business_ref','==',doc(db,'BusinessListings',businessId)),limit(1))).catch(()=>null)]);return snaps.some(s=>Boolean(s?.docs.length))?0:Math.min(100,subtotal)}

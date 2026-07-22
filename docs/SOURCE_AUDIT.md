@@ -1,0 +1,124 @@
+# Uploaded SPOTC Flutter Source Audit
+
+- Dart files: **182**
+- Custom widget files: **41**
+- Registered route references: **29**
+
+## Registered routes
+- `HomepageWidget`
+- `ContextgoNamedloginPageWidget`
+- `AdminDashboardWidget`
+- `PostStatusPageWidget`
+- `SpotPreviewWidget`
+- `UnlockPageWidget`
+- `MapPageWidget`
+- `AdminApprovalPageWidget`
+- `TestPreloadFeedPageWidget`
+- `CreateSpotPageWidget`
+- `CreatorDashboardWidget`
+- `BusinessDashboardPageWidget`
+- `GeneralProfilePageWidget`
+- `AdminDashboardPageWidget`
+- `BusinessPublicPageWidget`
+- `AIStudioPageWidget`
+- `CartPageWidget`
+- `AddressPageWidget`
+- `OrderSummaryPageWidget`
+- `OrderSuccessPageWidget`
+- `MyOrdersPageWidget`
+- `BusinessOnboardingPageWidget`
+- `BusinessClaimCodePageWidget`
+- `ShoppingCirclePageWidget`
+- `PrivacyPolicyPageWidget`
+- `TermsPageWidget`
+- `ContactUsPageWidget`
+- `AboutPageWidget`
+- `CircleJoinPageWidget`
+
+## Custom widgets
+- `a_i_studio_widget.dart`
+- `admin_approval_feed.dart`
+- `admin_business_manager_widget.dart`
+- `admin_business_onboarding_widget.dart`
+- `admin_dashboard_tabs.dart`
+- `ai_product_studio_save_library.dart`
+- `business_claim_code_widget.dart`
+- `business_dashboard_tabs.dart`
+- `business_offer_feed.dart`
+- `business_onboarding_widget.dart`
+- `business_public_page.dart`
+- `compare_products_page.dart`
+- `contact_us_content.dart`
+- `creator_dashboard_tabs.dart`
+- `custom_spot_video_feed.dart`
+- `firestore_preload_feed.dart`
+- `full_screen_spot_video.dart`
+- `general_profile_tabs.dart`
+- `index.dart`
+- `my_orders_widget.dart`
+- `privacy_policy_content.dart`
+- `product_barcode_scanner.dart`
+- `product_camera_recorder.dart`
+- `product_detail_page.dart`
+- `product_image_editor_sheet.dart`
+- `shop_feed_widget.dart`
+- `shopping_circle_link_resolver.dart`
+- `shopping_circle_page.dart`
+- `spot_c_address_widget.dart`
+- `spot_c_business_orders_widget.dart`
+- `spot_c_cart_widget.dart`
+- `spot_c_order_success_widget.dart`
+- `spot_c_order_summary_widget.dart`
+- `spot_camera_recorder30_sec.dart`
+- `spot_publish_details.dart`
+- `spot_unlock_page_widget.dart`
+- `spotit_home_feed_offline_safe.dart`
+- `spotit_login_onboarding.dart`
+- `spotit_unified_feed.dart`
+- `terms_content.dart`
+- `test_widget.dart`
+
+## Firestore collection names detected
+- `AreaLeaderboard`
+- `BillScanValidation`
+- `BusinessLeaderboard`
+- `BusinessListings`
+- `BusinessNotifications`
+- `BusinessOffers`
+- `BusinessPartners`
+- `BusinessProducts`
+- `CartItems`
+- `ContentReports`
+- `Coupons`
+- `CreatorLeaderboard`
+- `DeliveryPartners`
+- `Invites`
+- `MysteryBoxes`
+- `OnlineProductIndex`
+- `OnlineProducts`
+- `OrderItems`
+- `Orders`
+- `PartnerWithdrawRequests`
+- `ProductComparisons`
+- `ProductReviews`
+- `QrStickers`
+- `RewardAchievements`
+- `RewardBusinessProgress`
+- `RewardScans`
+- `ShoppingCircleMessages`
+- `ShoppingCircleParticipants`
+- `ShoppingCircleReports`
+- `ShoppingCircles`
+- `Spot`
+- `Staff`
+- `Unlocks`
+- `UserAddresses`
+- `UserCoupons`
+- `UserLeaderboard`
+- `UserMysteryBoxes`
+- `UserRewards`
+- `UserWallet`
+- `Users`
+- `WalkInSales`
+- `updated_at`
+- `users`

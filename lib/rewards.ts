@@ -1,0 +1,2 @@
+export type RewardEstimate={purchasePoints:number;nearbyBonusPoints:number;totalPoints:number;couponCount:number;couponValueEach:number;couponTotalValue:number;status:'pending_delivery'};
+export function calculateRewards(subtotal:number):RewardEstimate{const purchasePoints=Math.floor(Math.max(0,subtotal)/100)*2;const nearbyBonusPoints=15,couponCount=3,couponValueEach=100;return{purchasePoints,nearbyBonusPoints,totalPoints:purchasePoints+nearbyBonusPoints,couponCount,couponValueEach,couponTotalValue:couponCount*couponValueEach,status:'pending_delivery'}}
