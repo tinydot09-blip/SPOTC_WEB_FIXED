@@ -1,9 +1,11 @@
 import {
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   type User,
 } from 'firebase/auth';
+
 import {
   doc,
   serverTimestamp,
@@ -16,9 +18,40 @@ import {
   firebaseReady,
 } from '@/lib/firebase';
 
-let pendingGoogleLogin:
-  | Promise<User | null>
-  | null = null;
+let pendingGoogleLogin: Promise<User | null> | null = null;
+
+async function saveGoogleUser(user: User): Promise<void> {
+  if (!db || !user || user.isAnonymous) {
+    return;
+  }
+
+  await setDoc(
+    doc(db, 'Users', user.uid),
+    {
+      uid: user.uid,
+      display_name: user.displayName || '',
+      email: user.email || '',
+      photo_url: user.photoURL || '',
+      auth_provider: 'google',
+      is_guest: false,
+      last_login_at: serverTimestamp(),
+      updated_at: serverTimestamp(),
+    },
+    {
+      merge: true,
+    },
+  );
+}
+
+function createGoogleProvider(): GoogleAuthProvider {
+  const provider = new GoogleAuthProvider();
+
+  provider.setCustomParameters({
+    prompt: 'select_account',
+  });
+
+  return provider;
+}
 
 export async function requireGoogleLogin(): Promise<User | null> {
   if (!firebaseReady || !auth) {
@@ -27,13 +60,10 @@ export async function requireGoogleLogin(): Promise<User | null> {
     );
   }
 
-  const existingUser =
-    auth.currentUser;
+  const existingUser = auth.currentUser;
 
-  if (
-    existingUser &&
-    !existingUser.isAnonymous
-  ) {
+  if (existingUser && !existingUser.isAnonymous) {
+    await saveGoogleUser(existingUser);
     return existingUser;
   }
 
@@ -42,74 +72,28 @@ export async function requireGoogleLogin(): Promise<User | null> {
   }
 
   pendingGoogleLogin = (async () => {
+    const provider = createGoogleProvider();
+
     try {
-      const provider =
-        new GoogleAuthProvider();
+      const loginResult = await signInWithPopup(
+        auth,
+        provider,
+      );
 
-      provider.setCustomParameters({
-        prompt: 'select_account',
-      });
+      const user = loginResult.user;
 
-      const loginResult =
-        await signInWithPopup(
-          auth,
-          provider,
-        );
-
-      const user =
-        loginResult.user;
-
-      if (
-        !user ||
-        user.isAnonymous
-      ) {
+      if (!user || user.isAnonymous) {
         return null;
       }
 
-      if (db) {
-        await setDoc(
-          doc(
-            db,
-            'Users',
-            user.uid,
-          ),
-          {
-            uid: user.uid,
-
-            display_name:
-              user.displayName || '',
-
-            email:
-              user.email || '',
-
-            photo_url:
-              user.photoURL || '',
-
-            auth_provider:
-              'google',
-
-            is_guest:
-              false,
-
-            last_login_at:
-              serverTimestamp(),
-
-            updated_at:
-              serverTimestamp(),
-          },
-          {
-            merge: true,
-          },
-        );
-      }
+      await saveGoogleUser(user);
 
       return user;
     } catch (error: unknown) {
-      const firebaseError =
-        error as {
-          code?: string;
-          message?: string;
-        };
+      const firebaseError = error as {
+        code?: string;
+        message?: string;
+      };
 
       if (
         firebaseError.code ===
@@ -118,6 +102,38 @@ export async function requireGoogleLogin(): Promise<User | null> {
           'auth/cancelled-popup-request'
       ) {
         return null;
+      }
+
+      /*
+       * Chrome or another browser may block the Google popup.
+       * When that happens, automatically switch to full-page
+       * Google redirect login.
+       */
+      if (
+        firebaseError.code === 'auth/popup-blocked' ||
+        firebaseError.code ===
+          'auth/operation-not-supported-in-this-environment'
+      ) {
+        try {
+          sessionStorage.setItem(
+            'spotc_google_login_redirect',
+            window.location.href,
+          );
+
+          await signInWithRedirect(
+            auth,
+            provider,
+          );
+
+          return null;
+        } catch (redirectError) {
+          console.error(
+            'Google redirect login failed:',
+            redirectError,
+          );
+
+          throw redirectError;
+        }
       }
 
       console.error(
