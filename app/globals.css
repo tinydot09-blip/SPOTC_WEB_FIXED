@@ -1,21 +1,17 @@
 @import "./styles/00-base.css";
-@import "./styles/01-offers-core.css";
+@import "./styles/01-shell.css";
 @import "./styles/02-shop-spots-core.css";
-@import "./styles/03-business-product-flow.css";
-@import "./styles/04-header-offer-adjustments.css";
-@import "./styles/05-shop-offer-actions.css";
-@import "./styles/06-offer-desktop-panel.css";
-@import "./styles/07-spots-unlock.css";
-@import "./styles/08-unlock-product.css";
-@import "./styles/10-business-loading.css";
-@import "./styles/11-product-final.css";
-@import "./styles/12-profile-final.css";
-
-/* Viewport correction must load after the core page styles. */
+@import "./styles/03-responsive.css";
+@import "./styles/04-premium-polish.css";
+@import "./styles/05-fixes.css";
+@import "./styles/06-mobile-header.css";
+@import "./styles/07-mobile-feed-nav.css";
+@import "./styles/08-final-mobile.css";
 @import "./styles/09-final-feed-viewport.css";
-
-/* Must remain last. */
-@import "./styles/13-offer-mobile-final.css";
-
-/* Must remain LAST. */
+@import "./styles/10-desktop-offer.css";
+@import "./styles/11-mobile-offer.css";
+@import "./styles/12-desktop-shop.css";
+@import "./styles/13-product-detail.css";
 @import "./styles/14-shop-mobile-final.css";
+@import "./styles/15-spots-mobile-final.css";
+@import "./styles/16-shop-bottom-final.css";

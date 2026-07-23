@@ -1,0 +1,139 @@
+/* =========================================================
+   SPOTC — FINAL SHOP MOBILE BOTTOM FIX
+
+   The real navigation element is:
+   .spotc-mobile-navigation-bottom
+
+   This extends the dark navigation background through the
+   Android bottom gesture/safe-area, matching the Offer page.
+   ========================================================= */
+
+@media (max-width: 760px) {
+  html:has(.shop-page),
+  body:has(.shop-page) {
+    width: 100%;
+    min-height: 100%;
+    margin: 0 !important;
+    padding: 0 !important;
+
+    /*
+     * The page content remains light through its own containers.
+     * The root is dark so the Android bottom area cannot become white.
+     */
+    background: #17130f !important;
+    background-color: #17130f !important;
+    color-scheme: dark;
+  }
+
+  body:has(.shop-page) .spotc-app-shell {
+    width: 100% !important;
+    min-height: 100dvh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #f8f6f1 !important;
+  }
+
+  body:has(.shop-page) .spotc-site-content {
+    width: 100% !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+
+    /*
+     * 84px navigation plus the phone safe-area.
+     */
+    padding-bottom:
+      calc(84px + env(safe-area-inset-bottom, 0px)) !important;
+
+    background: #f8f6f1 !important;
+  }
+
+  body:has(.shop-page) .shop-page {
+    min-height: 0 !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    background: #f8f6f1 !important;
+  }
+
+  body:has(.shop-page) footer {
+    display: none !important;
+  }
+
+  /*
+   * This is the REAL Shop bottom navigation class from AppShell.
+   */
+  body:has(.shop-page)
+    .spotc-mobile-navigation-bottom {
+    position: fixed !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+
+    width: 100% !important;
+    height:
+      calc(84px + env(safe-area-inset-bottom, 0px)) !important;
+    min-height:
+      calc(84px + env(safe-area-inset-bottom, 0px)) !important;
+
+    margin: 0 !important;
+    padding:
+      0 0 env(safe-area-inset-bottom, 0px) !important;
+
+    box-sizing: border-box !important;
+
+    background: #17130f !important;
+    background-color: #17130f !important;
+
+    z-index: 99990 !important;
+  }
+
+  body:has(.shop-page)
+    .spotc-mobile-navigation-bottom::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom:
+      calc(-1 * env(safe-area-inset-bottom, 0px));
+    left: 0;
+
+    height:
+      calc(env(safe-area-inset-bottom, 0px) + 2px);
+
+    pointer-events: none;
+    background: #17130f;
+  }
+
+  body:has(.shop-page)
+    .spotc-mobile-navigation-bottom
+    .spotc-mobile-nav-link {
+    height: 84px !important;
+  }
+
+  /*
+   * Fallback for Android browsers reporting zero safe-area inset.
+   * This paints behind the browser gesture area.
+   */
+  body:has(.shop-page)::after {
+    content: "";
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+
+    width: 100%;
+    height: 24px;
+
+    pointer-events: none;
+    background: #17130f;
+
+    z-index: 99989;
+  }
+
+  /*
+   * Navigation must remain above the fallback background.
+   */
+  body:has(.shop-page)
+    .spotc-mobile-navigation-bottom {
+    z-index: 99990 !important;
+  }
+}
