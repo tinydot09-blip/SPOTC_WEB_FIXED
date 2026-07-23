@@ -1,4 +1,4 @@
-* Premium Shop feed */
+/* Premium Shop feed */
 .shop-page {
   padding-top: 36px;
   padding-bottom: 0 !important;
@@ -587,7 +587,10 @@ body:has(.shop-page) .spotc-site-content {
     margin: 0;
     padding: 0;
     overflow: hidden;
-    background: #000;
+    overscroll-behavior: none;
+    background: #000 !important;
+    background-color: #000 !important;
+    color-scheme: dark;
   }
 
   body:has(.spots-page) .spotc-app-shell,
@@ -617,9 +620,23 @@ body:has(.shop-page) .spotc-site-content {
     min-height: 0;
     max-height: none;
     margin: 0;
-    padding: 0;
+    padding: 0 0 env(safe-area-inset-bottom, 0px);
     overflow: hidden;
+    overscroll-behavior: none;
+    background: #000 !important;
+    background-color: #000 !important;
+  }
+
+  .spots-page::after {
+    content: "";
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: max(24px, env(safe-area-inset-bottom, 0px));
+    pointer-events: none;
     background: #000;
+    z-index: 999999;
   }
 
   .spot-feed {
