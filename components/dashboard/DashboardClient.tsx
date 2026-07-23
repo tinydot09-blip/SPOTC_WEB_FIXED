@@ -87,6 +87,7 @@ function DashboardAuthStyles() {
 
 export default function DashboardClient() {
   const [user, setUser] = useState<User | null>(auth?.currentUser ?? null);
+  const [guestMode, setGuestMode] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
   const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -109,16 +110,36 @@ export default function DashboardClient() {
   }, []);
 
   useEffect(() => {
-    const tab = new URLSearchParams(window.location.search).get('tab') as DashboardTab | null;
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab') as DashboardTab | null;
+
+    // The dashboard is viewable by everyone.
+    // A signed-in user receives real account data; everyone else sees guest previews.
+    setGuestMode(params.get('guest') !== '0');
+
     if (tab) setActiveTab(tab);
   }, []);
 
+  const guestUser = useMemo(
+    () =>
+      ({
+        uid: 'spotc-guest',
+        displayName: 'Explorer',
+        email: null,
+        photoURL: null,
+        isAnonymous: true,
+      }) as User,
+    [],
+  );
+
+  const effectiveUser = user ?? guestUser;
+
   const displayName = useMemo(() => {
-    const name = user?.displayName?.trim();
+    const name = effectiveUser.displayName?.trim();
     if (name) return name;
-    const email = user?.email?.trim();
+    const email = effectiveUser.email?.trim();
     return email ? email.split('@')[0] : 'Explorer';
-  }, [user]);
+  }, [effectiveUser]);
 
   const firstName = useMemo(
     () => displayName.split(/\s+/).filter(Boolean)[0] || 'Explorer',
@@ -153,7 +174,9 @@ export default function DashboardClient() {
   };
 
   const inviteFriends = async () => {
-    const inviteUrl = `${window.location.origin}/?ref=${encodeURIComponent(user?.uid ?? '')}`;
+    const inviteUrl = `${window.location.origin}/?ref=${encodeURIComponent(
+      user?.uid ?? 'spotc-guest',
+    )}`;
     const message = 'Join me on SPOTC and discover local offers, rewards and Mystery Boxes.';
 
     try {
@@ -199,7 +222,7 @@ export default function DashboardClient() {
     );
   }
 
-  if (!user) {
+  if (!user && !guestMode) {
     return (
       <>
         <DashboardAuthStyles />
@@ -223,7 +246,7 @@ export default function DashboardClient() {
               <LogIn />
               {loginBusy ? 'Opening Google…' : 'Continue with Google'}
             </button>
-            <Link href="/">Continue browsing without login</Link>
+            <Link href="/dashboard?guest=1">Continue browsing without login</Link>
           </section>
         </main>
       </>
@@ -235,7 +258,7 @@ export default function DashboardClient() {
       case 'overview':
         return (
           <DashboardOverview
-            user={user}
+            user={effectiveUser}
             onOpenLevels={() => setLevelsOpen(true)}
             onOpenMysteryBoxes={() => setMysteryOpen(true)}
           />
@@ -261,7 +284,7 @@ export default function DashboardClient() {
       default:
         return (
           <DashboardOverview
-            user={user}
+            user={effectiveUser}
             onOpenLevels={() => setLevelsOpen(true)}
             onOpenMysteryBoxes={() => setMysteryOpen(true)}
           />
@@ -285,47 +308,102 @@ export default function DashboardClient() {
       )}
 
       <section className="dash-shell">
-        <header className="dash-header-card">
-          <div className="dash-header-left">
-            <button type="button" className="dash-menu" onClick={() => setMobileMenu(true)}><Menu /></button>
-            <div className="dash-user-avatar">
-              {user.photoURL ? <img src={user.photoURL} alt="" /> : <span><UserRound /></span>}
+        <header className="dash-header-card dash-header-premium">
+          <button
+            type="button"
+            className="dash-header-menu-button"
+            onClick={() => setMobileMenu(true)}
+            aria-label="Open dashboard menu"
+          >
+            <Menu />
+          </button>
+
+          <div className="dash-header-profile">
+            <div className="dash-header-avatar">
+              {effectiveUser.photoURL ? (
+                <img src={effectiveUser.photoURL} alt="" />
+              ) : (
+                <span><UserRound /></span>
+              )}
               <i />
             </div>
-            <div className="dash-user-copy">
-              <div className="dash-eyebrow"><Crown />SPOTC EXPLORER</div>
-              <h1>Welcome back, {firstName}.</h1>
-              <p>Your rewards, local shopping activity and premium unlocks are ready.</p>
+
+            <div className="dash-header-greeting">
+              <span>Good to have you back,</span>
+              <h1>{firstName}!</h1>
+              <p>Let&apos;s earn, save and win together</p>
             </div>
           </div>
 
-          <div className="dash-header-right">
-            <div className="dash-member-chip">
-              <ShieldCheck />
-              <span><small>ACCOUNT STATUS</small><strong>Verified member</strong></span>
-            </div>
-
-            <div className="dash-notification-wrap">
-              <button type="button" className="dash-icon-button" onClick={() => setNotificationsOpen((v) => !v)}>
-                <Bell /><i />
+          <div className="dash-header-actions">
+            <div className="dash-notification-wrap dash-header-notification">
+              <button
+                type="button"
+                className="dash-header-notification-button"
+                onClick={() => setNotificationsOpen((value) => !value)}
+                aria-label="Open notifications"
+              >
+                <Bell />
+                <i />
               </button>
 
               {notificationsOpen && (
                 <div className="dash-notification-panel">
                   <div className="dash-popover-head">
-                    <div><strong>Notifications</strong><span>Important SPOTC updates appear here.</span></div>
-                    <button type="button" onClick={() => setNotificationsOpen(false)}><X /></button>
+                    <div>
+                      <strong>Notifications</strong>
+                      <span>Important SPOTC updates appear here.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setNotificationsOpen(false)}
+                    >
+                      <X />
+                    </button>
                   </div>
-                  <button type="button" onClick={() => changeTab('rewards')}><Gift /><span><strong>Reward updates</strong><small>Unlocked rewards and expiry alerts</small></span></button>
-                  <button type="button" onClick={() => changeTab('orders')}><CheckCircle2 /><span><strong>Order updates</strong><small>Confirmed, ready and delivered alerts</small></span></button>
-                  <button type="button" onClick={() => setMysteryOpen(true)}><Sparkles /><span><strong>Mystery Box alerts</strong><small>Milestones, winners and new boxes</small></span></button>
-                  <button type="button" onClick={() => changeTab('circles')}><Share2 /><span><strong>Shopping Circle</strong><small>Votes, replies and friend activity</small></span></button>
+
+                  <button type="button" onClick={() => changeTab('rewards')}>
+                    <Gift />
+                    <span>
+                      <strong>Reward updates</strong>
+                      <small>Unlocked rewards and expiry alerts</small>
+                    </span>
+                  </button>
+
+                  <button type="button" onClick={() => changeTab('orders')}>
+                    <CheckCircle2 />
+                    <span>
+                      <strong>Order updates</strong>
+                      <small>Confirmed, ready and delivered alerts</small>
+                    </span>
+                  </button>
+
+                  <button type="button" onClick={() => setMysteryOpen(true)}>
+                    <Sparkles />
+                    <span>
+                      <strong>Mystery Box alerts</strong>
+                      <small>Milestones, winners and new boxes</small>
+                    </span>
+                  </button>
+
+                  <button type="button" onClick={() => changeTab('circles')}>
+                    <Share2 />
+                    <span>
+                      <strong>Shopping Circle</strong>
+                      <small>Votes, replies and friend activity</small>
+                    </span>
+                  </button>
                 </div>
               )}
             </div>
 
-            <Link href="/" className="dash-icon-button"><Home /></Link>
-            <button type="button" className="dash-icon-button dash-logout-icon" onClick={logout}><LogOut /></button>
+            <Link
+              href="/"
+              className="dash-header-home-button"
+              aria-label="Go to home"
+            >
+              <Home />
+            </Link>
           </div>
         </header>
 
@@ -614,6 +692,1220 @@ export default function DashboardClient() {
             margin-top: 20px;
           }
         }
+
+        /* =========================================================
+           FINAL RESPONSIVE DASHBOARD SHELL FIX
+           - header stays inside viewport
+           - no horizontal page overflow
+           - bottom content is fully reachable on every tab
+        ========================================================= */
+
+        html:has(.dash-page),
+        body:has(.dash-page) {
+          width: 100% !important;
+          max-width: 100% !important;
+          overflow: hidden !important;
+        }
+
+        .dash-page,
+        .dash-shell,
+        .dash-content,
+        .dash-header-card,
+        .dash-bottom-cta-row {
+          max-width: 100% !important;
+          min-width: 0 !important;
+          box-sizing: border-box !important;
+        }
+
+        .dash-shell {
+          padding-bottom: max(
+            150px,
+            calc(env(safe-area-inset-bottom) + 120px)
+          ) !important;
+        }
+
+        .dash-content {
+          overflow: visible !important;
+        }
+
+        .dash-content > * {
+          min-width: 0 !important;
+          max-width: 100% !important;
+        }
+
+        @media (max-width: 980px) {
+          .dash-page {
+            width: 100% !important;
+            max-width: 100vw !important;
+            overflow: hidden !important;
+          }
+
+          .dash-shell {
+            width: 100% !important;
+            max-width: 100vw !important;
+            padding:
+              14px
+              12px
+              max(160px, calc(env(safe-area-inset-bottom) + 130px))
+              !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+          }
+
+          .dash-header-card {
+            width: 100% !important;
+            min-height: 112px !important;
+            padding: 14px !important;
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) auto !important;
+            align-items: center !important;
+            gap: 10px !important;
+            overflow: visible !important;
+            border-radius: 20px !important;
+          }
+
+          .dash-header-left {
+            min-width: 0 !important;
+            display: grid !important;
+            grid-template-columns: 42px 48px minmax(0, 1fr) !important;
+            align-items: center !important;
+            gap: 10px !important;
+          }
+
+          .dash-menu {
+            width: 42px !important;
+            height: 42px !important;
+            margin: 0 !important;
+          }
+
+          .dash-user-avatar,
+          .dash-user-avatar img,
+          .dash-user-avatar > span {
+            width: 48px !important;
+            height: 48px !important;
+          }
+
+          .dash-user-copy {
+            width: 100% !important;
+            min-width: 0 !important;
+            overflow: hidden !important;
+          }
+
+          .dash-eyebrow {
+            margin-bottom: 3px !important;
+            font-size: 9px !important;
+            white-space: nowrap !important;
+          }
+
+          .dash-user-copy h1 {
+            max-width: 100% !important;
+            margin: 0 !important;
+            font-size: 22px !important;
+            line-height: 1.08 !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+          }
+
+          .dash-user-copy p {
+            max-width: 100% !important;
+            margin-top: 5px !important;
+            overflow: hidden !important;
+            font-size: 11px !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+          }
+
+          .dash-header-right {
+            min-width: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: flex-end !important;
+            gap: 6px !important;
+          }
+
+          .dash-member-chip {
+            display: none !important;
+          }
+
+          .dash-icon-button {
+            width: 38px !important;
+            height: 38px !important;
+            flex: 0 0 38px !important;
+          }
+
+          .dash-bottom-cta-row {
+            width: 100% !important;
+            grid-template-columns: 1fr !important;
+          }
+
+          .dash-bottom-cta-row > article {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+          }
+        }
+
+        @media (max-width: 520px) {
+          .dash-header-card {
+            grid-template-columns: minmax(0, 1fr) auto !important;
+            padding: 12px 10px !important;
+          }
+
+          .dash-header-left {
+            grid-template-columns: 38px 42px minmax(0, 1fr) !important;
+            gap: 8px !important;
+          }
+
+          .dash-menu {
+            width: 38px !important;
+            height: 38px !important;
+          }
+
+          .dash-user-avatar,
+          .dash-user-avatar img,
+          .dash-user-avatar > span {
+            width: 42px !important;
+            height: 42px !important;
+            border-radius: 14px !important;
+          }
+
+          .dash-user-copy h1 {
+            font-size: 19px !important;
+          }
+
+          .dash-header-right {
+            gap: 4px !important;
+          }
+
+          .dash-icon-button {
+            width: 34px !important;
+            height: 34px !important;
+            flex-basis: 34px !important;
+            border-radius: 10px !important;
+          }
+
+          .dash-icon-button svg {
+            width: 17px !important;
+            height: 17px !important;
+          }
+
+          .dash-notification-panel {
+            top: 64px !important;
+          }
+        }
+
+        @media (max-width: 390px) {
+          .dash-header-left {
+            grid-template-columns: 36px 40px minmax(0, 1fr) !important;
+            gap: 6px !important;
+          }
+
+          .dash-menu {
+            width: 36px !important;
+            height: 36px !important;
+          }
+
+          .dash-user-avatar,
+          .dash-user-avatar img,
+          .dash-user-avatar > span {
+            width: 40px !important;
+            height: 40px !important;
+          }
+
+          .dash-user-copy h1 {
+            font-size: 17px !important;
+          }
+
+          .dash-user-copy p {
+            display: none !important;
+          }
+
+          .dash-icon-button {
+            width: 32px !important;
+            height: 32px !important;
+            flex-basis: 32px !important;
+          }
+        }
+
+
+        /* =========================================================
+           FINAL MOBILE HEADER + INVITE BUTTON FIX
+        ========================================================= */
+
+        @media (max-width: 980px) {
+          .dash-header-card {
+            min-height: 104px !important;
+            padding: 14px 16px !important;
+            grid-template-columns: minmax(0, 1fr) auto !important;
+            gap: 12px !important;
+          }
+
+          .dash-header-left {
+            grid-template-columns: 42px 50px minmax(0, 1fr) !important;
+            gap: 10px !important;
+          }
+
+          .dash-user-copy {
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+            min-width: 0 !important;
+          }
+
+          .dash-eyebrow {
+            margin: 0 0 4px !important;
+            color: #9a651f !important;
+            font-size: 10px !important;
+            font-weight: 800 !important;
+            line-height: 1.1 !important;
+            letter-spacing: 0.06em !important;
+          }
+
+          .dash-user-copy h1 {
+            margin: 0 !important;
+            max-width: 100% !important;
+            color: #171b20 !important;
+            font-size: 21px !important;
+            font-weight: 750 !important;
+            line-height: 1.12 !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+          }
+
+          .dash-user-copy p {
+            margin: 5px 0 0 !important;
+            max-width: 100% !important;
+            color: #747c86 !important;
+            font-size: 11px !important;
+            line-height: 1.2 !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+          }
+
+          .dash-header-right {
+            gap: 7px !important;
+          }
+
+          .dash-header-right .dash-icon-button {
+            width: 40px !important;
+            height: 40px !important;
+            flex: 0 0 40px !important;
+            border-radius: 12px !important;
+          }
+
+          .dash-bottom-cta-row .dash-invite-card-v2 {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-height: 330px !important;
+            padding: 20px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            justify-content: space-between !important;
+            gap: 18px !important;
+            overflow: visible !important;
+          }
+
+          .dash-invite-people-v2 {
+            top: 20px !important;
+            right: 20px !important;
+            font-size: 42px !important;
+          }
+
+          .dash-invite-content-v2 {
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            padding-right: 58px !important;
+            display: block !important;
+          }
+
+          .dash-invite-content-v2 h2 {
+            margin: 48px 0 14px !important;
+            max-width: 100% !important;
+            font-size: 26px !important;
+            line-height: 1.16 !important;
+          }
+
+          .dash-invite-content-v2 p {
+            max-width: 100% !important;
+            font-size: 14px !important;
+            line-height: 1.5 !important;
+          }
+
+          .dash-invite-button-v2 {
+            position: relative !important;
+            z-index: 5 !important;
+            width: 100% !important;
+            min-height: 52px !important;
+            margin: 0 !important;
+            padding: 0 18px !important;
+            display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex: 0 0 auto !important;
+            border-radius: 14px !important;
+          }
+        }
+
+        @media (max-width: 520px) {
+          .dash-header-card {
+            min-height: 96px !important;
+            padding: 12px !important;
+          }
+
+          .dash-header-left {
+            grid-template-columns: 38px 44px minmax(0, 1fr) !important;
+            gap: 8px !important;
+          }
+
+          .dash-user-avatar,
+          .dash-user-avatar img,
+          .dash-user-avatar > span {
+            width: 44px !important;
+            height: 44px !important;
+          }
+
+          .dash-user-copy h1 {
+            font-size: 18px !important;
+          }
+
+          .dash-header-right {
+            gap: 5px !important;
+          }
+
+          .dash-header-right .dash-icon-button {
+            width: 36px !important;
+            height: 36px !important;
+            flex-basis: 36px !important;
+          }
+
+          .dash-bottom-cta-row .dash-invite-card-v2 {
+            min-height: 315px !important;
+          }
+
+          .dash-invite-content-v2 h2 {
+            font-size: 24px !important;
+          }
+        }
+
+        @media (max-width: 390px) {
+          .dash-eyebrow {
+            font-size: 8px !important;
+          }
+
+          .dash-user-copy h1 {
+            font-size: 16px !important;
+          }
+
+          .dash-user-copy p {
+            display: none !important;
+          }
+
+          .dash-header-right .dash-icon-button {
+            width: 34px !important;
+            height: 34px !important;
+            flex-basis: 34px !important;
+          }
+        }
+
+
+        /* =========================================================
+           SELECTED PREMIUM TEAL DASHBOARD HEADER
+           Replaces only the dashboard header design.
+        ========================================================= */
+
+        .dash-header-card.dash-header-premium {
+          position: relative !important;
+          width: 100% !important;
+          min-height: 190px !important;
+          padding: 28px 76px 25px !important;
+          display: grid !important;
+          place-items: center !important;
+          overflow: visible !important;
+          border: 0 !important;
+          border-radius: 28px !important;
+          color: #ffffff !important;
+          background:
+            radial-gradient(
+              circle at 50% -25%,
+              rgba(55, 231, 211, 0.24),
+              transparent 47%
+            ),
+            radial-gradient(
+              circle at 12% 110%,
+              rgba(0, 77, 104, 0.42),
+              transparent 44%
+            ),
+            linear-gradient(145deg, #087e98 0%, #00657d 52%, #074b67 100%)
+            !important;
+          box-shadow:
+            0 18px 42px rgba(1, 75, 99, 0.24),
+            inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+        }
+
+        .dash-header-card.dash-header-premium::before,
+        .dash-header-card.dash-header-premium::after {
+          content: '' !important;
+          position: absolute !important;
+          pointer-events: none !important;
+          border-radius: 50% !important;
+        }
+
+        .dash-header-card.dash-header-premium::before {
+          width: 170px !important;
+          height: 170px !important;
+          top: -104px !important;
+          left: 50% !important;
+          transform: translateX(-50%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        }
+
+        .dash-header-card.dash-header-premium::after {
+          width: 230px !important;
+          height: 230px !important;
+          right: -120px !important;
+          bottom: -160px !important;
+          background: rgba(0, 38, 65, 0.16) !important;
+        }
+
+        .dash-header-menu-button,
+        .dash-header-notification-button {
+          position: absolute !important;
+          top: 22px !important;
+          z-index: 4 !important;
+          width: 44px !important;
+          height: 44px !important;
+          padding: 0 !important;
+          display: grid !important;
+          place-items: center !important;
+          border: 1px solid rgba(255, 255, 255, 0.12) !important;
+          border-radius: 14px !important;
+          color: #ffffff !important;
+          background: rgba(0, 42, 63, 0.35) !important;
+          box-shadow: none !important;
+          backdrop-filter: blur(10px) !important;
+          cursor: pointer !important;
+        }
+
+        .dash-header-menu-button {
+          left: 22px !important;
+        }
+
+        .dash-header-notification {
+          position: absolute !important;
+          top: 22px !important;
+          right: 22px !important;
+          z-index: 8 !important;
+        }
+
+        .dash-header-notification-button {
+          position: relative !important;
+          top: auto !important;
+          right: auto !important;
+        }
+
+        .dash-header-menu-button svg,
+        .dash-header-notification-button svg {
+          width: 21px !important;
+          height: 21px !important;
+        }
+
+        .dash-header-notification-button i {
+          position: absolute !important;
+          top: 8px !important;
+          right: 8px !important;
+          width: 7px !important;
+          height: 7px !important;
+          border: 2px solid #05647c !important;
+          border-radius: 50% !important;
+          background: #ff5060 !important;
+        }
+
+        .dash-header-profile {
+          position: relative !important;
+          z-index: 3 !important;
+          width: 100% !important;
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: center !important;
+          text-align: center !important;
+        }
+
+        .dash-header-avatar {
+          position: relative !important;
+          width: 78px !important;
+          height: 78px !important;
+          margin-bottom: 13px !important;
+          flex: 0 0 78px !important;
+        }
+
+        .dash-header-avatar img,
+        .dash-header-avatar > span {
+          width: 78px !important;
+          height: 78px !important;
+          display: grid !important;
+          place-items: center !important;
+          overflow: hidden !important;
+          border: 2px solid rgba(255, 255, 255, 0.72) !important;
+          border-radius: 50% !important;
+          color: #ffffff !important;
+          background:
+            linear-gradient(145deg, rgba(9, 163, 178, 0.95), rgba(2, 92, 122, 0.95))
+            !important;
+          box-shadow:
+            0 10px 22px rgba(0, 43, 63, 0.22),
+            inset 0 1px 0 rgba(255, 255, 255, 0.22) !important;
+          object-fit: cover !important;
+        }
+
+        .dash-header-avatar > span svg {
+          width: 39px !important;
+          height: 39px !important;
+          stroke-width: 1.7 !important;
+        }
+
+        .dash-header-avatar i {
+          position: absolute !important;
+          right: 1px !important;
+          bottom: 2px !important;
+          width: 17px !important;
+          height: 17px !important;
+          border: 3px solid #08758d !important;
+          border-radius: 50% !important;
+          background: #37dc75 !important;
+        }
+
+        .dash-header-greeting {
+          min-width: 0 !important;
+        }
+
+        .dash-header-greeting > span {
+          display: block !important;
+          color: rgba(255, 255, 255, 0.88) !important;
+          font-size: 14px !important;
+          font-weight: 500 !important;
+          line-height: 1.2 !important;
+        }
+
+        .dash-header-greeting h1 {
+          margin: 4px 0 0 !important;
+          color: #ffffff !important;
+          font-size: clamp(25px, 3vw, 34px) !important;
+          font-weight: 800 !important;
+          line-height: 1.05 !important;
+          letter-spacing: -0.025em !important;
+        }
+
+        .dash-header-greeting p {
+          margin: 10px 0 0 !important;
+          color: rgba(255, 255, 255, 0.86) !important;
+          font-size: 13px !important;
+          font-weight: 500 !important;
+          line-height: 1.3 !important;
+        }
+
+        .dash-header-premium .dash-notification-panel {
+          top: 54px !important;
+          right: 0 !important;
+        }
+
+        @media (max-width: 980px) {
+          .dash-header-card.dash-header-premium {
+            min-height: 200px !important;
+            padding: 26px 62px 24px !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            overflow: visible !important;
+            border-radius: 24px !important;
+          }
+
+          .dash-header-menu-button,
+          .dash-header-notification {
+            top: 18px !important;
+          }
+
+          .dash-header-menu-button {
+            left: 18px !important;
+          }
+
+          .dash-header-notification {
+            right: 18px !important;
+          }
+
+          .dash-header-avatar,
+          .dash-header-avatar img,
+          .dash-header-avatar > span {
+            width: 72px !important;
+            height: 72px !important;
+          }
+
+          .dash-header-avatar {
+            flex-basis: 72px !important;
+          }
+
+          .dash-header-greeting > span {
+            font-size: 13px !important;
+          }
+
+          .dash-header-greeting h1 {
+            font-size: 27px !important;
+          }
+
+          .dash-header-greeting p {
+            font-size: 12px !important;
+          }
+        }
+
+        @media (max-width: 520px) {
+          .dash-header-card.dash-header-premium {
+            min-height: 190px !important;
+            padding: 24px 54px 21px !important;
+            border-radius: 22px !important;
+          }
+
+          .dash-header-menu-button,
+          .dash-header-notification-button {
+            width: 38px !important;
+            height: 38px !important;
+            border-radius: 12px !important;
+          }
+
+          .dash-header-menu-button,
+          .dash-header-notification {
+            top: 15px !important;
+          }
+
+          .dash-header-menu-button {
+            left: 15px !important;
+          }
+
+          .dash-header-notification {
+            right: 15px !important;
+          }
+
+          .dash-header-avatar,
+          .dash-header-avatar img,
+          .dash-header-avatar > span {
+            width: 66px !important;
+            height: 66px !important;
+          }
+
+          .dash-header-avatar {
+            flex-basis: 66px !important;
+            margin-bottom: 11px !important;
+          }
+
+          .dash-header-avatar > span svg {
+            width: 34px !important;
+            height: 34px !important;
+          }
+
+          .dash-header-greeting > span {
+            font-size: 12px !important;
+          }
+
+          .dash-header-greeting h1 {
+            font-size: 24px !important;
+          }
+
+          .dash-header-greeting p {
+            margin-top: 8px !important;
+            font-size: 11px !important;
+          }
+
+          .dash-header-premium .dash-notification-panel {
+            position: fixed !important;
+            top: 76px !important;
+            right: 12px !important;
+            left: 12px !important;
+            width: auto !important;
+          }
+        }
+
+
+        /* =========================================================
+           FINAL SELECTED HEADER LAYOUT
+           DESKTOP: avatar + greeting in one row, icons on right
+           MOBILE: centered avatar and greeting, menu left, icons right
+        ========================================================= */
+
+        .dash-header-card.dash-header-premium::before,
+        .dash-header-card.dash-header-premium::after {
+          display: none !important;
+          content: none !important;
+        }
+
+        .dash-header-card.dash-header-premium {
+          min-height: 150px !important;
+          padding: 28px 28px !important;
+          display: grid !important;
+          grid-template-columns: minmax(0, 1fr) auto !important;
+          align-items: center !important;
+          justify-items: stretch !important;
+        }
+
+        .dash-header-menu-button {
+          display: none !important;
+        }
+
+        .dash-header-profile {
+          width: auto !important;
+          min-width: 0 !important;
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: center !important;
+          justify-content: flex-start !important;
+          gap: 18px !important;
+          text-align: left !important;
+        }
+
+        .dash-header-avatar {
+          width: 78px !important;
+          height: 78px !important;
+          margin: 0 !important;
+          flex: 0 0 78px !important;
+        }
+
+        .dash-header-greeting {
+          min-width: 0 !important;
+          text-align: left !important;
+        }
+
+        .dash-header-greeting > span {
+          font-size: 14px !important;
+        }
+
+        .dash-header-greeting h1 {
+          margin-top: 4px !important;
+          font-size: 34px !important;
+        }
+
+        .dash-header-greeting p {
+          margin-top: 7px !important;
+          font-size: 13px !important;
+        }
+
+        .dash-header-actions {
+          position: relative !important;
+          z-index: 8 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: flex-end !important;
+          gap: 10px !important;
+        }
+
+        .dash-header-notification {
+          position: relative !important;
+          top: auto !important;
+          right: auto !important;
+        }
+
+        .dash-header-notification-button,
+        .dash-header-home-button {
+          width: 44px !important;
+          height: 44px !important;
+          display: grid !important;
+          place-items: center !important;
+          border: 1px solid rgba(255, 255, 255, 0.12) !important;
+          border-radius: 14px !important;
+          color: #ffffff !important;
+          background: rgba(0, 42, 63, 0.35) !important;
+          text-decoration: none !important;
+          backdrop-filter: blur(10px) !important;
+        }
+
+        .dash-header-home-button svg {
+          width: 21px !important;
+          height: 21px !important;
+        }
+
+        .dash-header-premium .dash-notification-panel {
+          top: 54px !important;
+          right: 0 !important;
+        }
+
+        @media (max-width: 980px) {
+          .dash-header-card.dash-header-premium {
+            min-height: 200px !important;
+            padding: 24px 56px 22px !important;
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            place-items: center !important;
+          }
+
+          .dash-header-menu-button {
+            display: grid !important;
+            top: 16px !important;
+            left: 16px !important;
+          }
+
+          .dash-header-actions {
+            position: absolute !important;
+            top: 16px !important;
+            right: 16px !important;
+            gap: 7px !important;
+          }
+
+          .dash-header-profile {
+            width: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 0 !important;
+            text-align: center !important;
+          }
+
+          .dash-header-avatar {
+            width: 72px !important;
+            height: 72px !important;
+            margin: 0 0 12px !important;
+            flex-basis: 72px !important;
+          }
+
+          .dash-header-greeting {
+            text-align: center !important;
+          }
+
+          .dash-header-greeting > span {
+            font-size: 13px !important;
+          }
+
+          .dash-header-greeting h1 {
+            font-size: 27px !important;
+          }
+
+          .dash-header-greeting p {
+            margin-top: 8px !important;
+            font-size: 12px !important;
+          }
+        }
+
+        @media (max-width: 520px) {
+          .dash-header-card.dash-header-premium {
+            min-height: 190px !important;
+            padding: 22px 50px 20px !important;
+          }
+
+          .dash-header-menu-button {
+            top: 14px !important;
+            left: 14px !important;
+          }
+
+          .dash-header-actions {
+            top: 14px !important;
+            right: 14px !important;
+            gap: 6px !important;
+          }
+
+          .dash-header-menu-button,
+          .dash-header-notification-button,
+          .dash-header-home-button {
+            width: 38px !important;
+            height: 38px !important;
+            border-radius: 12px !important;
+          }
+
+          .dash-header-avatar,
+          .dash-header-avatar img,
+          .dash-header-avatar > span {
+            width: 66px !important;
+            height: 66px !important;
+          }
+
+          .dash-header-avatar {
+            flex-basis: 66px !important;
+          }
+
+          .dash-header-greeting h1 {
+            font-size: 24px !important;
+          }
+
+          .dash-header-greeting p {
+            font-size: 11px !important;
+          }
+
+          .dash-header-premium .dash-notification-panel {
+            position: fixed !important;
+            top: 72px !important;
+            right: 12px !important;
+            left: 12px !important;
+            width: auto !important;
+          }
+        }
+
+
+        /* ===== FINAL HEADER: NO LOGOUT CONTROL ===== */
+        .dash-sidebar-desktop .dash-logout,
+        .dash-mobile-panel .dash-logout{
+          display:none!important;
+        }
+
+        /* Desktop: no menu icon. Mobile: menu remains available. */
+        @media(min-width:901px){
+          .dash-header-menu-button{
+            display:none!important;
+          }
+        }
+
+
+        /* =========================================================
+           FINAL DASHBOARD WIDTH FIX — ALL TABS
+           Keeps every dashboard page inside the mobile viewport.
+           Also keeps reward metric cards two per row.
+        ========================================================= */
+
+        html:has(.dash-page),
+        body:has(.dash-page),
+        .site-shell:has(.dash-page),
+        .site-shell:has(.dash-page) > main {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          overflow-x: hidden !important;
+        }
+
+        .dash-page {
+          width: 100% !important;
+          max-width: 100vw !important;
+          min-width: 0 !important;
+          overflow-x: hidden !important;
+        }
+
+        .dash-shell {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          overflow-x: hidden !important;
+        }
+
+        .dash-content,
+        .dash-content > *,
+        .dash-content section,
+        .dash-content article,
+        .dash-content div {
+          min-width: 0 !important;
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+        }
+
+        .dash-content {
+          width: 100% !important;
+          overflow-x: hidden !important;
+        }
+
+        .dash-content > * {
+          width: 100% !important;
+          margin-left: 0 !important;
+          margin-right: 0 !important;
+        }
+
+        .reward-page,
+        .orders-page,
+        .partner-page,
+        .mystery-page,
+        .unlock-page,
+        .saved-page,
+        .circle-dashboard,
+        .dash-overview {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          overflow-x: hidden !important;
+        }
+
+        .reward-hero,
+        .reward-impact-grid,
+        .reward-summary-grid,
+        .reward-toolbar,
+        .reward-section,
+        .reward-sample-wrap,
+        .reward-card-grid,
+        .bill-list {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+        }
+
+        .reward-hero > div,
+        .reward-impact-grid > article,
+        .reward-summary-grid > article,
+        .reward-section > *,
+        .reward-sample-wrap > *,
+        .reward-card-grid > article {
+          min-width: 0 !important;
+          max-width: 100% !important;
+        }
+
+        @media (max-width: 980px) {
+          .dash-shell {
+            width: 100vw !important;
+            max-width: 100vw !important;
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+          }
+
+          .dash-header-card,
+          .dash-content,
+          .dash-bottom-cta-row {
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+        }
+
+        @media (max-width: 700px) {
+          .reward-page {
+            gap: 14px !important;
+          }
+
+          .reward-hero {
+            padding: 18px !important;
+            border-radius: 22px !important;
+            overflow: hidden !important;
+          }
+
+          .reward-hero h2 {
+            font-size: 28px !important;
+            line-height: 1.12 !important;
+          }
+
+          .reward-hero p {
+            font-size: 13px !important;
+            line-height: 1.5 !important;
+          }
+
+          .reward-value {
+            width: 100% !important;
+            min-width: 0 !important;
+            margin-top: 16px !important;
+            padding: 17px !important;
+          }
+
+          .reward-impact-grid {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+
+          .reward-impact-grid article {
+            width: 100% !important;
+            min-width: 0 !important;
+            padding: 16px !important;
+          }
+
+          .reward-summary-grid {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 10px !important;
+          }
+
+          .reward-summary-grid article {
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 112px !important;
+            padding: 13px 10px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            justify-content: center !important;
+            gap: 8px !important;
+            overflow: hidden !important;
+            border-radius: 17px !important;
+          }
+
+          .reward-summary-icon {
+            width: 40px !important;
+            height: 40px !important;
+            border-radius: 13px !important;
+          }
+
+          .reward-summary-icon svg {
+            width: 20px !important;
+            height: 20px !important;
+          }
+
+          .reward-summary-grid article > div {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .reward-summary-grid small {
+            font-size: 10px !important;
+            line-height: 1.2 !important;
+            white-space: normal !important;
+          }
+
+          .reward-summary-grid strong {
+            margin-top: 3px !important;
+            font-size: 23px !important;
+          }
+
+          .reward-summary-grid p {
+            margin-top: 5px !important;
+            font-size: 9px !important;
+            line-height: 1.25 !important;
+            white-space: normal !important;
+          }
+
+          .reward-toolbar {
+            padding: 10px !important;
+            overflow: hidden !important;
+          }
+
+          .reward-tabs {
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+
+          .reward-section {
+            padding: 15px !important;
+            border-radius: 20px !important;
+            overflow: hidden !important;
+          }
+
+          .reward-card-grid,
+          .reward-sample-grid {
+            grid-template-columns: 1fr !important;
+          }
+
+          .dash-guest-preview-note {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow: hidden !important;
+          }
+
+          .dash-guest-preview-note span {
+            min-width: 0 !important;
+            overflow-wrap: anywhere !important;
+          }
+        }
+
+        @media (max-width: 380px) {
+          .dash-shell {
+            padding-left: 9px !important;
+            padding-right: 9px !important;
+          }
+
+          .reward-summary-grid {
+            gap: 8px !important;
+          }
+
+          .reward-summary-grid article {
+            padding: 11px 9px !important;
+          }
+
+          .reward-summary-grid strong {
+            font-size: 21px !important;
+          }
+        }
+
       `}</style>
     </main>
   );

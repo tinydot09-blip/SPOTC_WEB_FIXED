@@ -362,6 +362,7 @@ export default function DashboardOrders() {
     if (!authChecked) return;
 
     if (!user) {
+      setOrders([]);
       setLoading(false);
       return;
     }
@@ -500,7 +501,16 @@ export default function DashboardOrders() {
     });
   }, [orders, filter, search]);
 
+  const requireSignIn = (action: string): boolean => {
+    if (user) return true;
+
+    setMessage(`Sign in to ${action}. You can continue browsing this preview.`);
+    return false;
+  };
+
   const copyOrderNumber = async (orderNumber: string) => {
+    if (!requireSignIn('copy a real order number')) return;
+
     try {
       await navigator.clipboard.writeText(orderNumber);
       setCopiedOrder(orderNumber);
@@ -511,12 +521,16 @@ export default function DashboardOrders() {
   };
 
   const openBusiness = (order: OrderRecord) => {
+    if (!requireSignIn('open a business from your real order')) return;
+
     window.location.href = order.businessId
       ? `/shop?business=${encodeURIComponent(order.businessId)}`
       : '/shop';
   };
 
   const shopAgain = (order: OrderRecord) => {
+    if (!requireSignIn('shop again from a real order')) return;
+
     if (order.items.length === 1 && order.items[0].productId) {
       window.location.href =
         `/product/${encodeURIComponent(order.items[0].productId)}`;
@@ -535,18 +549,25 @@ export default function DashboardOrders() {
     );
   }
 
-  if (!user) {
-    return (
-      <section className="orders-empty-page">
-        <ShoppingBag />
-        <h2>Sign in to see your orders</h2>
-        <p>Your current deliveries and complete order history will appear here.</p>
-      </section>
-    );
-  }
-
   return (
     <div className="orders-page">
+      {!user && (
+        <div className="dash-guest-preview-note">
+          <Sparkles />
+          <span>
+            Guest preview: explore the complete Orders page. Sign in only to
+            view, copy or manage your real orders.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = '/login?next=/dashboard?tab=orders';
+            }}
+          >
+            Sign In
+          </button>
+        </div>
+      )}
       <section className="orders-hero">
         <div>
           <span className="orders-eyebrow">
@@ -1080,6 +1101,125 @@ export default function DashboardOrders() {
           .order-details-grid,.order-modal-actions{grid-template-columns:1fr}
           .orders-sample-head{display:block}.orders-sample-head span{display:inline-flex;margin-top:10px}
         }
+
+        .dash-guest-preview-note{
+          width:100%;
+          padding:12px 14px;
+          display:flex;
+          align-items:center;
+          gap:9px;
+          border:1px solid #cfe5f0;
+          border-radius:14px;
+          color:#245b6d;
+          background:#eef9fc;
+          font-size:12px;
+          line-height:1.4;
+        }
+        .dash-guest-preview-note svg{
+          width:18px;
+          height:18px;
+          flex:0 0 auto;
+          color:#087e98;
+        }
+        .dash-guest-preview-note span{
+          min-width:0;
+          flex:1;
+        }
+        .dash-guest-preview-note button{
+          min-height:36px;
+          padding:0 13px;
+          flex:0 0 auto;
+          border:0;
+          border-radius:10px;
+          color:#fff;
+          background:#087e98;
+          font-weight:600;
+          cursor:pointer;
+        }
+
+        @media(max-width:650px){
+          .dash-guest-preview-note{
+            align-items:flex-start;
+            flex-wrap:wrap;
+          }
+          .dash-guest-preview-note button{
+            width:100%;
+          }
+        }
+
+
+        /* ===== FINAL MOBILE METRIC GRID: 2 CARDS PER ROW ===== */
+        @media(max-width:650px){
+          .orders-summary-grid{
+            display:grid!important;
+            grid-template-columns:repeat(2,minmax(0,1fr))!important;
+            gap:10px!important;
+          }
+
+          .orders-summary-grid article{
+            width:100%!important;
+            min-width:0!important;
+            min-height:112px!important;
+            padding:13px 10px!important;
+            display:flex!important;
+            flex-direction:column!important;
+            align-items:flex-start!important;
+            justify-content:center!important;
+            gap:8px!important;
+            overflow:hidden!important;
+            border-radius:17px!important;
+          }
+
+          .orders-summary-icon{
+            width:40px!important;
+            height:40px!important;
+            border-radius:13px!important;
+          }
+
+          .orders-summary-icon svg{
+            width:20px!important;
+            height:20px!important;
+          }
+
+          .orders-summary-grid article>div{
+            width:100%!important;
+            min-width:0!important;
+          }
+
+          .orders-summary-grid small{
+            font-size:10px!important;
+            line-height:1.2!important;
+            white-space:normal!important;
+          }
+
+          .orders-summary-grid strong{
+            margin-top:3px!important;
+            font-size:22px!important;
+            line-height:1!important;
+          }
+
+          .orders-summary-grid p{
+            margin-top:5px!important;
+            font-size:9px!important;
+            line-height:1.25!important;
+            white-space:normal!important;
+          }
+        }
+
+        @media(max-width:380px){
+          .orders-summary-grid{
+            gap:8px!important;
+          }
+
+          .orders-summary-grid article{
+            padding:11px 9px!important;
+          }
+
+          .orders-summary-grid strong{
+            font-size:20px!important;
+          }
+        }
+
       `}</style>
     </div>
   );

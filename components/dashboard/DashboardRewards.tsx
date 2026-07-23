@@ -286,6 +286,8 @@ export default function DashboardRewards() {
     if (!authChecked) return;
 
     if (!user) {
+      setRewards([]);
+      setBills([]);
       setLoading(false);
       return;
     }
@@ -490,7 +492,16 @@ export default function DashboardRewards() {
     );
   }, [bills, search]);
 
+  const requireSignIn = (action: string): boolean => {
+    if (user) return true;
+
+    setMessage(`Sign in to ${action}. You can continue browsing this preview.`);
+    return false;
+  };
+
   const copyCode = async (reward: RewardItem) => {
+    if (!requireSignIn('copy a real reward code')) return;
+
     if (!reward.code) {
       setMessage('This reward does not require a coupon code.');
       return;
@@ -506,6 +517,8 @@ export default function DashboardRewards() {
   };
 
   const useReward = async (reward: RewardItem) => {
+    if (!requireSignIn('use this reward')) return;
+
     if (reward.source !== 'coupon') {
       setMessage(
         reward.code
@@ -587,18 +600,25 @@ export default function DashboardRewards() {
     );
   }
 
-  if (!user) {
-    return (
-      <section className="reward-empty-page">
-        <Gift />
-        <h2>Sign in to see your rewards</h2>
-        <p>Your coupons, bill rewards and Mystery Box prizes will appear here.</p>
-      </section>
-    );
-  }
-
   return (
     <div className="reward-page">
+      {!user && (
+        <div className="dash-guest-preview-note">
+          <Sparkles />
+          <span>
+            Guest preview: explore the complete Rewards page. Sign in only to
+            claim, redeem, copy a real code or show a real QR.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = '/login?next=/dashboard';
+            }}
+          >
+            Sign In
+          </button>
+        </div>
+      )}
       <section className="reward-hero">
         <div>
           <span className="reward-eyebrow"><Sparkles /> MY SPOTC VALUE</span>
@@ -822,9 +842,10 @@ export default function DashboardRewards() {
                         <button
                           type="button"
                           className="primary"
-                          onClick={() =>
-                            setQrReward(reward)
-                          }
+                          onClick={() => {
+                            if (!requireSignIn('show a real reward QR')) return;
+                            setQrReward(reward);
+                          }}
                         >
                           <><QrCode /> Show Reward</>
                         </button>
@@ -899,9 +920,10 @@ export default function DashboardRewards() {
                 <button
                   type="button"
                   className="primary"
-                  onClick={() =>
-                    setQrReward(selected)
-                  }
+                  onClick={() => {
+                    if (!requireSignIn('show a real reward QR')) return;
+                    setQrReward(selected);
+                  }}
                 >
                   <><QrCode /> Show QR</>
                 </button>
@@ -1410,6 +1432,52 @@ export default function DashboardRewards() {
           .reward-sample-intro{display:block}
           .reward-sample-badge{display:inline-flex;margin-top:10px}
         }
+
+        .dash-guest-preview-note{
+          width:100%;
+          padding:12px 14px;
+          display:flex;
+          align-items:center;
+          gap:9px;
+          border:1px solid #cfe5f0;
+          border-radius:14px;
+          color:#245b6d;
+          background:#eef9fc;
+          font-size:12px;
+          line-height:1.4;
+        }
+        .dash-guest-preview-note svg{
+          width:18px;
+          height:18px;
+          flex:0 0 auto;
+          color:#087e98;
+        }
+        .dash-guest-preview-note span{
+          min-width:0;
+          flex:1;
+        }
+        .dash-guest-preview-note button{
+          min-height:36px;
+          padding:0 13px;
+          flex:0 0 auto;
+          border:0;
+          border-radius:10px;
+          color:#fff;
+          background:#087e98;
+          font-weight:600;
+          cursor:pointer;
+        }
+
+        @media(max-width:620px){
+          .dash-guest-preview-note{
+            align-items:flex-start;
+            flex-wrap:wrap;
+          }
+          .dash-guest-preview-note button{
+            width:100%;
+          }
+        }
+
       `}</style>
     </div>
   );

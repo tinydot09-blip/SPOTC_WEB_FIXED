@@ -1,0 +1,125 @@
+/* UNLOCK PAGE — TWO-COLUMN DESKTOP + VIDEO BUSINESS CARDS */
+.spot-unlock-old-desktop{padding-left:24px;padding-right:24px}
+.spot-unlock-desktop-grid{width:min(100%,1180px);margin:0 auto;display:grid;grid-template-columns:minmax(0,1.16fr) minmax(360px,.84fr);gap:24px;align-items:start}
+.spot-unlock-left-column,.spot-unlock-right-column{min-width:0}
+.spot-unlock-right-column{padding-top:64px}
+.spot-unlock-right-column .spot-nearby-card{margin-top:0}
+.spot-nearby-video-list{display:flex;flex-direction:column;gap:14px}
+.spot-nearby-video-card{display:block;overflow:hidden;border:1px solid rgba(242,183,116,.42);border-radius:22px;background:#111}
+.spot-nearby-video-media{position:relative;height:275px;overflow:hidden;background:#171717}
+.spot-nearby-video-media video,.spot-nearby-video-media img{width:100%;height:100%;display:block;object-fit:cover}
+.spot-nearby-video-media>svg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#f2b774}
+.spot-nearby-video-shade{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.06) 20%,rgba(0,0,0,.30) 55%,rgba(0,0,0,.92) 100%)}
+.spot-nearby-premium{position:absolute;right:12px;top:12px;min-height:29px;padding:0 11px;display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(242,183,116,.8);border-radius:999px;background:rgba(242,183,116,.18);color:#ffd28d;font-size:11px;font-weight:900}
+.spot-nearby-video-copy{position:absolute;left:14px;right:14px;bottom:13px;color:#fff;text-shadow:0 2px 10px #000}
+.spot-nearby-video-copy strong,.spot-nearby-video-copy span,.spot-nearby-video-copy small{display:flex;align-items:center}
+.spot-nearby-video-copy strong{font-size:18px;font-weight:900}
+.spot-nearby-video-copy span{margin-top:3px;color:rgba(255,255,255,.78);font-size:12px;font-weight:700}
+.spot-nearby-video-copy b{width:max-content;max-width:100%;margin-top:8px;padding:6px 9px;display:block;overflow:hidden;border:1px solid rgba(81,204,124,.42);border-radius:999px;background:rgba(25,125,60,.68);color:#89f2aa;font-size:11px;font-weight:900;white-space:nowrap;text-overflow:ellipsis}
+.spot-nearby-video-copy small{gap:5px;margin-top:8px;color:rgba(255,255,255,.78);font-size:11px;font-weight:750}
+@media(max-width:900px){.spot-unlock-desktop-grid{grid-template-columns:1fr}.spot-unlock-right-column{padding-top:0}.spot-nearby-video-media{height:280px}}
+@media(max-width:640px){.spot-unlock-old-desktop{padding-left:14px;padding-right:14px}.spot-unlock-desktop-grid{display:block}.spot-unlock-right-column{margin-top:22px}.spot-nearby-video-media{height:210px}}
+/* PRODUCT CARD — BUSINESS NAME + STOCK WITHOUT RATING */
+.product-stock-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.delivery-chip {
+  min-height: 25px;
+  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  background: #eef8f1;
+  color: #177a43;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.delivery-chip svg {
+  width: 13px;
+  height: 13px;
+}
+
+.product-stock-row small {
+  margin-left: auto;
+  color: #6f7b65;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.spotc-footer{
+    margin-top:50px !important;
+    background:#111;
+    color:#fff;
+    padding:60px 24px 24px;
+}
+
+.spotc-footer-grid{
+    max-width:1280px;
+    margin:auto;
+
+    display:grid;
+    grid-template-columns:2fr repeat(3,1fr);
+    gap:40px;
+}
+
+.spotc-footer h3{
+    margin:0 0 14px;
+    font-size:30px;
+}
+
+.spotc-footer h4{
+    margin:0 0 14px;
+    font-size:16px;
+}
+
+.spotc-footer p{
+    color:#bdbdbd;
+    line-height:1.7;
+}
+
+.spotc-footer a{
+    display:block;
+    margin:10px 0;
+    color:#d9d9d9;
+    text-decoration:none;
+}
+
+.spotc-footer a:hover{
+    color:#fff;
+}
+
+.spotc-footer-bottom{
+    max-width:1280px;
+    margin:20px auto 0;
+    padding-top:20px;
+    border-top:1px solid rgba(255,255,255,.12);
+    text-align:center;
+    color:#9c9c9c;
+    font-size:13px;
+}
+
+@media (max-width:900px){
+
+    .spotc-footer-grid{
+        grid-template-columns:1fr;
+        gap:10px;
+    }
+
+    .spotc-footer{
+    margin-top:50!important;
+    background:#111;
+    color:#fff;
+    padding:60px 24px 24px;
+}
+
+}
+

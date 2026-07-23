@@ -1,0 +1,564 @@
+/* =========================================================
+   SPOTS FEED — MUTED, GPS VERIFIED, DISTANCE + UNLOCK
+   Paste at the END of app/globals.css
+========================================================= */
+
+.spot-top {
+  justify-content: flex-start;
+}
+
+.spot-location-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.spot-location-status > span {
+  min-height: 28px;
+  padding: 6px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(12px);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 850;
+  text-shadow: 0 2px 8px #000000;
+}
+
+.spot-location-status .spot-gps-verified {
+  border-color: rgba(81, 204, 124, 0.55);
+  background: rgba(20, 112, 56, 0.45);
+  color: #80f4a8;
+}
+
+.spot-area-name {
+  margin-top: 7px;
+}
+
+.spot-unlock-button {
+  margin-top: 11px;
+  min-height: 40px;
+  padding: 0 15px;
+  justify-content: center;
+  border: 1px solid rgba(255, 220, 143, 0.75);
+  background: linear-gradient(135deg, #f2b774, #d99b2b);
+  color: #101010;
+  box-shadow: 0 10px 30px rgba(217, 155, 43, 0.24);
+  text-shadow: none;
+}
+
+.spot-unlock-button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+}
+
+@media (max-width: 640px) {
+  .spot-content {
+    right: 68px;
+  }
+
+  .spot-location-status {
+    gap: 5px;
+  }
+
+  .spot-location-status > span {
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+
+  .spot-unlock-button {
+    min-height: 38px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+}
+
+
+/* =========================================================
+   HIDDEN SPOT UNLOCK PAGE
+========================================================= */
+
+.hidden-spot-page {
+  min-height: calc(100vh - 76px);
+  padding: 54px 20px;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 15%, #27352e, #111111 46%, #050505);
+  color: #ffffff;
+}
+
+.hidden-spot-card {
+  width: min(100%, 620px);
+  padding: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 28px;
+  background: rgba(15, 15, 15, 0.92);
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.55);
+  text-align: center;
+}
+
+.hidden-spot-back {
+  width: max-content;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.hidden-spot-icon {
+  width: 76px;
+  height: 76px;
+  margin: 30px auto 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f2b774, #b8751e);
+  color: #111111;
+  box-shadow: 0 16px 45px rgba(242, 183, 116, 0.24);
+}
+
+.hidden-spot-card > small {
+  color: #f2b774;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.18em;
+}
+
+.hidden-spot-card h1 {
+  margin: 12px auto;
+  max-width: 520px;
+  font-size: clamp(30px, 5vw, 48px);
+  line-height: 1.05;
+}
+
+.hidden-spot-card > p {
+  max-width: 480px;
+  margin: 18px auto;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.65;
+}
+
+.hidden-spot-trust {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0;
+}
+
+.hidden-spot-trust span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 11px;
+  border: 1px solid rgba(81, 204, 124, 0.4);
+  border-radius: 999px;
+  background: rgba(81, 204, 124, 0.1);
+  color: #7bea9e;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.hidden-spot-card > button {
+  min-width: 230px;
+  height: 52px;
+  margin-top: 8px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f2b774, #d99b2b);
+  color: #111111;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.hidden-spot-card > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.hidden-spot-message {
+  color: #f2b774 !important;
+  font-weight: 800;
+}
+
+@media (max-width: 640px) {
+  .hidden-spot-page {
+    min-height: calc(100dvh - 62px - 47px);
+    padding: 22px 12px;
+  }
+
+  .hidden-spot-card {
+    padding: 20px 16px;
+    border-radius: 22px;
+  }
+}
+
+/* =========================================================
+   APP-STYLE HIDDEN SPOT PAGE
+========================================================= */
+
+.spot-unlock-app-page {
+  min-height: calc(100vh - 76px);
+  background: #000;
+  color: #fff;
+  padding: 28px 18px 110px;
+}
+
+.spot-unlock-app-shell {
+  width: min(100%, 760px);
+  margin: 0 auto;
+}
+
+.spot-unlock-app-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.spot-unlock-app-header h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.spot-home-button {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 50%;
+  background: #1a1a1a;
+}
+
+.spot-unlock-creator-card {
+  padding: 22px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 24px;
+  background: #151515;
+}
+
+.spot-unlock-avatar {
+  width: 82px;
+  height: 82px;
+  flex: 0 0 82px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: #ef7400;
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.spot-unlock-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.spot-unlock-creator-card strong,
+.spot-unlock-creator-card span {
+  display: block;
+}
+
+.spot-unlock-creator-card strong {
+  font-size: 22px;
+}
+
+.spot-unlock-creator-card span {
+  margin-top: 6px;
+  color: #aaa;
+  font-size: 17px;
+}
+
+.spot-unlock-caption {
+  margin: 30px 0;
+  font-size: clamp(30px, 5vw, 46px);
+  line-height: 1.1;
+}
+
+.spot-unlock-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.spot-unlock-stats article {
+  min-height: 138px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 22px;
+  background: #151515;
+}
+
+.spot-unlock-stats svg {
+  width: 30px;
+  height: 30px;
+  color: #f2b774;
+}
+
+.spot-unlock-stats strong {
+  margin-top: 10px;
+  font-size: 22px;
+}
+
+.spot-unlock-stats span {
+  margin-top: 4px;
+  color: #999;
+}
+
+.spot-unlock-trust-card,
+.spot-weather-card,
+.spot-nearby-card {
+  margin-top: 22px;
+  padding: 24px;
+  border-radius: 26px;
+}
+
+.spot-unlock-trust-card {
+  border: 1px solid rgba(242,183,116,.45);
+  background: linear-gradient(135deg,#25170a,#111);
+}
+
+.spot-unlock-trust-card > div {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 0;
+}
+
+.spot-unlock-trust-card svg {
+  color: #57d77e;
+}
+
+.spot-weather-card {
+  border: 1px solid rgba(60,180,255,.5);
+  background:
+    radial-gradient(circle at 20% 0%,rgba(15,107,151,.35),transparent 45%),
+    linear-gradient(135deg,#072435,#050505);
+}
+
+.spot-weather-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.spot-weather-head > strong {
+  font-size: 22px;
+  flex: 1;
+}
+
+.spot-weather-head > span {
+  padding: 5px 10px;
+  border: 1px solid #43d276;
+  border-radius: 999px;
+  color: #43d276;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.spot-weather-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255,255,255,.1);
+  color: #63c7ff;
+}
+
+.spot-weather-card h3 {
+  margin: 22px 0 4px;
+  font-size: 52px;
+}
+
+.spot-weather-card > p {
+  color: #bbb;
+}
+
+.spot-weather-chips {
+  margin-top: 22px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.spot-weather-chips span {
+  padding: 9px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+  color: #ddd;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.spot-nearby-card {
+  border: 1px solid rgba(242,183,116,.42);
+  background: linear-gradient(135deg,#281b0d,#101010);
+}
+
+.spot-nearby-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 18px;
+}
+
+.spot-nearby-title svg {
+  color: #f2b774;
+}
+
+.spot-nearby-title strong {
+  font-size: 21px;
+}
+
+.spot-nearby-grid {
+  display: grid;
+  grid-template-columns: repeat(2,1fr);
+  gap: 14px;
+}
+
+.spot-nearby-grid a {
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 18px;
+  background: #161616;
+}
+
+.spot-nearby-image {
+  height: 140px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #242424;
+  display: grid;
+  place-items: center;
+}
+
+.spot-nearby-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.spot-nearby-grid strong,
+.spot-nearby-grid span,
+.spot-nearby-grid small {
+  display: block;
+}
+
+.spot-nearby-grid strong {
+  margin-top: 10px;
+}
+
+.spot-nearby-grid span {
+  margin-top: 4px;
+  color: #aaa;
+  font-size: 13px;
+}
+
+.spot-nearby-grid small {
+  margin-top: 7px;
+  color: #bbb;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.spot-unlock-message {
+  color: #f2b774;
+  text-align: center;
+  font-weight: 800;
+}
+
+.spot-unlock-bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  padding: 14px 18px 20px;
+  border-top: 1px solid rgba(255,255,255,.1);
+  background: rgba(0,0,0,.94);
+  backdrop-filter: blur(16px);
+}
+
+.spot-unlock-bottom-bar button {
+  width: min(100%,760px);
+  height: 58px;
+  margin: 0 auto;
+  border: 0;
+  border-radius: 18px;
+  background: #f2b774;
+  color: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-size: 18px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+@media(max-width:640px) {
+  .spot-unlock-app-page {
+    min-height: calc(100dvh - 62px - 47px);
+    padding: 20px 14px 108px;
+  }
+
+  .spot-unlock-app-header h1 {
+    font-size: 24px;
+  }
+
+  .spot-unlock-creator-card {
+    padding: 18px;
+  }
+
+  .spot-unlock-avatar {
+    width: 68px;
+    height: 68px;
+    flex-basis: 68px;
+  }
+
+  .spot-unlock-stats {
+    gap: 10px;
+  }
+
+  .spot-unlock-stats article {
+    min-height: 120px;
+    padding: 12px;
+  }
+
+  .spot-weather-card h3 {
+    font-size: 44px;
+  }
+
+  .spot-nearby-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

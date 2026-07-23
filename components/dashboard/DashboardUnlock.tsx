@@ -304,6 +304,7 @@ export default function DashboardUnlock() {
     if (!authChecked) return;
 
     if (!user) {
+      setSpots([]);
       setLoading(false);
       return;
     }
@@ -428,7 +429,16 @@ export default function DashboardUnlock() {
     });
   }, [spots, search, filter]);
 
+  const requireSignIn = (action: string): boolean => {
+    if (user) return true;
+
+    setMessage(`Sign in to ${action}. You can continue browsing this preview.`);
+    return false;
+  };
+
   const shareSpot = async (spot: UnlockedSpot) => {
+    if (!requireSignIn('share a real unlocked place')) return;
+
     const url = spot.spotUrl.startsWith('http')
       ? spot.spotUrl
       : `${window.location.origin}${spot.spotUrl}`;
@@ -459,6 +469,8 @@ export default function DashboardUnlock() {
   };
 
   const openDirections = (spot: UnlockedSpot) => {
+    if (!requireSignIn('open directions for a real unlocked place')) return;
+
     if (!spot.mapsUrl) {
       setMessage('Directions are not available for this place.');
       return;
@@ -468,6 +480,8 @@ export default function DashboardUnlock() {
   };
 
   const openSpot = (spot: UnlockedSpot) => {
+    if (!requireSignIn('open a real unlocked place')) return;
+
     if (spot.spotUrl.startsWith('http')) {
       window.open(spot.spotUrl, '_blank', 'noopener,noreferrer');
       return;
@@ -485,20 +499,25 @@ export default function DashboardUnlock() {
     );
   }
 
-  if (!user) {
-    return (
-      <section className="unlock-empty">
-        <LockOpen />
-        <h2>Sign in to see unlocked places</h2>
-        <p>
-          Places you unlock from SPOTC Spots will be saved here automatically.
-        </p>
-      </section>
-    );
-  }
-
   return (
     <div className="unlock-page">
+      {!user && (
+        <div className="dash-guest-preview-note">
+          <Sparkles />
+          <span>
+            Guest preview: explore the complete Unlock page. Sign in only to
+            view, share or open your real saved discoveries.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = '/login?next=/dashboard?tab=unlock';
+            }}
+          >
+            Sign In
+          </button>
+        </div>
+      )}
       <section className="unlock-hero">
         <div>
           <span className="unlock-eyebrow">
@@ -968,6 +987,123 @@ export default function DashboardUnlock() {
           .unlock-latest{align-items:stretch;flex-direction:column}.unlock-latest button{justify-content:center}
           .unlock-sample-head{flex-direction:column}
         }
+
+        .dash-guest-preview-note{
+          width:100%;
+          padding:12px 14px;
+          display:flex;
+          align-items:center;
+          gap:9px;
+          border:1px solid #cfe5f0;
+          border-radius:14px;
+          color:#245b6d;
+          background:#eef9fc;
+          font-size:12px;
+          line-height:1.4;
+        }
+        .dash-guest-preview-note svg{
+          width:18px;
+          height:18px;
+          flex:0 0 auto;
+          color:#087e98;
+        }
+        .dash-guest-preview-note span{
+          min-width:0;
+          flex:1;
+        }
+        .dash-guest-preview-note button{
+          min-height:36px;
+          padding:0 13px;
+          flex:0 0 auto;
+          border:0;
+          border-radius:10px;
+          color:#fff;
+          background:#087e98;
+          font-weight:600;
+          cursor:pointer;
+        }
+
+        /* ===== FINAL MOBILE METRIC GRID: 2 CARDS PER ROW ===== */
+        @media(max-width:680px){
+          .unlock-summary-grid{
+            display:grid!important;
+            grid-template-columns:repeat(2,minmax(0,1fr))!important;
+            gap:10px!important;
+          }
+
+          .unlock-summary-grid article{
+            width:100%!important;
+            min-width:0!important;
+            min-height:112px!important;
+            padding:13px 10px!important;
+            display:flex!important;
+            flex-direction:column!important;
+            align-items:flex-start!important;
+            justify-content:center!important;
+            gap:8px!important;
+            overflow:hidden!important;
+            border-radius:17px!important;
+          }
+
+          .unlock-summary-icon{
+            width:40px!important;
+            height:40px!important;
+            border-radius:13px!important;
+          }
+
+          .unlock-summary-icon svg{
+            width:20px!important;
+            height:20px!important;
+          }
+
+          .unlock-summary-grid article>div{
+            width:100%!important;
+            min-width:0!important;
+          }
+
+          .unlock-summary-grid small{
+            font-size:10px!important;
+            line-height:1.2!important;
+            white-space:normal!important;
+          }
+
+          .unlock-summary-grid strong{
+            margin-top:3px!important;
+            font-size:21px!important;
+            line-height:1!important;
+          }
+
+          .unlock-summary-grid p{
+            margin-top:5px!important;
+            font-size:9px!important;
+            line-height:1.25!important;
+            white-space:normal!important;
+          }
+
+          .dash-guest-preview-note{
+            align-items:flex-start;
+            flex-wrap:wrap;
+          }
+
+          .dash-guest-preview-note button{
+            width:100%;
+          }
+        }
+
+        @media(max-width:380px){
+          .unlock-summary-grid{
+            gap:8px!important;
+          }
+
+          .unlock-summary-grid article{
+            padding:11px 9px!important;
+          }
+
+          .unlock-summary-grid strong{
+            font-size:19px!important;
+          }
+        }
+
       `}</style>
     </div>
   );

@@ -1,0 +1,316 @@
+/* =========================================================
+   SPOTC OFFER FEED — FINAL MOBILE OVERRIDES
+   Import this file LAST in globals.css.
+   Desktop Offer Feed remains unchanged.
+========================================================= */
+
+@media (max-width: 760px) {
+  /* -------------------------------------------------------
+     MOBILE PRODUCT STRIP
+  ------------------------------------------------------- */
+
+  .offers-page .offer-products.thumb-products,
+  .offers-page .offer-products-mobile {
+    width: 100% !important;
+
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+
+    margin-top: 10px !important;
+    padding: 2px 0 3px !important;
+
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+
+    scrollbar-width: none !important;
+  }
+
+  .offers-page .offer-products.thumb-products::-webkit-scrollbar,
+  .offers-page .offer-products-mobile::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  /* -------------------------------------------------------
+     REDUCED THUMBNAIL HEIGHT
+  ------------------------------------------------------- */
+
+  .offers-page
+    .offer-products.thumb-products
+    .offer-product-card,
+  .offers-page
+    .offer-products-mobile
+    .offer-product-card {
+    position: relative !important;
+
+    flex: 0 0 142px !important;
+    width: 142px !important;
+    min-width: 142px !important;
+
+    height: 96px !important;
+    min-height: 96px !important;
+    max-height: 96px !important;
+
+    padding: 0 !important;
+
+    overflow: hidden !important;
+
+    border: 1px solid rgba(255, 255, 255, 0.24) !important;
+    border-radius: 14px !important;
+
+    color: #ffffff !important;
+    background: #171717 !important;
+  }
+
+  .offers-page
+    .offer-products.thumb-products
+    .offer-product-card
+    img,
+  .offers-page
+    .offer-products-mobile
+    .offer-product-card
+    img {
+    width: 100% !important;
+    height: 100% !important;
+
+    display: block !important;
+
+    object-fit: cover !important;
+  }
+
+  /* -------------------------------------------------------
+     DISCOUNT LABEL
+  ------------------------------------------------------- */
+
+  .offers-page .offer-product-card .offer-discount {
+    position: absolute !important;
+    top: 7px !important;
+    left: 7px !important;
+    z-index: 3 !important;
+
+    padding: 5px 8px !important;
+
+    border-radius: 8px !important;
+
+    color: #ffffff !important;
+    background: #ff3d38 !important;
+
+    font-size: 13px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+
+    white-space: nowrap !important;
+  }
+
+  /* -------------------------------------------------------
+     PRODUCT NAME AND PRICE
+  ------------------------------------------------------- */
+
+  .offers-page .offer-product-card .product-overlay {
+    position: absolute !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+
+    padding: 25px 9px 7px !important;
+
+    background:
+      linear-gradient(
+        transparent,
+        rgba(0, 0, 0, 0.92)
+      ) !important;
+
+    text-align: left !important;
+  }
+
+  .offers-page .offer-product-card .product-overlay strong,
+  .offers-page .offer-product-card .product-overlay small {
+    display: block !important;
+
+    overflow: hidden !important;
+
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .offers-page .offer-product-card .product-overlay strong {
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    line-height: 1.15 !important;
+  }
+
+  .offers-page .offer-product-card .product-overlay small {
+    margin-top: 3px !important;
+
+    color: #ffd180 !important;
+
+    font-size: 14px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+  }
+
+  .offers-page .offer-product-card .product-overlay del {
+    margin-left: 4px !important;
+
+    color: rgba(255, 255, 255, 0.6) !important;
+
+    font-size: 11px !important;
+  }
+
+  /* -------------------------------------------------------
+     RIGHT-SIDE ACTIONS
+     View count / Save / Share / Report
+     Reduced by 1px and lighter weight
+  ------------------------------------------------------- */
+
+  .offers-page .offer-action-rail {
+    right: 7px !important;
+    bottom: 278px !important;
+
+    gap: 14px !important;
+  }
+
+  .offers-page .rail-item {
+    width: 56px !important;
+
+    gap: 4px !important;
+
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    line-height: 1.05 !important;
+  }
+
+  .offers-page .rail-item > span {
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    line-height: 1.05 !important;
+  }
+
+  .offers-page .rail-item svg {
+    width: 28px !important;
+    height: 28px !important;
+  }
+
+  /* Keep the number slightly stronger than the labels */
+
+  .offers-page .offer-action-rail > .rail-item:first-child > span {
+    font-weight: 650 !important;
+  }
+
+  /* -------------------------------------------------------
+     CONTACT BUTTON SPACING
+  ------------------------------------------------------- */
+
+  .offers-page .offer-contact-row {
+    margin-top: 10px !important;
+  }
+}
+
+/* =========================================================
+   SMALLER MOBILE SCREENS
+========================================================= */
+
+@media (max-width: 380px) {
+  .offers-page
+    .offer-products.thumb-products
+    .offer-product-card,
+  .offers-page
+    .offer-products-mobile
+    .offer-product-card {
+    flex-basis: 134px !important;
+    width: 134px !important;
+    min-width: 134px !important;
+
+    height: 92px !important;
+    min-height: 92px !important;
+    max-height: 92px !important;
+  }
+
+  .offers-page .offer-product-card .product-overlay strong {
+    font-size: 12px !important;
+  }
+
+  .offers-page .offer-product-card .product-overlay small {
+    font-size: 13px !important;
+  }
+
+  .offers-page .rail-item,
+  .offers-page .rail-item > span {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+  }
+
+  .offers-page .rail-item svg {
+    width: 27px !important;
+    height: 27px !important;
+  }
+}
+
+
+/* =========================================================
+   OFFER MOBILE TOP MENU + MUTE POSITION + BOTTOM CLEANUP
+   These rules are Offers-only and mobile-only.
+========================================================= */
+@media (max-width: 760px) {
+  html:has(.offers-page),
+  body:has(.offers-page),
+  body:has(.offers-page) .spotc-app-shell,
+  body:has(.offers-page) .spotc-site-content,
+  body:has(.offers-page) .offers-page {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    background: #000000 !important;
+  }
+
+  body:has(.offers-page) footer {
+    display: none !important;
+  }
+
+  body:has(.offers-page) .offers-page {
+    bottom: 0 !important;
+  }
+
+  /* The floating tabs now sit below the 62px mobile header. */
+  body:has(.offers-page) .spotc-mobile-navigation-top {
+    top: 62px !important;
+    right: 0 !important;
+    bottom: auto !important;
+    left: 0 !important;
+
+    width: 100% !important;
+    margin: 0 !important;
+
+    border-radius: 0 !important;
+  }
+
+  /* Move mute below the top floating navigation. */
+  .offers-page .offer-top-overlay {
+    top: 96px !important;
+    right: 12px !important;
+  }
+
+  .offers-page .offer-top-overlay .glass-icon {
+    width: 48px !important;
+    height: 48px !important;
+  }
+
+  /* Remove any inherited line or light strip at the bottom. */
+  body:has(.offers-page)::after,
+  body:has(.offers-page) .spotc-site-content::after,
+  body:has(.offers-page) .offers-page::after {
+    display: none !important;
+    content: none !important;
+  }
+}
+
+@media (max-width: 380px) {
+  body:has(.offers-page) .spotc-mobile-navigation-top {
+    right: 0 !important;
+    left: 0 !important;
+  }
+
+  .offers-page .offer-top-overlay {
+    top: 92px !important;
+    right: 10px !important;
+  }
+}

@@ -250,7 +250,31 @@ export default function DashboardShoppingCircles() {
     [circles],
   );
 
+  const summary = useMemo(() => {
+    return circles.reduce(
+      (current, circle) => {
+        current.participants += circle.participants;
+        current.comments += circle.commentsCount;
+        current.votes += circle.totalVotes;
+        return current;
+      },
+      {
+        participants: 0,
+        comments: 0,
+        votes: 0,
+      },
+    );
+  }, [circles]);
+
+  const requireSignIn = (action: string): boolean => {
+    if (currentUser) return true;
+
+    setError(`Sign in to ${action}. You can continue browsing this preview.`);
+    return false;
+  };
+
   const openCircle = (circle: ShoppingCircleItem) => {
+    if (!requireSignIn('open a real Shopping Circle')) return;
     router.push(`/circle/${encodeURIComponent(circle.shareCode)}`);
   };
 
@@ -259,6 +283,8 @@ export default function DashboardShoppingCircles() {
     circle: ShoppingCircleItem,
   ) => {
     event.stopPropagation();
+
+    if (!requireSignIn('copy a real Shopping Circle link')) return;
 
     const link = `${window.location.origin}/circle/${encodeURIComponent(
       circle.shareCode,
@@ -279,6 +305,8 @@ export default function DashboardShoppingCircles() {
     circle: ShoppingCircleItem,
   ) => {
     event.stopPropagation();
+
+    if (!requireSignIn('share a real Shopping Circle')) return;
 
     const url = `${window.location.origin}/circle/${encodeURIComponent(
       circle.shareCode,
@@ -409,18 +437,6 @@ export default function DashboardShoppingCircles() {
     );
   }
 
-  if (!currentUser) {
-    return (
-      <section className="circles-state">
-        <Users />
-        <h2>Sign in to see Shopping Circles</h2>
-        <p>Your active product questions, votes and comments will appear here.</p>
-
-        <style jsx>{styles}</style>
-      </section>
-    );
-  }
-
   return (
     <section className="circles-page">
       <header className="circles-header">
@@ -439,25 +455,93 @@ export default function DashboardShoppingCircles() {
         </div>
       </header>
 
+      {!currentUser && (
+        <div className="dash-guest-preview-note">
+          <Users />
+          <span>
+            Guest preview: explore how Shopping Circles work. Sign in only to
+            open, copy or share your real circles.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              router.push('/login?next=/dashboard?tab=circles');
+            }}
+          >
+            Sign In
+          </button>
+        </div>
+      )}
+
+      <section className="circles-summary-grid">
+        <article>
+          <span className="circles-summary-icon orange">
+            <Users />
+          </span>
+          <div>
+            <small>Active Circles</small>
+            <strong>{activeCircles.length}</strong>
+            <p>Open shopping decisions</p>
+          </div>
+        </article>
+
+        <article>
+          <span className="circles-summary-icon purple">
+            <ShoppingBag />
+          </span>
+          <div>
+            <small>Completed</small>
+            <strong>{completedCircles.length}</strong>
+            <p>Finished discussions</p>
+          </div>
+        </article>
+
+        <article>
+          <span className="circles-summary-icon blue">
+            <MessageCircle />
+          </span>
+          <div>
+            <small>Comments</small>
+            <strong>{summary.comments}</strong>
+            <p>Friends and family replies</p>
+          </div>
+        </article>
+
+        <article>
+          <span className="circles-summary-icon green">
+            <Users />
+          </span>
+          <div>
+            <small>Total Votes</small>
+            <strong>{summary.votes}</strong>
+            <p>Shopping opinions received</p>
+          </div>
+        </article>
+      </section>
+
       {error && <div className="circles-error">{error}</div>}
 
       {circles.length === 0 ? (
-        <div className="circles-empty">
-          <div className="empty-icon">
-            <Users />
+        currentUser ? (
+          <div className="circles-empty">
+            <div className="empty-icon">
+              <Users />
+            </div>
+
+            <h3>No Shopping Circles yet</h3>
+            <p>
+              Open a product and tap <strong>Ask Friends &amp; Family</strong>.
+              Your new circle will appear here automatically.
+            </p>
+
+            <button type="button" onClick={() => router.push('/shop')}>
+              <ShoppingBag />
+              Browse products
+            </button>
           </div>
-
-          <h3>No Shopping Circles yet</h3>
-          <p>
-            Open a product and tap <strong>Ask Friends &amp; Family</strong>.
-            Your new circle will appear here automatically.
-          </p>
-
-          <button type="button" onClick={() => router.push('/shop')}>
-            <ShoppingBag />
-            Browse products
-          </button>
-        </div>
+        ) : (
+          <ShoppingCircleSamplePreview />
+        )
       ) : (
         <>
           <section className="circles-section">
@@ -491,6 +575,55 @@ export default function DashboardShoppingCircles() {
       )}
 
       <style jsx>{styles}</style>
+    </section>
+  );
+}
+
+function ShoppingCircleSamplePreview() {
+  return (
+    <section className="circles-sample">
+      <div className="circles-sample-head">
+        <div>
+          <h3>See how Shopping Circles will appear</h3>
+          <p>
+            This sample is shown while you are browsing as a guest. Real
+            products, comments, participants and votes appear after sign-in.
+          </p>
+        </div>
+
+        <span>SAMPLE PREVIEW</span>
+      </div>
+
+      <article className="circle-card">
+        <div className="circle-image">
+          <ShoppingBag />
+          <span className="circle-status active">Active</span>
+        </div>
+
+        <div className="circle-content">
+          <p className="circle-business">DOTZ Fashion</p>
+          <h3>Premium Casual Shirt</h3>
+          <p className="circle-question">Should I buy this for the weekend?</p>
+
+          <div className="circle-stats">
+            <span><Users /> 4 participants</span>
+            <span><MessageCircle /> 7 comments</span>
+            <span><Users /> 9 votes</span>
+          </div>
+
+          <div className="circle-footer">
+            <span><Clock3 /> Recently created</span>
+
+            <div className="circle-actions">
+              <button type="button" disabled><Copy /> Copy</button>
+              <button type="button" disabled><Share2 /> Share</button>
+              <button type="button" className="open-circle" disabled>
+                <ExternalLink /> Open chat
+              </button>
+            </div>
+          </div>
+        </div>
+      </article>
     </section>
   );
 }
@@ -887,6 +1020,177 @@ const styles = `
     opacity: 0.86;
   }
 
+  .dash-guest-preview-note {
+    width: 100%;
+    margin-bottom: 18px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border: 1px solid #cfe5f0;
+    border-radius: 14px;
+    color: #245b6d;
+    background: #eef9fc;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .dash-guest-preview-note > :global(svg) {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    color: #087e98;
+  }
+
+  .dash-guest-preview-note span {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .dash-guest-preview-note button {
+    min-height: 36px;
+    padding: 0 13px;
+    flex: 0 0 auto;
+    border: 0;
+    border-radius: 10px;
+    color: #fff;
+    background: #087e98;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .circles-summary-grid {
+    margin-bottom: 22px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .circles-summary-grid article {
+    min-width: 0;
+    min-height: 104px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    border: 1px solid #e4e7ec;
+    border-radius: 19px;
+    background: #fff;
+    box-shadow: 0 10px 25px rgba(42, 48, 61, 0.055);
+  }
+
+  .circles-summary-icon {
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    border-radius: 17px;
+  }
+
+  .circles-summary-icon > :global(svg) {
+    width: 24px;
+    height: 24px;
+  }
+
+  .circles-summary-icon.orange {
+    color: #df7a00;
+    background: #fff0db;
+  }
+
+  .circles-summary-icon.purple {
+    color: #6734da;
+    background: #eee8ff;
+  }
+
+  .circles-summary-icon.blue {
+    color: #1768e5;
+    background: #eaf2ff;
+  }
+
+  .circles-summary-icon.green {
+    color: #159b50;
+    background: #e8f8ef;
+  }
+
+  .circles-summary-grid small,
+  .circles-summary-grid strong,
+  .circles-summary-grid p {
+    display: block;
+  }
+
+  .circles-summary-grid small {
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .circles-summary-grid strong {
+    margin-top: 4px;
+    font-size: 24px;
+    font-weight: 800;
+  }
+
+  .circles-summary-grid p {
+    margin: 6px 0 0;
+    color: #707985;
+    font-size: 11px;
+  }
+
+  .circles-sample {
+    padding: 20px;
+    border: 1px dashed #cfd6e2;
+    border-radius: 22px;
+    background:
+      radial-gradient(circle at 92% 8%, rgba(202, 104, 8, 0.08), transparent 24%),
+      linear-gradient(180deg, #fcfdff, #f8fafc);
+  }
+
+  .circles-sample-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 17px;
+  }
+
+  .circles-sample-head h3 {
+    margin: 0;
+    font-size: 19px;
+  }
+
+  .circles-sample-head p {
+    max-width: 720px;
+    margin: 6px 0 0;
+    color: #707985;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .circles-sample-head span {
+    padding: 8px 11px;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    color: #9a4c00;
+    background: #fff0df;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+  }
+
+  .circles-sample .circle-card {
+    max-width: 760px;
+    cursor: default;
+  }
+
+  .circles-sample .circle-card:hover {
+    transform: none;
+  }
+
+  .circles-sample .circle-actions button {
+    cursor: not-allowed;
+    opacity: 0.68;
+  }
+
   @media (max-width: 1120px) {
     .circles-grid {
       grid-template-columns: 1fr;
@@ -894,6 +1198,64 @@ const styles = `
   }
 
   @media (max-width: 720px) {
+    .circles-summary-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .circles-summary-grid article {
+      min-height: 112px;
+      padding: 13px 10px;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 8px;
+      overflow: hidden;
+      border-radius: 17px;
+    }
+
+    .circles-summary-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 13px;
+    }
+
+    .circles-summary-icon > :global(svg) {
+      width: 20px;
+      height: 20px;
+    }
+
+    .circles-summary-grid article > div {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .circles-summary-grid small {
+      font-size: 10px;
+      line-height: 1.2;
+    }
+
+    .circles-summary-grid strong {
+      margin-top: 3px;
+      font-size: 21px;
+      line-height: 1;
+    }
+
+    .circles-summary-grid p {
+      margin-top: 5px;
+      font-size: 9px;
+      line-height: 1.25;
+    }
+
+    .dash-guest-preview-note {
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .dash-guest-preview-note button {
+      width: 100%;
+    }
+
     .circles-header {
       align-items: flex-start;
     }

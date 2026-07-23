@@ -1,0 +1,186 @@
+/* ==================================================
+   SHOP PRODUCT CARD ACTIONS
+   Edit these values easily
+   ================================================== */
+
+.product-actions {
+  display: grid;
+
+  /* Left button flexible, Add button fixed width */
+  grid-template-columns: minmax(0, 1fr) 82px;
+
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+/* Both buttons use the same base styling */
+.product-compare-online,
+.product-add-button {
+  height: 40px;
+  min-height: 40px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  box-sizing: border-box;
+  border-radius: 8px;
+
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+/* Compare Online */
+.product-compare-online {
+  min-width: 0;
+  padding: 0 10px;
+
+  border: 1px solid #dedbd5;
+  background: #ffffff;
+  color: #111111;
+}
+
+/* Add button */
+.product-add-button {
+  width: 82px;
+  padding: 0 10px;
+
+  border: 1px solid #111111;
+  background: #111111;
+  color: #ffffff;
+
+  cursor: pointer;
+}
+
+/* Optional title-link cleanup */
+.product-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .product-actions {
+    grid-template-columns: minmax(0, 1fr) 70px;
+    gap: 6px;
+  }
+
+  .product-compare-online,
+  .product-add-button {
+    height: 38px;
+    min-height: 38px;
+    font-size: 11px;
+  }
+
+  .product-compare-online {
+    padding: 0 7px;
+  }
+
+  .product-add-button {
+    width: 70px;
+    padding: 0 7px;
+  }
+
+  .product-compare-online svg,
+  .product-add-button svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* ==================================================
+   OFFER PRODUCT THUMBNAILS
+   Desktop: right side of video
+   Mobile: bottom horizontal strip
+   ================================================== */
+
+/* Desktop */
+@media (min-width: 761px) {
+  .offer-products.thumb-products {
+    position: absolute;
+
+    /* Move strip to the right side */
+    right: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+
+    width: 170px;
+    max-height: 430px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    padding: 4px;
+    z-index: 8;
+
+    scrollbar-width: none;
+  }
+
+  .offer-products.thumb-products::-webkit-scrollbar {
+    display: none;
+  }
+
+  .offer-products.thumb-products .offer-product-card {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 100%;
+    height: 112px;
+  }
+
+  /* Leave room for the product cards */
+  .offer-content {
+    right: 205px;
+  }
+
+  /* Keep social icons between video and products */
+  .offer-action-rail {
+    right: 188px;
+    bottom: 190px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 760px) {
+  .offer-products.thumb-products {
+    position: static;
+    transform: none;
+
+    width: 100%;
+    max-height: none;
+
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    padding: 2px 0 4px;
+  }
+
+  .offer-products.thumb-products .offer-product-card {
+    flex: 0 0 132px;
+    width: 132px;
+    min-width: 132px;
+    height: 110px;
+  }
+
+  .offer-content {
+    right: 12px;
+  }
+
+  .offer-action-rail {
+    right: 8px;
+    bottom: 290px;
+  }
+}

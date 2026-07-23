@@ -577,6 +577,7 @@ export default function DashboardSaved() {
     if (!authChecked) return;
 
     if (!user) {
+      setItems([]);
       setLoading(false);
       return;
     }
@@ -632,7 +633,15 @@ export default function DashboardSaved() {
     });
   }, [items, filter, search]);
 
+  const requireSignIn = (action: string): boolean => {
+    if (user) return true;
+
+    setMessage(`Sign in to ${action}. You can continue browsing this preview.`);
+    return false;
+  };
+
   const removeSaved = async (item: SavedItem) => {
+    if (!requireSignIn('remove a real saved item')) return;
     if (removingId) return;
 
     setRemovingId(item.id);
@@ -666,6 +675,8 @@ export default function DashboardSaved() {
   };
 
   const openItem = (item: SavedItem) => {
+    if (!requireSignIn('open a real saved item')) return;
+
     if (!item.link) {
       setMessage('This saved item does not have an active link.');
       return;
@@ -680,6 +691,8 @@ export default function DashboardSaved() {
   };
 
   const shareItem = async (item: SavedItem) => {
+    if (!requireSignIn('share a real saved item')) return;
+
     const url = item.link.startsWith('http')
       ? item.link
       : `${window.location.origin}${item.link}`;
@@ -717,20 +730,25 @@ export default function DashboardSaved() {
     );
   }
 
-  if (!user) {
-    return (
-      <section className="saved-empty">
-        <Heart />
-        <h2>Sign in to view Saved items</h2>
-        <p>
-          Products, offers, businesses and Spots you save will appear here.
-        </p>
-      </section>
-    );
-  }
-
   return (
     <div className="saved-page">
+      {!user && (
+        <div className="dash-guest-preview-note">
+          <Sparkles />
+          <span>
+            Guest preview: explore the complete Saved page. Sign in only to
+            open, share or remove your real saved items.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = '/login?next=/dashboard?tab=saved';
+            }}
+          >
+            Sign In
+          </button>
+        </div>
+      )}
       <section className="saved-hero">
         <div>
           <span className="saved-eyebrow">
@@ -1240,6 +1258,123 @@ export default function DashboardSaved() {
           .saved-sample-head{flex-direction:column}
           .saved-value-banner>svg{display:none}
         }
+
+        .dash-guest-preview-note{
+          width:100%;
+          padding:12px 14px;
+          display:flex;
+          align-items:center;
+          gap:9px;
+          border:1px solid #cfe5f0;
+          border-radius:14px;
+          color:#245b6d;
+          background:#eef9fc;
+          font-size:12px;
+          line-height:1.4;
+        }
+        .dash-guest-preview-note svg{
+          width:18px;
+          height:18px;
+          flex:0 0 auto;
+          color:#087e98;
+        }
+        .dash-guest-preview-note span{
+          min-width:0;
+          flex:1;
+        }
+        .dash-guest-preview-note button{
+          min-height:36px;
+          padding:0 13px;
+          flex:0 0 auto;
+          border:0;
+          border-radius:10px;
+          color:#fff;
+          background:#087e98;
+          font-weight:600;
+          cursor:pointer;
+        }
+
+        /* ===== FINAL MOBILE METRIC GRID: 2 CARDS PER ROW ===== */
+        @media(max-width:680px){
+          .saved-summary-grid{
+            display:grid!important;
+            grid-template-columns:repeat(2,minmax(0,1fr))!important;
+            gap:10px!important;
+          }
+
+          .saved-summary-grid article{
+            width:100%!important;
+            min-width:0!important;
+            min-height:112px!important;
+            padding:13px 10px!important;
+            display:flex!important;
+            flex-direction:column!important;
+            align-items:flex-start!important;
+            justify-content:center!important;
+            gap:8px!important;
+            overflow:hidden!important;
+            border-radius:17px!important;
+          }
+
+          .saved-summary-icon{
+            width:40px!important;
+            height:40px!important;
+            border-radius:13px!important;
+          }
+
+          .saved-summary-icon svg{
+            width:20px!important;
+            height:20px!important;
+          }
+
+          .saved-summary-grid article>div{
+            width:100%!important;
+            min-width:0!important;
+          }
+
+          .saved-summary-grid small{
+            font-size:10px!important;
+            line-height:1.2!important;
+            white-space:normal!important;
+          }
+
+          .saved-summary-grid strong{
+            margin-top:3px!important;
+            font-size:21px!important;
+            line-height:1!important;
+          }
+
+          .saved-summary-grid p{
+            margin-top:5px!important;
+            font-size:9px!important;
+            line-height:1.25!important;
+            white-space:normal!important;
+          }
+
+          .dash-guest-preview-note{
+            align-items:flex-start;
+            flex-wrap:wrap;
+          }
+
+          .dash-guest-preview-note button{
+            width:100%;
+          }
+        }
+
+        @media(max-width:380px){
+          .saved-summary-grid{
+            gap:8px!important;
+          }
+
+          .saved-summary-grid article{
+            padding:11px 9px!important;
+          }
+
+          .saved-summary-grid strong{
+            font-size:19px!important;
+          }
+        }
+
       `}</style>
     </div>
   );

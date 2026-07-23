@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import {
   deleteDoc,
@@ -24,6 +25,7 @@ import {
   ShoppingBag,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 import { getOffers, getProducts } from "@/lib/data";
 import { auth, db, firebaseProjectId, firebaseReady } from "@/lib/firebase";
@@ -40,6 +42,512 @@ type OfferProduct = {
   discount: string;
   productId: string;
 };
+
+
+const QUICK_ENQUIRY_QUESTIONS = [
+  "Is this offer available?",
+  "What is the final price?",
+  "Do you have other colours or sizes?",
+  "Can I visit your shop today?",
+  "Please share more photos.",
+  "I want to buy this product.",
+] as const;
+
+function QuickEnquirySheet({
+  open,
+  businessName,
+  businessLogo,
+  offerTitle,
+  whatsappNumber,
+  onClose,
+}: {
+  open: boolean;
+  businessName: string;
+  businessLogo: string;
+  offerTitle: string;
+  whatsappNumber: string;
+  onClose: () => void;
+}) {
+  const [selectedQuestion, setSelectedQuestion] = useState<
+  (typeof QUICK_ENQUIRY_QUESTIONS)[number]
+>(QUICK_ENQUIRY_QUESTIONS[0]);
+  const [customMessage, setCustomMessage] = useState("");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [onClose, open]);
+
+  useEffect(() => {
+    if (!open) {
+      setSelectedQuestion(QUICK_ENQUIRY_QUESTIONS[0]);
+      setCustomMessage("");
+    }
+  }, [open]);
+
+  if (!open || !mounted) return null;
+
+  const continueToWhatsApp = () => {
+    const cleanNumber = whatsappNumber.replace(/\D/g, "");
+
+    if (!cleanNumber) {
+      window.alert("WhatsApp number is not available.");
+      return;
+    }
+
+    const enquiry = customMessage.trim() || selectedQuestion;
+
+    const message = [
+      `Hi ${businessName},`,
+      "",
+      "I saw this offer on SPOTC.",
+      "",
+      "Offer:",
+      offerTitle,
+      "",
+      "My enquiry:",
+      enquiry,
+      "",
+      "Thank you.",
+    ].join("\n");
+
+    window.open(
+      `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+
+    onClose();
+  };
+
+  return createPortal(
+    <div
+      className="spotc-enquiry-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="spotc-enquiry-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="spotc-enquiry-title"
+      >
+        <div className="spotc-enquiry-handle" />
+
+        <header className="spotc-enquiry-header">
+          <div>
+            <small>QUICK ENQUIRY</small>
+            <h2 id="spotc-enquiry-title">Ask the business</h2>
+          </div>
+
+          <button
+            type="button"
+            className="spotc-enquiry-close"
+            aria-label="Close enquiry"
+            onClick={onClose}
+          >
+            <X size={21} />
+          </button>
+        </header>
+
+        <div className="spotc-enquiry-business">
+          <div className="spotc-enquiry-logo">
+            {businessLogo ? (
+              <img src={businessLogo} alt={`${businessName} logo`} />
+            ) : (
+              <span>{businessName.charAt(0).toUpperCase()}</span>
+            )}
+          </div>
+
+          <div>
+            <strong>{businessName}</strong>
+            <small>{offerTitle}</small>
+          </div>
+        </div>
+
+        <p className="spotc-enquiry-label">Choose a question</p>
+
+        <div className="spotc-enquiry-options">
+          {QUICK_ENQUIRY_QUESTIONS.map((question) => {
+            const active = selectedQuestion === question;
+
+            return (
+              <button
+                key={question}
+                type="button"
+                className={
+                  active
+                    ? "spotc-enquiry-option spotc-enquiry-option-active"
+                    : "spotc-enquiry-option"
+                }
+                onClick={() => {
+                  setSelectedQuestion(question);
+                  setCustomMessage("");
+                }}
+              >
+                <span>{question}</span>
+                <i aria-hidden="true" />
+              </button>
+            );
+          })}
+        </div>
+
+        <label className="spotc-enquiry-custom">
+          <span>Or type your own message</span>
+          <textarea
+            value={customMessage}
+            maxLength={300}
+            rows={3}
+            placeholder="Write your question here..."
+            onChange={(event) => setCustomMessage(event.target.value)}
+          />
+          <small>{customMessage.length}/300</small>
+        </label>
+
+        <button
+          type="button"
+          className="spotc-enquiry-continue"
+          onClick={continueToWhatsApp}
+        >
+          <MessageCircle size={21} />
+          Continue to WhatsApp
+        </button>
+
+        <p className="spotc-enquiry-note">
+          The business will reply directly on WhatsApp.
+        </p>
+      </section>
+
+      <style jsx global>{`
+        .spotc-enquiry-backdrop {
+          position: fixed !important;
+          top: 0 !important;
+          right: 0 !important;
+          bottom: 0 !important;
+          left: 0 !important;
+          z-index: 2147483646 !important;
+          width: 100vw !important;
+          height: 100dvh !important;
+          margin: 0 !important;
+          padding: 18px !important;
+          display: flex !important;
+          align-items: flex-end !important;
+          justify-content: center !important;
+          overflow: hidden !important;
+          background: rgba(0, 0, 0, 0.68) !important;
+          backdrop-filter: blur(5px);
+          -webkit-backdrop-filter: blur(5px);
+          box-sizing: border-box !important;
+          isolation: isolate !important;
+        }
+
+        .spotc-enquiry-sheet {
+          position: relative !important;
+          z-index: 1 !important;
+          width: min(100%, 520px) !important;
+          max-height: calc(100dvh - 24px) !important;
+          margin: 0 !important;
+          padding: 10px 18px calc(18px + env(safe-area-inset-bottom)) !important;
+          overflow-x: hidden !important;
+          overflow-y: auto !important;
+          overscroll-behavior: contain !important;
+          -webkit-overflow-scrolling: touch;
+          box-sizing: border-box !important;
+          border: 1px solid #e8e1d7;
+          border-radius: 25px 25px 18px 18px;
+          color: #1d1a17;
+          background: #fffdf9;
+          box-shadow: 0 -20px 70px rgba(0, 0, 0, 0.28);
+          animation: spotcEnquiryUp 220ms ease-out;
+        }
+
+        @keyframes spotcEnquiryUp {
+          from {
+            opacity: 0;
+            transform: translateY(28px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .spotc-enquiry-handle {
+          width: 46px;
+          height: 5px;
+          margin: 1px auto 12px;
+          border-radius: 999px;
+          background: #d8d0c5;
+        }
+
+        .spotc-enquiry-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 14px;
+        }
+
+        .spotc-enquiry-header small {
+          color: #8a7d6c;
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 0.12em;
+        }
+
+        .spotc-enquiry-header h2 {
+          margin: 4px 0 0;
+          font-size: 28px;
+          line-height: 1.15;
+          font-weight: 700;
+        }
+
+        .spotc-enquiry-close {
+          width: 38px;
+          height: 38px;
+          padding: 0;
+          display: grid;
+          place-items: center;
+          flex: 0 0 38px;
+          border: 1px solid #e1d9ce;
+          border-radius: 50%;
+          color: #29241f;
+          background: #fff;
+          cursor: pointer;
+        }
+
+        .spotc-enquiry-business {
+          margin-top: 15px;
+          padding: 11px;
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          border: 1px solid #ebe4da;
+          border-radius: 16px;
+          background: #f7f2ea;
+        }
+
+        .spotc-enquiry-logo {
+          width: 48px;
+          height: 48px;
+          display: grid;
+          place-items: center;
+          flex: 0 0 48px;
+          overflow: hidden;
+          border-radius: 13px;
+          color: #fff;
+          background: #211d19;
+          font-size: 18px;
+          font-weight: 900;
+        }
+
+        .spotc-enquiry-logo img {
+          width: 100%;
+          height: 100%;
+          display: block;
+          object-fit: cover;
+        }
+
+        .spotc-enquiry-business > div:last-child {
+          min-width: 0;
+        }
+
+        .spotc-enquiry-business strong,
+        .spotc-enquiry-business small {
+          display: block;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .spotc-enquiry-business strong {
+          font-size: 19px;
+          font-weight: 700;
+        }
+
+        .spotc-enquiry-business small {
+          margin-top: 4px;
+          color: #746b61;
+          font-size: 15px;
+          font-weight: 500;
+        }
+
+        .spotc-enquiry-label {
+          margin: 17px 0 9px;
+          font-size: 18px;
+          font-weight: 600;
+        }
+
+        .spotc-enquiry-options {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+        }
+
+        .spotc-enquiry-option {
+          min-height: 58px;
+          padding: 12px 12px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          border: 1px solid #ddd5ca;
+          border-radius: 13px;
+          color: #312b25;
+          background: #fff;
+          font-family: inherit;
+          font-size: 18px;
+          font-weight: 500;
+          line-height: 1.4;
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .spotc-enquiry-option i {
+          width: 15px;
+          height: 15px;
+          flex: 0 0 15px;
+          border: 2px solid #c5baab;
+          border-radius: 50%;
+        }
+
+        .spotc-enquiry-option-active {
+          border-color: #159447;
+          background: #f0fbf4;
+          box-shadow: inset 0 0 0 1px #159447;
+        }
+
+        .spotc-enquiry-option-active i {
+          border: 4px solid #159447;
+          background: #fff;
+        }
+
+        .spotc-enquiry-custom {
+          position: relative;
+          margin-top: 14px;
+          display: block;
+        }
+
+        .spotc-enquiry-custom > span {
+          display: block;
+          margin-bottom: 7px;
+          font-size: 17px;
+          font-weight: 600;
+        }
+
+        .spotc-enquiry-custom textarea {
+          width: 100%;
+          min-height: 82px;
+          padding: 11px 12px 25px;
+          resize: none;
+          border: 1px solid #ddd5ca;
+          border-radius: 13px;
+          outline: none;
+          color: #29241f;
+          background: #fff;
+          font-family: inherit;
+          font-size: 17px;
+          font-weight: 400;
+          line-height: 1.5;
+          box-sizing: border-box;
+        }
+
+        .spotc-enquiry-custom textarea:focus {
+          border-color: #159447;
+          box-shadow: 0 0 0 3px rgba(21, 148, 71, 0.12);
+        }
+
+        .spotc-enquiry-custom > small {
+          position: absolute;
+          right: 10px;
+          bottom: 8px;
+          color: #8b8176;
+          font-size: 12px;
+          font-weight: 500;
+        }
+
+        .spotc-enquiry-continue {
+          width: 100%;
+          height: 50px;
+          margin-top: 14px;
+          padding: 0 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 9px;
+          border: 0;
+          border-radius: 999px;
+          color: #fff;
+          background: #159447;
+          font-family: inherit;
+          font-size: 18px;
+          font-weight: 700;
+          cursor: pointer;
+          box-shadow: 0 9px 24px rgba(21, 148, 71, 0.24);
+        }
+
+        .spotc-enquiry-note {
+          margin: 9px 0 0;
+          color: #766d63;
+          font-size: 13px;
+          font-weight: 500;
+          text-align: center;
+        }
+
+        @media (max-width: 560px) {
+          .spotc-enquiry-backdrop {
+            padding: 0 !important;
+          }
+
+          .spotc-enquiry-sheet {
+            width: 100% !important;
+            max-height: 100dvh !important;
+            padding: 9px 14px calc(15px + env(safe-area-inset-bottom)) !important;
+            border-right: 0;
+            border-bottom: 0;
+            border-left: 0;
+            border-radius: 24px 24px 0 0;
+          }
+
+          .spotc-enquiry-header h2 {
+            font-size: 25px;
+            font-weight:700;
+          }
+
+          .spotc-enquiry-options {
+            grid-template-columns: 1fr;
+            gap: 7px;
+          }
+
+          .spotc-enquiry-option {
+            min-height: 56px;
+            font-size:17px;
+          }
+        }
+      `}</style>
+    </div>,
+    document.body,
+  );
+}
 
 function dateValue(value: unknown): Date | null {
   if (!value) return null;
@@ -242,6 +750,7 @@ function OfferCard({
   const [saving, setSaving] = useState(false);
   const [muted, setMuted] = useState(true);
   const [playing, setPlaying] = useState(false);
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
 
   const video = text(
     item.playback_720_url ||
@@ -268,6 +777,9 @@ function OfferCard({
   const whatsapp = text(item.whatsapp || item.whatsapp_number || item.phone);
   const businessHref = `/${slugify(name)}`;
   const offerId = text(item.id).trim();
+  const offerTitle =
+    text(item.offer_title || item.offer_text || item.caption).trim() ||
+    `${name} Offer`;
 
   useEffect(() => {
     if (!auth) return;
@@ -641,13 +1153,13 @@ function OfferCard({
               </a>
             )}
             {whatsapp && (
-              <a
-                href={`https://wa.me/${whatsapp.replace(/\D/g, "")}`}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                className="offer-whatsapp-enquiry-button"
+                onClick={() => setEnquiryOpen(true)}
               >
                 <MessageCircle /> WhatsApp
-              </a>
+              </button>
             )}
             <a href={mapsUrl(item)} target="_blank" rel="noreferrer">
               <Navigation /> Direction
@@ -674,6 +1186,65 @@ function OfferCard({
           {renderProducts("desktop")}
         </aside>
       )}
+
+      <QuickEnquirySheet
+        open={enquiryOpen}
+        businessName={name}
+        businessLogo={logo}
+        offerTitle={offerTitle}
+        whatsappNumber={whatsapp}
+        onClose={() => setEnquiryOpen(false)}
+      />
+
+      <style jsx global>{`
+        .offers-page .offer-contact-row-four > button.offer-whatsapp-enquiry-button {
+          width: 100% !important;
+          min-width: 0 !important;
+          height: 46px !important;
+          min-height: 46px !important;
+          margin: 0 !important;
+          padding: 0 6px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: 7px !important;
+          overflow: hidden !important;
+          border: 1px solid rgba(255, 255, 255, 0.34) !important;
+          border-radius: 24px !important;
+          color: #ffffff !important;
+          background: rgba(0, 0, 0, 0.26) !important;
+          font-family: inherit !important;
+          font-size: 14px !important;
+          font-weight: 800 !important;
+          line-height: 1 !important;
+          white-space: nowrap !important;
+          cursor: pointer !important;
+          appearance: none !important;
+          -webkit-appearance: none !important;
+          box-sizing: border-box !important;
+        }
+
+        .offers-page .offer-contact-row-four > button.offer-whatsapp-enquiry-button svg {
+          width: 20px !important;
+          height: 20px !important;
+          flex: 0 0 20px !important;
+        }
+
+        .offers-page .offer-contact-row-four > button.offer-whatsapp-enquiry-button:active {
+          transform: scale(0.98);
+        }
+
+        .offers-page .offer-contact-row-four > a,
+        .offers-page .offer-contact-row-four > button {
+          min-width: 0 !important;
+        }
+
+        @media (max-width: 380px) {
+          .offers-page .offer-contact-row-four > button.offer-whatsapp-enquiry-button {
+            font-size: 13px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -644,7 +644,8 @@ export default function DashboardOverview({
           </button>
         </div>
 
-        <div className="dash-journey-line">
+        <div className="dash-journey-scroll">
+          <div className="dash-journey-line">
           {rewardMilestones.map((required, index) => {
             const unlocked = totals.total >= required;
 
@@ -670,6 +671,7 @@ export default function DashboardOverview({
               </article>
             );
           })}
+          </div>
         </div>
       </section>
 
@@ -2372,6 +2374,424 @@ export default function DashboardOverview({
           .dash-journey-line:before{
             left:40px!important;
             right:40px!important;
+          }
+        }
+
+
+        /* =========================================================
+           FINAL MOBILE DASHBOARD LAYOUT FIX
+           - two metric cards per row
+           - only points strip scrolls
+           - no whole-card horizontal movement
+           - all cards stay inside viewport
+        ========================================================= */
+
+        .dash-overview,
+        .dash-overview-light,
+        .dash-summary-grid,
+        .dash-action-grid,
+        .dash-journey-panel,
+        .dash-business-progress {
+          max-width: 100% !important;
+          min-width: 0 !important;
+          box-sizing: border-box !important;
+        }
+
+        .dash-journey-panel {
+          overflow: hidden !important;
+        }
+
+        .dash-journey-scroll {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          margin-top: 24px !important;
+          overflow-x: auto !important;
+          overflow-y: hidden !important;
+          overscroll-behavior-x: contain !important;
+          -webkit-overflow-scrolling: touch !important;
+          scrollbar-width: none !important;
+        }
+
+        .dash-journey-scroll::-webkit-scrollbar {
+          display: none !important;
+        }
+
+        .dash-journey-scroll .dash-journey-line {
+          margin-top: 0 !important;
+        }
+
+        @media (max-width: 900px) {
+          .dash-journey-panel {
+            overflow: hidden !important;
+          }
+
+          .dash-journey-scroll {
+            overflow-x: auto !important;
+          }
+
+          .dash-journey-line {
+            width: max-content !important;
+            min-width: 880px !important;
+            grid-template-columns: repeat(11, 80px) !important;
+            padding: 0 8px 8px !important;
+          }
+
+          .dash-journey-line:before {
+            left: 48px !important;
+            right: 48px !important;
+          }
+        }
+
+        @media (max-width: 700px) {
+          .dash-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 12px !important;
+          }
+
+          .dash-summary-card {
+            min-width: 0 !important;
+            min-height: 132px !important;
+            padding: 14px 12px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            justify-content: center !important;
+            gap: 10px !important;
+            border-radius: 18px !important;
+          }
+
+          .dash-summary-icon {
+            width: 44px !important;
+            height: 44px !important;
+            border-radius: 14px !important;
+          }
+
+          .dash-summary-icon svg {
+            width: 22px !important;
+            height: 22px !important;
+          }
+
+          .dash-summary-card > div {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .dash-summary-card small {
+            font-size: 11px !important;
+            line-height: 1.2 !important;
+          }
+
+          .dash-summary-card strong {
+            margin-top: 4px !important;
+            font-size: 24px !important;
+          }
+
+          .dash-summary-card p {
+            margin-top: 6px !important;
+            font-size: 10px !important;
+            line-height: 1.25 !important;
+            white-space: normal !important;
+          }
+
+          .dash-action-grid {
+            grid-template-columns: 1fr !important;
+          }
+
+          .dash-scan-banner,
+          .dash-partner-card,
+          .dash-journey-panel,
+          .dash-business-progress-light {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+          }
+
+          .dash-section-heading {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .dash-section-heading h2 {
+            font-size: 22px !important;
+          }
+
+          .dash-section-heading p {
+            max-width: 100% !important;
+            white-space: normal !important;
+          }
+        }
+
+        @media (max-width: 380px) {
+          .dash-summary-grid {
+            gap: 9px !important;
+          }
+
+          .dash-summary-card {
+            min-height: 125px !important;
+            padding: 12px 10px !important;
+          }
+        }
+
+
+        /* =========================================================
+           SPOTC OVERVIEW FINAL MOBILE FIX
+           1. Two metric cards in every mobile row
+           2. Only the Reward Journey points strip scrolls
+           3. No clipped card bottoms
+           4. Action buttons remain visible inside cards
+        ========================================================= */
+
+        .dash-overview.dash-overview-light{
+          width:100%!important;
+          max-width:100%!important;
+          min-width:0!important;
+          overflow:visible!important;
+        }
+
+        .dash-summary-grid{
+          width:100%!important;
+          min-width:0!important;
+        }
+
+        .dash-journey-panel{
+          width:100%!important;
+          max-width:100%!important;
+          min-width:0!important;
+          overflow:hidden!important;
+        }
+
+        .dash-journey-scroll{
+          width:100%!important;
+          max-width:100%!important;
+          min-width:0!important;
+          overflow-x:auto!important;
+          overflow-y:hidden!important;
+          overscroll-behavior-x:contain!important;
+          -webkit-overflow-scrolling:touch!important;
+          scrollbar-width:none!important;
+          touch-action:pan-x!important;
+        }
+
+        .dash-journey-scroll::-webkit-scrollbar{
+          display:none!important;
+        }
+
+        .dash-journey-scroll .dash-journey-line{
+          margin-top:0!important;
+        }
+
+        .dash-business-progress-light,
+        .dash-business-grid-light,
+        .dash-business-grid-light article{
+          overflow:visible!important;
+        }
+
+        .dash-business-grid-light article{
+          height:auto!important;
+          min-height:0!important;
+          display:flex!important;
+          flex-direction:column!important;
+        }
+
+        .dash-business-actions{
+          width:100%!important;
+          margin-top:auto!important;
+          padding-top:14px!important;
+          overflow:visible!important;
+        }
+
+        .dash-business-actions button{
+          position:relative!important;
+          z-index:2!important;
+          display:inline-flex!important;
+          align-items:center!important;
+          justify-content:center!important;
+          visibility:visible!important;
+          opacity:1!important;
+        }
+
+        @media(max-width:700px){
+          .dash-summary-grid{
+            display:grid!important;
+            grid-template-columns:repeat(2,minmax(0,1fr))!important;
+            gap:11px!important;
+          }
+
+          .dash-summary-card{
+            width:100%!important;
+            min-width:0!important;
+            min-height:0!important;
+            height:auto!important;
+            padding:13px 11px!important;
+            display:grid!important;
+            grid-template-columns:40px minmax(0,1fr)!important;
+            align-items:center!important;
+            align-content:center!important;
+            gap:10px!important;
+            overflow:visible!important;
+            border-radius:17px!important;
+          }
+
+          .dash-summary-icon{
+            width:40px!important;
+            height:40px!important;
+            border-radius:13px!important;
+          }
+
+          .dash-summary-icon svg{
+            width:20px!important;
+            height:20px!important;
+          }
+
+          .dash-summary-card>div{
+            width:100%!important;
+            min-width:0!important;
+          }
+
+          .dash-summary-card small{
+            overflow:hidden!important;
+            font-size:10px!important;
+            line-height:1.2!important;
+            text-overflow:ellipsis!important;
+            white-space:nowrap!important;
+          }
+
+          .dash-summary-card strong{
+            margin-top:4px!important;
+            font-size:22px!important;
+            line-height:1!important;
+          }
+
+          .dash-summary-card p{
+            margin:5px 0 0!important;
+            overflow:visible!important;
+            font-size:9px!important;
+            line-height:1.25!important;
+            white-space:normal!important;
+          }
+
+          .dash-action-grid{
+            width:100%!important;
+            grid-template-columns:1fr!important;
+          }
+
+          .dash-action-grid .dash-scan-banner,
+          .dash-action-grid .dash-partner-card{
+            width:100%!important;
+            min-width:0!important;
+            min-height:0!important;
+            height:auto!important;
+            overflow:visible!important;
+          }
+
+          .dash-action-grid .dash-scan-banner{
+            grid-template-columns:48px minmax(0,1fr)!important;
+            grid-template-rows:auto auto!important;
+            padding:16px!important;
+          }
+
+          .dash-action-grid .dash-scan-banner button{
+            grid-column:1/-1!important;
+            width:100%!important;
+            min-width:0!important;
+            display:flex!important;
+          }
+
+          .dash-partner-card{
+            grid-template-columns:46px minmax(0,1fr)!important;
+            grid-template-rows:auto auto!important;
+            padding:16px!important;
+          }
+
+          .dash-partner-card>button{
+            grid-column:1/-1!important;
+            width:100%!important;
+            min-width:0!important;
+            display:flex!important;
+          }
+
+          .dash-journey-panel{
+            padding:18px 14px 20px!important;
+          }
+
+          .dash-journey-scroll{
+            margin-top:20px!important;
+          }
+
+          .dash-journey-scroll .dash-journey-line{
+            width:max-content!important;
+            min-width:880px!important;
+            grid-template-columns:repeat(11,80px)!important;
+            padding:0 8px 8px!important;
+            overflow:visible!important;
+          }
+
+          .dash-journey-scroll .dash-journey-line:before{
+            left:48px!important;
+            right:48px!important;
+          }
+
+          .dash-business-progress-light{
+            padding:17px!important;
+          }
+
+          .dash-business-grid-light{
+            grid-template-columns:1fr!important;
+          }
+
+          .dash-business-grid-light article{
+            width:100%!important;
+            min-width:0!important;
+            height:auto!important;
+            padding:15px!important;
+            overflow:visible!important;
+          }
+
+          .dash-business-actions{
+            display:grid!important;
+            grid-template-columns:1fr!important;
+            align-items:stretch!important;
+            gap:10px!important;
+          }
+
+          .dash-business-actions>span{
+            width:100%!important;
+            white-space:normal!important;
+          }
+
+          .dash-business-actions button{
+            width:100%!important;
+            min-height:42px!important;
+          }
+
+          .dash-empty-progress.dash-empty-progress-light{
+            height:auto!important;
+            min-height:0!important;
+            overflow:visible!important;
+          }
+        }
+
+        @media(max-width:380px){
+          .dash-summary-grid{
+            gap:8px!important;
+          }
+
+          .dash-summary-card{
+            padding:11px 9px!important;
+            grid-template-columns:36px minmax(0,1fr)!important;
+            gap:8px!important;
+          }
+
+          .dash-summary-icon{
+            width:36px!important;
+            height:36px!important;
+          }
+
+          .dash-summary-card strong{
+            font-size:20px!important;
           }
         }
 

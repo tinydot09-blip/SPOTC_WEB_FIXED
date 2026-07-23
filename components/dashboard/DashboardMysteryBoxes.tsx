@@ -372,6 +372,14 @@ export default function DashboardMysteryBoxes() {
     if (!authChecked) return;
 
     if (!user) {
+      setWallet({
+        businessCoins: 0,
+        nearbyBonusPoints: 0,
+        levelBonusPoints: 0,
+        totalPoints: 0,
+      });
+      setBoxes([]);
+      setUserBoxes([]);
       setLoading(false);
       return;
     }
@@ -458,7 +466,15 @@ export default function DashboardMysteryBoxes() {
     });
   }, [boxes, filter, search, userBoxMap, wallet.totalPoints]);
 
+  const requireSignIn = (action: string): boolean => {
+    if (user) return true;
+
+    setMessage(`Sign in to ${action}. You can continue browsing this preview.`);
+    return false;
+  };
+
   const unlockBox = async (box: MysteryBoxRecord) => {
+    if (!requireSignIn('unlock a real Mystery Box')) return;
     if (!user || busyId) return;
 
     if (wallet.totalPoints < box.requiredPoints) {
@@ -558,6 +574,7 @@ export default function DashboardMysteryBoxes() {
   };
 
   const claimReward = async (box: MysteryBoxRecord) => {
+    if (!requireSignIn('claim a real Mystery Box reward')) return;
     if (!user || busyId) return;
 
     const userBox = userBoxMap.get(box.id);
@@ -690,20 +707,25 @@ export default function DashboardMysteryBoxes() {
     );
   }
 
-  if (!user) {
-    return (
-      <section className="mystery-empty-page">
-        <Gift />
-        <h2>Sign in to unlock Mystery Boxes</h2>
-        <p>
-          Earn points, unlock sponsored rewards and claim them into your wallet.
-        </p>
-      </section>
-    );
-  }
-
   return (
     <div className="mystery-page">
+      {!user && (
+        <div className="dash-guest-preview-note">
+          <Sparkles />
+          <span>
+            Guest preview: explore the complete Mystery Boxes page. Sign in
+            only to unlock or claim a real reward.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = '/login?next=/dashboard?tab=mystery';
+            }}
+          >
+            Sign In
+          </button>
+        </div>
+      )}
       <section className="mystery-hero">
         <div>
           <span className="mystery-eyebrow">
@@ -1165,10 +1187,127 @@ export default function DashboardMysteryBoxes() {
           .mystery-summary-grid{grid-template-columns:1fr}
           .mystery-card-actions,.mystery-rule-grid,.mystery-modal-actions{grid-template-columns:1fr}
         }
+
+        .dash-guest-preview-note{
+          width:100%;
+          padding:12px 14px;
+          display:flex;
+          align-items:center;
+          gap:9px;
+          border:1px solid #cfe5f0;
+          border-radius:14px;
+          color:#245b6d;
+          background:#eef9fc;
+          font-size:12px;
+          line-height:1.4;
+        }
+        .dash-guest-preview-note svg{
+          width:18px;
+          height:18px;
+          flex:0 0 auto;
+          color:#087e98;
+        }
+        .dash-guest-preview-note span{
+          min-width:0;
+          flex:1;
+        }
+        .dash-guest-preview-note button{
+          min-height:36px;
+          padding:0 13px;
+          flex:0 0 auto;
+          border:0;
+          border-radius:10px;
+          color:#fff;
+          background:#087e98;
+          font-weight:600;
+          cursor:pointer;
+        }
+
+        /* ===== FINAL MOBILE METRIC GRID: 2 CARDS PER ROW ===== */
+        @media(max-width:620px){
+          .mystery-summary-grid{
+            display:grid!important;
+            grid-template-columns:repeat(2,minmax(0,1fr))!important;
+            gap:10px!important;
+          }
+
+          .mystery-summary-grid article{
+            width:100%!important;
+            min-width:0!important;
+            min-height:112px!important;
+            padding:13px 10px!important;
+            display:flex!important;
+            flex-direction:column!important;
+            align-items:flex-start!important;
+            justify-content:center!important;
+            gap:8px!important;
+            overflow:hidden!important;
+            border-radius:17px!important;
+          }
+
+          .mystery-summary-icon{
+            width:40px!important;
+            height:40px!important;
+            border-radius:13px!important;
+          }
+
+          .mystery-summary-icon svg{
+            width:20px!important;
+            height:20px!important;
+          }
+
+          .mystery-summary-grid article>div{
+            width:100%!important;
+            min-width:0!important;
+          }
+
+          .mystery-summary-grid small{
+            font-size:10px!important;
+            line-height:1.2!important;
+            white-space:normal!important;
+          }
+
+          .mystery-summary-grid strong{
+            margin-top:3px!important;
+            font-size:22px!important;
+            line-height:1!important;
+          }
+
+          .mystery-summary-grid p{
+            margin-top:5px!important;
+            font-size:9px!important;
+            line-height:1.25!important;
+            white-space:normal!important;
+          }
+
+          .dash-guest-preview-note{
+            align-items:flex-start;
+            flex-wrap:wrap;
+          }
+
+          .dash-guest-preview-note button{
+            width:100%;
+          }
+        }
+
+        @media(max-width:380px){
+          .mystery-summary-grid{
+            gap:8px!important;
+          }
+
+          .mystery-summary-grid article{
+            padding:11px 9px!important;
+          }
+
+          .mystery-summary-grid strong{
+            font-size:20px!important;
+          }
+        }
+
       `}</style>
     </div>
   );
-
+}
 
 function MysterySamplePreview() {
   return (
@@ -1252,7 +1391,4 @@ function MysterySamplePreview() {
       </article>
     </section>
   );
-}
-
-
 }

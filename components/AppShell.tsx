@@ -6,8 +6,10 @@ import {
   CircleUserRound,
   LayoutDashboard,
   LogOut,
+  MapPin,
   Search,
   ShoppingBag,
+  Tag,
   UsersRound,
   Video,
   X,
@@ -39,14 +41,17 @@ const navigation = [
   {
     href: '/offers',
     label: 'Offers',
+    icon: Tag,
   },
   {
     href: '/shop',
     label: 'Shop',
+    icon: ShoppingBag,
   },
   {
     href: '/spots',
     label: 'Spots',
+    icon: MapPin,
   },
 ] as const;
 
@@ -96,9 +101,13 @@ export function AppShell({
     useRef<HTMLDivElement>(null);
 
   const standalonePage =
-  pathname.startsWith('/dashboard') ||
-  pathname.startsWith('/compare-online') ||
-  pathname.startsWith('/order-success');
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/compare-online') ||
+    pathname.startsWith('/order-success');
+
+  const mobileNavAtTop =
+    pathname.startsWith('/offers') ||
+    pathname.startsWith('/spots');
 
   const searchPlaceholder = useMemo(() => {
     if (pathname.startsWith('/shop')) {
@@ -274,7 +283,13 @@ export function AppShell({
   }
 
   return (
-    <div className="spotc-app-shell">
+    <div
+      className={
+        pathname.startsWith('/shop') || pathname.startsWith('/product/')
+          ? 'spotc-app-shell spotc-app-shell-shop'
+          : 'spotc-app-shell'
+      }
+    >
       <header className="spotc-site-header">
         <div className="spotc-header-inner">
           <Link
@@ -347,6 +362,16 @@ export function AppShell({
           </div>
 
           <div className="spotc-header-account-actions">
+            {!authLoading &&
+              !firebaseUser && (
+                <Link
+                  href="/dashboard"
+                  className="spotc-login-register-chip"
+                >
+                  Sign in
+                </Link>
+              )}
+
             <Link
               href="/cart"
               className="spotc-header-cart-button"
@@ -366,16 +391,6 @@ export function AppShell({
               )}
             </Link>
 
-            {!authLoading &&
-              !firebaseUser && (
-                <Link
-                  href="/dashboard"
-                  className="spotc-login-register-chip"
-                >
-                  Login / Register
-                </Link>
-              )}
-
             {!authLoading && (
               <div
                 className="spotc-account-menu-container"
@@ -391,10 +406,7 @@ export function AppShell({
                   aria-label="Open profile menu"
                   aria-expanded={menuOpen}
                   onClick={() =>
-                    setMenuOpen(
-                      (current) =>
-                        !current,
-                    )
+                    setMenuOpen((current) => !current)
                   }
                 >
                   {firebaseUser?.photoURL ? (
@@ -463,7 +475,11 @@ export function AppShell({
                     )}
 
                     <Link
-                      href="/dashboard"
+                      href={
+                        firebaseUser
+                          ? '/dashboard'
+                          : '/dashboard?guest=1'
+                      }
                       className="spotc-dropdown-item"
                       onClick={() =>
                         setMenuOpen(false)
@@ -479,7 +495,11 @@ export function AppShell({
                     </Link>
 
                     <Link
-                      href="/dashboard?tab=circles"
+                      href={
+                        firebaseUser
+                          ? '/dashboard?tab=circles'
+                          : '/dashboard?guest=1&tab=circles'
+                      }
                       className="spotc-dropdown-item"
                       onClick={() =>
                         setMenuOpen(false)
@@ -560,29 +580,79 @@ export function AppShell({
         {children}
       </main>
 
-      <nav className="spotc-mobile-navigation">
-        {navigation.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={
-              pathname.startsWith(
-                item.href,
-              )
-                ? 'spotc-mobile-nav-link spotc-mobile-nav-link-active'
-                : 'spotc-mobile-nav-link'
-            }
-          >
-            {item.label}
-          </Link>
-        ))}
+      <nav
+        className={
+          mobileNavAtTop
+            ? 'spotc-mobile-navigation spotc-mobile-navigation-top'
+            : 'spotc-mobile-navigation spotc-mobile-navigation-bottom'
+        }
+      >
+        {navigation.map((item) => {
+          const Icon = item.icon;
+          const active =
+            pathname.startsWith(item.href) ||
+            (item.href === '/shop' && pathname.startsWith('/product/'));
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={
+                active
+                  ? 'spotc-mobile-nav-link spotc-mobile-nav-link-active'
+                  : 'spotc-mobile-nav-link'
+              }
+              aria-current={
+                active ? 'page' : undefined
+              }
+            >
+              <Icon
+                className="spotc-mobile-nav-icon"
+                aria-hidden="true"
+              />
+
+              <span>
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
       </nav>
 
       <style jsx global>{`
         .spotc-app-shell {
           width: 100%;
-          min-height: 100vh;
+          max-width: 100vw;
+          min-height: 0;
+          height: auto;
+          overflow: visible;
           background: #f8f6f1;
+        }
+
+        /* Shop uses a normal content-height shell so the footer starts
+           immediately after the final product row. */
+        .spotc-app-shell-shop {
+          min-height: 0 !important;
+          height: auto !important;
+        }
+
+        .spotc-app-shell-shop .spotc-site-content {
+          min-height: 0 !important;
+          height: auto !important;
+          padding-bottom: 0 !important;
+        }
+
+        @media (max-width: 700px) {
+          .spotc-app-shell:has(.pd-page) .spotc-site-content {
+            min-height: 0 !important;
+            height: auto !important;
+            padding-bottom: 0 !important;
+          }
+        }
+
+        html,
+        body {
+          overflow-x: hidden;
         }
 
         .spotc-site-header {
@@ -617,6 +687,7 @@ export function AppShell({
             auto;
           align-items: center;
           gap: 24px;
+          overflow: visible;
         }
 
         .spotc-header-brand {
@@ -711,6 +782,8 @@ export function AppShell({
         }
 
         .spotc-header-account-actions {
+          position: relative;
+          z-index: 5001;
           display: flex;
           align-items: center;
           justify-content: flex-end;
@@ -762,7 +835,7 @@ export function AppShell({
           border-radius: 999px;
           color: #2c2925;
           background: #fff;
-          font-size: 14px;
+          font-size: 16px;
           font-weight: 600;
           line-height: 1;
           text-decoration: none;
@@ -778,6 +851,7 @@ export function AppShell({
 
         .spotc-account-menu-container {
           position: relative;
+          z-index: 5002;
           width: 36px;
           height: 36px;
           flex: 0 0 36px;
@@ -980,9 +1054,8 @@ export function AppShell({
         }
 
         .spotc-site-content {
-          min-height: calc(
-            100vh - 72px
-          );
+          min-height: 0;
+          height: auto;
         }
 
         .spotc-mobile-navigation {
@@ -1016,11 +1089,15 @@ export function AppShell({
           }
 
           .spotc-header-inner {
+            width: calc(
+              100% - 16px
+            );
+            max-width: 100%;
             grid-template-columns:
               auto
-              1fr
+              minmax(0, 1fr)
               auto;
-            gap: 8px;
+            gap: 6px;
           }
 
           .spotc-header-brand small {
@@ -1028,32 +1105,51 @@ export function AppShell({
           }
 
           .spotc-header-search {
+            min-width: 0;
             height: 36px;
+            padding: 0 9px;
+            gap: 7px;
           }
 
           .spotc-login-register-chip {
-            max-width: 72px;
-            height: 28px;
-            padding: 0 7px;
-            font-size: 9px;
-            white-space: normal;
+            width: 62px;
+            min-width: 62px;
+            max-width: 62px;
+            height: 29px;
+            padding: 0 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 62px;
+            overflow: hidden;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1;
+            white-space: nowrap;
+            word-break: keep-all;
             text-align: center;
           }
 
+          .spotc-header-account-actions {
+            min-width: 0;
+            gap: 4px;
+          }
+
           .spotc-header-cart-button {
-            width: 32px;
-            height: 32px;
+            width: 31px;
+            height: 31px;
+            flex: 0 0 31px;
           }
 
           .spotc-account-menu-container,
           .spotc-account-trigger {
-            width: 33px !important;
-            height: 33px !important;
-            min-width: 33px !important;
-            max-width: 33px !important;
-            min-height: 33px !important;
-            max-height: 33px !important;
-            flex-basis: 33px !important;
+            width: 31px !important;
+            height: 31px !important;
+            min-width: 31px !important;
+            max-width: 31px !important;
+            min-height: 31px !important;
+            max-height: 31px !important;
+            flex-basis: 31px !important;
           }
 
           .spotc-account-dropdown {
@@ -1068,46 +1164,216 @@ export function AppShell({
           }
 
           .spotc-site-content {
-            min-height: calc(
-              100vh - 112px
-            );
-            padding-bottom: 54px;
+            min-height: 0;
+            height: auto;
+            padding-bottom: 0;
           }
 
+          /* Shop has a normal document footer. Do not reserve a
+             viewport-height content area or an extra blank nav area. */
+          .spotc-app-shell:has(.shop-page)
+          .spotc-site-content {
+            min-height: 0 !important;
+            height: auto !important;
+            padding-bottom: 0 !important;
+          }
+
+          .spotc-app-shell:has(.shop-page)
+          .shop-page {
+            min-height: 0 !important;
+            height: auto !important;
+            margin-bottom: 0 !important;
+            padding-bottom: 0 !important;
+          }
+
+          /* =====================================================
+   PREMIUM MOBILE BOTTOM NAVIGATION
+===================================================== */
+
+.spotc-mobile-navigation {
+  position: fixed;
+  right: 0;
+  left: 0;
+  z-index: 3500;
+
+  width: 100%;
+  height: 84px;
+  margin: 0;
+  padding: 8px 0 9px;
+
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 0;
+
+  overflow: hidden;
+
+  border: 0;
+  border-radius: 0;
+
+  color: #ffffff;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(24, 17, 12, 0.86) 0%,
+      rgba(17, 12, 9, 0.78) 100%
+    );
+
+  box-shadow:
+    0 10px 24px
+      rgba(0, 0, 0, 0.16);
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.spotc-mobile-navigation-top {
+  top: 62px;
+  right: 0;
+  bottom: auto;
+  left: 0;
+}
+
+.spotc-mobile-navigation-bottom {
+  top: auto;
+  bottom: env(safe-area-inset-bottom);
+}
+
+.spotc-mobile-nav-link {
+  position: relative;
+
+  min-width: 0;
+  height: 67px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+
+  padding: 5px 8px 9px;
+
+  border-radius: 0;
+
+  color: rgba(255, 255, 255, 0.94);
+  background: transparent;
+
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: 0;
+
+  text-decoration: none;
+
+  transition:
+    color 180ms ease,
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.spotc-mobile-nav-link:not(:last-child)::before {
+  content: '';
+
+  position: absolute;
+  top: 15px;
+  right: 0;
+  bottom: 15px;
+
+  width: 1px;
+
+  background:
+    rgba(255, 255, 255, 0.22);
+}
+
+.spotc-mobile-nav-icon {
+  width: 24px;
+  height: 24px;
+
+  stroke-width: 2;
+}
+
+.spotc-mobile-nav-link > span {
+  display: block;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spotc-mobile-nav-link-active {
+  color: #f5bd4d;
+
+  font-size: 16px;
+  font-weight: 850;
+
+  transform: translateY(-1px);
+}
+
+.spotc-mobile-nav-link-active
+  .spotc-mobile-nav-icon {
+  stroke-width: 2.35;
+
+  filter:
+    drop-shadow(
+      0 2px 5px rgba(245, 189, 77, 0.26)
+    );
+}
+
+.spotc-mobile-nav-link-active::after {
+  content: '';
+
+  position: absolute;
+  right: 24%;
+  bottom: 2px;
+  left: 24%;
+
+  height: 4px;
+
+  border-radius: 999px;
+
+  background:
+    linear-gradient(
+      90deg,
+      #d99c2b,
+      #ffd978
+    );
+
+  box-shadow:
+    0 0 10px
+      rgba(245, 189, 77, 0.52);
+}
+
+.spotc-mobile-nav-link:active {
+  opacity: 0.76;
+  transform: scale(0.97);
+}
+        }
+
+        @media (
+          max-width: 380px
+        ) {
           .spotc-mobile-navigation {
-            position: fixed;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 3500;
-            height: 54px;
-            padding-bottom: env(
-              safe-area-inset-bottom
-            );
-            display: grid;
-            grid-template-columns:
-              repeat(3, 1fr);
-            border-top: 1px solid
-              #e1dbd2;
-            background: rgba(
-              255,
-              255,
-              255,
-              0.98
-            );
+            height: 78px;
+            padding-right: 10px;
+            padding-left: 10px;
           }
 
           .spotc-mobile-nav-link {
-            display: grid;
-            place-items: center;
-            color: #77716a;
-            font-size: 11px;
-            font-weight: 800;
-            text-decoration: none;
+            height: 62px;
+            gap: 4px;
+            font-size: 14px;
           }
 
           .spotc-mobile-nav-link-active {
-            color: #171513;
+            font-size: 15px;
+          }
+
+          .spotc-mobile-nav-icon {
+            width: 22px;
+            height: 22px;
           }
         }
 
@@ -1118,6 +1384,7 @@ export function AppShell({
             width: calc(
               100% - 16px
             );
+            max-width: 100%;
           }
 
           .spotc-header-brand strong {

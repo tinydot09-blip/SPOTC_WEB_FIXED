@@ -1,0 +1,470 @@
+/* =========================================================
+   SPOTC PROFILE DROPDOWN — FINAL FONT + SPACING FIX
+   Paste this complete block at the VERY BOTTOM of app/globals.css
+========================================================= */
+
+.spotc-account-dropdown {
+  width: 300px !important;
+  min-width: 300px !important;
+  padding: 10px !important;
+  border-radius: 18px !important;
+}
+
+.spotc-dropdown-user {
+  padding: 10px 11px !important;
+  gap: 11px !important;
+}
+
+.spotc-dropdown-avatar {
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  max-width: 42px !important;
+  flex: 0 0 42px !important;
+}
+
+.spotc-dropdown-avatar span {
+  font-size: 15px !important;
+  font-weight: 500 !important;
+}
+
+.spotc-dropdown-user-text strong {
+  color: #1d1b18 !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  line-height: 1.25 !important;
+}
+
+.spotc-dropdown-user-text small {
+  margin-top: 4px !important;
+  color: #77716a !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.3 !important;
+}
+
+.spotc-dropdown-divider {
+  margin: 5px 7px !important;
+}
+
+.spotc-dropdown-item {
+  width: 100% !important;
+  min-height: 50px !important;
+  height: auto !important;
+  padding: 10px 11px !important;
+  gap: 11px !important;
+  border-radius: 11px !important;
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+}
+
+.spotc-dropdown-item svg {
+  width: 19px !important;
+  height: 19px !important;
+  flex: 0 0 19px !important;
+}
+
+.spotc-dropdown-item span,
+.spotc-dropdown-item strong {
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+}
+
+.spotc-dropdown-logout,
+.spotc-dropdown-logout span,
+.spotc-dropdown-logout strong {
+  color: #b42318 !important;
+  font-size: 15px !important;
+  font-weight: 500 !important;
+}
+
+/* Supports your earlier dropdown class names too */
+
+.account-dropdown {
+  width: 300px !important;
+  min-width: 300px !important;
+  padding: 10px !important;
+  border-radius: 18px !important;
+}
+
+.account-dropdown-user {
+  padding: 10px 11px !important;
+  gap: 11px !important;
+}
+
+.account-dropdown-avatar {
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  max-width: 42px !important;
+  flex: 0 0 42px !important;
+}
+
+.account-dropdown-user strong {
+  color: #1d1b18 !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  line-height: 1.25 !important;
+}
+
+.account-dropdown-user small {
+  margin-top: 4px !important;
+  color: #77716a !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.3 !important;
+}
+
+.account-dropdown-divider {
+  margin: 5px 7px !important;
+}
+
+.account-dropdown a,
+.account-dropdown-logout {
+  min-height: 50px !important;
+  padding: 10px 11px !important;
+  gap: 11px !important;
+  border-radius: 11px !important;
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+}
+
+.account-dropdown a strong,
+.account-dropdown a span,
+.account-dropdown-logout strong,
+.account-dropdown-logout span {
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+}
+
+.account-dropdown-logout,
+.account-dropdown-logout strong,
+.account-dropdown-logout span {
+  color: #b42318 !important;
+  font-weight: 500 !important;
+}
+
+@media (max-width: 700px) {
+  .spotc-account-dropdown,
+  .account-dropdown {
+    width: min(300px, calc(100vw - 16px)) !important;
+    min-width: 0 !important;
+  }
+}
+/* =========================================================
+   SPOTC PROFILE DROPDOWN — FINAL ACTUAL CLASS FIX
+   Keep this as the LAST block in app/globals.css
+========================================================= */
+
+.profile-menu-wrap {
+  position: relative !important;
+}
+
+.profile-trigger {
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  max-width: 40px !important;
+  max-height: 40px !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  display: grid !important;
+  place-items: center !important;
+
+  overflow: hidden !important;
+
+  border: 1px solid #d8d2c8 !important;
+  border-radius: 50% !important;
+
+  background: #ffffff !important;
+  color: #171717 !important;
+
+  cursor: pointer !important;
+  box-shadow: none !important;
+}
+
+.profile-trigger:hover {
+  background: #f4f1eb !important;
+}
+
+.profile-trigger img {
+  width: 100% !important;
+  height: 100% !important;
+
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+
+  display: block !important;
+
+  border-radius: 50% !important;
+  object-fit: cover !important;
+}
+
+.profile-trigger > span {
+  width: 100% !important;
+  height: 100% !important;
+
+  display: grid !important;
+  place-items: center !important;
+
+  color: #ffffff !important;
+  background: #2d6e25 !important;
+
+  font-size: 15px !important;
+  font-weight: 500 !important;
+}
+
+.profile-dropdown {
+  position: absolute !important;
+
+  top: 48px !important;
+  right: 0 !important;
+  left: auto !important;
+
+  z-index: 99999 !important;
+
+  width: 300px !important;
+  min-width: 300px !important;
+  max-width: calc(100vw - 24px) !important;
+
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: calc(100vh - 100px) !important;
+
+  margin: 0 !important;
+  padding: 10px !important;
+
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+
+  border: 1px solid #e4ded4 !important;
+  border-radius: 18px !important;
+
+  background: #ffffff !important;
+
+  box-shadow:
+    0 24px 60px
+    rgba(20, 16, 8, 0.18) !important;
+
+  transform: none !important;
+}
+
+.profile-dropdown-user,
+.account-dropdown-user {
+  padding: 10px 11px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 11px !important;
+}
+
+.profile-dropdown-user > div:last-child,
+.account-dropdown-user > div:last-child {
+  min-width: 0 !important;
+  flex: 1 !important;
+}
+
+.profile-dropdown-avatar,
+.account-dropdown-avatar {
+  width: 42px !important;
+  height: 42px !important;
+
+  min-width: 42px !important;
+  min-height: 42px !important;
+  max-width: 42px !important;
+  max-height: 42px !important;
+
+  flex: 0 0 42px !important;
+
+  overflow: hidden !important;
+
+  border-radius: 50% !important;
+  background: #2d6e25 !important;
+}
+
+.profile-dropdown-avatar img,
+.account-dropdown-avatar img {
+  width: 100% !important;
+  height: 100% !important;
+
+  display: block !important;
+
+  border-radius: 50% !important;
+  object-fit: cover !important;
+}
+
+.profile-dropdown-avatar span,
+.account-dropdown-avatar span {
+  width: 100% !important;
+  height: 100% !important;
+
+  display: grid !important;
+  place-items: center !important;
+
+  color: #ffffff !important;
+
+  font-size: 15px !important;
+  font-weight: 500 !important;
+}
+
+.profile-dropdown-user strong,
+.account-dropdown-user strong {
+  display: block !important;
+
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+
+  color: #1d1b18 !important;
+
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  line-height: 1.25 !important;
+}
+
+.profile-dropdown-user small,
+.account-dropdown-user small {
+  display: block !important;
+
+  margin-top: 4px !important;
+
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+
+  color: #77716a !important;
+
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.3 !important;
+}
+
+.profile-dropdown-divider,
+.account-dropdown-divider {
+  width: auto !important;
+  height: 1px !important;
+
+  margin: 5px 7px !important;
+
+  background: #eee8df !important;
+}
+
+.profile-dropdown a,
+.profile-dropdown button,
+.account-dropdown a,
+.account-dropdown button,
+.account-dropdown-logout {
+  width: 100% !important;
+
+  height: auto !important;
+  min-height: 50px !important;
+
+  margin: 0 !important;
+  padding: 10px 11px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 11px !important;
+
+  border: 0 !important;
+  border-radius: 11px !important;
+
+  color: #24211d !important;
+  background: transparent !important;
+
+  font-family: inherit !important;
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+
+  text-align: left !important;
+  text-decoration: none !important;
+
+  cursor: pointer !important;
+  box-shadow: none !important;
+}
+
+.profile-dropdown a:hover,
+.profile-dropdown button:hover,
+.account-dropdown a:hover,
+.account-dropdown button:hover {
+  background: #f5f1ea !important;
+}
+
+.profile-dropdown a svg,
+.profile-dropdown button svg,
+.account-dropdown a svg,
+.account-dropdown button svg {
+  width: 19px !important;
+  height: 19px !important;
+  flex: 0 0 19px !important;
+}
+
+.profile-dropdown a > span,
+.profile-dropdown button > span,
+.account-dropdown a > span,
+.account-dropdown button > span {
+  min-width: 0 !important;
+
+  display: block !important;
+
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+}
+
+.profile-dropdown strong,
+.profile-dropdown a strong,
+.profile-dropdown button strong,
+.account-dropdown a strong,
+.account-dropdown button strong {
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+}
+
+.profile-dropdown .account-dropdown-logout,
+.profile-dropdown .profile-dropdown-logout,
+.profile-dropdown button:last-child,
+.account-dropdown-logout {
+  color: #b42318 !important;
+}
+
+.profile-dropdown .account-dropdown-logout span,
+.profile-dropdown .account-dropdown-logout strong,
+.profile-dropdown .profile-dropdown-logout span,
+.profile-dropdown .profile-dropdown-logout strong,
+.profile-dropdown button:last-child span,
+.profile-dropdown button:last-child strong,
+.account-dropdown-logout span,
+.account-dropdown-logout strong {
+  color: #b42318 !important;
+  font-weight: 500 !important;
+}
+
+@media (max-width: 700px) {
+  .profile-dropdown {
+    position: fixed !important;
+
+    top: 58px !important;
+    right: 8px !important;
+    left: auto !important;
+
+    width: min(
+      300px,
+      calc(100vw - 16px)
+    ) !important;
+
+    min-width: 0 !important;
+  }
+}

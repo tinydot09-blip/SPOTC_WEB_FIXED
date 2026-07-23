@@ -260,6 +260,8 @@ export default function DashboardPartner() {
     if (!authChecked) return;
 
     if (!user) {
+      setPartners([]);
+      setRequests([]);
       setLoading(false);
       return;
     }
@@ -400,6 +402,13 @@ export default function DashboardPartner() {
     (request) => request.status === 'pending',
   );
 
+  const requireSignIn = (action: string): boolean => {
+    if (user) return true;
+
+    setMessage(`Sign in to ${action}. You can continue browsing this preview.`);
+    return false;
+  };
+
   const partnerLinkOf = (partner: PartnerRecord): string => {
     if (partner.partnerCode) {
       return `${window.location.origin}/r/${encodeURIComponent(
@@ -432,6 +441,8 @@ export default function DashboardPartner() {
   };
 
   const sharePartnerShop = async (partner: PartnerRecord) => {
+    if (!requireSignIn('share a real partner shop')) return;
+
     const url = partnerLinkOf(partner);
     const text =
       `Shop ${partner.businessName} on SPOTC through my partner link. ` +
@@ -462,6 +473,8 @@ export default function DashboardPartner() {
   };
 
   const copyPartnerLink = async (partner: PartnerRecord) => {
+    if (!requireSignIn('copy a real partner link')) return;
+
     try {
       await navigator.clipboard.writeText(partnerLinkOf(partner));
       setCopied(partner.id);
@@ -472,6 +485,8 @@ export default function DashboardPartner() {
   };
 
   const loadProducts = async (partner: PartnerRecord) => {
+    if (!requireSignIn('load products for a real partner shop')) return;
+
     setProductsPartner(partner);
     setProductsLoading(true);
     setProducts([]);
@@ -527,6 +542,8 @@ export default function DashboardPartner() {
     partner: PartnerRecord,
     product: ProductRecord,
   ) => {
+    if (!requireSignIn('share a real partner product')) return;
+
     const url =
       `${window.location.origin}/product/${encodeURIComponent(
         product.id,
@@ -622,20 +639,25 @@ export default function DashboardPartner() {
     );
   }
 
-  if (!user) {
-    return (
-      <section className="partner-empty-page">
-        <Handshake />
-        <h2>Sign in to manage partner shops</h2>
-        <p>
-          Your commission, product sharing and withdrawal tools will appear here.
-        </p>
-      </section>
-    );
-  }
-
   return (
     <div className="partner-page">
+      {!user && (
+        <div className="dash-guest-preview-note">
+          <Sparkles />
+          <span>
+            Guest preview: explore the complete Partner page. Sign in only to
+            apply, share, copy links, load products or withdraw.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = '/login?next=/dashboard?tab=partner';
+            }}
+          >
+            Sign In
+          </button>
+        </div>
+      )}
       <section className="partner-hero">
         <div>
           <span className="partner-eyebrow">
@@ -877,7 +899,10 @@ export default function DashboardPartner() {
 
                 <button
                   type="button"
-                  onClick={() => setQrPartner(partner)}
+                  onClick={() => {
+                    if (!requireSignIn('show a real partner QR')) return;
+                    setQrPartner(partner);
+                  }}
                 >
                   <QrCode /> QR Code
                 </button>
@@ -887,6 +912,7 @@ export default function DashboardPartner() {
                   className="primary"
                   disabled={partner.availableBalance <= 0}
                   onClick={() => {
+                    if (!requireSignIn('withdraw real partner earnings')) return;
                     setWithdrawPartner(partner);
                     setWithdrawAmount('');
                   }}
@@ -899,6 +925,7 @@ export default function DashboardPartner() {
                 type="button"
                 className="partner-view-shop"
                 onClick={() => {
+                  if (!requireSignIn('view real partner performance')) return;
                   setSelectedPartner(partner);
                 }}
               >
@@ -1327,6 +1354,123 @@ export default function DashboardPartner() {
           .partner-products-list article{grid-template-columns:54px minmax(0,1fr)}.partner-products-list button{grid-column:1/-1;justify-content:center}
           .partner-sample-head{display:block}.partner-sample-head span{display:inline-flex;margin-top:10px}
         }
+
+        .dash-guest-preview-note{
+          width:100%;
+          padding:12px 14px;
+          display:flex;
+          align-items:center;
+          gap:9px;
+          border:1px solid #cfe5f0;
+          border-radius:14px;
+          color:#245b6d;
+          background:#eef9fc;
+          font-size:12px;
+          line-height:1.4;
+        }
+        .dash-guest-preview-note svg{
+          width:18px;
+          height:18px;
+          flex:0 0 auto;
+          color:#087e98;
+        }
+        .dash-guest-preview-note span{
+          min-width:0;
+          flex:1;
+        }
+        .dash-guest-preview-note button{
+          min-height:36px;
+          padding:0 13px;
+          flex:0 0 auto;
+          border:0;
+          border-radius:10px;
+          color:#fff;
+          background:#087e98;
+          font-weight:600;
+          cursor:pointer;
+        }
+
+        /* ===== FINAL MOBILE METRIC GRID: 2 CARDS PER ROW ===== */
+        @media(max-width:650px){
+          .partner-summary-grid{
+            display:grid!important;
+            grid-template-columns:repeat(2,minmax(0,1fr))!important;
+            gap:10px!important;
+          }
+
+          .partner-summary-grid>article{
+            width:100%!important;
+            min-width:0!important;
+            min-height:112px!important;
+            padding:13px 10px!important;
+            display:flex!important;
+            flex-direction:column!important;
+            align-items:flex-start!important;
+            justify-content:center!important;
+            gap:8px!important;
+            overflow:hidden!important;
+            border-radius:17px!important;
+          }
+
+          .partner-summary-icon{
+            width:40px!important;
+            height:40px!important;
+            border-radius:13px!important;
+          }
+
+          .partner-summary-icon svg{
+            width:20px!important;
+            height:20px!important;
+          }
+
+          .partner-summary-grid>article>div{
+            width:100%!important;
+            min-width:0!important;
+          }
+
+          .partner-summary-grid small{
+            font-size:10px!important;
+            line-height:1.2!important;
+            white-space:normal!important;
+          }
+
+          .partner-summary-grid strong{
+            margin-top:3px!important;
+            font-size:21px!important;
+            line-height:1!important;
+          }
+
+          .partner-summary-grid p{
+            margin-top:5px!important;
+            font-size:9px!important;
+            line-height:1.25!important;
+            white-space:normal!important;
+          }
+
+          .dash-guest-preview-note{
+            align-items:flex-start;
+            flex-wrap:wrap;
+          }
+
+          .dash-guest-preview-note button{
+            width:100%;
+          }
+        }
+
+        @media(max-width:380px){
+          .partner-summary-grid{
+            gap:8px!important;
+          }
+
+          .partner-summary-grid>article{
+            padding:11px 9px!important;
+          }
+
+          .partner-summary-grid strong{
+            font-size:19px!important;
+          }
+        }
+
       `}</style>
     </div>
   );

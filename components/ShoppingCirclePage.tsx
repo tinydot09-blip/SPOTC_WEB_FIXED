@@ -56,7 +56,7 @@ function getAppFirestore() {
     throw new Error('Firebase authentication is not available.');
   }
 
-  return getAppFirestore();
+  return getFirestore(currentAuth.app);
 }
 
 type ShoppingCirclePageProps = {
