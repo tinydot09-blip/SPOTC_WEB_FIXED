@@ -36,6 +36,11 @@ import {
   auth,
   firebaseReady,
 } from '@/lib/firebase';
+import {
+  completeGoogleRedirectLogin,
+  consumeGoogleLoginReturnUrl,
+  requireGoogleLogin,
+} from '@/lib/auth';
 
 const navigation = [
   {
@@ -120,6 +125,37 @@ export function AppShell({
 
     return 'Search offers';
   }, [pathname]);
+
+  useEffect(() => {
+    let active = true;
+
+    completeGoogleRedirectLogin()
+      .then((redirectUser) => {
+        if (!active || !redirectUser) return;
+
+        setFirebaseUser(redirectUser);
+
+        const returnUrl = consumeGoogleLoginReturnUrl();
+
+        if (
+          returnUrl &&
+          typeof window !== 'undefined' &&
+          returnUrl !== window.location.href
+        ) {
+          window.location.replace(returnUrl);
+        }
+      })
+      .catch((error) => {
+        console.error(
+          'SPOTC redirect login completion failed:',
+          error,
+        );
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!firebaseReady || !auth) {
@@ -247,6 +283,24 @@ export function AppShell({
     );
   };
 
+  const handleGoogleSignIn = async () => {
+    try {
+      const signedInUser = await requireGoogleLogin();
+
+      if (!signedInUser) return;
+
+      setFirebaseUser(signedInUser);
+      setMenuOpen(false);
+    } catch (error) {
+      console.error('SPOTC Google sign-in failed:', error);
+      window.alert(
+        error instanceof Error
+          ? `Sign in failed: ${error.message}`
+          : 'Google sign in failed. Please try again.',
+      );
+    }
+  };
+
   const handleLogout = async () => {
     setMenuOpen(false);
 
@@ -364,12 +418,13 @@ export function AppShell({
           <div className="spotc-header-account-actions">
             {!authLoading &&
               !firebaseUser && (
-                <Link
-                  href="/dashboard"
+                <button
+                  type="button"
                   className="spotc-login-register-chip"
+                  onClick={() => void handleGoogleSignIn()}
                 >
                   Sign in
-                </Link>
+                </button>
               )}
 
             <Link
@@ -840,6 +895,10 @@ export function AppShell({
           line-height: 1;
           text-decoration: none;
           white-space: nowrap;
+          font-family: inherit;
+          cursor: pointer;
+          appearance: none;
+          -webkit-appearance: none;
           box-shadow: 0 2px 8px
             rgba(20, 16, 8, 0.04);
         }

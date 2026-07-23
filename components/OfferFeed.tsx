@@ -69,8 +69,8 @@ function QuickEnquirySheet({
   onClose: () => void;
 }) {
   const [selectedQuestion, setSelectedQuestion] = useState<
-  (typeof QUICK_ENQUIRY_QUESTIONS)[number]
->(QUICK_ENQUIRY_QUESTIONS[0]);
+    (typeof QUICK_ENQUIRY_QUESTIONS)[number]
+  >(QUICK_ENQUIRY_QUESTIONS[0]);
   const [customMessage, setCustomMessage] = useState("");
   const [mounted, setMounted] = useState(false);
 
@@ -1197,26 +1197,58 @@ function OfferCard({
       />
 
       <style jsx global>{`
-        .offers-page .offer-contact-row-four > button.offer-whatsapp-enquiry-button {
+        /*
+         * FINAL RESPONSIVE CONTACT BUTTON FIX
+         *
+         * Desktop:
+         * - Four buttons stay inside the video width.
+         * - Call is slightly smaller.
+         * - WhatsApp, Direction and View shop get more space.
+         *
+         * Mobile:
+         * - Direction is hidden, matching the mobile app.
+         * - Call, WhatsApp and View shop use three equal columns.
+         */
+        .offers-page .offer-contact-row-four {
+          width: 100% !important;
+          max-width: 100% !important;
+          display: grid !important;
+          grid-template-columns:
+            minmax(86px, 0.82fr)
+            minmax(108px, 1.08fr)
+            minmax(108px, 1.08fr)
+            minmax(116px, 1.16fr) !important;
+          gap: 8px !important;
+          align-items: stretch !important;
+          overflow: visible !important;
+          box-sizing: border-box !important;
+        }
+
+        .offers-page .offer-contact-row-four > a,
+        .offers-page .offer-contact-row-four > button {
           width: 100% !important;
           min-width: 0 !important;
+          max-width: 100% !important;
           height: 46px !important;
           min-height: 46px !important;
           margin: 0 !important;
-          padding: 0 6px !important;
+          padding: 0 9px !important;
           display: flex !important;
           align-items: center !important;
           justify-content: center !important;
-          gap: 7px !important;
+          gap: 6px !important;
           overflow: hidden !important;
           border: 1px solid rgba(255, 255, 255, 0.34) !important;
-          border-radius: 24px !important;
+          border-radius: 999px !important;
           color: #ffffff !important;
           background: rgba(0, 0, 0, 0.26) !important;
           font-family: inherit !important;
           font-size: 14px !important;
-          font-weight: 800 !important;
+          font-weight: 500 !important;
+          font-style: normal !important;
           line-height: 1 !important;
+          text-align: center !important;
+          text-decoration: none !important;
           white-space: nowrap !important;
           cursor: pointer !important;
           appearance: none !important;
@@ -1224,24 +1256,75 @@ function OfferCard({
           box-sizing: border-box !important;
         }
 
-        .offers-page .offer-contact-row-four > button.offer-whatsapp-enquiry-button svg {
-          width: 20px !important;
-          height: 20px !important;
-          flex: 0 0 20px !important;
+        .offers-page .offer-contact-row-four > a svg,
+        .offers-page .offer-contact-row-four > button svg {
+          width: 19px !important;
+          height: 19px !important;
+          min-width: 19px !important;
+          min-height: 19px !important;
+          flex: 0 0 19px !important;
+          display: block !important;
+          margin: 0 !important;
+          position: static !important;
+          transform: none !important;
         }
 
-        .offers-page .offer-contact-row-four > button.offer-whatsapp-enquiry-button:active {
+        .offers-page .offer-contact-row-four > a:active,
+        .offers-page .offer-contact-row-four > button:active {
           transform: scale(0.98);
         }
 
-        .offers-page .offer-contact-row-four > a,
-        .offers-page .offer-contact-row-four > button {
-          min-width: 0 !important;
+        @media (max-width: 760px) {
+          .offers-page .offer-contact-row-four {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+          }
+
+          /* Direction is desktop-only. */
+          .offers-page .offer-contact-row-four > a[target="_blank"] {
+            display: none !important;
+          }
+
+          .offers-page .offer-contact-row-four > a,
+          .offers-page .offer-contact-row-four > button {
+            height: 48px !important;
+            min-height: 48px !important;
+            padding: 0 10px !important;
+            gap: 7px !important;
+            font-size: 15px !important;
+          }
+
+          .offers-page .offer-contact-row-four > a svg,
+          .offers-page .offer-contact-row-four > button svg {
+            width: 21px !important;
+            height: 21px !important;
+            min-width: 21px !important;
+            min-height: 21px !important;
+            flex-basis: 21px !important;
+          }
         }
 
-        @media (max-width: 380px) {
-          .offers-page .offer-contact-row-four > button.offer-whatsapp-enquiry-button {
-            font-size: 13px !important;
+        @media (max-width: 390px) {
+          .offers-page .offer-contact-row-four {
+            gap: 6px !important;
+          }
+
+          .offers-page .offer-contact-row-four > a,
+          .offers-page .offer-contact-row-four > button {
+            height: 46px !important;
+            min-height: 46px !important;
+            padding: 0 7px !important;
+            gap: 5px !important;
+            font-size: 14px !important;
+          }
+
+          .offers-page .offer-contact-row-four > a svg,
+          .offers-page .offer-contact-row-four > button svg {
+            width: 19px !important;
+            height: 19px !important;
+            min-width: 19px !important;
+            min-height: 19px !important;
+            flex-basis: 19px !important;
           }
         }
       `}</style>

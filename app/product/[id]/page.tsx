@@ -1957,6 +1957,37 @@ width:200px;
         .pd-rewards-highlight{width:100%;margin:-2px 0 18px;padding:14px 15px;display:grid;grid-template-columns:42px minmax(0,1fr) 22px;gap:12px;align-items:center;border:1px solid #e1b96c;border-radius:17px;background:linear-gradient(135deg,#fff7df 0%,#fff1c5 100%);color:#3d2a0d;text-align:left;box-shadow:0 8px 24px rgba(139,94,20,.12);cursor:pointer}.pd-rewards-highlight:hover{border-color:#c98b25;transform:translateY(-1px)}.pd-rewards-highlight-icon{width:42px;height:42px;display:grid;place-items:center;border-radius:13px;background:#17120d;color:#f7bc4d}.pd-rewards-highlight-icon svg{width:24px;height:24px}.pd-rewards-highlight-copy{min-width:0;display:block}.pd-rewards-highlight-copy strong,.pd-rewards-highlight-copy small{display:block}.pd-rewards-highlight-copy strong{font-size:16px;font-weight:950}.pd-rewards-highlight-copy small{margin-top:4px;color:#795d2d;font-size:12px;font-weight:800}.pd-rewards-highlight-arrow{width:20px;transform:rotate(180deg);color:#7d591c}.pd-rewards-sheet{width:min(560px,100%);background:#fffaf0;color:#17120d;border-color:#e8d7b3}.pd-rewards-sheet .pd-modal-close{background:#17120d;color:#fff;border-color:#17120d}.pd-rewards-sheet-heading{display:grid;grid-template-columns:48px 1fr;gap:13px;align-items:start;padding-right:36px}.pd-rewards-sheet-heading>span{width:48px;height:48px;display:grid;place-items:center;border-radius:15px;background:#17120d;color:#f5b943}.pd-rewards-sheet-heading svg{width:27px;height:27px}.pd-rewards-sheet-heading small{display:block;color:#9a6b1e;font-size:11px;font-weight:950;letter-spacing:.12em}.pd-rewards-sheet-heading h2{margin:4px 0 7px;font-size:25px}.pd-rewards-sheet-heading p{margin:0;color:#705f49;font-size:13px;line-height:1.5}.pd-rewards-points-card{margin-top:18px;padding:17px;border:1px solid #e6c982;border-radius:18px;background:linear-gradient(135deg,#1a1712,#2b2113);color:#fff}.pd-rewards-points-card strong{display:block;color:#f8bf4d;font-size:34px;line-height:1}.pd-rewards-points-card span{display:block;margin-top:5px;font-size:16px;font-weight:900}.pd-rewards-points-card small{display:block;margin-top:4px;color:rgba(255,255,255,.66)}.pd-coupon-list{display:grid;gap:10px;margin-top:18px}.pd-coupon-list-title{display:flex;align-items:center;justify-content:space-between;gap:12px}.pd-coupon-list-title h3{margin:0;font-size:17px}.pd-coupon-list-title span{padding:5px 8px;border-radius:999px;background:#f1e4c7;color:#75501a;font-size:10px;font-weight:900}.pd-coupon-card{display:grid;grid-template-columns:108px 1fr;gap:13px;align-items:center;padding:13px;border:1px dashed #d3a24b;border-radius:16px;background:#fff}.pd-coupon-badge{min-height:70px;display:grid;place-items:center;padding:9px;border-radius:12px;background:#fff2c9;color:#7d5110;font-size:15px;font-weight:950;text-align:center}.pd-coupon-copy{min-width:0}.pd-coupon-copy strong,.pd-coupon-copy small,.pd-coupon-copy code{display:block}.pd-coupon-copy strong{font-size:14px;line-height:1.35}.pd-coupon-copy small{margin-top:4px;color:#756552;font-size:11px;line-height:1.4}.pd-coupon-copy code{width:max-content;margin-top:8px;padding:5px 8px;border-radius:8px;background:#17120d;color:#f8bf4d;font-family:inherit;font-size:11px;font-weight:950}.pd-coupon-note{margin:14px 0 0;padding:11px 12px;border-radius:12px;background:#f3ead9;color:#6d5b43;font-size:11px;line-height:1.5}.pd-rewards-sheet-done{width:100%;height:48px;margin-top:14px;border:0;border-radius:13px;background:#17120d;color:#fff;font-weight:950;cursor:pointer}@media(max-width:620px){.pd-rewards-highlight{margin:0 0 16px;padding:13px;grid-template-columns:39px minmax(0,1fr) 19px}.pd-rewards-highlight-icon{width:39px;height:39px}.pd-rewards-highlight-copy strong{font-size:15px}.pd-rewards-highlight-copy small{font-size:11px}.pd-rewards-sheet-backdrop{align-items:flex-end}.pd-rewards-sheet{width:100%;max-height:88vh;border-radius:24px 24px 0 0;padding:20px 15px calc(20px + env(safe-area-inset-bottom))}.pd-rewards-sheet-heading{grid-template-columns:42px 1fr;gap:11px}.pd-rewards-sheet-heading>span{width:42px;height:42px}.pd-rewards-sheet-heading h2{font-size:22px}.pd-coupon-card{grid-template-columns:94px 1fr;padding:11px}.pd-coupon-badge{min-height:64px;font-size:13px}}
 
 
+
+        /* Desktop-only typography refinement */
+        @media (min-width: 1024px) {
+          .pd-info h1 {
+            font-size: 42px !important;
+            line-height: 1.08 !important;
+            font-weight: 500 !important;
+            letter-spacing: -0.02em !important;
+          }
+
+          .pd-brand,
+          .pd-rating span,
+          .pd-price strong,
+          .pd-price del,
+          .pd-price em,
+          .pd-rewards-highlight strong,
+          .pd-rewards-highlight small,
+          .pd-option label,
+          .pd-option button,
+          .pd-qty strong,
+          .pd-save,
+          .pd-add,
+          .pd-peace-card strong,
+          .pd-peace-card small {
+            font-weight: 500 !important;
+          }
+
+          .pd-price strong {
+            font-size: 34px !important;
+          }
+        }
               `}</style>
     </main>
   );
