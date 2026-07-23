@@ -579,10 +579,29 @@ body:has(.shop-page) .spotc-site-content {
     margin-top: 0 !important;
   }
 
-  .spots-page {
-    height: calc(100dvh - 62px - 47px);
-  }
+ .spots-page {
+  position: fixed;
+  top: 146px; /* 62px header + 84px top navigation */
+  right: 0;
+  bottom: 0;
+  left: 0;
 
+  width: 100%;
+  height: auto;
+  min-height: 0;
+
+  overflow: hidden;
+  background: #000;
+}
+
+.spot-feed {
+  height: 100%;
+}
+
+.spot-slide {
+  height: 100%;
+  min-height: 100%;
+}
   .spot-slide {
     height: 100%;
     min-height: 520px;
