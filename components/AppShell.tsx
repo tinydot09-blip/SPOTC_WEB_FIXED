@@ -1262,7 +1262,22 @@ export function AppShell({
 
 .spotc-mobile-navigation-bottom {
   top: auto;
-  bottom: env(safe-area-inset-bottom);
+  bottom: 0;
+
+  height: calc(
+    84px + env(safe-area-inset-bottom, 0px)
+  );
+
+  padding-bottom: calc(
+    9px + env(safe-area-inset-bottom, 0px)
+  );
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(24, 17, 12, 0.96) 0%,
+      rgba(17, 12, 9, 1) 100%
+    );
 }
 
 .spotc-mobile-nav-link {
@@ -1383,6 +1398,16 @@ export function AppShell({
             height: 78px;
             padding-right: 10px;
             padding-left: 10px;
+          }
+
+          .spotc-mobile-navigation-bottom {
+            height: calc(
+              78px + env(safe-area-inset-bottom, 0px)
+            );
+
+            padding-bottom: calc(
+              9px + env(safe-area-inset-bottom, 0px)
+            );
           }
 
           .spotc-mobile-nav-link {
