@@ -36,11 +36,7 @@ import {
   auth,
   firebaseReady,
 } from '@/lib/firebase';
-import {
-  completeGoogleRedirectLogin,
-  consumeGoogleLoginReturnUrl,
-  requireGoogleLogin,
-} from '@/lib/auth';
+import { requireGoogleLogin } from '@/lib/auth';
 
 const navigation = [
   {
@@ -125,37 +121,6 @@ export function AppShell({
 
     return 'Search offers';
   }, [pathname]);
-
-  useEffect(() => {
-    let active = true;
-
-    completeGoogleRedirectLogin()
-      .then((redirectUser) => {
-        if (!active || !redirectUser) return;
-
-        setFirebaseUser(redirectUser);
-
-        const returnUrl = consumeGoogleLoginReturnUrl();
-
-        if (
-          returnUrl &&
-          typeof window !== 'undefined' &&
-          returnUrl !== window.location.href
-        ) {
-          window.location.replace(returnUrl);
-        }
-      })
-      .catch((error) => {
-        console.error(
-          'SPOTC redirect login completion failed:',
-          error,
-        );
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (!firebaseReady || !auth) {
