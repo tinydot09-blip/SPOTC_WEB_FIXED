@@ -866,20 +866,20 @@ if (!signedInUser) {
 .spotc-navigation-link{
   position:relative;
 
-  width:110px;
+  width:120px;
   height:72px;
 
   display:flex;
-  flex-direction:column;
+  flex-direction:row;
   align-items:center;
   justify-content:center;
-  gap:5px;
+  gap:8px;
 
-  color:#ffffffcc;
+  color:#6e6962;
   text-decoration:none;
 
   font-size:15px;
-  font-weight:750;
+  font-weight:700;
 
   transition:.2s;
 }
@@ -898,9 +898,11 @@ if (!signedInUser) {
 }
 
 .spotc-desktop-nav-icon{
-  width:24px;
-  height:24px;
+  width:20px;
+  height:20px;
+  flex:0 0 20px;
   stroke-width:2;
+  color:inherit;
 }
 
 .spotc-navigation-link span{
@@ -908,8 +910,8 @@ if (!signedInUser) {
 }
 
 .spotc-navigation-link-active{
-  color:#f5bd4d;
-  font-weight:850;
+  color:#d99c2b;
+  font-weight:800;
 }
 
 .spotc-navigation-link-active .spotc-desktop-nav-icon{
