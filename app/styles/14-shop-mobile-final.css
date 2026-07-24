@@ -1,7 +1,7 @@
 /* =========================================================
-   SPOTC SHOP MOBILE — FINAL LAYOUT
-   Removes the large gap before the footer
-   Keeps the footer above the fixed mobile navigation
+   SPOTC SHOP MOBILE — FINAL WORKING LAYOUT
+   Product grid touches footer
+   Footer content stays above fixed bottom navigation
 
    Save as:
    app/styles/14-shop-mobile-final.css
@@ -80,7 +80,6 @@
     margin-bottom: 0 !important;
   }
 
-  /* Remove any large empty space left by inherited layout rules */
   body:has(.shop-page) .shop-page::after,
   body:has(.shop-page) .product-grid::after,
   body:has(.shop-page) .product-grid.rich::after {
@@ -89,7 +88,7 @@
   }
 
   /* =========================================================
-     SHOP FOOTER — MOBILE
+     SHOP FOOTER
   ========================================================= */
 
   body:has(.shop-page) .spotc-footer {
@@ -100,13 +99,14 @@
     min-height: 0 !important;
     height: auto !important;
 
-    margin: 16px 0 0 !important;
+    /* No beige or dark strip between products and footer */
+    margin: 0 !important;
 
     padding:
       42px
       20px
       calc(
-        110px + env(safe-area-inset-bottom, 0px)
+        120px + env(safe-area-inset-bottom, 0px)
       ) !important;
 
     display: block !important;
@@ -142,7 +142,7 @@
     right: 0 !important;
     bottom: 0 !important;
     left: 0 !important;
-    margin-top: 50px!important;
+    margin: 0 !important;
     z-index: 5000 !important;
   }
 }
