@@ -1361,9 +1361,7 @@ if (!signedInUser) {
 .spotc-site-content {
   min-height: 0 !important;
   height: auto !important;
-  padding-bottom: calc(
-    110px + env(safe-area-inset-bottom, 0px)
-  ) !important;
+  padding-bottom: 0 !important;
 }
 
 .spotc-app-shell:has(.shop-page)
@@ -1371,7 +1369,7 @@ if (!signedInUser) {
   min-height: 0 !important;
   height: auto !important;
   margin-bottom: 0 !important;
-  padding-bottom: 20px !important;
+  padding-bottom: 0 !important;
 }
 
           /* =====================================================
