@@ -1356,22 +1356,23 @@ if (!signedInUser) {
             padding-bottom: 0;
           }
 
-          /* Shop has a normal document footer. Do not reserve a
-             viewport-height content area or an extra blank nav area. */
-          .spotc-app-shell:has(.shop-page)
-          .spotc-site-content {
-            min-height: 0 !important;
-            height: auto !important;
-            padding-bottom: 0 !important;
-          }
+          /* Shop mobile: reserve space above the fixed bottom navigation. */
+.spotc-app-shell:has(.shop-page)
+.spotc-site-content {
+  min-height: 0 !important;
+  height: auto !important;
+  padding-bottom: calc(
+    110px + env(safe-area-inset-bottom, 0px)
+  ) !important;
+}
 
-          .spotc-app-shell:has(.shop-page)
-          .shop-page {
-            min-height: 0 !important;
-            height: auto !important;
-            margin-bottom: 0 !important;
-            padding-bottom: 0 !important;
-          }
+.spotc-app-shell:has(.shop-page)
+.shop-page {
+  min-height: 0 !important;
+  height: auto !important;
+  margin-bottom: 0 !important;
+  padding-bottom: 20px !important;
+}
 
           /* =====================================================
    PREMIUM MOBILE BOTTOM NAVIGATION

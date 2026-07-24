@@ -1,5 +1,5 @@
 /* =========================================================
-   SPOTC SHOP MOBILE — FINAL LAYOUT + FOOTER FIX
+   SPOTC SHOP MOBILE — FINAL LAYOUT + FIXED BOTTOM NAV SPACE
    Save as: app/styles/14-shop-mobile-final.css
    Import this file LAST in app/globals.css
 ========================================================= */
@@ -32,25 +32,29 @@
   }
 
   body:has(.shop-page) .spotc-site-content {
-    width: 100% !important;
-    min-height: 0 !important;
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    display: block !important;
-    overflow: visible !important;
-  }
+  width: 100% !important;
+  min-height: 0 !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 0
+    calc(110px + env(safe-area-inset-bottom, 0px))
+    !important;
+  display: block !important;
+  overflow: visible !important;
+  box-sizing: border-box !important;
+}
 
   body:has(.shop-page) .page.shop-page,
-  body:has(.shop-page) .shop-page {
-    width: min(100%, 1280px) !important;
-    min-height: 0 !important;
-    height: auto !important;
-    margin: 0 auto !important;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-    display: block !important;
-  }
+body:has(.shop-page) .shop-page {
+  width: min(100%, 1280px) !important;
+  min-height: 0 !important;
+  height: auto !important;
+  margin: 0 auto !important;
+  padding-top: 0 !important;
+  padding-bottom: 20px !important;
+  display: block !important;
+  box-sizing: border-box !important;
+}
 
   body:has(.shop-page) .shop-page > *,
   body:has(.shop-page) .product-grid,
@@ -60,11 +64,11 @@
   }
 
   body:has(.shop-page) .product-grid.rich {
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-    padding-bottom: 0 !important;
-    align-content: start !important;
-  }
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding-bottom: 20px !important;
+  align-content: start !important;
+}
 
   body:has(.shop-page) .product-card.rich:last-child,
   body:has(.shop-page) .product-grid.rich > :last-child {
@@ -76,8 +80,9 @@
     min-height: 0 !important;
     height: auto !important;
     margin-top: 50px !important;
+
     padding-bottom: calc(
-      92px + env(safe-area-inset-bottom)
+      104px + env(safe-area-inset-bottom, 0px)
     ) !important;
   }
 
