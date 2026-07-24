@@ -15,3 +15,31 @@
 @import "./styles/14-shop-mobile-final.css";
 @import "./styles/15-spots-mobile-final.css";
 @import "./styles/16-shop-bottom-final.css";
+
+/* =========================================================
+   SHOP MOBILE — FINAL LIVE FOOTER GAP
+   KEEP THIS AT THE ABSOLUTE END OF globals.css
+========================================================= */
+
+@media (max-width: 760px) {
+  body:has(.shop-page) .spotc-site-content {
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding-bottom: 28px !important;
+    background: #f8f6f1 !important;
+  }
+
+  body:has(.shop-page) .shop-page,
+  body:has(.shop-page) .product-grid,
+  body:has(.shop-page) .product-grid.rich {
+    min-height: 0 !important;
+    height: auto !important;
+    margin-bottom: 0 !important;
+  }
+
+  body:has(.shop-page) .spotc-footer {
+    display: block !important;
+    margin-top: 0 !important;
+  }
+}
