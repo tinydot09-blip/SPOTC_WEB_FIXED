@@ -839,25 +839,52 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
     );
   }
 
+  const totalVotes = comparisonMode
+    ? products.reduce(
+        (sum, _product, index) =>
+          sum + n(circle[`product_${index}_votes`]),
+        n(circle.none_votes),
+      )
+    : n(circle.vote_buy_it) +
+      n(circle.vote_looks_good) +
+      n(circle.vote_not_sure) +
+      n(circle.vote_dont_buy) +
+      n(circle.none_votes);
+
+  const recentMessages = messages.filter(
+    (item) => item.message_type !== 'vote',
+  );
+
   return (
     <main className="sc-shell">
       <header className="sc-topbar">
-        <button className="icon-button" onClick={() => router.back()} aria-label="Go back">
-          <ArrowLeft size={21} />
+        <button
+          className="icon-button back"
+          onClick={() => router.back()}
+          aria-label="Go back"
+        >
+          <ArrowLeft size={23} />
         </button>
 
         <div className="brand-block">
-          <span className="eyebrow">SPOTC</span>
           <strong>Shopping Circle</strong>
+          <button type="button" className="share-code" onClick={copyLink}>
+            Share code: {shareCode.slice(0, 14)}
+            <Copy size={14} />
+          </button>
         </div>
 
         <div className="top-actions">
-          <button className="icon-button" onClick={copyLink} aria-label="Copy link">
-            <Copy size={19} />
-          </button>
-          <button className="share-button" onClick={shareCircle}>
-            <Share2 size={18} />
-            Share
+          <span className="member-pill">
+            <Users size={18} />
+            {n(circle.participants)}
+          </span>
+          <button
+            className="icon-button"
+            onClick={shareCircle}
+            aria-label="Share Shopping Circle"
+          >
+            <Share2 size={19} />
           </button>
         </div>
       </header>
@@ -865,39 +892,70 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
       <div className="sc-layout">
         <section className="sc-main">
           {comparisonMode ? (
-            <section className="hero-card">
-              <div className="hero-heading">
-                <div>
-                  <span className="eyebrow">COMPARE TOGETHER</span>
-                  <h1>Which one should I buy?</h1>
-                </div>
-                <span className="live-badge"><span /> Live circle</span>
-              </div>
+            <section className="product-card comparison-card">
+              <div className="section-kicker">COMPARE TOGETHER</div>
+              <h1>Which one should I buy?</h1>
 
               <div className="product-strip">
                 {products.map((product, index) => {
                   const vote = `product_${index}`;
+
                   return (
-                    <article className="compare-product" key={`${product.id || product.title}-${index}`}>
+                    <article
+                      className="compare-product"
+                      key={`${product.id || product.title}-${index}`}
+                    >
                       <div className="compare-image">
-                        {product.image ? <img src={product.image} alt={product.title || 'Product'} /> : <ShoppingBag size={40} />}
+                        {product.image ? (
+                          <img
+                            src={product.image}
+                            alt={product.title || 'Product'}
+                          />
+                        ) : (
+                          <ShoppingBag size={42} />
+                        )}
                         <span className="choice-number">{index + 1}</span>
                       </div>
+
                       <div className="compare-copy">
-                        <span>{product.business_name || product.shop_name || 'SPOTC Shop'}</span>
+                        <span>
+                          {product.business_name ||
+                            product.shop_name ||
+                            'SPOTC Shop'}
+                        </span>
                         <h2>{product.title || 'Product'}</h2>
                         <div className="price-row">
                           <strong>{formatMoney(product.price)}</strong>
-                          {n(product.old_price) > n(product.price) && <del>{formatMoney(product.old_price)}</del>}
+                          {n(product.old_price) > n(product.price) && (
+                            <del>{formatMoney(product.old_price)}</del>
+                          )}
                         </div>
+
                         <button
-                          className={myVote === vote ? 'vote-choice selected' : 'vote-choice'}
-                          onClick={() => submitVote(vote, `Voted for ${product.title || `Product ${index + 1}`}`)}
+                          className={
+                            myVote === vote
+                              ? 'compare-vote selected'
+                              : 'compare-vote'
+                          }
+                          onClick={() =>
+                            submitVote(
+                              vote,
+                              `Voted for ${
+                                product.title || `Product ${index + 1}`
+                              }`,
+                            )
+                          }
                           disabled={busy}
                         >
-                          {myVote === vote ? <Check size={17} /> : <ThumbsUp size={17} />}
-                          {myVote === vote ? 'My choice' : 'Vote for this'}
-                          <span>{n(circle[`product_${index}_votes`])}</span>
+                          {myVote === vote ? (
+                            <Check size={17} />
+                          ) : (
+                            <ThumbsUp size={17} />
+                          )}
+                          <span>
+                            {myVote === vote ? 'My choice' : 'Vote for this'}
+                          </span>
+                          <b>{n(circle[`product_${index}_votes`])}</b>
                         </button>
                       </div>
                     </article>
@@ -906,155 +964,218 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
               </div>
 
               <button
-                className={myVote === 'none' ? 'none-choice selected' : 'none-choice'}
+                className={
+                  myVote === 'none'
+                    ? 'none-choice selected'
+                    : 'none-choice'
+                }
                 onClick={() => submitVote('none', 'None of these')}
                 disabled={busy}
               >
-                Not convinced by any option
+                <X size={18} />
+                None of these
                 <strong>{n(circle.none_votes)}</strong>
               </button>
             </section>
           ) : (
-            <section className="hero-card single-hero">
-              <div className="single-media">
-                {circle.product_image ? (
-                  <img src={circle.product_image} alt={circle.product_title || 'Product'} />
-                ) : (
-                  <ShoppingBag size={58} />
-                )}
-                <span className="live-badge media-live"><span /> Live circle</span>
+            <section className="product-card">
+              <div className="product-summary">
+                <div className="product-image">
+                  {circle.product_image ? (
+                    <img
+                      src={circle.product_image}
+                      alt={circle.product_title || 'Product'}
+                    />
+                  ) : (
+                    <ShoppingBag size={52} />
+                  )}
+                </div>
+
+                <div className="product-info">
+                  <h1>{circle.product_title || 'Product'}</h1>
+
+                  <div className="price-row large">
+                    <strong>{formatMoney(circle.product_price)}</strong>
+                    {n(circle.product_old_price) >
+                      n(circle.product_price) && (
+                      <del>{formatMoney(circle.product_old_price)}</del>
+                    )}
+                    {n(circle.product_discount) > 0 && (
+                      <em>{n(circle.product_discount)}% OFF</em>
+                    )}
+                  </div>
+
+                  <div className="store-row">
+                    <span>
+                      {circle.business_name || 'SPOTC Official Store'}
+                    </span>
+                    <span className="verified">
+                      <Check size={11} />
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <div className="single-copy">
-                <span className="eyebrow">{circle.business_name || 'SPOTC SHOP'}</span>
-                <h1>{circle.product_title || 'Product'}</h1>
-                <div className="price-row large">
-                  <strong>{formatMoney(circle.product_price)}</strong>
-                  {n(circle.product_old_price) > n(circle.product_price) && (
-                    <del>{formatMoney(circle.product_old_price)}</del>
-                  )}
-                  {n(circle.product_discount) > 0 && <em>{n(circle.product_discount)}% OFF</em>}
-                </div>
+              <div className="circle-meta">
+                <span>
+                  <i />
+                  Active
+                </span>
+                <span>Created recently</span>
+                <span className="votes-open">
+                  <MessageCircle size={15} />
+                  Open for votes
+                </span>
+              </div>
+            </section>
+          )}
 
-                <div className="question-card">
-                  <MessageCircle size={19} />
-                  <span>{circle.question || 'Should I buy this?'}</span>
+          {!comparisonMode && (
+            <section className="vote-card">
+              <div className="vote-heading">
+                <div>
+                  <h2>What&apos;s the verdict?</h2>
+                  <p>Tap to vote</p>
                 </div>
+                {busy && <Loader2 className="spin" size={20} />}
+              </div>
 
-                <div className="vote-grid">
-                  {singleProductVoteOptions.map(
-                    ([vote, label, Icon, countKey]) => (
-                      <button
-                        key={vote}
-                        className={
-                          myVote === vote
-                            ? 'vote-tile selected'
-                            : 'vote-tile'
-                        }
-                        onClick={() => submitVote(vote, label)}
-                        disabled={busy}
-                      >
-                        <Icon size={21} />
-                        <span>{label}</span>
-                        <strong>{n(circle[countKey])}</strong>
-                      </button>
-                    ),
-                  )}
+              <div className="vote-grid">
+                {singleProductVoteOptions.map(
+                  ([vote, label, Icon, countKey]) => (
+                    <button
+                      key={vote}
+                      className={
+                        myVote === vote
+                          ? `vote-tile ${vote} selected`
+                          : `vote-tile ${vote}`
+                      }
+                      onClick={() => submitVote(vote, label)}
+                      disabled={busy}
+                    >
+                      <Icon size={25} />
+                      <span>{label}</span>
+                      <strong>{n(circle[countKey])}</strong>
+                    </button>
+                  ),
+                )}
+
+                <button
+                  className={
+                    myVote === 'none'
+                      ? 'vote-tile none selected'
+                      : 'vote-tile none'
+                  }
+                  onClick={() => submitVote('none', 'No opinion')}
+                  disabled={busy}
+                >
+                  <X size={25} />
+                  <span>None</span>
+                  <strong>{n(circle.none_votes)}</strong>
+                </button>
+              </div>
+
+              <div className="vote-total">
+                <div>
+                  <span>Total votes</span>
+                  <strong>{totalVotes}</strong>
+                </div>
+                <div>
+                  <span>Status</span>
+                  <strong>Voting live</strong>
                 </div>
               </div>
             </section>
           )}
 
-          <section className="chat-discovery-card">
-            <div className="chat-discovery-heading">
-              <div className="chat-discovery-icon">
-                <MessageSquareText size={24} />
-              </div>
-
-              <div>
-                <span className="eyebrow">FRIENDS &amp; FAMILY CHAT</span>
-                <h2>See what everyone thinks</h2>
-                <p>
-                  Vote, message, reply or send a voice note in this live
-                  Shopping Circle.
-                </p>
-              </div>
-
-              <div className="chat-discovery-counts">
-                <span>
-                  <Users size={15} />
-                  {n(circle.participants)}
-                </span>
-                <span>
-                  <MessageCircle size={15} />
-                  {n(circle.comments_count)}
-                </span>
-              </div>
-            </div>
-
-            {messages.length > 0 ? (
-              <div className="chat-preview-list">
-                {messages.slice(-2).map((item) => (
-                  <article className="chat-preview-item" key={`preview-${item.id}`}>
-                    {item.sender_photo ? (
-                      <img src={item.sender_photo} alt="" />
-                    ) : (
-                      <div className="chat-preview-avatar">
-                        {initials(item.sender_name)}
-                      </div>
-                    )}
-
-                    <div>
-                      <strong>{item.sender_name}</strong>
-                      <p>
-                        {item.message_type === 'voice'
-                          ? 'Voice message'
-                          : item.vote
-                            ? item.message || 'Voted'
-                            : item.message}
-                      </p>
-                    </div>
-
-                    <time>{timeAgo(item.created_at)}</time>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="chat-preview-empty">
-                <MessageCircle size={21} />
-                <span>
-                  Be the first to start the discussion.
-                </span>
-              </div>
-            )}
-
-            <button
-              type="button"
-              className="open-chat-button"
-              onClick={openChat}
-            >
-              <MessageCircle size={19} />
-              {messages.length > 0
-                ? `Open chat · ${messages.length} message${
-                    messages.length === 1 ? '' : 's'
-                  }`
-                : 'Start the chat'}
-              <ArrowLeft className="open-chat-arrow" size={18} />
-            </button>
-          </section>
-
           <section className={`summary-card ${summary.tone}`}>
-            <div className="summary-icon"><Sparkles size={23} /></div>
+            <div className="summary-icon">
+              <Sparkles size={21} />
+            </div>
             <div>
               <span>{summary.title}</span>
               <h2>{summary.text}</h2>
             </div>
           </section>
 
-          <section
-            className="mobile-chat-wrap"
-            ref={mobileChatRef}
-          >
+          <section className="discussion-card">
+            <nav className="circle-tabs" aria-label="Shopping Circle sections">
+              <button className="active">Discussion</button>
+              <button>Details</button>
+              <button>Participants</button>
+            </nav>
+
+            <button
+              type="button"
+              className="chat-entry"
+              onClick={openChat}
+            >
+              <span className="chat-entry-icon">
+                <MessageSquareText size={22} />
+              </span>
+              <span className="chat-entry-copy">
+                <strong>Friends &amp; Family Chat</strong>
+                <small>Chat with your group about this product</small>
+              </span>
+              <span className="chat-entry-count">
+                {n(circle.participants)}
+              </span>
+              <ArrowLeft className="entry-arrow" size={19} />
+            </button>
+
+            <div className="recent-head">
+              <h3>Recent messages</h3>
+              <button type="button" onClick={openChat}>
+                View all
+              </button>
+            </div>
+
+            {recentMessages.length > 0 ? (
+              <div className="recent-list">
+                {recentMessages.slice(-5).reverse().map((item) => (
+                  <button
+                    type="button"
+                    className="recent-item"
+                    key={`recent-${item.id}`}
+                    onClick={openChat}
+                  >
+                    {item.sender_photo ? (
+                      <img src={item.sender_photo} alt="" />
+                    ) : (
+                      <span className="recent-avatar">
+                        {initials(item.sender_name)}
+                      </span>
+                    )}
+
+                    <span className="recent-copy">
+                      <strong>{item.sender_name}</strong>
+                      <small>
+                        {item.message_type === 'voice'
+                          ? 'Voice message'
+                          : item.message}
+                      </small>
+                    </span>
+
+                    <time>{timeAgo(item.created_at)}</time>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="empty-recent"
+                onClick={openChat}
+              >
+                <MessageCircle size={22} />
+                <span>
+                  <strong>Start the discussion</strong>
+                  <small>Be the first to share an opinion.</small>
+                </span>
+              </button>
+            )}
+          </section>
+
+          <section className="mobile-chat-wrap" ref={mobileChatRef}>
             <ChatPanel
               messages={messages}
               circle={circle}
@@ -1105,12 +1226,11 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
         aria-label="Open Shopping Circle chat"
       >
         <span className="floating-chat-icon">
-          <MessageCircle size={21} />
+          <MessageSquareText size={21} />
           {messages.length > 0 && (
             <b>{Math.min(messages.length, 99)}</b>
           )}
         </span>
-
         <span>
           <strong>Shopping Chat</strong>
           <small>
@@ -1124,22 +1244,47 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
       </button>
 
       {menuMessage && (
-        <div className="modal-backdrop" onClick={() => setMenuMessage(null)}>
-          <div className="message-menu" onClick={(event) => event.stopPropagation()}>
+        <div
+          className="modal-backdrop"
+          onClick={() => setMenuMessage(null)}
+        >
+          <div
+            className="message-menu"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="menu-head">
               <strong>Message actions</strong>
-              <button onClick={() => setMenuMessage(null)}><X size={20} /></button>
+              <button onClick={() => setMenuMessage(null)}>
+                <X size={20} />
+              </button>
             </div>
-            <button onClick={() => { setReplyTo(menuMessage); setMenuMessage(null); }}>
-              <Reply size={18} /> Reply
+
+            <button
+              onClick={() => {
+                setReplyTo(menuMessage);
+                setMenuMessage(null);
+                openChat();
+              }}
+            >
+              <Reply size={18} />
+              Reply
             </button>
+
             {menuMessage.user_uid === auth?.currentUser?.uid ? (
-              <button className="danger" onClick={() => deleteMessage(menuMessage)}>
-                <Trash2 size={18} /> Delete
+              <button
+                className="danger"
+                onClick={() => deleteMessage(menuMessage)}
+              >
+                <Trash2 size={18} />
+                Delete
               </button>
             ) : (
-              <button className="danger" onClick={() => reportMessage(menuMessage)}>
-                <MoreHorizontal size={18} /> Report
+              <button
+                className="danger"
+                onClick={() => reportMessage(menuMessage)}
+              >
+                <MoreHorizontal size={18} />
+                Report
               </button>
             )}
           </div>
@@ -1320,43 +1465,66 @@ function ChatPanel({
 }
 
 const styles = `
-  :global(*) { box-sizing: border-box; }
-  :global(body) { margin: 0; background: #f5f4ef; }
-  :global(button), :global(textarea) { font: inherit; }
-  :global(.spin) { animation: sc-spin .8s linear infinite; }
-  @keyframes sc-spin { to { transform: rotate(360deg); } }
+  :global(*) {
+    box-sizing: border-box;
+  }
+
+  :global(html) {
+    background: #f7f7fb;
+  }
+
+  :global(body) {
+    margin: 0;
+    background: #f7f7fb;
+  }
+
+  :global(button),
+  :global(textarea) {
+    font: inherit;
+  }
+
+  :global(.spin) {
+    animation: sc-spin .8s linear infinite;
+  }
+
+  @keyframes sc-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 
   .sc-shell {
     min-height: 100vh;
-    color: #171814;
+    padding: 22px;
+    color: #151523;
     background:
-      radial-gradient(circle at 8% 0%, rgba(242,183,116,.17), transparent 26rem),
-      radial-gradient(circle at 96% 20%, rgba(34,197,94,.10), transparent 30rem),
-      #f5f4ef;
-    padding: 28px;
+      radial-gradient(circle at 5% 0%, rgba(124, 58, 237, .08), transparent 26rem),
+      radial-gradient(circle at 95% 20%, rgba(236, 72, 153, .06), transparent 28rem),
+      #f7f7fb;
   }
 
   .sc-topbar {
-    max-width: 1460px;
-    margin: 0 auto 22px;
-    min-height: 68px;
-    padding: 12px 14px;
+    width: min(1180px, 100%);
+    min-height: 72px;
+    margin: 0 auto 18px;
+    padding: 10px 14px;
     display: flex;
     align-items: center;
-    gap: 14px;
-    border: 1px solid rgba(20,20,15,.08);
-    border-radius: 22px;
-    background: rgba(255,255,255,.84);
-    backdrop-filter: blur(18px);
-    box-shadow: 0 16px 50px rgba(39,35,25,.08);
+    gap: 12px;
     position: sticky;
-    top: 14px;
-    z-index: 20;
+    top: 10px;
+    z-index: 30;
+    border: 1px solid #ececf3;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, .92);
+    box-shadow: 0 14px 40px rgba(37, 25, 71, .08);
+    backdrop-filter: blur(18px);
   }
 
-  .icon-button, .share-button, .menu-head button {
+  .icon-button,
+  .member-pill,
+  .share-code {
     border: 0;
-    cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1365,395 +1533,1198 @@ const styles = `
   .icon-button {
     width: 44px;
     height: 44px;
-    border-radius: 14px;
-    color: #20211d;
-    background: #f0efe9;
+    flex: 0 0 auto;
+    border-radius: 15px;
+    color: #242333;
+    background: #f4f3f8;
+    cursor: pointer;
   }
 
-  .brand-block { display: grid; gap: 2px; flex: 1; }
-  .brand-block strong { font-size: 18px; letter-spacing: -.02em; }
-  .eyebrow { color: #6a6b62; font-size: 11px; font-weight: 900; letter-spacing: .15em; text-transform: uppercase; }
-  .top-actions { display: flex; align-items: center; gap: 9px; }
-  .share-button {
+  .brand-block {
+    min-width: 0;
+    flex: 1;
+    display: grid;
+    gap: 3px;
+  }
+
+  .brand-block strong {
+    font-size: 19px;
+    letter-spacing: -.025em;
+  }
+
+  .share-code {
+    width: max-content;
+    max-width: 100%;
+    padding: 0;
+    gap: 6px;
+    overflow: hidden;
+    color: #6f6c7f;
+    background: transparent;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .top-actions {
+    display: flex;
+    align-items: center;
     gap: 8px;
-    height: 44px;
-    padding: 0 18px;
-    border-radius: 14px;
-    color: white;
-    background: #171814;
-    font-weight: 850;
+  }
+
+  .member-pill {
+    min-height: 42px;
+    padding: 0 14px;
+    gap: 7px;
+    border: 1px solid #e8e6f0;
+    border-radius: 999px;
+    color: #262334;
+    background: #fff;
+    font-weight: 800;
   }
 
   .sc-layout {
-    width: min(1460px, 100%);
+    width: min(1180px, 100%);
     margin: auto;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 430px;
-    gap: 22px;
+    gap: 20px;
     align-items: start;
   }
 
-  .sc-main { display: grid; gap: 18px; min-width: 0; }
-  .hero-card, .summary-card, .chat-card {
-    border: 1px solid rgba(20,20,15,.08);
-    background: rgba(255,255,255,.92);
-    box-shadow: 0 20px 60px rgba(40,36,25,.08);
+  .sc-main {
+    min-width: 0;
+    display: grid;
+    gap: 14px;
   }
 
-  .hero-card { border-radius: 30px; padding: 28px; overflow: hidden; }
-  .hero-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
-  .hero-heading h1, .single-copy h1 { margin: 7px 0 0; font-size: clamp(27px, 4vw, 48px); line-height: 1.02; letter-spacing: -.045em; }
-  .live-badge {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 9px 12px; border-radius: 999px;
-    color: #16783a; background: #e9f8ed; font-size: 12px; font-weight: 900;
+  .product-card,
+  .vote-card,
+  .discussion-card,
+  .summary-card,
+  .chat-card {
+    border: 1px solid #ececf3;
+    background: rgba(255, 255, 255, .96);
+    box-shadow: 0 16px 50px rgba(38, 28, 68, .07);
   }
-  .live-badge span, .record-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 5px rgba(34,197,94,.13); }
+
+  .product-card {
+    overflow: hidden;
+    border-radius: 24px;
+  }
+
+  .product-summary {
+    padding: 18px;
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 18px;
+    align-items: center;
+  }
+
+  .product-image {
+    width: 150px;
+    aspect-ratio: 1 / 1;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #fde7ed, #f7dce8);
+  }
+
+  .product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .product-info {
+    min-width: 0;
+  }
+
+  .product-info h1 {
+    margin: 0;
+    font-size: clamp(22px, 3vw, 34px);
+    line-height: 1.12;
+    letter-spacing: -.035em;
+  }
+
+  .price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .price-row.large {
+    margin-top: 14px;
+  }
+
+  .price-row strong {
+    color: #d71936;
+    font-size: 30px;
+    letter-spacing: -.03em;
+  }
+
+  .price-row del {
+    color: #8c8998;
+    font-size: 16px;
+  }
+
+  .price-row em {
+    padding: 6px 10px;
+    border-radius: 999px;
+    color: #ce2340;
+    background: #fff0f3;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 900;
+  }
+
+  .store-row {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: #454251;
+    font-size: 14px;
+  }
+
+  .verified {
+    width: 18px;
+    height: 18px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: white;
+    background: #7c3aed;
+  }
+
+  .circle-meta {
+    min-height: 50px;
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border-top: 1px solid #efedf4;
+    color: #666273;
+    font-size: 12px;
+  }
+
+  .circle-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .circle-meta i {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #18b66a;
+    box-shadow: 0 0 0 5px rgba(24, 182, 106, .11);
+  }
+
+  .circle-meta .votes-open {
+    margin-left: auto;
+  }
+
+  .vote-card {
+    padding: 20px;
+    border-radius: 24px;
+  }
+
+  .vote-heading {
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .vote-heading h2 {
+    margin: 0;
+    font-size: 22px;
+    letter-spacing: -.025em;
+  }
+
+  .vote-heading p {
+    margin: 4px 0 0;
+    color: #777386;
+    font-size: 13px;
+  }
+
+  .vote-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .vote-tile {
+    min-height: 122px;
+    padding: 14px 9px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 9px;
+    border: 1px solid #e8e5ed;
+    border-radius: 18px;
+    color: #24212e;
+    background: #fff;
+    cursor: pointer;
+    transition:
+      transform .18s ease,
+      box-shadow .18s ease,
+      border-color .18s ease;
+  }
+
+  .vote-tile:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 25px rgba(35, 27, 55, .08);
+  }
+
+  .vote-tile span {
+    font-size: 12px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .vote-tile strong {
+    font-size: 18px;
+  }
+
+  .vote-tile.buy_it {
+    color: #e52d4f;
+    background: #fff8fa;
+    border-color: #ffc9d3;
+  }
+
+  .vote-tile.looks_good {
+    color: #0b9e57;
+    background: #f4fff9;
+    border-color: #bdebd2;
+  }
+
+  .vote-tile.not_sure {
+    color: #d78a00;
+    background: #fffaf0;
+    border-color: #f5d79b;
+  }
+
+  .vote-tile.dont_buy {
+    color: #e8781b;
+    background: #fff9f4;
+    border-color: #ffd1aa;
+  }
+
+  .vote-tile.none {
+    color: #6f43d6;
+    background: #faf7ff;
+    border-color: #d9c6ff;
+  }
+
+  .vote-tile.selected {
+    color: #fff;
+    border-color: #7c3aed;
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    box-shadow: 0 14px 28px rgba(109, 40, 217, .22);
+  }
+
+  .vote-total {
+    margin-top: 14px;
+    padding: 14px 16px;
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    border-radius: 16px;
+    background: #f8f7fb;
+  }
+
+  .vote-total div {
+    display: grid;
+    gap: 3px;
+  }
+
+  .vote-total div:last-child {
+    text-align: right;
+  }
+
+  .vote-total span {
+    color: #777386;
+    font-size: 12px;
+  }
+
+  .vote-total strong {
+    font-size: 18px;
+  }
+
+  .summary-card {
+    min-height: 112px;
+    padding: 18px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    border-radius: 22px;
+  }
+
+  .summary-card.green {
+    border-color: #c7efd9;
+    background: linear-gradient(135deg, #f7fff9, #eafaf1);
+  }
+
+  .summary-card.red {
+    border-color: #f4d0d5;
+    background: linear-gradient(135deg, #fff9fa, #ffedf0);
+  }
+
+  .summary-card.gold {
+    border-color: #eadbb9;
+    background: linear-gradient(135deg, #fffdf7, #fbf2df);
+  }
+
+  .summary-icon {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 15px;
+    color: #7c3aed;
+    background: rgba(255, 255, 255, .85);
+  }
+
+  .summary-card span {
+    color: #777386;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+  }
+
+  .summary-card h2 {
+    margin: 6px 0 0;
+    font-size: 18px;
+    line-height: 1.35;
+  }
+
+  .discussion-card {
+    padding: 0 18px 18px;
+    border-radius: 24px;
+  }
+
+  .circle-tabs {
+    height: 58px;
+    margin: 0 -18px 16px;
+    padding: 0 18px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-bottom: 1px solid #eceaf1;
+  }
+
+  .circle-tabs button {
+    position: relative;
+    border: 0;
+    color: #5f5b6c;
+    background: transparent;
+    cursor: pointer;
+    font-weight: 750;
+  }
+
+  .circle-tabs button.active {
+    color: #7c3aed;
+  }
+
+  .circle-tabs button.active::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 3px;
+    border-radius: 999px 999px 0 0;
+    background: #7c3aed;
+  }
+
+  .chat-entry {
+    width: 100%;
+    min-height: 82px;
+    padding: 13px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid #dbc7ff;
+    border-radius: 18px;
+    color: #2e2344;
+    background: linear-gradient(135deg, #fbf8ff, #f4ecff);
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .chat-entry-icon {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 15px;
+    color: #7c3aed;
+    background: #ede3ff;
+  }
+
+  .chat-entry-copy {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+  }
+
+  .chat-entry-copy strong {
+    color: #7138dd;
+    font-size: 16px;
+  }
+
+  .chat-entry-copy small {
+    overflow: hidden;
+    color: #676174;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chat-entry-count {
+    min-width: 34px;
+    height: 28px;
+    padding: 0 8px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    color: #7040ce;
+    background: rgba(255, 255, 255, .82);
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .entry-arrow {
+    color: #9b78d8;
+    transform: rotate(180deg);
+  }
+
+  .recent-head {
+    margin: 20px 2px 9px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .recent-head h3 {
+    margin: 0;
+    color: #5b5767;
+    font-size: 15px;
+  }
+
+  .recent-head button {
+    border: 0;
+    color: #7c3aed;
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .recent-list {
+    display: grid;
+  }
+
+  .recent-item {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 2px;
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    gap: 11px;
+    align-items: center;
+    border: 0;
+    border-bottom: 1px solid #f0eef4;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .recent-item:last-child {
+    border-bottom: 0;
+  }
+
+  .recent-item img,
+  .recent-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+  }
+
+  .recent-item img {
+    object-fit: cover;
+  }
+
+  .recent-avatar {
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: linear-gradient(135deg, #8b5cf6, #5b21b6);
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .recent-copy {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+  }
+
+  .recent-copy strong {
+    font-size: 13px;
+  }
+
+  .recent-copy small {
+    overflow: hidden;
+    color: #686474;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .recent-item time {
+    color: #9995a4;
+    font-size: 10px;
+  }
+
+  .empty-recent {
+    width: 100%;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px dashed #d9d5e1;
+    border-radius: 16px;
+    color: #6e6878;
+    background: #faf9fc;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .empty-recent span {
+    display: grid;
+    gap: 3px;
+  }
+
+  .empty-recent strong {
+    color: #36313f;
+  }
+
+  .empty-recent small {
+    color: #7b7584;
+  }
+
+  .comparison-card {
+    padding: 22px;
+  }
+
+  .section-kicker {
+    color: #7c3aed;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .14em;
+  }
+
+  .comparison-card > h1 {
+    margin: 6px 0 18px;
+    font-size: 30px;
+    letter-spacing: -.035em;
+  }
 
   .product-strip {
     display: grid;
     grid-auto-flow: column;
-    grid-auto-columns: minmax(240px, 1fr);
-    gap: 16px;
+    grid-auto-columns: minmax(235px, 1fr);
+    gap: 13px;
     overflow-x: auto;
     padding-bottom: 8px;
   }
 
   .compare-product {
     min-width: 0;
-    border: 1px solid #e4e2da;
-    border-radius: 22px;
     overflow: hidden;
-    background: #fbfaf6;
+    border: 1px solid #e9e6ef;
+    border-radius: 18px;
+    background: #fff;
   }
 
-  .compare-image { height: 220px; display: grid; place-items: center; position: relative; background: #efeee8; overflow: hidden; }
-  .compare-image img { width: 100%; height: 100%; object-fit: cover; }
-  .choice-number { position: absolute; top: 12px; left: 12px; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: white; background: rgba(15,16,14,.88); font-weight: 900; }
-  .compare-copy { padding: 17px; }
-  .compare-copy > span { color: #77786e; font-size: 12px; font-weight: 850; text-transform: uppercase; }
-  .compare-copy h2 { min-height: 48px; margin: 6px 0 12px; font-size: 20px; line-height: 1.2; }
-  .price-row { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
-  .price-row strong { font-size: 24px; }
-  .price-row del { color: #8a8a82; }
-  .price-row em { color: #11813b; background: #e7f7eb; border-radius: 999px; padding: 5px 9px; font-size: 12px; font-style: normal; font-weight: 900; }
-
-  .vote-choice, .none-choice, .vote-tile {
-    border: 0; cursor: pointer; font-weight: 900;
-  }
-  .vote-choice {
-    width: 100%; margin-top: 15px; padding: 12px 13px;
-    display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px;
-    border-radius: 14px; color: #2a2b26; background: #ecebe5;
-  }
-  .vote-choice span { min-width: 28px; height: 28px; padding: 0 7px; display: grid; place-items: center; border-radius: 999px; background: white; }
-  .vote-choice.selected, .none-choice.selected, .vote-tile.selected { color: white; background: #1c9b4a; }
-  .none-choice { width: 100%; margin-top: 15px; padding: 14px 18px; display: flex; justify-content: space-between; border-radius: 15px; color: #53544d; background: #efeee8; }
-
-  .single-hero { display: grid; grid-template-columns: minmax(330px, .92fr) minmax(0, 1.08fr); gap: 30px; }
-  .single-media { min-height: 520px; position: relative; display: grid; place-items: center; overflow: hidden; border-radius: 24px; background: #ecebe5; }
-  .single-media img { width: 100%; height: 100%; object-fit: cover; }
-  .media-live { position: absolute; top: 16px; left: 16px; }
-  .single-copy { align-self: center; padding: 8px 8px 8px 0; }
-  .price-row.large { margin-top: 18px; }
-  .price-row.large strong { font-size: 34px; }
-  .question-card { margin: 24px 0 18px; padding: 15px; display: flex; gap: 10px; align-items: center; border-radius: 16px; background: #f2f0e9; font-weight: 850; }
-  .vote-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
-  .vote-tile { min-height: 62px; padding: 13px 14px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; text-align: left; border-radius: 16px; color: #242520; background: #ecebe5; }
-  .vote-tile strong { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,.86); color: #20211d; }
-
-
-  .chat-discovery-card {
-    padding: 22px;
-    border: 1px solid #dfe5ec;
-    border-radius: 24px;
-    background:
-      linear-gradient(135deg, rgba(240, 249, 255, .96), rgba(255, 255, 255, .96));
-    box-shadow: 0 18px 48px rgba(38, 43, 51, .07);
-  }
-
-  .chat-discovery-heading {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 14px;
-  }
-
-  .chat-discovery-icon {
-    width: 52px;
-    height: 52px;
+  .compare-image {
+    height: 185px;
+    position: relative;
     display: grid;
     place-items: center;
-    border-radius: 17px;
+    overflow: hidden;
+    background: #f0eef4;
+  }
+
+  .compare-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .choice-number {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
     color: #fff;
-    background: #087e98;
-    box-shadow: 0 12px 26px rgba(8, 126, 152, .24);
+    background: rgba(25, 23, 33, .9);
+    font-weight: 900;
   }
 
-  .chat-discovery-heading h2 {
-    margin: 4px 0 3px;
-    font-size: 22px;
-    letter-spacing: -.025em;
+  .compare-copy {
+    padding: 14px;
   }
 
-  .chat-discovery-heading p {
-    margin: 0;
-    color: #64707b;
-    font-size: 13px;
-    line-height: 1.45;
+  .compare-copy > span {
+    color: #817c8b;
+    font-size: 10px;
+    font-weight: 850;
+    text-transform: uppercase;
   }
 
-  .chat-discovery-counts {
+  .compare-copy h2 {
+    min-height: 42px;
+    margin: 5px 0 10px;
+    font-size: 17px;
+    line-height: 1.25;
+  }
+
+  .compare-copy .price-row strong {
+    color: #d71936;
+    font-size: 21px;
+  }
+
+  .compare-vote,
+  .none-choice {
+    border: 0;
+    cursor: pointer;
+    font-weight: 850;
+  }
+
+  .compare-vote {
+    width: 100%;
+    min-height: 42px;
+    margin-top: 13px;
+    padding: 0 11px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 8px;
+    border-radius: 13px;
+    color: #4b4655;
+    background: #f0eef4;
+  }
+
+  .compare-vote.selected,
+  .none-choice.selected {
+    color: #fff;
+    background: #7c3aed;
+  }
+
+  .none-choice {
+    width: 100%;
+    min-height: 46px;
+    margin-top: 13px;
+    padding: 0 14px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 8px;
+    border-radius: 14px;
+    color: #5b5665;
+    background: #f3f1f6;
+  }
+
+  .sc-side {
+    position: sticky;
+    top: 104px;
+  }
+
+  .chat-card {
+    height: calc(100vh - 126px);
+    min-height: 610px;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    overflow: hidden;
+    border-radius: 26px;
+  }
+
+  .chat-head {
+    padding: 19px;
     display: flex;
-    gap: 7px;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid #eeecf2;
   }
 
-  .chat-discovery-counts span {
-    min-height: 34px;
-    padding: 0 10px;
+  .chat-head .eyebrow {
+    color: #7c3aed;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .13em;
+  }
+
+  .chat-head h2 {
+    margin: 4px 0 0;
+    font-size: 22px;
+    letter-spacing: -.03em;
+  }
+
+  .circle-stats {
+    display: flex;
+    gap: 6px;
+  }
+
+  .circle-stats span {
+    min-height: 32px;
+    padding: 0 9px;
     display: inline-flex;
     align-items: center;
     gap: 5px;
     border-radius: 999px;
-    color: #39515d;
-    background: #eaf5f8;
+    color: #615b6d;
+    background: #f4f2f7;
     font-size: 11px;
     font-weight: 850;
   }
 
-  .chat-preview-list {
-    margin-top: 15px;
+  .chat-card::before {
+    content: "You’re discussing this product";
+    min-height: 52px;
+    padding: 0 18px;
+    display: flex;
+    align-items: center;
+    color: #7c3aed;
+    background: linear-gradient(90deg, #fff5fa, #f5edff);
+    font-size: 13px;
+    font-weight: 850;
+  }
+
+  .chat-body {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 17px;
+    background: linear-gradient(180deg, #fff, #fbfafc);
+  }
+
+  .empty-chat {
+    height: 100%;
+    min-height: 290px;
     display: grid;
+    place-content: center;
+    justify-items: center;
+    text-align: center;
+    color: #777184;
+  }
+
+  .empty-chat div {
+    width: 64px;
+    height: 64px;
+    display: grid;
+    place-items: center;
+    border-radius: 22px;
+    color: #7c3aed;
+    background: #f0e8ff;
+  }
+
+  .empty-chat h3 {
+    margin: 14px 0 5px;
+    color: #2b2732;
+  }
+
+  .empty-chat p {
+    margin: 0;
+  }
+
+  .chat-message {
+    margin-bottom: 14px;
+    display: flex;
+    align-items: flex-end;
     gap: 8px;
   }
 
-  .chat-preview-item {
-    min-width: 0;
-    padding: 10px 11px;
-    display: grid;
-    grid-template-columns: 34px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 10px;
-    border: 1px solid #e5e9ee;
-    border-radius: 14px;
-    background: rgba(255,255,255,.82);
+  .chat-message.mine {
+    justify-content: flex-end;
   }
 
-  .chat-preview-item img,
-  .chat-preview-avatar {
+  .avatar {
     width: 34px;
     height: 34px;
+    flex: 0 0 auto;
+    object-fit: cover;
     border-radius: 50%;
   }
 
-  .chat-preview-item img {
-    object-fit: cover;
-  }
-
-  .chat-preview-avatar {
+  .avatar.fallback {
     display: grid;
     place-items: center;
     color: #fff;
-    background: #2b3138;
+    background: linear-gradient(135deg, #8b5cf6, #5b21b6);
     font-size: 11px;
     font-weight: 900;
   }
 
-  .chat-preview-item div:nth-child(2) {
-    min-width: 0;
+  .bubble {
+    max-width: 82%;
+    padding: 11px 13px 9px;
+    border: 0;
+    border-radius: 17px 17px 17px 6px;
+    color: #292532;
+    background: #f3f2f6;
+    box-shadow: 0 7px 18px rgba(31, 24, 44, .04);
+    cursor: pointer;
+    text-align: left;
   }
 
-  .chat-preview-item strong,
-  .chat-preview-item p {
+  .mine .bubble {
+    color: #2d203f;
+    border-radius: 17px 17px 6px 17px;
+    background: linear-gradient(135deg, #f5eaff, #ead9ff);
+  }
+
+  .bubble > strong {
     display: block;
-    min-width: 0;
-  }
-
-  .chat-preview-item strong {
-    color: #26313a;
+    margin-bottom: 4px;
+    color: #7c3aed;
     font-size: 11px;
   }
 
-  .chat-preview-item p {
-    margin: 2px 0 0;
+  .bubble p {
+    margin: 0;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .bubble time {
+    display: block;
+    margin-top: 5px;
+    color: inherit;
+    opacity: .55;
+    font-size: 10px;
+    text-align: right;
+  }
+
+  .reply-preview {
+    margin-bottom: 7px;
+    padding: 8px;
+    display: grid;
+    gap: 2px;
+    border-left: 3px solid #7c3aed;
+    border-radius: 8px;
+    background: rgba(124, 58, 237, .08);
+  }
+
+  .reply-preview b {
+    font-size: 10px;
+  }
+
+  .reply-preview span {
+    max-width: 260px;
     overflow: hidden;
-    color: #65717c;
-    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    opacity: .75;
+  }
+
+  .vote-message,
+  .voice-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 850;
+  }
+
+  .voice-row {
+    color: #6d28d9;
+  }
+
+  .voice-row em {
+    color: #5e5867;
+    font-size: 11px;
+    font-style: normal;
+  }
+
+  .voice-wave {
+    letter-spacing: -2px;
+    opacity: .65;
+  }
+
+  .chat-compose {
+    padding: 11px;
+    border-top: 1px solid #eceaf1;
+    background: #fff;
+  }
+
+  .replying,
+  .recording-line {
+    margin-bottom: 8px;
+    padding: 9px 10px;
+    border-radius: 13px;
+    background: #f4f1f8;
+  }
+
+  .replying {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .replying div {
+    min-width: 0;
+    display: grid;
+  }
+
+  .replying strong {
+    font-size: 11px;
+  }
+
+  .replying span {
+    overflow: hidden;
+    color: #777184;
+    font-size: 11px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .chat-preview-item time {
-    color: #8b949d;
-    font-size: 10px;
-    white-space: nowrap;
+  .replying button {
+    border: 0;
+    background: transparent;
+    cursor: pointer;
   }
 
-  .chat-preview-empty {
-    margin-top: 15px;
-    min-height: 48px;
-    padding: 0 13px;
+  .recording-line {
     display: flex;
     align-items: center;
     gap: 9px;
-    border: 1px dashed #cfd9e1;
-    border-radius: 14px;
-    color: #65717c;
-    background: rgba(255,255,255,.62);
+    color: #bc2445;
     font-size: 12px;
-    font-weight: 750;
+    font-weight: 850;
   }
 
-  .open-chat-button {
+  .record-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #e53858;
+    box-shadow: 0 0 0 5px rgba(229, 56, 88, .13);
+    animation: pulse 1s infinite alternate;
+  }
+
+  @keyframes pulse {
+    to {
+      opacity: .35;
+    }
+  }
+
+  .recording-line button {
+    margin-left: auto;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: 999px;
+    color: #fff;
+    background: #b91c45;
+    cursor: pointer;
+    font-weight: 850;
+  }
+
+  .compose-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: end;
+  }
+
+  .compose-row textarea {
     width: 100%;
     min-height: 48px;
-    margin-top: 13px;
-    padding: 0 15px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
+    max-height: 120px;
+    padding: 13px 15px;
+    border: 1px solid #e5e1ea;
+    border-radius: 18px;
+    outline: none;
+    resize: none;
+    color: #292532;
+    background: #fbfafc;
+  }
+
+  .compose-row textarea:focus {
+    border-color: #bda4ee;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(124, 58, 237, .08);
+  }
+
+  .send-round {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
     border: 0;
-    border-radius: 14px;
+    border-radius: 50%;
     color: #fff;
-    background: #171814;
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    box-shadow: 0 10px 22px rgba(109, 40, 217, .25);
     cursor: pointer;
-    font-weight: 900;
   }
 
-  .open-chat-arrow {
-    margin-left: auto;
-    transform: rotate(-90deg);
+  .send-round.recording {
+    background: #c7264f;
   }
 
+  .mobile-chat-wrap,
   .floating-chat-button {
     display: none;
   }
 
-  .summary-card { min-height: 126px; padding: 22px; display: flex; gap: 16px; align-items: flex-start; border-radius: 24px; }
-  .summary-card.green { background: linear-gradient(135deg, #f5fff7, #e7f7eb); border-color: #ccebd5; }
-  .summary-card.red { background: linear-gradient(135deg, #fff8f7, #fde9e6); border-color: #f1d0ca; }
-  .summary-card.gold { background: linear-gradient(135deg, #fffdf7, #f7eddd); border-color: #ead9bf; }
-  .summary-icon { width: 48px; height: 48px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 16px; background: rgba(255,255,255,.8); }
-  .summary-card span { color: #6a6b62; font-size: 11px; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
-  .summary-card h2 { max-width: 760px; margin: 7px 0 0; font-size: clamp(19px, 2vw, 26px); line-height: 1.25; letter-spacing: -.025em; }
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    padding: 20px;
+    display: grid;
+    place-items: end center;
+    background: rgba(21, 17, 31, .46);
+    backdrop-filter: blur(6px);
+  }
 
-  .sc-side { position: sticky; top: 104px; }
-  .chat-card { height: calc(100vh - 126px); min-height: 610px; display: grid; grid-template-rows: auto 1fr auto; border-radius: 28px; overflow: hidden; }
-  .chat-head { padding: 21px 21px 17px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; border-bottom: 1px solid #eceae2; }
-  .chat-head h2 { margin: 4px 0 0; font-size: 23px; letter-spacing: -.03em; }
-  .circle-stats { display: flex; gap: 8px; }
-  .circle-stats span { display: inline-flex; align-items: center; gap: 5px; padding: 8px 10px; border-radius: 999px; background: #f0efe9; font-size: 12px; font-weight: 850; }
+  .message-menu {
+    width: min(430px, 100%);
+    padding: 12px;
+    border-radius: 22px;
+    background: #fff;
+    box-shadow: 0 22px 70px rgba(0, 0, 0, .22);
+  }
 
-  .chat-body { min-height: 0; overflow-y: auto; padding: 18px; background: linear-gradient(180deg, #fbfaf6, #f4f2eb); }
-  .empty-chat { height: 100%; min-height: 290px; display: grid; place-content: center; justify-items: center; text-align: center; color: #73746c; }
-  .empty-chat div { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 22px; background: white; box-shadow: 0 10px 34px rgba(30,27,20,.08); }
-  .empty-chat h3 { margin: 14px 0 5px; color: #272822; }
-  .empty-chat p { margin: 0; }
+  .menu-head {
+    padding: 7px 7px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
 
-  .chat-message { margin-bottom: 13px; display: flex; align-items: flex-end; gap: 8px; }
-  .chat-message.mine { justify-content: flex-end; }
-  .avatar { width: 30px; height: 30px; flex: 0 0 auto; object-fit: cover; border-radius: 50%; }
-  .avatar.fallback { display: grid; place-items: center; color: #201f1b; background: #f2b774; font-size: 11px; font-weight: 900; }
-  .bubble { max-width: 82%; padding: 11px 12px 9px; border: 0; cursor: pointer; text-align: left; border-radius: 17px 17px 17px 5px; color: #282923; background: white; box-shadow: 0 8px 24px rgba(35,32,24,.06); }
-  .mine .bubble { color: white; background: #1e7d48; border-radius: 17px 17px 5px 17px; }
-  .bubble > strong { display: block; margin-bottom: 4px; color: #a36122; font-size: 11px; }
-  .mine .bubble > strong { color: #c9f6d8; }
-  .bubble p { margin: 0; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .bubble time { display: block; margin-top: 5px; color: inherit; opacity: .55; font-size: 10px; text-align: right; }
-  .reply-preview { margin-bottom: 7px; padding: 8px; display: grid; gap: 2px; border-left: 3px solid #f2b774; border-radius: 8px; background: rgba(0,0,0,.06); }
-  .reply-preview b { font-size: 10px; }
-  .reply-preview span { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; opacity: .75; }
-  .vote-message, .voice-row { display: flex; align-items: center; gap: 8px; font-weight: 850; }
-  .voice-row em { font-size: 11px; font-style: normal; opacity: .7; }
-  .voice-wave { letter-spacing: -2px; opacity: .65; }
+  .menu-head button {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 12px;
+    background: #f3f1f6;
+    cursor: pointer;
+  }
 
-  .chat-compose { padding: 12px; border-top: 1px solid #eceae2; background: white; }
-  .replying, .recording-line { margin-bottom: 8px; padding: 9px 10px; border-radius: 13px; background: #f2f0e9; }
-  .replying { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
-  .replying div { min-width: 0; display: grid; }
-  .replying strong { font-size: 11px; }
-  .replying span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #72736b; font-size: 11px; }
-  .replying button { border: 0; background: transparent; cursor: pointer; }
-  .recording-line { display: flex; align-items: center; gap: 9px; color: #b02323; font-weight: 850; font-size: 12px; }
-  .recording-line .record-dot { background: #e53838; box-shadow: 0 0 0 5px rgba(229,56,56,.13); animation: pulse 1s infinite alternate; }
-  @keyframes pulse { to { opacity: .35; } }
-  .recording-line button { margin-left: auto; border: 0; border-radius: 999px; padding: 7px 10px; color: white; background: #b02323; cursor: pointer; font-weight: 850; }
+  .message-menu > button {
+    width: 100%;
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 0;
+    border-radius: 14px;
+    color: #292532;
+    background: transparent;
+    cursor: pointer;
+    font-weight: 850;
+  }
 
-  .compose-row { display: grid; grid-template-columns: 1fr auto; gap: 9px; align-items: end; }
-  .compose-row textarea { width: 100%; min-height: 48px; max-height: 120px; resize: none; border: 1px solid #e4e2da; outline: none; padding: 13px 15px; border-radius: 17px; color: #242520; background: #f7f6f2; }
-  .compose-row textarea:focus { border-color: #9a9a8d; background: white; }
-  .send-round { width: 48px; height: 48px; border: 0; border-radius: 16px; display: grid; place-items: center; cursor: pointer; color: white; background: #171814; }
-  .send-round.recording { background: #bd2b2b; }
+  .message-menu > button:hover {
+    background: #f6f3fa;
+  }
 
-  .mobile-chat-wrap { display: none; }
-  .modal-backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: end center; padding: 20px; background: rgba(14,15,12,.46); backdrop-filter: blur(6px); }
-  .message-menu { width: min(430px, 100%); padding: 12px; border-radius: 22px; background: white; box-shadow: 0 22px 70px rgba(0,0,0,.22); }
-  .menu-head { padding: 7px 7px 12px; display: flex; justify-content: space-between; align-items: center; }
-  .menu-head button { width: 36px; height: 36px; border-radius: 12px; background: #f0efe9; }
-  .message-menu > button { width: 100%; border: 0; padding: 14px; display: flex; align-items: center; gap: 10px; border-radius: 14px; cursor: pointer; color: #242520; background: transparent; font-weight: 850; }
-  .message-menu > button:hover { background: #f4f3ee; }
-  .message-menu > button.danger { color: #bc2828; }
+  .message-menu > button.danger {
+    color: #bd2448;
+  }
 
-  .sc-state { min-height: 72vh; display: grid; place-content: center; justify-items: center; text-align: center; padding: 30px; color: #22231e; background: #f5f4ef; }
-  .sc-state h1 { margin: 16px 0 7px; }
-  .sc-state p { margin: 0 0 18px; color: #73746c; }
-  .sc-state button { border: 0; border-radius: 14px; padding: 13px 18px; color: white; background: #171814; cursor: pointer; font-weight: 850; }
+  .sc-state {
+    min-height: 72vh;
+    padding: 30px;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    color: #282532;
+    background: #f7f7fb;
+    text-align: center;
+  }
+
+  .sc-state h1 {
+    margin: 16px 0 7px;
+  }
+
+  .sc-state p {
+    margin: 0 0 18px;
+    color: #777184;
+  }
+
+  .sc-state button {
+    padding: 13px 18px;
+    border: 0;
+    border-radius: 14px;
+    color: #fff;
+    background: #7c3aed;
+    cursor: pointer;
+    font-weight: 850;
+  }
 
   @media (max-width: 1050px) {
-    .sc-layout { grid-template-columns: 1fr; }
-    .chat-discovery-card {
-      padding: 17px;
-      border-radius: 20px;
+    .sc-layout {
+      grid-template-columns: 1fr;
     }
 
-    .chat-discovery-heading {
-      grid-template-columns: auto minmax(0, 1fr);
-      align-items: start;
+    .sc-side {
+      display: none;
     }
 
-    .chat-discovery-icon {
-      width: 46px;
-      height: 46px;
-      border-radius: 15px;
+    .mobile-chat-wrap {
+      display: block;
+      scroll-margin-top: 84px;
     }
 
-    .chat-discovery-heading h2 {
-      font-size: 19px;
-    }
-
-    .chat-discovery-counts {
-      grid-column: 1 / -1;
-      padding-left: 60px;
+    .mobile-chat-wrap .chat-card {
+      height: min(760px, 80vh);
+      min-height: 610px;
     }
 
     .floating-chat-button {
       position: fixed;
       right: 16px;
-      bottom: calc(88px + env(safe-area-inset-bottom));
-      z-index: 40;
-      min-height: 54px;
-      padding: 8px 14px 8px 9px;
+      bottom: calc(86px + env(safe-area-inset-bottom));
+      z-index: 45;
+      min-height: 58px;
+      padding: 8px 15px 8px 9px;
       display: flex;
       align-items: center;
-      gap: 9px;
-      border: 1px solid rgba(255,255,255,.32);
+      gap: 10px;
+      border: 1px solid rgba(255, 255, 255, .4);
       border-radius: 999px;
       color: #fff;
-      background: rgba(23,24,20,.95);
-      box-shadow: 0 16px 34px rgba(0,0,0,.26);
-      backdrop-filter: blur(14px);
+      background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+      box-shadow: 0 16px 34px rgba(92, 33, 190, .3);
       cursor: pointer;
     }
 
     .floating-chat-icon {
-      width: 38px;
-      height: 38px;
+      width: 40px;
+      height: 40px;
       position: relative;
       display: grid;
       place-items: center;
       border-radius: 50%;
-      color: #171814;
+      color: #6d28d9;
       background: #fff;
     }
 
@@ -1766,10 +2737,10 @@ const styles = `
       padding: 0 5px;
       display: grid;
       place-items: center;
-      border: 2px solid #171814;
+      border: 2px solid #6d28d9;
       border-radius: 999px;
       color: #fff;
-      background: #ef4444;
+      background: #ef3f61;
       font-size: 9px;
     }
 
@@ -1785,61 +2756,276 @@ const styles = `
 
     .floating-chat-button small {
       margin-top: 3px;
-      color: rgba(255,255,255,.72);
+      color: rgba(255, 255, 255, .78);
       font-size: 9px;
     }
-
-    .sc-side { display: none; }
-    .mobile-chat-wrap { display: block; }
-    .mobile-chat-wrap .chat-card { height: 720px; min-height: 620px; }
   }
 
   @media (max-width: 760px) {
-    .sc-shell { padding: 10px; }
-    .sc-topbar { top: 7px; margin-bottom: 10px; min-height: 60px; border-radius: 18px; }
-    .brand-block strong { font-size: 15px; }
-    .share-button { width: 44px; padding: 0; }
-    .share-button :global(svg) { margin: 0; }
-    .share-button { font-size: 0; }
-    .hero-card { padding: 16px; border-radius: 22px; }
-    .hero-heading h1, .single-copy h1 { font-size: 31px; }
-    .live-badge { padding: 8px 10px; }
-    .product-strip { grid-auto-columns: 82%; }
-    .single-hero { grid-template-columns: 1fr; gap: 19px; }
-    .single-media { min-height: 390px; }
-    .single-copy { padding: 0; }
-    .vote-grid { grid-template-columns: 1fr; }
-    .chat-discovery-heading {
-      gap: 10px;
+    :global(body:has(.sc-shell)) {
+      overflow-x: hidden;
+      background: #fff;
     }
 
-    .chat-discovery-counts {
-      padding-left: 0;
+    .sc-shell {
+      padding: 0 0 calc(92px + env(safe-area-inset-bottom));
+      background: #fff;
     }
 
-    .chat-preview-item {
-      grid-template-columns: 31px minmax(0, 1fr);
+    .sc-topbar {
+      top: 0;
+      min-height: 70px;
+      margin: 0;
+      padding: 9px 12px;
+      border-width: 0 0 1px;
+      border-radius: 0;
+      box-shadow: none;
+      background: rgba(255, 255, 255, .97);
     }
 
-    .chat-preview-item time {
+    .icon-button {
+      width: 40px;
+      height: 40px;
+      border-radius: 13px;
+    }
+
+    .brand-block strong {
+      font-size: 18px;
+    }
+
+    .share-code {
+      max-width: 185px;
+      font-size: 11px;
+    }
+
+    .member-pill {
+      min-height: 38px;
+      padding: 0 11px;
+      font-size: 12px;
+    }
+
+    .sc-layout {
+      display: block;
+    }
+
+    .sc-main {
+      gap: 0;
+    }
+
+    .product-card,
+    .vote-card,
+    .discussion-card,
+    .summary-card,
+    .chat-card {
+      border-right: 0;
+      border-left: 0;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .product-card {
+      border-top: 0;
+    }
+
+    .product-summary {
+      padding: 16px;
+      grid-template-columns: 132px minmax(0, 1fr);
+      gap: 16px;
+    }
+
+    .product-image {
+      width: 132px;
+      border-radius: 16px;
+    }
+
+    .product-info h1 {
+      font-size: 21px;
+      line-height: 1.2;
+    }
+
+    .price-row.large {
+      margin-top: 11px;
+    }
+
+    .price-row strong {
+      font-size: 25px;
+    }
+
+    .price-row del {
+      font-size: 14px;
+    }
+
+    .price-row em {
+      padding: 5px 8px;
+      font-size: 10px;
+    }
+
+    .store-row {
+      margin-top: 11px;
+      font-size: 12px;
+    }
+
+    .circle-meta {
+      min-height: 48px;
+      padding: 9px 16px;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .vote-card {
+      padding: 18px 16px;
+    }
+
+    .vote-heading h2 {
+      font-size: 20px;
+    }
+
+    .vote-grid {
+      grid-template-columns: repeat(5, minmax(74px, 1fr));
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+
+    .vote-grid::-webkit-scrollbar {
       display: none;
     }
 
-    .chat-preview-item img,
-    .chat-preview-avatar {
-      width: 31px;
-      height: 31px;
+    .vote-tile {
+      min-height: 116px;
+      padding: 12px 7px;
+      border-radius: 15px;
+    }
+
+    .vote-tile span {
+      font-size: 11px;
+    }
+
+    .vote-total {
+      margin-top: 12px;
+    }
+
+    .summary-card {
+      margin: 0;
+      padding: 16px;
+      min-height: 98px;
+    }
+
+    .summary-card h2 {
+      font-size: 16px;
+    }
+
+    .discussion-card {
+      padding: 0 16px 18px;
+    }
+
+    .circle-tabs {
+      margin: 0 -16px 16px;
+      padding: 0 16px;
+    }
+
+    .chat-entry {
+      min-height: 86px;
+      padding: 13px;
+      grid-template-columns: auto minmax(0, 1fr) auto auto;
+    }
+
+    .chat-entry-copy strong {
+      font-size: 15px;
+    }
+
+    .chat-entry-copy small {
+      font-size: 11px;
+    }
+
+    .recent-item {
+      grid-template-columns: 40px minmax(0, 1fr) auto;
+    }
+
+    .recent-item img,
+    .recent-avatar {
+      width: 40px;
+      height: 40px;
+    }
+
+    .comparison-card {
+      padding: 16px;
+    }
+
+    .comparison-card > h1 {
+      font-size: 25px;
+    }
+
+    .product-strip {
+      grid-auto-columns: 82%;
+    }
+
+    .mobile-chat-wrap {
+      scroll-margin-top: 70px;
+    }
+
+    .mobile-chat-wrap .chat-card {
+      height: 78vh;
+      min-height: 600px;
+      border-top: 10px solid #f6f4f9;
+    }
+
+    .chat-head {
+      padding: 16px;
+    }
+
+    .chat-head h2 {
+      font-size: 20px;
+    }
+
+    .circle-stats span {
+      padding: 0 8px;
+    }
+
+    .bubble {
+      max-width: 88%;
     }
 
     .floating-chat-button {
-      right: 12px;
-      bottom: calc(78px + env(safe-area-inset-bottom));
+      right: 13px;
+      bottom: calc(76px + env(safe-area-inset-bottom));
+      min-height: 56px;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .product-summary {
+      grid-template-columns: 112px minmax(0, 1fr);
+      gap: 13px;
     }
 
-    .summary-card { border-radius: 20px; }
-    .mobile-chat-wrap .chat-card { height: 76vh; min-height: 600px; border-radius: 22px; }
-    .chat-head { padding: 17px; }
-    .circle-stats span { padding: 7px 8px; }
-    .bubble { max-width: 88%; }
+    .product-image {
+      width: 112px;
+    }
+
+    .product-info h1 {
+      font-size: 18px;
+    }
+
+    .price-row strong {
+      font-size: 22px;
+    }
+
+    .member-pill {
+      padding: 0 9px;
+    }
+
+    .top-actions {
+      gap: 5px;
+    }
+
+    .chat-entry-count {
+      display: none;
+    }
+
+    .chat-entry {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+    }
   }
 `;
