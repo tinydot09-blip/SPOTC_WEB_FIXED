@@ -93,4 +93,46 @@ body:has(.shop-page) .shop-page {
     left: 0 !important;
     z-index: 5000 !important;
   }
+  /* =========================================================
+   SHOW SHOP FOOTER ABOVE FIXED MOBILE NAVIGATION
+========================================================= */
+
+body:has(.shop-page) .spotc-footer {
+  position: relative !important;
+  z-index: 1 !important;
+
+  width: 100% !important;
+  min-height: auto !important;
+  height: auto !important;
+
+  margin: 40px 0 0 !important;
+
+  padding:
+    42px
+    20px
+    calc(
+      110px + env(safe-area-inset-bottom, 0px)
+    ) !important;
+
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  overflow: visible !important;
+
+  clear: both !important;
+  color: #ffffff !important;
+  background: #111111 !important;
+  box-sizing: border-box !important;
+}
+
+body:has(.shop-page) .spotc-footer-grid,
+body:has(.shop-page) .spotc-footer-bottom {
+  display: grid !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+body:has(.shop-page) .spotc-footer-bottom {
+  display: block !important;
+}
 }
