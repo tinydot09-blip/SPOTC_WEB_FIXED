@@ -17,34 +17,19 @@ export default function ShopPage() {
 
       <ProductGrid />
 
-      {/*
-       * Real document-flow spacing between the final product
-       * row and FooterWrapper. This does not collapse and is
-       * not affected by footer margin rules.
-       */}
       <div
-        className="shop-footer-gap"
         aria-hidden="true"
-      />
-
-      <style jsx>{`
-        .shop-footer-gap {
-          width: 100%;
-          height: 32px;
-          min-height: 32px;
-          flex: 0 0 32px;
-          display: block;
-          background: #f8f6f1;
-        }
-
-        @media (min-width: 761px) {
-          .shop-footer-gap {
-            height: 50px;
-            min-height: 50px;
-            flex-basis: 50px;
-          }
-        }
-      `}</style>
+        style={{
+          display: 'block',
+          width: '100%',
+          height: '32px',
+          minHeight: '32px',
+          flexShrink: 0,
+          backgroundColor: '#f8f6f1',
+        }}
+      >
+        &nbsp;
+      </div>
     </main>
   );
 }
