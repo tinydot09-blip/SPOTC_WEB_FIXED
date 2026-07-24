@@ -1,11 +1,12 @@
 /* =========================================================
    SPOTC — SHOP MOBILE FOOTER + BOTTOM NAV FINAL FIX
 
-   Root cause fixed:
-   - Footer was explicitly hidden with display:none.
-   - Shop content added 84px bottom padding before the footer.
-   - The fixed navigation does not need content padding because
-     the footer already has enough mobile bottom padding.
+   Fixes:
+   - Footer remains visible.
+   - Adds a controlled gap between the final product row
+     and the footer.
+   - Removes the old 84px empty content gap.
+   - Keeps the mobile navigation fixed at the bottom.
 ========================================================= */
 
 @media (max-width: 760px) {
@@ -60,17 +61,17 @@
   }
 
   /*
-   * FooterWrapper already renders the footer after AppShell.
-   * Keep the footer in normal document flow.
+   * Controlled space between the last product cards
+   * and the footer.
    */
   body:has(.shop-page) .spotc-footer {
     display: block !important;
     width: 100% !important;
-    margin-top: 0 !important;
+    margin-top: 28px !important;
   }
 
   /*
-   * Keep the real AppShell mobile navigation fixed.
+   * Keep the real Shop mobile navigation fixed.
    */
   body:has(.shop-page) .spotc-mobile-navigation-bottom {
     position: fixed !important;
@@ -80,15 +81,20 @@
     left: 0 !important;
 
     width: 100% !important;
-    height: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
-    min-height: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
+    height:
+      calc(84px + env(safe-area-inset-bottom, 0px)) !important;
+    min-height:
+      calc(84px + env(safe-area-inset-bottom, 0px)) !important;
 
     margin: 0 !important;
-    padding: 0 0 env(safe-area-inset-bottom, 0px) !important;
+    padding:
+      0 0 env(safe-area-inset-bottom, 0px) !important;
+
     box-sizing: border-box !important;
 
     background: #17130f !important;
     background-color: #17130f !important;
+
     z-index: 99990 !important;
   }
 
@@ -99,8 +105,7 @@
   }
 
   /*
-   * Android fallback when safe-area-inset-bottom reports zero.
-   * It stays behind the navigation and never hides the footer.
+   * Android gesture-area fallback.
    */
   body:has(.shop-page)::after {
     content: "";
@@ -114,6 +119,7 @@
 
     pointer-events: none;
     background: #17130f;
+
     z-index: 99989;
   }
 }
