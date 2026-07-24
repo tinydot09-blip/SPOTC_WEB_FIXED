@@ -110,11 +110,12 @@ export function AppShell({
     useRef<HTMLDivElement>(null);
 
   const standalonePage =
-    pathname.startsWith('/dashboard') ||
-    pathname.startsWith('/compare-online') ||
-    pathname.startsWith('/order-success') ||
-    pathname.startsWith('/complete-profile') ||
-    pathname.startsWith('/profile');
+  pathname.startsWith('/dashboard') ||
+  pathname.startsWith('/compare-online') ||
+  pathname.startsWith('/order-success') ||
+  pathname.startsWith('/complete-profile') ||
+  pathname.startsWith('/profile') ||
+  pathname.startsWith('/circle/');
 
   const mobileNavAtTop =
     pathname.startsWith('/offers') ||

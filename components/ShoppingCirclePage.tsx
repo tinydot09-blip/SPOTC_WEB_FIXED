@@ -113,7 +113,19 @@ type CircleMessage = {
   reply_to_text: string;
   created_at?: Timestamp;
 };
+type CircleTab =
+  | 'discussion'
+  | 'details'
+  | 'participants';
 
+type CircleParticipant = {
+  id: string;
+  user_uid: string;
+  name: string;
+  photo: string;
+  joined_at?: Timestamp;
+  last_seen_at?: Timestamp;
+};
 const n = (value: unknown) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -176,6 +188,14 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [playingUrl, setPlayingUrl] = useState('');
+  const [activeTab, setActiveTab] =
+  useState<CircleTab>('discussion');
+
+const [participants, setParticipants] =
+  useState<CircleParticipant[]>([]);
+
+const [participantsLoading, setParticipantsLoading] =
+  useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -325,7 +345,78 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
       stopMessages?.();
     };
   }, [shareCode]);
+useEffect(() => {
+  if (!circleRef) {
+    setParticipants([]);
+    return;
+  }
 
+  const db = getAppFirestore();
+
+  setParticipantsLoading(true);
+
+  const participantsQuery = query(
+    collection(db, 'ShoppingCircleParticipants'),
+    where('circle_ref', '==', circleRef),
+  );
+
+  const unsubscribe = onSnapshot(
+    participantsQuery,
+    (snapshot) => {
+      const nextParticipants =
+        snapshot.docs
+          .map((participantDocument) => {
+            const data = participantDocument.data();
+
+            return {
+              id: participantDocument.id,
+              user_uid: String(data.user_uid ?? ''),
+              name: String(
+                data.name ??
+                  data.user_name ??
+                  'SPOTC User',
+              ),
+              photo: String(
+                data.photo ??
+                  data.user_photo ??
+                  '',
+              ),
+              joined_at:
+                data.joined_at instanceof Timestamp
+                  ? data.joined_at
+                  : undefined,
+              last_seen_at:
+                data.last_seen_at instanceof Timestamp
+                  ? data.last_seen_at
+                  : undefined,
+            } satisfies CircleParticipant;
+          })
+          .sort((a, b) => {
+            const aTime =
+              a.joined_at?.toMillis() ?? 0;
+
+            const bTime =
+              b.joined_at?.toMillis() ?? 0;
+
+            return aTime - bTime;
+          });
+
+      setParticipants(nextParticipants);
+      setParticipantsLoading(false);
+    },
+    (error) => {
+      console.error(
+        'Shopping Circle participants listener failed:',
+        error,
+      );
+
+      setParticipants([]);
+      setParticipantsLoading(false);
+    },
+  );
+
+  return unsubscribe;
+}, [circleRef]);
   useEffect(() => {
     if (!firebaseReady || !auth || !circleRef) {
       return;
@@ -1099,81 +1190,297 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
           </section>
 
           <section className="discussion-card">
-            <nav className="circle-tabs" aria-label="Shopping Circle sections">
-              <button className="active">Discussion</button>
-              <button>Details</button>
-              <button>Participants</button>
-            </nav>
+  <nav
+    className="circle-tabs"
+    aria-label="Shopping Circle sections"
+  >
+    <button
+      type="button"
+      className={
+        activeTab === 'discussion'
+          ? 'active'
+          : ''
+      }
+      onClick={() =>
+        setActiveTab('discussion')
+      }
+    >
+      Discussion
+    </button>
 
-            <button
-              type="button"
-              className="chat-entry"
-              onClick={openChat}
-            >
-              <span className="chat-entry-icon">
-                <MessageSquareText size={22} />
-              </span>
-              <span className="chat-entry-copy">
-                <strong>Friends &amp; Family Chat</strong>
-                <small>Chat with your group about this product</small>
-              </span>
-              <span className="chat-entry-count">
-                {n(circle.participants)}
-              </span>
-              <ArrowLeft className="entry-arrow" size={19} />
-            </button>
+    <button
+      type="button"
+      className={
+        activeTab === 'details'
+          ? 'active'
+          : ''
+      }
+      onClick={() =>
+        setActiveTab('details')
+      }
+    >
+      Details
+    </button>
 
-            <div className="recent-head">
-              <h3>Recent messages</h3>
-              <button type="button" onClick={openChat}>
-                View all
-              </button>
-            </div>
+    <button
+      type="button"
+      className={
+        activeTab === 'participants'
+          ? 'active'
+          : ''
+      }
+      onClick={() =>
+        setActiveTab('participants')
+      }
+    >
+      Participants
+    </button>
+  </nav>
 
-            {recentMessages.length > 0 ? (
-              <div className="recent-list">
-                {recentMessages.slice(-5).reverse().map((item) => (
-                  <button
-                    type="button"
-                    className="recent-item"
-                    key={`recent-${item.id}`}
-                    onClick={openChat}
-                  >
-                    {item.sender_photo ? (
-                      <img src={item.sender_photo} alt="" />
-                    ) : (
-                      <span className="recent-avatar">
-                        {initials(item.sender_name)}
-                      </span>
-                    )}
+  {activeTab === 'discussion' && (
+    <>
+      <button
+        type="button"
+        className="chat-entry"
+        onClick={openChat}
+      >
+        <span className="chat-entry-icon">
+          <MessageSquareText size={22} />
+        </span>
 
-                    <span className="recent-copy">
-                      <strong>{item.sender_name}</strong>
-                      <small>
-                        {item.message_type === 'voice'
-                          ? 'Voice message'
-                          : item.message}
-                      </small>
-                    </span>
+        <span className="chat-entry-copy">
+          <strong>
+            Friends &amp; Family Chat
+          </strong>
 
-                    <time>{timeAgo(item.created_at)}</time>
-                  </button>
-                ))}
-              </div>
-            ) : (
+          <small>
+            Chat with your group about this product
+          </small>
+        </span>
+
+        <span className="chat-entry-count">
+          {n(circle.participants)}
+        </span>
+
+        <ArrowLeft
+          className="entry-arrow"
+          size={19}
+        />
+      </button>
+
+      <div className="recent-head">
+        <h3>Recent messages</h3>
+
+        <button
+          type="button"
+          onClick={openChat}
+        >
+          View all
+        </button>
+      </div>
+
+      {recentMessages.length > 0 ? (
+        <div className="recent-list">
+          {recentMessages
+            .slice(-5)
+            .reverse()
+            .map((item) => (
               <button
                 type="button"
-                className="empty-recent"
+                className="recent-item"
+                key={`recent-${item.id}`}
                 onClick={openChat}
               >
-                <MessageCircle size={22} />
-                <span>
-                  <strong>Start the discussion</strong>
-                  <small>Be the first to share an opinion.</small>
+                {item.sender_photo ? (
+                  <img
+                    src={item.sender_photo}
+                    alt=""
+                  />
+                ) : (
+                  <span className="recent-avatar">
+                    {initials(
+                      item.sender_name,
+                    )}
+                  </span>
+                )}
+
+                <span className="recent-copy">
+                  <strong>
+                    {item.sender_name}
+                  </strong>
+
+                  <small>
+                    {item.message_type ===
+                    'voice'
+                      ? 'Voice message'
+                      : item.message}
+                  </small>
                 </span>
+
+                <time>
+                  {timeAgo(
+                    item.created_at,
+                  )}
+                </time>
               </button>
-            )}
-          </section>
+            ))}
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="empty-recent"
+          onClick={openChat}
+        >
+          <MessageCircle size={22} />
+
+          <span>
+            <strong>
+              Start the discussion
+            </strong>
+
+            <small>
+              Be the first to share an opinion.
+            </small>
+          </span>
+        </button>
+      )}
+    </>
+  )}
+
+  {activeTab === 'details' && (
+    <div className="circle-tab-panel">
+      <div className="circle-detail-row">
+        <span>Circle status</span>
+        <strong>
+          {String(
+            circle.status || 'active',
+          )}
+        </strong>
+      </div>
+
+      <div className="circle-detail-row">
+        <span>Share code</span>
+        <strong>
+          {circle.share_code ||
+            shareCode}
+        </strong>
+      </div>
+
+      <div className="circle-detail-row">
+        <span>Total votes</span>
+        <strong>{totalVotes}</strong>
+      </div>
+
+      <div className="circle-detail-row">
+        <span>Messages</span>
+        <strong>
+          {n(circle.comments_count)}
+        </strong>
+      </div>
+
+      <div className="circle-detail-row">
+        <span>Participants</span>
+        <strong>
+          {Math.max(
+            n(circle.participants),
+            participants.length,
+          )}
+        </strong>
+      </div>
+
+      <div className="circle-question-box">
+        <span>Question</span>
+
+        <strong>
+          {circle.question ||
+            'Which one should I buy?'}
+        </strong>
+      </div>
+    </div>
+  )}
+
+  {activeTab === 'participants' && (
+    <div className="circle-tab-panel">
+      <div className="participants-heading">
+        <div>
+          <strong>
+            Circle participants
+          </strong>
+
+          <span>
+            {Math.max(
+              n(circle.participants),
+              participants.length,
+            )}{' '}
+            people joined
+          </span>
+        </div>
+
+        <Users size={21} />
+      </div>
+
+      {participantsLoading ? (
+        <div className="participants-state">
+          <Loader2
+            className="spin"
+            size={23}
+          />
+
+          Loading participants…
+        </div>
+      ) : participants.length > 0 ? (
+        <div className="participants-list">
+          {participants.map(
+            (participant) => (
+              <div
+                className="participant-row"
+                key={participant.id}
+              >
+                {participant.photo ? (
+                  <img
+                    src={
+                      participant.photo
+                    }
+                    alt=""
+                  />
+                ) : (
+                  <span className="participant-avatar">
+                    {initials(
+                      participant.name,
+                    )}
+                  </span>
+                )}
+
+                <span className="participant-copy">
+                  <strong>
+                    {participant.name}
+                  </strong>
+
+                  <small>
+                    Joined{' '}
+                    {timeAgo(
+                      participant.joined_at,
+                    )}
+                  </small>
+                </span>
+
+                <span className="participant-status">
+                  Active
+                </span>
+              </div>
+            ),
+          )}
+        </div>
+      ) : (
+        <div className="participants-state">
+          <Users size={25} />
+
+          No registered participants yet.
+        </div>
+      )}
+    </div>
+  )}
+</section>
 
           <section className="mobile-chat-wrap" ref={mobileChatRef}>
             <ChatPanel
@@ -2993,7 +3300,153 @@ const styles = `
       min-height: 56px;
     }
   }
+.circle-tabs button {
+  cursor: pointer;
+}
 
+.circle-tab-panel {
+  padding: 20px;
+}
+
+.circle-detail-row {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid #eceaf1;
+}
+
+.circle-detail-row span {
+  color: #777481;
+  font-size: 13px;
+}
+
+.circle-detail-row strong {
+  color: #171521;
+  font-size: 14px;
+  text-align: right;
+  text-transform: capitalize;
+}
+
+.circle-question-box {
+  margin-top: 18px;
+  padding: 17px;
+  display: grid;
+  gap: 6px;
+  border-radius: 16px;
+  background: #f7f5fb;
+}
+
+.circle-question-box span {
+  color: #817d8d;
+  font-size: 12px;
+}
+
+.circle-question-box strong {
+  color: #201d2a;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.participants-heading {
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #5e25d9;
+}
+
+.participants-heading div {
+  display: grid;
+  gap: 3px;
+}
+
+.participants-heading strong {
+  color: #1e1b28;
+  font-size: 16px;
+}
+
+.participants-heading span {
+  color: #85818e;
+  font-size: 12px;
+}
+
+.participants-list {
+  display: grid;
+}
+
+.participant-row {
+  min-height: 66px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid #eeebf2;
+}
+
+.participant-row:first-child {
+  border-top: 0;
+}
+
+.participant-row img,
+.participant-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+
+.participant-row img {
+  display: block;
+  object-fit: cover;
+}
+
+.participant-avatar {
+  display: grid;
+  place-items: center;
+  color: white;
+  background: #6e35db;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.participant-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.participant-copy strong {
+  overflow: hidden;
+  color: #211e29;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.participant-copy small {
+  color: #8a8691;
+  font-size: 11px;
+}
+
+.participant-status {
+  padding: 6px 9px;
+  border-radius: 999px;
+  color: #078c52;
+  background: #e9f9f1;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.participants-state {
+  min-height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: #817d89;
+  font-size: 13px;
+}
   @media (max-width: 420px) {
     .product-summary {
       grid-template-columns: 112px minmax(0, 1fr);
