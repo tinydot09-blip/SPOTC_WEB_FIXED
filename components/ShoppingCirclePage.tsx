@@ -46,7 +46,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 
 import { requireGoogleLogin } from '@/lib/auth';
 import { auth, firebaseReady } from '@/lib/firebase';
@@ -1619,7 +1619,7 @@ type ChatPanelProps = {
   recordSeconds: number;
   startRecording: () => void;
   stopRecording: () => void;
-  chatEndRef: React.RefObject<HTMLDivElement>;
+  chatEndRef: RefObject<HTMLDivElement>;
 };
 
 function ChatPanel({
@@ -2988,6 +2988,12 @@ const styles = `
   }
 
   @media (max-width: 1050px) {
+    .sc-shell {
+      width: 100%;
+      min-height: 100dvh;
+      padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    }
+
     .sc-layout {
       grid-template-columns: 1fr;
     }
@@ -2998,18 +3004,22 @@ const styles = `
 
     .mobile-chat-wrap {
       display: block;
+      width: 100%;
+      min-height: 0;
+      height: auto;
       scroll-margin-top: 84px;
     }
 
     .mobile-chat-wrap .chat-card {
-      height: min(760px, 80vh);
-      min-height: 610px;
+      width: 100%;
+      height: min(620px, 72dvh);
+      min-height: 480px;
     }
 
     .floating-chat-button {
       position: fixed;
       right: 16px;
-      bottom: calc(86px + env(safe-area-inset-bottom));
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
       z-index: 45;
       min-height: 58px;
       padding: 8px 15px 8px 9px;
@@ -3069,13 +3079,22 @@ const styles = `
   }
 
   @media (max-width: 760px) {
+    :global(html),
+    :global(body),
     :global(body:has(.sc-shell)) {
+      width: 100%;
+      min-height: 100%;
+      height: auto;
+      margin: 0;
+      padding: 0;
       overflow-x: hidden;
       background: #fff;
     }
 
     .sc-shell {
-      padding: 0 0 calc(92px + env(safe-area-inset-bottom));
+      width: 100%;
+      min-height: 100dvh;
+      padding: 0 0 calc(78px + env(safe-area-inset-bottom, 0px));
       background: #fff;
     }
 
@@ -3096,26 +3115,18 @@ const styles = `
       border-radius: 13px;
     }
 
-    .brand-block strong {
-      font-size: 18px;
-    }
-
-    .share-code {
-      max-width: 185px;
-      font-size: 11px;
-    }
-
-    .member-pill {
-      min-height: 38px;
-      padding: 0 11px;
-      font-size: 12px;
-    }
+    .brand-block strong { font-size: 18px; }
+    .share-code { max-width: 185px; font-size: 11px; }
+    .member-pill { min-height: 38px; padding: 0 11px; font-size: 12px; }
 
     .sc-layout {
+      width: 100%;
       display: block;
     }
 
     .sc-main {
+      width: 100%;
+      min-height: 0;
       gap: 0;
     }
 
@@ -3130,9 +3141,7 @@ const styles = `
       box-shadow: none;
     }
 
-    .product-card {
-      border-top: 0;
-    }
+    .product-card { border-top: 0; }
 
     .product-summary {
       padding: 16px;
@@ -3140,37 +3149,13 @@ const styles = `
       gap: 16px;
     }
 
-    .product-image {
-      width: 132px;
-      border-radius: 16px;
-    }
-
-    .product-info h1 {
-      font-size: 21px;
-      line-height: 1.2;
-    }
-
-    .price-row.large {
-      margin-top: 11px;
-    }
-
-    .price-row strong {
-      font-size: 25px;
-    }
-
-    .price-row del {
-      font-size: 14px;
-    }
-
-    .price-row em {
-      padding: 5px 8px;
-      font-size: 10px;
-    }
-
-    .store-row {
-      margin-top: 11px;
-      font-size: 12px;
-    }
+    .product-image { width: 132px; border-radius: 16px; }
+    .product-info h1 { font-size: 21px; line-height: 1.2; }
+    .price-row.large { margin-top: 11px; }
+    .price-row strong { font-size: 25px; }
+    .price-row del { font-size: 14px; }
+    .price-row em { padding: 5px 8px; font-size: 10px; }
+    .store-row { margin-top: 11px; font-size: 12px; }
 
     .circle-meta {
       min-height: 48px;
@@ -3179,13 +3164,8 @@ const styles = `
       white-space: nowrap;
     }
 
-    .vote-card {
-      padding: 18px 16px;
-    }
-
-    .vote-heading h2 {
-      font-size: 20px;
-    }
+    .vote-card { padding: 18px 16px; }
+    .vote-heading h2 { font-size: 20px; }
 
     .vote-grid {
       grid-template-columns: repeat(5, minmax(74px, 1fr));
@@ -3195,42 +3175,20 @@ const styles = `
       scrollbar-width: none;
     }
 
-    .vote-grid::-webkit-scrollbar {
-      display: none;
-    }
-
-    .vote-tile {
-      min-height: 116px;
-      padding: 12px 7px;
-      border-radius: 15px;
-    }
-
-    .vote-tile span {
-      font-size: 11px;
-    }
-
-    .vote-total {
-      margin-top: 12px;
-    }
+    .vote-grid::-webkit-scrollbar { display: none; }
+    .vote-tile { min-height: 116px; padding: 12px 7px; border-radius: 15px; }
+    .vote-tile span { font-size: 11px; }
+    .vote-total { margin-top: 12px; }
 
     .summary-card {
+      min-height: 98px;
       margin: 0;
       padding: 16px;
-      min-height: 98px;
     }
 
-    .summary-card h2 {
-      font-size: 16px;
-    }
-
-    .discussion-card {
-      padding: 0 16px 18px;
-    }
-
-    .circle-tabs {
-      margin: 0 -16px 16px;
-      padding: 0 16px;
-    }
+    .summary-card h2 { font-size: 16px; }
+    .discussion-card { padding: 0 16px 18px; }
+    .circle-tabs { margin: 0 -16px 16px; padding: 0 16px; }
 
     .chat-entry {
       min-height: 86px;
@@ -3238,65 +3196,37 @@ const styles = `
       grid-template-columns: auto minmax(0, 1fr) auto auto;
     }
 
-    .chat-entry-copy strong {
-      font-size: 15px;
-    }
-
-    .chat-entry-copy small {
-      font-size: 11px;
-    }
-
-    .recent-item {
-      grid-template-columns: 40px minmax(0, 1fr) auto;
-    }
-
-    .recent-item img,
-    .recent-avatar {
-      width: 40px;
-      height: 40px;
-    }
-
-    .comparison-card {
-      padding: 16px;
-    }
-
-    .comparison-card > h1 {
-      font-size: 25px;
-    }
-
-    .product-strip {
-      grid-auto-columns: 82%;
-    }
+    .chat-entry-copy strong { font-size: 15px; }
+    .chat-entry-copy small { font-size: 11px; }
+    .recent-item { grid-template-columns: 40px minmax(0, 1fr) auto; }
+    .recent-item img, .recent-avatar { width: 40px; height: 40px; }
+    .comparison-card { padding: 16px; }
+    .comparison-card > h1 { font-size: 25px; }
+    .product-strip { grid-auto-columns: 82%; }
 
     .mobile-chat-wrap {
+      width: 100%;
+      height: auto;
+      min-height: 0;
       scroll-margin-top: 70px;
     }
 
     .mobile-chat-wrap .chat-card {
-      height: 78vh;
-      min-height: 600px;
+      width: 100%;
+      height: min(560px, 68dvh);
+      min-height: 430px;
       border-top: 10px solid #f6f4f9;
+      border-radius: 0;
     }
 
-    .chat-head {
-      padding: 16px;
-    }
-
-    .chat-head h2 {
-      font-size: 20px;
-    }
-
-    .circle-stats span {
-      padding: 0 8px;
-    }
-
-    .bubble {
-      max-width: 88%;
-    }
+    .chat-head { padding: 16px; }
+    .chat-head h2 { font-size: 20px; }
+    .circle-stats span { padding: 0 8px; }
+    .bubble { max-width: 88%; }
 
     .floating-chat-button {
       right: 13px;
-      bottom: calc(76px + env(safe-area-inset-bottom));
+      bottom: calc(12px + env(safe-area-inset-bottom, 0px));
       min-height: 56px;
     }
   }

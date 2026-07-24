@@ -1,22 +1,19 @@
-  'use client';
+'use client';
 
-  import { usePathname } from 'next/navigation';
-  import Footer from '@/components/Footer';
+import { usePathname } from 'next/navigation';
+import Footer from './Footer';
 
-  export default function FooterWrapper() {
-    const pathname = usePathname() || '';
+export default function FooterWrapper() {
+  const pathname = usePathname();
 
-    const hideFooter =
-      pathname === '/dashboard' ||
-      pathname.startsWith('/dashboard/') ||
-      pathname === '/compare-online' ||
-      pathname.startsWith('/compare-online/') ||
-      pathname === '/order-success' ||
-      pathname.startsWith('/order-success/');
+  const hideFooter =
+    pathname.startsWith('/offers') ||
+    pathname.startsWith('/spots') ||
+    pathname.startsWith('/circle/');
 
-    if (hideFooter) {
-      return null;
-    }
-
-    return <Footer />;
+  if (hideFooter) {
+    return null;
   }
+
+  return <Footer />;
+}
