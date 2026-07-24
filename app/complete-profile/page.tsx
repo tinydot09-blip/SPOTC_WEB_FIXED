@@ -4,12 +4,14 @@ import {
   CalendarDays,
   Check,
   LoaderCircle,
+  LogOut,
   Phone,
   UserRound,
 } from 'lucide-react';
 
 import {
   onAuthStateChanged,
+  signOut,
   type User,
 } from 'firebase/auth';
 
@@ -19,12 +21,10 @@ import {
   setDoc,
 } from 'firebase/firestore';
 
-import {
-  useRouter,
-} from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 import {
-  FormEvent,
+  type FormEvent,
   useEffect,
   useMemo,
   useState,
@@ -47,18 +47,30 @@ type GenderValue =
   | 'other'
   | 'prefer_not_to_say';
 
-function cleanPhoneNumber(value: string): string {
+const PROFILE_SKIP_KEY =
+  'spotc-profile-skipped';
+
+function cleanPhoneNumber(
+  value: string,
+): string {
   return value.replace(/[^\d+]/g, '');
 }
 
-function phoneDigits(value: string): string {
+function phoneDigits(
+  value: string,
+): string {
   return value.replace(/\D/g, '');
 }
 
-function isValidPhone(value: string): boolean {
+function isValidPhone(
+  value: string,
+): boolean {
   const digits = phoneDigits(value);
 
-  return digits.length >= 10 && digits.length <= 15;
+  return (
+    digits.length >= 10 &&
+    digits.length <= 15
+  );
 }
 
 export default function CompleteProfilePage() {
@@ -73,122 +85,167 @@ export default function CompleteProfilePage() {
   const [saving, setSaving] =
     useState(false);
 
+  const [loggingOut, setLoggingOut] =
+    useState(false);
+
   const [error, setError] =
     useState('');
 
-  const [displayName, setDisplayName] =
-    useState('');
+  const [
+    displayName,
+    setDisplayName,
+  ] = useState('');
 
-  const [gender, setGender] =
-    useState<GenderValue>('');
+  const [
+    gender,
+    setGender,
+  ] = useState<GenderValue>('');
 
-  const [dateOfBirth, setDateOfBirth] =
-    useState('');
+  const [
+    dateOfBirth,
+    setDateOfBirth,
+  ] = useState('');
 
-  const [phoneNumber, setPhoneNumber] =
-    useState('');
+  const [
+    phoneNumber,
+    setPhoneNumber,
+  ] = useState('');
 
-  const [whatsappNumber, setWhatsappNumber] =
-    useState('');
+  const [
+    whatsappNumber,
+    setWhatsappNumber,
+  ] = useState('');
 
-  const [sameAsPhone, setSameAsPhone] =
-    useState(true);
+  const [
+    sameAsPhone,
+    setSameAsPhone,
+  ] = useState(true);
 
   const maximumDate = useMemo(() => {
-    return new Date().toISOString().split('T')[0];
+    return new Date()
+      .toISOString()
+      .split('T')[0];
   }, []);
 
   useEffect(() => {
-    if (!firebaseReady || !auth) {
+    if (
+      !firebaseReady ||
+      !auth
+    ) {
       setError(
         'Firebase authentication is not configured.',
       );
+
       setLoading(false);
       return;
     }
 
     let active = true;
 
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      async (nextUser) => {
-        if (!active) {
-          return;
-        }
-
-        if (
-          !nextUser ||
-          nextUser.isAnonymous
-        ) {
-          router.replace('/offers');
-          return;
-        }
-
-        setUser(nextUser);
-
-        try {
-          const existingProfile =
-            await getSpotcUserProfile(nextUser);
-
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        async (nextUser) => {
           if (!active) {
             return;
           }
 
           if (
-            existingProfile?.profile_complete === true
+            !nextUser ||
+            nextUser.isAnonymous
           ) {
             router.replace('/offers');
             return;
           }
 
-          setDisplayName(
-            existingProfile?.display_name?.trim() ||
-              nextUser.displayName?.trim() ||
-              '',
-          );
+          setUser(nextUser);
 
-          setGender(
-            (existingProfile?.gender as GenderValue) ||
-              '',
-          );
+          try {
+            const existingProfile =
+              await getSpotcUserProfile(
+                nextUser,
+              );
 
-          setDateOfBirth(
-            existingProfile?.date_of_birth || '',
-          );
+            if (!active) {
+              return;
+            }
 
-          setPhoneNumber(
-            existingProfile?.phone_number || '',
-          );
+            if (
+              existingProfile
+                ?.profile_complete === true
+            ) {
+              sessionStorage.removeItem(
+                PROFILE_SKIP_KEY,
+              );
 
-          const existingWhatsapp =
-            existingProfile?.whatsapp_number || '';
+              router.replace('/offers');
+              return;
+            }
 
-          setWhatsappNumber(existingWhatsapp);
+            setDisplayName(
+              existingProfile
+                ?.display_name
+                ?.trim() ||
+                nextUser.displayName
+                  ?.trim() ||
+                '',
+            );
 
-          if (
-            existingWhatsapp &&
-            existingProfile?.phone_number &&
-            existingWhatsapp !==
-              existingProfile.phone_number
+            setGender(
+              (
+                existingProfile?.gender ||
+                ''
+              ) as GenderValue,
+            );
+
+            setDateOfBirth(
+              existingProfile
+                ?.date_of_birth ||
+                '',
+            );
+
+            const savedPhone =
+              existingProfile
+                ?.phone_number ||
+              '';
+
+            const savedWhatsapp =
+              existingProfile
+                ?.whatsapp_number ||
+              '';
+
+            setPhoneNumber(
+              savedPhone,
+            );
+
+            setWhatsappNumber(
+              savedWhatsapp ||
+                savedPhone,
+            );
+
+            setSameAsPhone(
+              !savedWhatsapp ||
+                savedWhatsapp ===
+                  savedPhone,
+            );
+          } catch (
+            profileError
           ) {
-            setSameAsPhone(false);
-          }
-        } catch (profileError) {
-          console.error(
-            'Unable to load profile:',
-            profileError,
-          );
+            console.error(
+              'Unable to load profile:',
+              profileError,
+            );
 
-          setError(
-            'Unable to load your profile. Please refresh and try again.',
-          );
-        } finally {
-          if (active) {
-            setLoading(false);
+            setError(
+              'Unable to load your profile. Please refresh and try again.',
+            );
+          } finally {
+            if (active) {
+              setLoading(false);
+            }
           }
-        }
-      },
-    );
+        },
+      );
 
     return () => {
       active = false;
@@ -199,12 +256,15 @@ export default function CompleteProfilePage() {
   const handlePhoneChange = (
     value: string,
   ) => {
-    const cleaned = cleanPhoneNumber(value);
+    const cleaned =
+      cleanPhoneNumber(value);
 
     setPhoneNumber(cleaned);
 
     if (sameAsPhone) {
-      setWhatsappNumber(cleaned);
+      setWhatsappNumber(
+        cleaned,
+      );
     }
   };
 
@@ -214,37 +274,106 @@ export default function CompleteProfilePage() {
     setSameAsPhone(checked);
 
     if (checked) {
-      setWhatsappNumber(phoneNumber);
+      setWhatsappNumber(
+        phoneNumber,
+      );
+    }
+  };
+
+  const handleSkipForNow = () => {
+    if (!user) {
+      router.replace('/offers');
+      return;
+    }
+
+    sessionStorage.setItem(
+      PROFILE_SKIP_KEY,
+      user.uid,
+    );
+
+    router.replace('/offers');
+    router.refresh();
+  };
+
+  const handleSignOut = async () => {
+    if (!auth) {
+      router.replace('/offers');
+      return;
+    }
+
+    setLoggingOut(true);
+    setError('');
+
+    try {
+      sessionStorage.removeItem(
+        PROFILE_SKIP_KEY,
+      );
+
+      await signOut(auth);
+
+      router.replace('/offers');
+      router.refresh();
+    } catch (
+      logoutError
+    ) {
+      console.error(
+        'Profile logout failed:',
+        logoutError,
+      );
+
+      setError(
+        'Unable to sign out. Please try again.',
+      );
+
+      setLoggingOut(false);
     }
   };
 
   const handleSubmit = async (
-    event: FormEvent<HTMLFormElement>,
+    event:
+      FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
 
-    if (!user || !db) {
+    if (
+      !user ||
+      !db
+    ) {
       setError(
         'You must be signed in to save your profile.',
       );
+
       return;
     }
 
-    const finalName = displayName.trim();
-    const finalPhone =
-      cleanPhoneNumber(phoneNumber);
+    const finalName =
+      displayName.trim();
 
-    const finalWhatsapp = sameAsPhone
-      ? finalPhone
-      : cleanPhoneNumber(whatsappNumber);
+    const finalPhone =
+      cleanPhoneNumber(
+        phoneNumber,
+      );
+
+    const finalWhatsapp =
+      sameAsPhone
+        ? finalPhone
+        : cleanPhoneNumber(
+            whatsappNumber,
+          );
 
     if (!finalName) {
-      setError('Please enter your full name.');
+      setError(
+        'Please enter your full name.',
+      );
+
       return;
     }
 
     if (!gender) {
-      setError('Please select your gender.');
+      setError(
+        'Please select your gender.',
+      );
+
       return;
     }
 
@@ -252,27 +381,42 @@ export default function CompleteProfilePage() {
       setError(
         'Please enter your date of birth.',
       );
+
       return;
     }
 
-    if (dateOfBirth > maximumDate) {
+    if (
+      dateOfBirth >
+      maximumDate
+    ) {
       setError(
         'Date of birth cannot be in the future.',
       );
+
       return;
     }
 
-    if (!isValidPhone(finalPhone)) {
+    if (
+      !isValidPhone(
+        finalPhone,
+      )
+    ) {
       setError(
         'Please enter a valid phone number.',
       );
+
       return;
     }
 
-    if (!isValidPhone(finalWhatsapp)) {
+    if (
+      !isValidPhone(
+        finalWhatsapp,
+      )
+    ) {
       setError(
         'Please enter a valid WhatsApp number.',
       );
+
       return;
     }
 
@@ -281,39 +425,71 @@ export default function CompleteProfilePage() {
 
     try {
       await setDoc(
-        doc(db, 'Users', user.uid),
+        doc(
+          db,
+          'Users',
+          user.uid,
+        ),
         {
           uid: user.uid,
-          display_name: finalName,
-          email: user.email || '',
-          photo_url: user.photoURL || '',
+
+          display_name:
+            finalName,
+
+          email:
+            user.email ||
+            '',
+
+          photo_url:
+            user.photoURL ||
+            '',
+
           gender,
-          date_of_birth: dateOfBirth,
-          phone_number: finalPhone,
-          whatsapp_number: finalWhatsapp,
+
+          date_of_birth:
+            dateOfBirth,
+
+          phone_number:
+            finalPhone,
+
+          whatsapp_number:
+            finalWhatsapp,
+
           whatsapp_same_as_phone:
             sameAsPhone,
-          profile_complete: true,
+
+          profile_complete:
+            true,
+
           profile_completed_at:
             serverTimestamp(),
-          updated_at: serverTimestamp(),
+
+          updated_at:
+            serverTimestamp(),
         },
         {
           merge: true,
         },
       );
 
+      sessionStorage.removeItem(
+        PROFILE_SKIP_KEY,
+      );
+
       router.replace('/offers');
       router.refresh();
-    } catch (saveError) {
+    } catch (
+      saveError
+    ) {
       console.error(
         'Profile save failed:',
         saveError,
       );
 
-      const firebaseError = saveError as {
-        code?: string;
-      };
+      const firebaseError =
+        saveError as {
+          code?: string;
+        };
 
       if (
         firebaseError.code ===
@@ -340,12 +516,14 @@ export default function CompleteProfilePage() {
           className="complete-profile-spinner"
         />
 
-        <p>Loading your profile…</p>
+        <p>
+          Loading your profile…
+        </p>
 
         <style jsx>{`
           .complete-profile-loading {
             width: 100%;
-            min-height: 100vh;
+            min-height: 100dvh;
             display: grid;
             place-content: center;
             justify-items: center;
@@ -362,13 +540,17 @@ export default function CompleteProfilePage() {
           }
 
           .complete-profile-spinner {
-            animation: profile-spin 0.8s
-              linear infinite;
+            animation:
+              profile-spin
+              0.8s
+              linear
+              infinite;
           }
 
           @keyframes profile-spin {
             to {
-              transform: rotate(360deg);
+              transform:
+                rotate(360deg);
             }
           }
         `}</style>
@@ -380,9 +562,29 @@ export default function CompleteProfilePage() {
     return null;
   }
 
+  const actionsDisabled =
+    saving ||
+    loggingOut;
+
   return (
     <main className="complete-profile-page">
       <section className="complete-profile-card">
+        <div className="complete-profile-top">
+          <button
+            type="button"
+            className="profile-close-button"
+            onClick={
+              handleSkipForNow
+            }
+            disabled={
+              actionsDisabled
+            }
+            aria-label="Close profile setup"
+          >
+            Skip
+          </button>
+        </div>
+
         <div className="complete-profile-brand">
           SPOTC
         </div>
@@ -390,44 +592,67 @@ export default function CompleteProfilePage() {
         <div className="complete-profile-avatar">
           {user.photoURL ? (
             <img
-              src={user.photoURL}
-              alt={displayName || 'Profile'}
+              src={
+                user.photoURL
+              }
+              alt={
+                displayName ||
+                'Profile'
+              }
               referrerPolicy="no-referrer"
             />
           ) : (
-            <UserRound size={42} />
+            <UserRound
+              size={42}
+            />
           )}
 
           <span>
-            <Check size={15} />
+            <Check
+              size={15}
+            />
           </span>
         </div>
 
         <header className="complete-profile-header">
-          <h1>Complete your profile</h1>
+          <h1>
+            Complete your profile
+          </h1>
 
           <p>
-            Add a few details to personalize your
-            SPOTC experience.
+            Add a few details to
+            personalize your SPOTC
+            experience.
           </p>
         </header>
 
         <form
           className="complete-profile-form"
-          onSubmit={handleSubmit}
+          onSubmit={
+            handleSubmit
+          }
         >
           <label className="profile-field">
-            <span>Full name</span>
+            <span>
+              Full name
+            </span>
 
             <div className="profile-input-wrap">
-              <UserRound size={18} />
+              <UserRound
+                size={18}
+              />
 
               <input
                 type="text"
-                value={displayName}
-                onChange={(event) =>
+                value={
+                  displayName
+                }
+                onChange={(
+                  event,
+                ) =>
                   setDisplayName(
-                    event.target.value,
+                    event.target
+                      .value,
                   )
                 }
                 placeholder="Enter your full name"
@@ -438,11 +663,15 @@ export default function CompleteProfilePage() {
           </label>
 
           <label className="profile-field">
-            <span>Gender</span>
+            <span>
+              Gender
+            </span>
 
             <select
               value={gender}
-              onChange={(event) =>
+              onChange={(
+                event,
+              ) =>
                 setGender(
                   event.target
                     .value as GenderValue,
@@ -472,18 +701,29 @@ export default function CompleteProfilePage() {
           </label>
 
           <label className="profile-field">
-            <span>Date of birth</span>
+            <span>
+              Date of birth
+            </span>
 
             <div className="profile-input-wrap">
-              <CalendarDays size={18} />
+              <CalendarDays
+                size={18}
+              />
 
               <input
                 type="date"
-                value={dateOfBirth}
-                max={maximumDate}
-                onChange={(event) =>
+                value={
+                  dateOfBirth
+                }
+                max={
+                  maximumDate
+                }
+                onChange={(
+                  event,
+                ) =>
                   setDateOfBirth(
-                    event.target.value,
+                    event.target
+                      .value,
                   )
                 }
               />
@@ -491,18 +731,27 @@ export default function CompleteProfilePage() {
           </label>
 
           <label className="profile-field">
-            <span>Phone number</span>
+            <span>
+              Phone number
+            </span>
 
             <div className="profile-input-wrap">
-              <Phone size={18} />
+              <Phone
+                size={18}
+              />
 
               <input
                 type="tel"
                 inputMode="tel"
-                value={phoneNumber}
-                onChange={(event) =>
+                value={
+                  phoneNumber
+                }
+                onChange={(
+                  event,
+                ) =>
                   handlePhoneChange(
-                    event.target.value,
+                    event.target
+                      .value,
                   )
                 }
                 placeholder="+91 98765 43210"
@@ -515,35 +764,51 @@ export default function CompleteProfilePage() {
           <label className="profile-checkbox">
             <input
               type="checkbox"
-              checked={sameAsPhone}
-              onChange={(event) =>
+              checked={
+                sameAsPhone
+              }
+              onChange={(
+                event,
+              ) =>
                 handleSameAsPhoneChange(
-                  event.target.checked,
+                  event.target
+                    .checked,
                 )
               }
             />
 
             <span>
-              WhatsApp number is the same as my
-              phone number
+              WhatsApp number is
+              the same as my phone
+              number
             </span>
           </label>
 
           {!sameAsPhone && (
             <label className="profile-field">
-              <span>WhatsApp number</span>
+              <span>
+                WhatsApp number
+              </span>
 
               <div className="profile-input-wrap">
-                <Phone size={18} />
+                <Phone
+                  size={18}
+                />
 
                 <input
                   type="tel"
                   inputMode="tel"
-                  value={whatsappNumber}
-                  onChange={(event) =>
+                  value={
+                    whatsappNumber
+                  }
+                  onChange={(
+                    event,
+                  ) =>
                     setWhatsappNumber(
                       cleanPhoneNumber(
-                        event.target.value,
+                        event
+                          .target
+                          .value,
                       ),
                     )
                   }
@@ -555,9 +820,13 @@ export default function CompleteProfilePage() {
           )}
 
           <div className="profile-email">
-            <span>Google account</span>
+            <span>
+              Google account
+            </span>
+
             <strong>
-              {user.email || 'Signed in'}
+              {user.email ||
+                'Signed in'}
             </strong>
           </div>
 
@@ -573,7 +842,9 @@ export default function CompleteProfilePage() {
           <button
             type="submit"
             className="profile-submit"
-            disabled={saving}
+            disabled={
+              actionsDisabled
+            }
           >
             {saving ? (
               <>
@@ -581,10 +852,54 @@ export default function CompleteProfilePage() {
                   size={19}
                   className="profile-button-spinner"
                 />
+
                 Saving profile…
               </>
             ) : (
               'Continue to SPOTC'
+            )}
+          </button>
+
+          <button
+            type="button"
+            className="profile-later-button"
+            disabled={
+              actionsDisabled
+            }
+            onClick={
+              handleSkipForNow
+            }
+          >
+            Do this later
+          </button>
+
+          <button
+            type="button"
+            className="profile-logout-button"
+            disabled={
+              actionsDisabled
+            }
+            onClick={() =>
+              void handleSignOut()
+            }
+          >
+            {loggingOut ? (
+              <>
+                <LoaderCircle
+                  size={18}
+                  className="profile-button-spinner"
+                />
+
+                Signing out…
+              </>
+            ) : (
+              <>
+                <LogOut
+                  size={18}
+                />
+
+                Sign out
+              </>
             )}
           </button>
         </form>
@@ -593,28 +908,74 @@ export default function CompleteProfilePage() {
       <style jsx>{`
         .complete-profile-page {
           width: 100%;
-          min-height: 100vh;
-          padding: 40px 16px;
+          min-height: 100dvh;
+          padding:
+            40px
+            16px;
           display: grid;
           place-items: center;
+          overflow-x: hidden;
           background:
             radial-gradient(
               circle at top,
-              rgba(230, 185, 91, 0.16),
+              rgba(
+                230,
+                185,
+                91,
+                0.16
+              ),
               transparent 34%
             ),
             #f8f6f1;
         }
 
         .complete-profile-card {
-          width: min(100%, 520px);
+          position: relative;
+          width: min(
+            100%,
+            520px
+          );
           padding: 34px;
-          border: 1px solid #e5ded3;
+          border: 1px solid
+            #e5ded3;
           border-radius: 28px;
-          background: rgba(255, 255, 255, 0.96);
+          background:
+            rgba(
+              255,
+              255,
+              255,
+              0.96
+            );
           box-shadow:
             0 28px 80px
-            rgba(43, 32, 19, 0.12);
+            rgba(
+              43,
+              32,
+              19,
+              0.12
+            );
+        }
+
+        .complete-profile-top {
+          position: absolute;
+          top: 16px;
+          right: 18px;
+        }
+
+        .profile-close-button {
+          min-height: 34px;
+          padding:
+            0
+            12px;
+          border: 1px solid
+            #ddd5ca;
+          border-radius: 999px;
+          color: #554e46;
+          background: #fff;
+          font-family: inherit;
+          font-size: 12px;
+          font-weight: 750;
+          cursor: pointer;
         }
 
         .complete-profile-brand {
@@ -630,7 +991,10 @@ export default function CompleteProfilePage() {
           position: relative;
           width: 86px;
           height: 86px;
-          margin: 0 auto 18px;
+          margin:
+            0
+            auto
+            18px;
           display: grid;
           place-items: center;
           overflow: visible;
@@ -639,7 +1003,8 @@ export default function CompleteProfilePage() {
           background: #211d18;
           box-shadow:
             0 0 0 5px #fff,
-            0 0 0 6px #dfd6c9;
+            0 0 0 6px
+              #dfd6c9;
         }
 
         .complete-profile-avatar img {
@@ -658,7 +1023,8 @@ export default function CompleteProfilePage() {
           height: 27px;
           display: grid;
           place-items: center;
-          border: 3px solid #fff;
+          border: 3px solid
+            #fff;
           border-radius: 50%;
           color: #fff;
           background: #257a46;
@@ -672,14 +1038,23 @@ export default function CompleteProfilePage() {
         .complete-profile-header h1 {
           margin: 0;
           color: #1e1b18;
-          font-size: clamp(25px, 5vw, 32px);
+          font-size:
+            clamp(
+              25px,
+              5vw,
+              32px
+            );
           font-weight: 900;
-          letter-spacing: -0.8px;
+          letter-spacing:
+            -0.8px;
         }
 
         .complete-profile-header p {
           max-width: 390px;
-          margin: 9px auto 0;
+          margin:
+            9px
+            auto
+            0;
           color: #777067;
           font-size: 14px;
           line-height: 1.55;
@@ -704,11 +1079,14 @@ export default function CompleteProfilePage() {
 
         .profile-input-wrap {
           height: 50px;
-          padding: 0 14px;
+          padding:
+            0
+            14px;
           display: flex;
           align-items: center;
           gap: 10px;
-          border: 1px solid #ddd5ca;
+          border: 1px solid
+            #ddd5ca;
           border-radius: 13px;
           color: #746c62;
           background: #fff;
@@ -718,7 +1096,12 @@ export default function CompleteProfilePage() {
           border-color: #5c5349;
           box-shadow:
             0 0 0 3px
-            rgba(91, 81, 69, 0.1);
+            rgba(
+              91,
+              81,
+              69,
+              0.1
+            );
         }
 
         .profile-input-wrap input {
@@ -728,7 +1111,8 @@ export default function CompleteProfilePage() {
           border: 0;
           outline: 0;
           color: #201d19;
-          background: transparent;
+          background:
+            transparent;
           font: inherit;
           font-size: 14px;
         }
@@ -736,8 +1120,11 @@ export default function CompleteProfilePage() {
         .profile-field select {
           width: 100%;
           height: 50px;
-          padding: 0 14px;
-          border: 1px solid #ddd5ca;
+          padding:
+            0
+            14px;
+          border: 1px solid
+            #ddd5ca;
           border-radius: 13px;
           outline: 0;
           color: #201d19;
@@ -750,12 +1137,18 @@ export default function CompleteProfilePage() {
           border-color: #5c5349;
           box-shadow:
             0 0 0 3px
-            rgba(91, 81, 69, 0.1);
+            rgba(
+              91,
+              81,
+              69,
+              0.1
+            );
         }
 
         .profile-checkbox {
           display: flex;
-          align-items: flex-start;
+          align-items:
+            flex-start;
           gap: 10px;
           color: #514b44;
           font-size: 13px;
@@ -767,11 +1160,14 @@ export default function CompleteProfilePage() {
           width: 17px;
           height: 17px;
           margin-top: 1px;
-          accent-color: #211d18;
+          accent-color:
+            #211d18;
         }
 
         .profile-email {
-          padding: 13px 15px;
+          padding:
+            13px
+            15px;
           display: grid;
           gap: 4px;
           border-radius: 13px;
@@ -783,13 +1179,17 @@ export default function CompleteProfilePage() {
           color: #29251f;
           font-size: 13px;
           font-weight: 700;
-          text-overflow: ellipsis;
+          text-overflow:
+            ellipsis;
           white-space: nowrap;
         }
 
         .profile-error {
-          padding: 12px 14px;
-          border: 1px solid #f0bbb5;
+          padding:
+            12px
+            14px;
+          border: 1px solid
+            #f0bbb5;
           border-radius: 12px;
           color: #a52b20;
           background: #fff3f1;
@@ -798,16 +1198,27 @@ export default function CompleteProfilePage() {
           line-height: 1.45;
         }
 
-        .profile-submit {
+        .profile-submit,
+        .profile-later-button,
+        .profile-logout-button {
           width: 100%;
-          min-height: 52px;
-          padding: 0 20px;
+          min-height: 50px;
+          padding:
+            0
+            20px;
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 9px;
-          border: 0;
           border-radius: 14px;
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .profile-submit {
+          border: 0;
           color: #fff;
           background:
             linear-gradient(
@@ -815,41 +1226,85 @@ export default function CompleteProfilePage() {
               #2b2722,
               #171411
             );
-          font-family: inherit;
-          font-size: 15px;
-          font-weight: 850;
-          cursor: pointer;
           box-shadow:
             0 13px 28px
-            rgba(27, 23, 18, 0.2);
+            rgba(
+              27,
+              23,
+              18,
+              0.2
+            );
         }
 
-        .profile-submit:disabled {
-          opacity: 0.65;
+        .profile-later-button {
+          border: 1px solid
+            #d8d0c5;
+          color: #312d28;
+          background: #fff;
+        }
+
+        .profile-logout-button {
+          border: 1px solid
+            #f0c5bf;
+          color: #a52b20;
+          background: #fff4f2;
+        }
+
+        .profile-submit:disabled,
+        .profile-later-button:disabled,
+        .profile-logout-button:disabled,
+        .profile-close-button:disabled {
+          opacity: 0.55;
           cursor: wait;
         }
 
         .profile-button-spinner {
           animation:
-            profile-button-spin 0.8s
-            linear infinite;
+            profile-button-spin
+            0.8s
+            linear
+            infinite;
         }
 
         @keyframes profile-button-spin {
           to {
-            transform: rotate(360deg);
+            transform:
+              rotate(360deg);
           }
         }
 
-        @media (max-width: 600px) {
+        @media (
+          max-width: 600px
+        ) {
           .complete-profile-page {
-            padding: 20px 12px;
-            place-items: start center;
+            padding:
+              16px
+              10px
+              calc(
+                24px +
+                env(
+                  safe-area-inset-bottom,
+                  0px
+                )
+              );
+            place-items:
+              start center;
           }
 
           .complete-profile-card {
-            padding: 26px 18px;
+            padding:
+              26px
+              18px;
             border-radius: 22px;
+          }
+
+          .complete-profile-top {
+            top: 12px;
+            right: 12px;
+          }
+
+          .complete-profile-brand {
+            margin-top: 6px;
           }
         }
       `}</style>

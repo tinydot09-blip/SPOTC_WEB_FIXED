@@ -11,9 +11,9 @@ import {
 } from 'next/navigation';
 
 import {
+  type ReactNode,
   useEffect,
   useRef,
-  type ReactNode,
 } from 'react';
 
 import {
@@ -26,89 +26,158 @@ import {
   firebaseReady,
 } from '@/lib/firebase';
 
-const PUBLIC_PROFILE_PATH = '/complete-profile';
+const COMPLETE_PROFILE_PATH =
+  '/complete-profile';
+
+const PROFILE_SKIP_KEY =
+  'spotc-profile-skipped';
 
 export default function ProfileCompletionGate({
   children,
 }: {
   children: ReactNode;
 }) {
-  const pathname = usePathname();
-  const router = useRouter();
+  const pathname =
+    usePathname();
 
-  const checkingUserRef = useRef<string | null>(null);
+  const router =
+    useRouter();
+
+  const checkingUserRef =
+    useRef<string | null>(
+      null,
+    );
 
   useEffect(() => {
-    if (!firebaseReady || !auth) {
+    if (
+      !firebaseReady ||
+      !auth
+    ) {
       return;
     }
 
     let active = true;
 
-    const checkProfile = async (
-      user: User | null,
-    ) => {
-      if (
-        !active ||
-        !user ||
-        user.isAnonymous
-      ) {
-        checkingUserRef.current = null;
-        return;
-      }
+    const checkProfile =
+      async (
+        user: User | null,
+      ) => {
+        if (
+          !active ||
+          !user ||
+          user.isAnonymous
+        ) {
+          checkingUserRef.current =
+            null;
 
-      if (pathname.startsWith(PUBLIC_PROFILE_PATH)) {
-        return;
-      }
-
-      if (checkingUserRef.current === user.uid) {
-        return;
-      }
-
-      checkingUserRef.current = user.uid;
-
-      try {
-        const complete =
-          await isUserProfileComplete(user);
-
-        if (!active) {
           return;
         }
 
-        if (!complete) {
-          router.replace(PUBLIC_PROFILE_PATH);
+        if (
+          pathname.startsWith(
+            COMPLETE_PROFILE_PATH,
+          )
+        ) {
+          return;
         }
-      } catch (error) {
-        console.error(
-          'Unable to check profile completion:',
-          error,
-        );
-      } finally {
-        checkingUserRef.current = null;
-      }
-    };
+
+        const skippedUid =
+          sessionStorage.getItem(
+            PROFILE_SKIP_KEY,
+          );
+
+        if (
+          skippedUid ===
+          user.uid
+        ) {
+          return;
+        }
+
+        if (
+          checkingUserRef.current ===
+          user.uid
+        ) {
+          return;
+        }
+
+        checkingUserRef.current =
+          user.uid;
+
+        try {
+          const complete =
+            await isUserProfileComplete(
+              user,
+            );
+
+          if (!active) {
+            return;
+          }
+
+          if (complete) {
+            sessionStorage.removeItem(
+              PROFILE_SKIP_KEY,
+            );
+
+            return;
+          }
+
+          router.replace(
+            COMPLETE_PROFILE_PATH,
+          );
+        } catch (
+          error
+        ) {
+          console.error(
+            'Unable to check profile completion:',
+            error,
+          );
+        } finally {
+          checkingUserRef.current =
+            null;
+        }
+      };
 
     void (async () => {
-  const redirectUser =
-    await completeGoogleRedirectLogin();
+      try {
+        const redirectUser =
+          await completeGoogleRedirectLogin();
 
-  await checkProfile(
-    redirectUser || auth.currentUser,
-  );
-})();
+        await checkProfile(
+          redirectUser ||
+            auth.currentUser,
+        );
+      } catch (
+        redirectError
+      ) {
+        console.error(
+          'Unable to complete Google redirect login:',
+          redirectError,
+        );
 
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      (user) => {
-        void checkProfile(user);
-      },
-    );
+        await checkProfile(
+          auth.currentUser,
+        );
+      }
+    })();
+
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        (user) => {
+          void checkProfile(
+            user,
+          );
+        },
+      );
 
     return () => {
       active = false;
       unsubscribe();
     };
-  }, [pathname, router]);
+  }, [
+    pathname,
+    router,
+  ]);
 
-  return children;
+  return <>{children}</>;
 }
