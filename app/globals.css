@@ -40,6 +40,6 @@
 
   body:has(.shop-page) .spotc-footer {
     display: block !important;
-    margin-top: 0 !important;
-  }
+    margin-top: 40px !important;
+}
 }
