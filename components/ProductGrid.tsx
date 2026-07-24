@@ -796,7 +796,7 @@ export function ProductGrid({
                   <GitCompareArrows size={15} />
 
                   {compare.has(item.id)
-                    ? 'Selected'
+                    ? 'Added'
                     : 'Ask Friends'}
                 </button>
               </div>
