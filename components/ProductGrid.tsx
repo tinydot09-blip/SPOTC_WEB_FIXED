@@ -673,13 +673,11 @@ export function ProductGrid({
                   }
                 >
                   <Heart
-                    size={19}
-                    fill={
-                      saved.has(item.id)
-                        ? 'currentColor'
-                        : 'none'
-                    }
-                  />
+  size={19}
+  color={saved.has(item.id) ? "#ef4444" : "#171717"}
+  strokeWidth={2}
+  fill={saved.has(item.id) ? "#ef4444" : "none"}
+/>
                 </button>
 
                 <button

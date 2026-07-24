@@ -176,19 +176,41 @@
   position: absolute;
   left: 10px;
   bottom: 10px;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .94);
+
   display: flex;
   align-items: center;
   gap: 5px;
+
   padding: 7px 9px;
+
+  border: 1px solid #d9d9d9;
+  border-radius: 999px;
+
+  background: #ffffff;
+  color: #171717;      /* FIX */
+
   font-size: 11px;
   font-weight: 850;
+
+  cursor: pointer;
+  transition: all .2s ease;
+}
+
+.compare-check:hover {
+  background: #f5f5f5;
+}
+
+.compare-check svg {
+  color: #171717;      /* FIX */
 }
 
 .compare-check.on {
   background: #111;
+  color: #fff;
+  border-color: #111;
+}
+
+.compare-check.on svg {
   color: #fff;
 }
 
