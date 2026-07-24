@@ -164,21 +164,80 @@
   ------------------------------------------------------- */
 
   .offers-page .offer-action-rail {
-    right: 7px !important;
-    bottom: 278px !important;
+  position: absolute !important;
 
-    gap: 14px !important;
-  }
+  right: 7px !important;
+  bottom: 278px !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 14px !important;
+
+  z-index: 120 !important;
+
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+}
+/* Make every mobile action receive the tap */
+.offers-page .offer-action-rail .rail-item {
+  position: relative !important;
+  z-index: 121 !important;
+
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+
+  cursor: pointer !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* Decorative video layers must never block mobile actions */
+.offers-page .offer-shade,
+.offers-page .offer-play {
+  pointer-events: none !important;
+}
+
+/*
+  The top overlay occupies the full video width.
+  Disable taps on its empty area and re-enable only the mute button.
+*/
+.offers-page .offer-top-overlay {
+  pointer-events: none !important;
+}
+
+.offers-page .offer-top-overlay .glass-icon {
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+}
 
   .offers-page .rail-item {
-    width: 56px !important;
+  width: 56px !important;
+  min-height: 48px !important;
+  margin: 0 !important;
+  padding: 0 !important;
 
-    gap: 4px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
 
-    font-size: 12px !important;
-    font-weight: 600 !important;
-    line-height: 1.05 !important;
-  }
+  border: 0 !important;
+  outline: 0 !important;
+
+  color: #ffffff !important;
+  background: transparent !important;
+
+  font-family: inherit !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  line-height: 1.05 !important;
+
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+}
 
   .offers-page .rail-item > span {
     font-size: 12px !important;
