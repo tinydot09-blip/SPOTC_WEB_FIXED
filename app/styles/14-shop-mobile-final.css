@@ -1,7 +1,5 @@
 /* =========================================================
-   SPOTC SHOP MOBILE — FINAL WORKING LAYOUT
-   Product grid touches footer
-   Footer content stays above fixed bottom navigation
+   SPOTC SHOP MOBILE — PRODUCT DETAIL REFERENCE LAYOUT
 
    Save as:
    app/styles/14-shop-mobile-final.css
@@ -10,13 +8,7 @@
 ========================================================= */
 
 @media (max-width: 760px) {
-  html:has(.shop-page),
   body:has(.shop-page) {
-    width: 100%;
-    min-height: 100%;
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
     overflow-x: hidden !important;
     overflow-y: auto !important;
     background: #f8f6f1 !important;
@@ -28,13 +20,7 @@
     height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
-    display: block !important;
     overflow: visible !important;
-    background: #f8f6f1 !important;
-  }
-
-  body:has(.shop-page) .spotc-site-header {
-    margin-top: 0 !important;
   }
 
   body:has(.shop-page) .spotc-site-content {
@@ -43,98 +29,29 @@
     height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
-    display: block !important;
     overflow: visible !important;
-    box-sizing: border-box !important;
   }
 
-  body:has(.shop-page) .page.shop-page,
   body:has(.shop-page) .shop-page {
     width: min(100%, 1280px) !important;
     min-height: 0 !important;
     height: auto !important;
     margin: 0 auto !important;
-    padding: 0 !important;
-    display: block !important;
-    overflow: visible !important;
-    box-sizing: border-box !important;
-  }
-
-  body:has(.shop-page) .shop-page > * {
-    min-height: 0 !important;
-    height: auto !important;
+    padding-bottom: 0 !important;
   }
 
   body:has(.shop-page) .product-grid,
   body:has(.shop-page) .product-grid.rich {
     min-height: 0 !important;
     height: auto !important;
-    margin-top: 0 !important;
     margin-bottom: 0 !important;
     padding-bottom: 0 !important;
     align-content: start !important;
   }
 
-  body:has(.shop-page) .product-card.rich:last-child,
-  body:has(.shop-page) .product-grid.rich > :last-child {
-    margin-bottom: 0 !important;
-  }
-
-  body:has(.shop-page) .shop-page::after,
-  body:has(.shop-page) .product-grid::after,
-  body:has(.shop-page) .product-grid.rich::after {
-    content: none !important;
-    display: none !important;
-  }
-
-  /* =========================================================
-     SHOP FOOTER
-  ========================================================= */
-
   body:has(.shop-page) .spotc-footer {
-    position: relative !important;
-    z-index: 1 !important;
-
-    width: 100% !important;
-    min-height: 0 !important;
-    height: auto !important;
-
-    /* No beige or dark strip between products and footer */
-    margin: 0 !important;
-
-    padding:
-      42px
-      20px
-      calc(
-        120px + env(safe-area-inset-bottom, 0px)
-      ) !important;
-
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    overflow: visible !important;
-
-    clear: both !important;
-    color: #ffffff !important;
-    background: #111111 !important;
-    box-sizing: border-box !important;
+    margin-top: 0 !important;
   }
-
-  body:has(.shop-page) .spotc-footer-grid {
-    display: grid !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-  }
-
-  body:has(.shop-page) .spotc-footer-bottom {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-  }
-
-  /* =========================================================
-     FIXED MOBILE NAVIGATION
-  ========================================================= */
 
   body:has(.shop-page) .spotc-mobile-navigation-bottom {
     position: fixed !important;
