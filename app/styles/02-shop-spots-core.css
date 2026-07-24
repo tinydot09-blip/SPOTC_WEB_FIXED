@@ -594,7 +594,8 @@ body:has(.shop-page) .spotc-site-content {
 
   body:has(.shop-page) .spotc-site-content {
     min-height: 0 !important;
-    padding-bottom: 84px !important;
+    height: auto !important;
+    padding-bottom: 0 !important;
   }
 
   body:has(.shop-page) footer {
@@ -690,76 +691,5 @@ body:has(.shop-page) .spotc-site-content {
   .spot-rail {
     right: 7px;
     bottom: 137px;
-  }
-}
-
-/* =========================================================
-   FINAL MOBILE SHOP BOTTOM SAFE-AREA FIX
-   Keeps the Shop content light while painting the browser /
-   Android gesture area below the fixed navigation black.
-   ========================================================= */
-@media (max-width: 640px) {
-  html:has(.shop-page),
-  body:has(.shop-page) {
-    margin: 0 !important;
-    padding: 0 !important;
-    min-height: 100% !important;
-    background: #17130f !important;
-    background-color: #17130f !important;
-    color-scheme: dark;
-  }
-
-  body:has(.shop-page) .spotc-app-shell {
-    min-height: 100dvh !important;
-    background: #f7f4ed !important;
-  }
-
-  body:has(.shop-page) .spotc-site-content {
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
-    background: #f7f4ed !important;
-  }
-
-  body:has(.shop-page) .shop-page {
-    margin-bottom: 0 !important;
-    padding-bottom: 0 !important;
-    background: #f7f4ed !important;
-  }
-
-  body:has(.shop-page) footer {
-    display: none !important;
-  }
-
-  /*
-   * Apply the black safe-area directly to the mobile feed navigation.
-   * These selectors cover the common class names used by the SPOTC shell.
-   */
-  body:has(.shop-page) .mobile-feed-nav,
-  body:has(.shop-page) .mobile-bottom-nav,
-  body:has(.shop-page) .feed-mobile-nav,
-  body:has(.shop-page) nav[aria-label="Feed navigation"] {
-    bottom: 0 !important;
-    min-height: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
-    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
-    background: #17130f !important;
-    background-color: #17130f !important;
-  }
-
-  /*
-   * Fallback for devices where the safe-area is not included in the
-   * navigation element's box.
-   */
-  body:has(.shop-page)::after {
-    content: "";
-    position: fixed;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    height: env(safe-area-inset-bottom, 0px);
-    min-height: 1px;
-    pointer-events: none;
-    background: #17130f;
-    z-index: 999999;
   }
 }
