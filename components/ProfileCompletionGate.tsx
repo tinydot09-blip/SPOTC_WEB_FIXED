@@ -13,6 +13,7 @@ import {
 } from 'next/navigation';
 
 import {
+  Suspense,
   type ReactNode,
   useEffect,
   useRef,
@@ -104,7 +105,7 @@ function clearStoredReturnPath() {
   }
 }
 
-export default function ProfileCompletionGate({
+function ProfileCompletionGateContent({
   children,
 }: {
   children: ReactNode;
@@ -304,4 +305,18 @@ export default function ProfileCompletionGate({
   ]);
 
   return <>{children}</>;
+}
+
+export default function ProfileCompletionGate({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <Suspense fallback={<>{children}</>}>
+      <ProfileCompletionGateContent>
+        {children}
+      </ProfileCompletionGateContent>
+    </Suspense>
+  );
 }
