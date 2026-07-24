@@ -2158,6 +2158,184 @@ width:200px;
           }
         }
 
+
+        /* =========================================================
+           FINAL MOBILE PURCHASE + SHOPPING TOOL ALIGNMENT OVERRIDES
+           Keep this block LAST so it wins over older duplicate rules.
+        ========================================================= */
+
+        .pd-purchase-row {
+          align-items: stretch !important;
+        }
+
+        .pd-purchase-row .pd-qty-inline {
+          width: 100% !important;
+          min-width: 0 !important;
+          height: 54px !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          align-self: stretch !important;
+        }
+
+        .pd-purchase-row .pd-qty-inline > div {
+          width: 100% !important;
+          height: 54px !important;
+          min-height: 54px !important;
+          box-sizing: border-box !important;
+          margin: 0 !important;
+          padding: 0 10px !important;
+          display: grid !important;
+          grid-template-columns: 34px minmax(24px, 1fr) 34px !important;
+          align-items: center !important;
+          justify-items: center !important;
+          overflow: hidden !important;
+          border: 1.5px solid #17120d !important;
+          border-radius: 15px !important;
+          background: #ffffff !important;
+        }
+
+        .pd-purchase-row .pd-qty-inline button {
+          width: 34px !important;
+          height: 50px !important;
+          min-width: 34px !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          display: grid !important;
+          place-items: center !important;
+          border: 0 !important;
+          background: transparent !important;
+        }
+
+        .pd-purchase-row .pd-qty-inline strong {
+          width: 100% !important;
+          min-width: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          text-align: center !important;
+          font-size: 18px !important;
+          font-weight: 900 !important;
+          line-height: 1 !important;
+        }
+
+        .pd-purchase-row .pd-qty-inline svg {
+          width: 18px !important;
+          height: 18px !important;
+          stroke-width: 2.5 !important;
+        }
+
+        .pd-cart-secondary,
+        .pd-buy-primary {
+          height: 54px !important;
+          min-height: 54px !important;
+          box-sizing: border-box !important;
+          font-size: 16px !important;
+        }
+
+        .pd-tool-card {
+          align-items: center !important;
+        }
+
+        .pd-tool-copy {
+          min-width: 0 !important;
+          align-self: center !important;
+        }
+
+        .pd-tool-copy strong {
+          font-size: 17px !important;
+          line-height: 1.18 !important;
+        }
+
+        .pd-tool-copy small {
+          font-size: 14px !important;
+          line-height: 1.32 !important;
+        }
+
+        .pd-tool-copy em {
+          font-size: 14px !important;
+          line-height: 1.25 !important;
+        }
+
+        .pd-tool-arrow {
+          align-self: center !important;
+        }
+
+        @media (max-width: 620px) {
+          .pd-purchase-row {
+            grid-template-columns: 104px minmax(0, 1fr) minmax(0, 1fr) !important;
+            align-items: stretch !important;
+            gap: 8px !important;
+          }
+
+          .pd-purchase-row .pd-qty-inline,
+          .pd-purchase-row .pd-qty-inline > div,
+          .pd-cart-secondary,
+          .pd-buy-primary {
+            height: 54px !important;
+            min-height: 54px !important;
+          }
+
+          .pd-purchase-row .pd-qty-inline > div {
+            padding: 0 5px !important;
+            grid-template-columns: 28px minmax(22px, 1fr) 28px !important;
+            border-radius: 14px !important;
+          }
+
+          .pd-purchase-row .pd-qty-inline button {
+            width: 28px !important;
+            min-width: 28px !important;
+            height: 50px !important;
+          }
+
+          .pd-purchase-row .pd-qty-inline strong {
+            font-size: 17px !important;
+          }
+
+          .pd-purchase-row .pd-qty-inline svg {
+            width: 17px !important;
+            height: 17px !important;
+          }
+
+          .pd-cart-secondary,
+          .pd-buy-primary {
+            padding: 0 8px !important;
+            gap: 5px !important;
+            font-size: 13px !important;
+            line-height: 1.05 !important;
+          }
+
+          .pd-cart-secondary svg,
+          .pd-buy-primary svg {
+            width: 17px !important;
+            height: 17px !important;
+            min-width: 17px !important;
+          }
+
+          .pd-tool-copy strong {
+            font-size: 16px !important;
+          }
+
+          .pd-tool-copy small {
+            font-size: 13px !important;
+          }
+
+          .pd-tool-copy em {
+            font-size: 13px !important;
+          }
+        }
+
+        @media (max-width: 410px) {
+          .pd-purchase-row {
+            grid-template-columns: 96px minmax(0, 1fr) minmax(0, 1fr) !important;
+            gap: 6px !important;
+          }
+
+          .pd-cart-secondary,
+          .pd-buy-primary {
+            padding: 0 5px !important;
+            font-size: 12px !important;
+          }
+        }
+
               `}</style>
     </main>
   );
