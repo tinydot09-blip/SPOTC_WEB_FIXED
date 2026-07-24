@@ -1,12 +1,11 @@
 /* =========================================================
    SPOTC — SHOP MOBILE FOOTER + BOTTOM NAV FINAL FIX
 
-   Fixes:
-   - Footer remains visible.
-   - Adds a controlled gap between the final product row
-     and the footer.
-   - Removes the old 84px empty content gap.
-   - Keeps the mobile navigation fixed at the bottom.
+   Final behaviour:
+   - Footer is visible.
+   - 28px light space appears after the last product row.
+   - No large 84px blank gap.
+   - Bottom navigation remains fixed.
 ========================================================= */
 
 @media (max-width: 760px) {
@@ -37,7 +36,12 @@
     min-height: 0 !important;
     height: auto !important;
     margin: 0 !important;
-    padding: 0 !important;
+
+    /*
+     * Exact visible space between final product cards and footer.
+     */
+    padding: 0 0 28px !important;
+
     overflow: visible !important;
     background: #f8f6f1 !important;
   }
@@ -60,19 +64,12 @@
     align-content: start !important;
   }
 
-  /*
-   * Controlled space between the last product cards
-   * and the footer.
-   */
   body:has(.shop-page) .spotc-footer {
     display: block !important;
     width: 100% !important;
-    margin-top: 28px !important;
+    margin-top: 0 !important;
   }
 
-  /*
-   * Keep the real Shop mobile navigation fixed.
-   */
   body:has(.shop-page) .spotc-mobile-navigation-bottom {
     position: fixed !important;
     top: auto !important;
@@ -104,9 +101,6 @@
     height: 84px !important;
   }
 
-  /*
-   * Android gesture-area fallback.
-   */
   body:has(.shop-page)::after {
     content: "";
     position: fixed;
@@ -119,7 +113,6 @@
 
     pointer-events: none;
     background: #17130f;
-
     z-index: 99989;
   }
 }
