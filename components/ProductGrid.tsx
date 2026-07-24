@@ -797,7 +797,7 @@ export function ProductGrid({
 
                   {compare.has(item.id)
                     ? 'Selected'
-                    : 'Compare'}
+                    : 'Ask Friends'}
                 </button>
               </div>
 
