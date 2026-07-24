@@ -646,10 +646,34 @@ export default function ProductDetailPage() {
     }
   };
 
+  const validatePurchaseOptions = (): boolean => {
+    if (!inStock) {
+      alert('This product is out of stock');
+      return false;
+    }
+
+    if (sizes.length > 0 && !size) {
+      alert('Select a size');
+      return false;
+    }
+
+    if (colors.length > 0 && !color) {
+      alert('Select a colour');
+      return false;
+    }
+
+    return true;
+  };
+
   const addToCart = () => {
-    if (!inStock) return alert('This product is out of stock');
-    if (sizes.length > 0 && !size) return alert('Select a size');
-    if (colors.length > 0 && !color) return alert('Select a colour');
+    if (!validatePurchaseOptions()) return;
+
+    addProduct(product, { size, color, qty });
+    alert('1 product added to cart');
+  };
+
+  const buyNow = () => {
+    if (!validatePurchaseOptions()) return;
 
     addProduct(product, { size, color, qty });
     router.push('/cart');
@@ -1190,18 +1214,52 @@ export default function ProductDetailPage() {
           <div className="pd-purchase-row">
             <div className="pd-qty pd-qty-inline">
               <div>
-                <button type="button" aria-label="Decrease quantity" disabled={qty <= 1} onClick={() => setQty((current) => Math.max(1, current - 1))}><Minus /></button>
+                <button
+                  type="button"
+                  aria-label="Decrease quantity"
+                  disabled={qty <= 1}
+                  onClick={() =>
+                    setQty((current) => Math.max(1, current - 1))
+                  }
+                >
+                  <Minus />
+                </button>
+
                 <strong>{qty}</strong>
-                <button type="button" aria-label="Increase quantity" disabled={!inStock || qty >= maximumQuantity} onClick={() => setQty((current) => Math.min(maximumQuantity, current + 1))}><Plus /></button>
+
+                <button
+                  type="button"
+                  aria-label="Increase quantity"
+                  disabled={!inStock || qty >= maximumQuantity}
+                  onClick={() =>
+                    setQty((current) =>
+                      Math.min(maximumQuantity, current + 1),
+                    )
+                  }
+                >
+                  <Plus />
+                </button>
               </div>
             </div>
 
-            <button type="button" className={`pd-save pd-save-inline ${saved ? 'active' : ''}`} onClick={toggleSaved} disabled={saveBusy}>
-              <Heart fill={saved ? 'currentColor' : 'none'} />{saveBusy ? 'Saving…' : saved ? 'Saved' : 'Save'}
+            <button
+              type="button"
+              className="pd-cart-secondary"
+              disabled={!inStock}
+              onClick={addToCart}
+            >
+              <ShoppingBag />
+              <span>{inStock ? 'Add to cart' : 'Out of stock'}</span>
             </button>
 
-            <button type="button" className="pd-add pd-add-inline" disabled={!inStock} onClick={addToCart}>
-              <ShoppingBag />{inStock ? 'Add to cart' : 'Out of stock'}
+            <button
+              type="button"
+              className="pd-buy-primary"
+              disabled={!inStock}
+              onClick={buyNow}
+            >
+              <Bolt />
+              <span>{inStock ? 'Buy Now' : 'Out of stock'}</span>
             </button>
           </div>
 
@@ -1988,6 +2046,118 @@ width:200px;
             font-size: 34px !important;
           }
         }
+
+        /* =========================================
+           PRODUCT PURCHASE BUTTONS — FINAL
+        ========================================= */
+        .pd-purchase-row {
+          display: grid !important;
+          grid-template-columns: minmax(122px, 0.75fr) minmax(170px, 1fr) minmax(170px, 1fr) !important;
+          align-items: stretch !important;
+          gap: 12px !important;
+          margin-top: 24px !important;
+        }
+
+        .pd-cart-secondary,
+        .pd-buy-primary {
+          width: 100% !important;
+          height: 54px !important;
+          min-width: 0 !important;
+          margin: 0 !important;
+          padding: 0 16px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: 8px !important;
+          border-radius: 15px !important;
+          font: inherit !important;
+          font-size: 15px !important;
+          font-weight: 900 !important;
+          line-height: 1 !important;
+          white-space: nowrap !important;
+          cursor: pointer !important;
+          transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, opacity 160ms ease !important;
+        }
+
+        .pd-cart-secondary {
+          border: 1.5px solid #e4a044 !important;
+          background: #ffffff !important;
+          color: #17120d !important;
+        }
+
+        .pd-cart-secondary:hover {
+          background: #fff8eb !important;
+          border-color: #d99325 !important;
+        }
+
+        .pd-buy-primary {
+          border: 1.5px solid #e4a044 !important;
+          background: #e4a044 !important;
+          color: #20150a !important;
+          box-shadow: 0 9px 22px rgba(228, 160, 68, 0.24) !important;
+        }
+
+        .pd-buy-primary:hover {
+          background: #eca94d !important;
+          border-color: #eca94d !important;
+        }
+
+        .pd-cart-secondary:active,
+        .pd-buy-primary:active {
+          transform: scale(0.98) !important;
+        }
+
+        .pd-cart-secondary:disabled,
+        .pd-buy-primary:disabled {
+          cursor: not-allowed !important;
+          opacity: 0.5 !important;
+          transform: none !important;
+        }
+
+        .pd-cart-secondary svg,
+        .pd-buy-primary svg {
+          width: 19px !important;
+          height: 19px !important;
+          min-width: 19px !important;
+          stroke-width: 2.2 !important;
+        }
+
+        @media (max-width: 620px) {
+          .pd-purchase-row {
+            grid-template-columns: 104px minmax(0, 1fr) minmax(0, 1fr) !important;
+            gap: 8px !important;
+          }
+
+          .pd-cart-secondary,
+          .pd-buy-primary {
+            height: 54px !important;
+            padding: 0 8px !important;
+            gap: 5px !important;
+            border-radius: 14px !important;
+            font-size: 12px !important;
+          }
+
+          .pd-cart-secondary svg,
+          .pd-buy-primary svg {
+            width: 16px !important;
+            height: 16px !important;
+            min-width: 16px !important;
+          }
+        }
+
+        @media (max-width: 410px) {
+          .pd-purchase-row {
+            grid-template-columns: 96px minmax(0, 1fr) minmax(0, 1fr) !important;
+            gap: 6px !important;
+          }
+
+          .pd-cart-secondary,
+          .pd-buy-primary {
+            padding: 0 5px !important;
+            font-size: 11px !important;
+          }
+        }
+
               `}</style>
     </main>
   );
