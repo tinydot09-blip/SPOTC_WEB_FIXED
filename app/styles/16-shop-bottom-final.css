@@ -67,7 +67,7 @@
   body:has(.shop-page) .spotc-footer {
     display: block !important;
     width: 100% !important;
-    margin-top: 0 !important;
+    margin-top: 100 !important;
   }
 
   body:has(.shop-page) .spotc-mobile-navigation-bottom {
