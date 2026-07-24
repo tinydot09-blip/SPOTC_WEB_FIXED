@@ -2,12 +2,14 @@
 
 import {
   onAuthStateChanged,
+  type Auth,
   type User,
 } from 'firebase/auth';
 
 import {
   usePathname,
   useRouter,
+  useSearchParams,
 } from 'next/navigation';
 
 import {
@@ -26,157 +28,279 @@ import {
   firebaseReady,
 } from '@/lib/firebase';
 
-const COMPLETE_PROFILE_PATH =
-  '/complete-profile';
+const COMPLETE_PROFILE_PATH = '/complete-profile';
+const PROFILE_SKIP_KEY = 'spotc-profile-skipped';
+const AUTH_RETURN_PATH_KEY = 'spotc-auth-return-path';
 
-const PROFILE_SKIP_KEY =
-  'spotc-profile-skipped';
+function safeReturnPath(value: string | null): string {
+  if (
+    !value ||
+    !value.startsWith('/') ||
+    value.startsWith('//') ||
+    value.startsWith(COMPLETE_PROFILE_PATH)
+  ) {
+    return '';
+  }
+
+  return value;
+}
+
+function readStoredReturnPath(): string {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  try {
+    return safeReturnPath(
+      sessionStorage.getItem(AUTH_RETURN_PATH_KEY) ||
+        localStorage.getItem(AUTH_RETURN_PATH_KEY),
+    );
+  } catch {
+    return '';
+  }
+}
+
+function storeReturnPath(path: string) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const safePath = safeReturnPath(path);
+
+  if (!safePath) {
+    return;
+  }
+
+  try {
+    sessionStorage.setItem(
+      AUTH_RETURN_PATH_KEY,
+      safePath,
+    );
+
+    localStorage.setItem(
+      AUTH_RETURN_PATH_KEY,
+      safePath,
+    );
+  } catch {
+    // Storage may be unavailable in private browsing.
+  }
+}
+
+function clearStoredReturnPath() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    sessionStorage.removeItem(
+      AUTH_RETURN_PATH_KEY,
+    );
+
+    localStorage.removeItem(
+      AUTH_RETURN_PATH_KEY,
+    );
+  } catch {
+    // Nothing else is required.
+  }
+}
 
 export default function ProfileCompletionGate({
   children,
 }: {
   children: ReactNode;
 }) {
-  const pathname =
-    usePathname();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
-  const router =
-    useRouter();
-
-  const checkingUserRef =
-    useRef<string | null>(
-      null,
-    );
+  const checkingUserRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (
-      !firebaseReady ||
-      !auth
-    ) {
+    if (!firebaseReady || !auth) {
       return;
     }
 
-    let active = true;
+    const activeAuth: Auth = auth;
+    let effectActive = true;
 
-    const checkProfile =
-      async (
-        user: User | null,
-      ) => {
-        if (
-          !active ||
-          !user ||
-          user.isAnonymous
-        ) {
-          checkingUserRef.current =
-            null;
+    const currentQuery = searchParams.toString();
 
-          return;
-        }
+    const currentPath = currentQuery
+      ? `${pathname}?${currentQuery}`
+      : pathname;
 
-        if (
-          pathname.startsWith(
-            COMPLETE_PROFILE_PATH,
-          )
-        ) {
-          return;
-        }
+    const nextFromQuery = safeReturnPath(
+      searchParams.get('next'),
+    );
 
-        const skippedUid =
+    if (nextFromQuery) {
+      storeReturnPath(nextFromQuery);
+    }
+
+    const checkProfile = async (
+      user: User | null,
+    ) => {
+      if (
+        !effectActive ||
+        !user ||
+        user.isAnonymous
+      ) {
+        checkingUserRef.current = null;
+        return;
+      }
+
+      let skippedUid = '';
+
+      try {
+        skippedUid =
           sessionStorage.getItem(
             PROFILE_SKIP_KEY,
-          );
+          ) || '';
+      } catch {
+        skippedUid = '';
+      }
 
-        if (
-          skippedUid ===
-          user.uid
-        ) {
+      if (skippedUid === user.uid) {
+        return;
+      }
+
+      if (
+        checkingUserRef.current === user.uid
+      ) {
+        return;
+      }
+
+      checkingUserRef.current = user.uid;
+
+      try {
+        const profileComplete =
+          await isUserProfileComplete(user);
+
+        if (!effectActive) {
           return;
         }
 
-        if (
-          checkingUserRef.current ===
-          user.uid
-        ) {
-          return;
-        }
+        const storedReturnPath =
+          readStoredReturnPath();
 
-        checkingUserRef.current =
-          user.uid;
-
-        try {
-          const complete =
-            await isUserProfileComplete(
-              user,
-            );
-
-          if (!active) {
-            return;
-          }
-
-          if (complete) {
+        if (profileComplete) {
+          try {
             sessionStorage.removeItem(
               PROFILE_SKIP_KEY,
             );
+          } catch {
+            // Nothing else is required.
+          }
 
+          if (
+            storedReturnPath &&
+            currentPath !== storedReturnPath
+          ) {
+            clearStoredReturnPath();
+            router.replace(storedReturnPath);
             return;
           }
 
-          router.replace(
+          if (
+            pathname.startsWith(
+              COMPLETE_PROFILE_PATH,
+            )
+          ) {
+            if (storedReturnPath) {
+              clearStoredReturnPath();
+              router.replace(storedReturnPath);
+            } else {
+              router.replace('/');
+            }
+          }
+
+          return;
+        }
+
+        if (
+          !pathname.startsWith(
             COMPLETE_PROFILE_PATH,
-          );
-        } catch (
-          error
+          )
         ) {
-          console.error(
-            'Unable to check profile completion:',
-            error,
+          storeReturnPath(currentPath);
+
+          const returnPath =
+            readStoredReturnPath();
+
+          router.replace(
+            returnPath
+              ? `${COMPLETE_PROFILE_PATH}?next=${encodeURIComponent(
+                  returnPath,
+                )}`
+              : COMPLETE_PROFILE_PATH,
           );
-        } finally {
-          checkingUserRef.current =
-            null;
+        }
+      } catch (error) {
+        console.error(
+          'Unable to check profile completion:',
+          error,
+        );
+      } finally {
+        checkingUserRef.current = null;
+      }
+    };
+
+    const completeRedirectLogin =
+      async () => {
+        try {
+          const redirectUser =
+            await completeGoogleRedirectLogin();
+
+          await checkProfile(
+            redirectUser ||
+              activeAuth.currentUser,
+          );
+        } catch (redirectError) {
+          console.error(
+            'Unable to complete Google redirect login:',
+            redirectError,
+          );
+
+          await checkProfile(
+            activeAuth.currentUser,
+          );
         }
       };
 
-    void (async () => {
-      try {
-        const redirectUser =
-          await completeGoogleRedirectLogin();
-
-        await checkProfile(
-          redirectUser ||
-            auth.currentUser,
-        );
-      } catch (
-        redirectError
-      ) {
-        console.error(
-          'Unable to complete Google redirect login:',
-          redirectError,
-        );
-
-        await checkProfile(
-          auth.currentUser,
-        );
-      }
-    })();
+    void completeRedirectLogin();
 
     const unsubscribe =
       onAuthStateChanged(
-        auth,
+        activeAuth,
         (user) => {
-          void checkProfile(
-            user,
-          );
+          void checkProfile(user);
         },
       );
 
+    const refreshProfile = () => {
+      void checkProfile(
+        activeAuth.currentUser,
+      );
+    };
+
+    window.addEventListener(
+      'spotc-profile-updated',
+      refreshProfile,
+    );
+
     return () => {
-      active = false;
+      effectActive = false;
       unsubscribe();
+
+      window.removeEventListener(
+        'spotc-profile-updated',
+        refreshProfile,
+      );
     };
   }, [
     pathname,
     router,
+    searchParams,
   ]);
 
   return <>{children}</>;

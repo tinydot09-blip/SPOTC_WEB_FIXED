@@ -576,41 +576,45 @@ if (!signedInUser) {
 
                     {firebaseUser && (
                       <>
-                        {profileIsComplete ? (
-                          <Link
-                            href="/profile"
-                            className="spotc-dropdown-item"
-                            onClick={() =>
-                              setMenuOpen(false)
-                            }
-                          >
-                            <CircleUserRound size={18} />
-                            <span>Profile</span>
-                          </Link>
-                        ) : (
-                          <Link
-                            href="/complete-profile"
-                            className="spotc-profile-completion-link"
-                            onClick={() =>
-                              setMenuOpen(false)
-                            }
-                          >
-                            <div className="spotc-profile-completion-title">
-                              <span>Complete Profile</span>
-                              <strong>{profileCompletion}%</strong>
-                            </div>
+                        <Link
+                          href="/profile"
+                          className="spotc-dropdown-item"
+                          onClick={() =>
+                            setMenuOpen(false)
+                          }
+                        >
+                          <CircleUserRound size={18} />
+                          <span>Profile</span>
+                        </Link>
 
-                            <div
-                              className="spotc-profile-progress-track"
-                              aria-label={`Profile ${profileCompletion}% complete`}
+                        {!profileIsComplete && (
+                          <>
+                            <div className="spotc-dropdown-divider" />
+
+                            <Link
+                              href="/complete-profile"
+                              className="spotc-profile-completion-link"
+                              onClick={() =>
+                                setMenuOpen(false)
+                              }
                             >
-                              <span
-                                style={{
-                                  width: `${profileCompletion}%`,
-                                }}
-                              />
-                            </div>
-                          </Link>
+                              <div className="spotc-profile-completion-title">
+                                <span>Complete Profile</span>
+                                <strong>{profileCompletion}%</strong>
+                              </div>
+
+                              <div
+                                className="spotc-profile-progress-track"
+                                aria-label={`Profile ${profileCompletion}% complete`}
+                              >
+                                <span
+                                  style={{
+                                    width: `${profileCompletion}%`,
+                                  }}
+                                />
+                              </div>
+                            </Link>
+                          </>
                         )}
 
                         <div className="spotc-dropdown-divider" />

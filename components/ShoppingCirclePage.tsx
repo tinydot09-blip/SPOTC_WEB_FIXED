@@ -7,6 +7,7 @@ import {
   Heart,
   Loader2,
   MessageCircle,
+  MessageSquareText,
   Mic,
   MoreHorizontal,
   Pause,
@@ -23,6 +24,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
+import { onAuthStateChanged, type Auth, type User } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import {
   DocumentData,
@@ -178,6 +180,7 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
   const mediaChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const mobileChatRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!firebaseReady || !shareCode.trim()) {
@@ -324,6 +327,90 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
   }, [shareCode]);
 
   useEffect(() => {
+    if (!firebaseReady || !auth || !circleRef) {
+      return;
+    }
+
+    const activeAuth: Auth = auth;
+    let cancelled = false;
+
+    const joinSignedInUser = async (
+      user: User | null,
+    ) => {
+      if (
+        cancelled ||
+        !user ||
+        user.isAnonymous
+      ) {
+        return;
+      }
+
+      try {
+        const db = getAppFirestore();
+        const participantRef = doc(
+          db,
+          'ShoppingCircleParticipants',
+          `${circleRef.id}_${user.uid}`,
+        );
+
+        await runTransaction(db, async (transaction) => {
+          const participantSnapshot =
+            await transaction.get(participantRef);
+
+          if (participantSnapshot.exists()) {
+            transaction.set(
+              participantRef,
+              {
+                last_seen_at: serverTimestamp(),
+                updated_at: serverTimestamp(),
+              },
+              { merge: true },
+            );
+            return;
+          }
+
+          transaction.set(participantRef, {
+            circle_ref: circleRef,
+            circle_id: circleRef.id,
+            share_code: shareCode.trim(),
+            user_uid: user.uid,
+            user_ref: doc(db, 'users', user.uid),
+            name: user.displayName || 'SPOTC User',
+            photo: user.photoURL || '',
+            joined_at: serverTimestamp(),
+            last_seen_at: serverTimestamp(),
+            updated_at: serverTimestamp(),
+          });
+
+          transaction.update(circleRef, {
+            participants: increment(1),
+            updated_at: serverTimestamp(),
+          });
+        });
+      } catch (error) {
+        console.error(
+          'Automatic Shopping Circle participant registration failed:',
+          error,
+        );
+      }
+    };
+
+    void joinSignedInUser(activeAuth.currentUser);
+
+    const unsubscribe = onAuthStateChanged(
+      activeAuth,
+      (user) => {
+        void joinSignedInUser(user);
+      },
+    );
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [circleRef, shareCode]);
+
+  useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [messages.length]);
 
@@ -378,8 +465,27 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
   }, [circle, comparisonMode, products]);
 
   async function ensureUser() {
-    const user = auth?.currentUser ?? (await requireGoogleLogin());
-    if (!user) throw new Error('Please sign in to continue.');
+    const currentUser = auth?.currentUser ?? null;
+
+    if (currentUser && !currentUser.isAnonymous) {
+      return currentUser;
+    }
+
+    const returnPath = `/circle/${encodeURIComponent(shareCode)}`;
+
+    try {
+      sessionStorage.setItem('spotc-auth-return-path', returnPath);
+      localStorage.setItem('spotc-auth-return-path', returnPath);
+    } catch {
+      // Storage can be unavailable in private browsing. Login can still continue.
+    }
+
+    const user = await requireGoogleLogin();
+
+    if (!user || user.isAnonymous) {
+      throw new Error('Please sign in to continue.');
+    }
+
     return user;
   }
 
@@ -395,11 +501,15 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
 
       transaction.set(participantRef, {
         circle_ref: circleRef,
+        circle_id: circleRef.id,
+        share_code: shareCode.trim(),
         user_uid: user.uid,
         user_ref: doc(db, 'users', user.uid),
         name: user.displayName || 'SPOTC User',
         photo: user.photoURL || '',
         joined_at: serverTimestamp(),
+        last_seen_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
       });
       transaction.update(circleRef, {
         participants: increment(1),
@@ -551,6 +661,21 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
 
     setMenuMessage(null);
     alert('Reported. SPOTC will review it.');
+  }
+
+  function openChat() {
+    mobileChatRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+
+    window.setTimeout(() => {
+      const input = mobileChatRef.current?.querySelector(
+        'textarea',
+      ) as HTMLTextAreaElement | null;
+
+      input?.focus();
+    }, 550);
   }
 
   async function shareCircle() {
@@ -840,6 +965,84 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
             </section>
           )}
 
+          <section className="chat-discovery-card">
+            <div className="chat-discovery-heading">
+              <div className="chat-discovery-icon">
+                <MessageSquareText size={24} />
+              </div>
+
+              <div>
+                <span className="eyebrow">FRIENDS &amp; FAMILY CHAT</span>
+                <h2>See what everyone thinks</h2>
+                <p>
+                  Vote, message, reply or send a voice note in this live
+                  Shopping Circle.
+                </p>
+              </div>
+
+              <div className="chat-discovery-counts">
+                <span>
+                  <Users size={15} />
+                  {n(circle.participants)}
+                </span>
+                <span>
+                  <MessageCircle size={15} />
+                  {n(circle.comments_count)}
+                </span>
+              </div>
+            </div>
+
+            {messages.length > 0 ? (
+              <div className="chat-preview-list">
+                {messages.slice(-2).map((item) => (
+                  <article className="chat-preview-item" key={`preview-${item.id}`}>
+                    {item.sender_photo ? (
+                      <img src={item.sender_photo} alt="" />
+                    ) : (
+                      <div className="chat-preview-avatar">
+                        {initials(item.sender_name)}
+                      </div>
+                    )}
+
+                    <div>
+                      <strong>{item.sender_name}</strong>
+                      <p>
+                        {item.message_type === 'voice'
+                          ? 'Voice message'
+                          : item.vote
+                            ? item.message || 'Voted'
+                            : item.message}
+                      </p>
+                    </div>
+
+                    <time>{timeAgo(item.created_at)}</time>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="chat-preview-empty">
+                <MessageCircle size={21} />
+                <span>
+                  Be the first to start the discussion.
+                </span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="open-chat-button"
+              onClick={openChat}
+            >
+              <MessageCircle size={19} />
+              {messages.length > 0
+                ? `Open chat · ${messages.length} message${
+                    messages.length === 1 ? '' : 's'
+                  }`
+                : 'Start the chat'}
+              <ArrowLeft className="open-chat-arrow" size={18} />
+            </button>
+          </section>
+
           <section className={`summary-card ${summary.tone}`}>
             <div className="summary-icon"><Sparkles size={23} /></div>
             <div>
@@ -848,7 +1051,10 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
             </div>
           </section>
 
-          <section className="mobile-chat-wrap">
+          <section
+            className="mobile-chat-wrap"
+            ref={mobileChatRef}
+          >
             <ChatPanel
               messages={messages}
               circle={circle}
@@ -891,6 +1097,31 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
           />
         </aside>
       </div>
+
+      <button
+        type="button"
+        className="floating-chat-button"
+        onClick={openChat}
+        aria-label="Open Shopping Circle chat"
+      >
+        <span className="floating-chat-icon">
+          <MessageCircle size={21} />
+          {messages.length > 0 && (
+            <b>{Math.min(messages.length, 99)}</b>
+          )}
+        </span>
+
+        <span>
+          <strong>Shopping Chat</strong>
+          <small>
+            {messages.length > 0
+              ? `${messages.length} message${
+                  messages.length === 1 ? '' : 's'
+                }`
+              : 'Start discussion'}
+          </small>
+        </span>
+      </button>
 
       {menuMessage && (
         <div className="modal-backdrop" onClick={() => setMenuMessage(null)}>
@@ -1231,6 +1462,174 @@ const styles = `
   .vote-tile { min-height: 62px; padding: 13px 14px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; text-align: left; border-radius: 16px; color: #242520; background: #ecebe5; }
   .vote-tile strong { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,.86); color: #20211d; }
 
+
+  .chat-discovery-card {
+    padding: 22px;
+    border: 1px solid #dfe5ec;
+    border-radius: 24px;
+    background:
+      linear-gradient(135deg, rgba(240, 249, 255, .96), rgba(255, 255, 255, .96));
+    box-shadow: 0 18px 48px rgba(38, 43, 51, .07);
+  }
+
+  .chat-discovery-heading {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .chat-discovery-icon {
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    border-radius: 17px;
+    color: #fff;
+    background: #087e98;
+    box-shadow: 0 12px 26px rgba(8, 126, 152, .24);
+  }
+
+  .chat-discovery-heading h2 {
+    margin: 4px 0 3px;
+    font-size: 22px;
+    letter-spacing: -.025em;
+  }
+
+  .chat-discovery-heading p {
+    margin: 0;
+    color: #64707b;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .chat-discovery-counts {
+    display: flex;
+    gap: 7px;
+  }
+
+  .chat-discovery-counts span {
+    min-height: 34px;
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border-radius: 999px;
+    color: #39515d;
+    background: #eaf5f8;
+    font-size: 11px;
+    font-weight: 850;
+  }
+
+  .chat-preview-list {
+    margin-top: 15px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .chat-preview-item {
+    min-width: 0;
+    padding: 10px 11px;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid #e5e9ee;
+    border-radius: 14px;
+    background: rgba(255,255,255,.82);
+  }
+
+  .chat-preview-item img,
+  .chat-preview-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+  }
+
+  .chat-preview-item img {
+    object-fit: cover;
+  }
+
+  .chat-preview-avatar {
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: #2b3138;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .chat-preview-item div:nth-child(2) {
+    min-width: 0;
+  }
+
+  .chat-preview-item strong,
+  .chat-preview-item p {
+    display: block;
+    min-width: 0;
+  }
+
+  .chat-preview-item strong {
+    color: #26313a;
+    font-size: 11px;
+  }
+
+  .chat-preview-item p {
+    margin: 2px 0 0;
+    overflow: hidden;
+    color: #65717c;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chat-preview-item time {
+    color: #8b949d;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .chat-preview-empty {
+    margin-top: 15px;
+    min-height: 48px;
+    padding: 0 13px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border: 1px dashed #cfd9e1;
+    border-radius: 14px;
+    color: #65717c;
+    background: rgba(255,255,255,.62);
+    font-size: 12px;
+    font-weight: 750;
+  }
+
+  .open-chat-button {
+    width: 100%;
+    min-height: 48px;
+    margin-top: 13px;
+    padding: 0 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    border: 0;
+    border-radius: 14px;
+    color: #fff;
+    background: #171814;
+    cursor: pointer;
+    font-weight: 900;
+  }
+
+  .open-chat-arrow {
+    margin-left: auto;
+    transform: rotate(-90deg);
+  }
+
+  .floating-chat-button {
+    display: none;
+  }
+
   .summary-card { min-height: 126px; padding: 22px; display: flex; gap: 16px; align-items: flex-start; border-radius: 24px; }
   .summary-card.green { background: linear-gradient(135deg, #f5fff7, #e7f7eb); border-color: #ccebd5; }
   .summary-card.red { background: linear-gradient(135deg, #fff8f7, #fde9e6); border-color: #f1d0ca; }
@@ -1303,6 +1702,93 @@ const styles = `
 
   @media (max-width: 1050px) {
     .sc-layout { grid-template-columns: 1fr; }
+    .chat-discovery-card {
+      padding: 17px;
+      border-radius: 20px;
+    }
+
+    .chat-discovery-heading {
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: start;
+    }
+
+    .chat-discovery-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 15px;
+    }
+
+    .chat-discovery-heading h2 {
+      font-size: 19px;
+    }
+
+    .chat-discovery-counts {
+      grid-column: 1 / -1;
+      padding-left: 60px;
+    }
+
+    .floating-chat-button {
+      position: fixed;
+      right: 16px;
+      bottom: calc(88px + env(safe-area-inset-bottom));
+      z-index: 40;
+      min-height: 54px;
+      padding: 8px 14px 8px 9px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      border: 1px solid rgba(255,255,255,.32);
+      border-radius: 999px;
+      color: #fff;
+      background: rgba(23,24,20,.95);
+      box-shadow: 0 16px 34px rgba(0,0,0,.26);
+      backdrop-filter: blur(14px);
+      cursor: pointer;
+    }
+
+    .floating-chat-icon {
+      width: 38px;
+      height: 38px;
+      position: relative;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: #171814;
+      background: #fff;
+    }
+
+    .floating-chat-icon b {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      min-width: 19px;
+      height: 19px;
+      padding: 0 5px;
+      display: grid;
+      place-items: center;
+      border: 2px solid #171814;
+      border-radius: 999px;
+      color: #fff;
+      background: #ef4444;
+      font-size: 9px;
+    }
+
+    .floating-chat-button > span:last-child {
+      display: grid;
+      text-align: left;
+    }
+
+    .floating-chat-button strong {
+      font-size: 12px;
+      line-height: 1.1;
+    }
+
+    .floating-chat-button small {
+      margin-top: 3px;
+      color: rgba(255,255,255,.72);
+      font-size: 9px;
+    }
+
     .sc-side { display: none; }
     .mobile-chat-wrap { display: block; }
     .mobile-chat-wrap .chat-card { height: 720px; min-height: 620px; }
@@ -1323,6 +1809,33 @@ const styles = `
     .single-media { min-height: 390px; }
     .single-copy { padding: 0; }
     .vote-grid { grid-template-columns: 1fr; }
+    .chat-discovery-heading {
+      gap: 10px;
+    }
+
+    .chat-discovery-counts {
+      padding-left: 0;
+    }
+
+    .chat-preview-item {
+      grid-template-columns: 31px minmax(0, 1fr);
+    }
+
+    .chat-preview-item time {
+      display: none;
+    }
+
+    .chat-preview-item img,
+    .chat-preview-avatar {
+      width: 31px;
+      height: 31px;
+    }
+
+    .floating-chat-button {
+      right: 12px;
+      bottom: calc(78px + env(safe-area-inset-bottom));
+    }
+
     .summary-card { border-radius: 20px; }
     .mobile-chat-wrap .chat-card { height: 76vh; min-height: 600px; border-radius: 22px; }
     .chat-head { padding: 17px; }

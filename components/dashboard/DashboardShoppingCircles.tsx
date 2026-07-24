@@ -16,6 +16,9 @@ import {
   collection,
   doc,
   DocumentData,
+  DocumentReference,
+  QuerySnapshot,
+  getDoc,
   getDocs,
   getFirestore,
   limit,
@@ -40,6 +43,11 @@ type ShoppingCircleItem = {
   commentsCount: number;
   totalVotes: number;
   createdAt: Date | null;
+  relation: 'mine' | 'joined';
+  latestMessage: string;
+  latestSender: string;
+  latestAt: Date | null;
+  hasNewActivity: boolean;
 };
 
 const text = (value: unknown): string =>
@@ -71,6 +79,13 @@ const dateValue = (value: unknown): Date | null => {
 const normalizeCircle = (
   id: string,
   data: DocumentData,
+  metadata?: {
+    relation?: 'mine' | 'joined';
+    latestMessage?: string;
+    latestSender?: string;
+    latestAt?: Date | null;
+    lastSeenAt?: Date | null;
+  },
 ): ShoppingCircleItem => {
   const totalVotes =
     numberValue(data.vote_buy_it) +
@@ -101,6 +116,15 @@ const normalizeCircle = (
     commentsCount: numberValue(data.comments_count),
     totalVotes,
     createdAt: dateValue(data.created_at),
+    relation: metadata?.relation ?? 'mine',
+    latestMessage: metadata?.latestMessage ?? '',
+    latestSender: metadata?.latestSender ?? '',
+    latestAt: metadata?.latestAt ?? null,
+    hasNewActivity:
+      Boolean(metadata?.latestAt) &&
+      (!metadata?.lastSeenAt ||
+        (metadata.latestAt?.getTime() ?? 0) >
+          metadata.lastSeenAt.getTime()),
   };
 };
 
@@ -112,6 +136,21 @@ const formatDate = (date: Date | null): string => {
     month: 'short',
     year: 'numeric',
   });
+};
+
+const formatActivityTime = (date: Date | null): string => {
+  if (!date) return '';
+
+  const seconds = Math.max(
+    0,
+    Math.floor((Date.now() - date.getTime()) / 1000),
+  );
+
+  if (seconds < 60) return 'Just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+
+  return formatDate(date);
 };
 
 export default function DashboardShoppingCircles() {
@@ -164,45 +203,276 @@ export default function DashboardShoppingCircles() {
 
       try {
         const db = getFirestore(auth.app);
-        const userRef = doc(db, 'Users', currentUser.uid);
 
-        let snapshot;
+        const circleDocuments = new Map<
+          string,
+          { id: string; data: DocumentData }
+        >();
+
+        const ownedCircleIds = new Set<string>();
+        const participantLastSeen = new Map<string, Date | null>();
+
+        const addCircleSnapshot = (
+          snapshot: QuerySnapshot<DocumentData>,
+        ) => {
+          snapshot.docs.forEach((circleDocument) => {
+            circleDocuments.set(circleDocument.id, {
+              id: circleDocument.id,
+              data: circleDocument.data(),
+            });
+          });
+        };
+
+        const createdByReferences = [
+          doc(db, 'Users', currentUser.uid),
+          doc(db, 'users', currentUser.uid),
+        ];
+
+        for (const createdByReference of createdByReferences) {
+          try {
+            const createdSnapshot = await getDocs(
+              query(
+                collection(db, 'ShoppingCircles'),
+                where('created_by', '==', createdByReference),
+                limit(50),
+              ),
+            );
+
+            addCircleSnapshot(createdSnapshot);
+            createdSnapshot.docs.forEach((item) =>
+              ownedCircleIds.add(item.id),
+            );
+          } catch (createdQueryError) {
+            console.warn(
+              'Shopping Circles created_by query failed:',
+              createdQueryError,
+            );
+          }
+        }
+
+        const creatorUidFields = [
+          'created_by_uid',
+          'creator_uid',
+          'owner_uid',
+          'user_uid',
+        ] as const;
+
+        for (const fieldName of creatorUidFields) {
+          try {
+            const createdByUidSnapshot = await getDocs(
+              query(
+                collection(db, 'ShoppingCircles'),
+                where(fieldName, '==', currentUser.uid),
+                limit(50),
+              ),
+            );
+
+            addCircleSnapshot(createdByUidSnapshot);
+            createdByUidSnapshot.docs.forEach((item) =>
+              ownedCircleIds.add(item.id),
+            );
+          } catch (createdByUidError) {
+            console.warn(
+              `Shopping Circles ${fieldName} query failed:`,
+              createdByUidError,
+            );
+          }
+        }
 
         try {
-          snapshot = await getDocs(
+          const participantSnapshot = await getDocs(
             query(
-              collection(db, 'ShoppingCircles'),
-              where('created_by', '==', userRef),
-              orderBy('created_at', 'desc'),
-              limit(50),
+              collection(db, 'ShoppingCircleParticipants'),
+              where('user_uid', '==', currentUser.uid),
+              limit(100),
             ),
-          );
-        } catch (indexedQueryError) {
-          console.warn(
-            'Shopping Circles ordered query failed. Retrying without orderBy:',
-            indexedQueryError,
           );
 
-          snapshot = await getDocs(
-            query(
-              collection(db, 'ShoppingCircles'),
-              where('created_by', '==', userRef),
-              limit(50),
-            ),
+          const joinedCircleSnapshots = await Promise.all(
+            participantSnapshot.docs.map(async (participantDocument) => {
+              const participantData = participantDocument.data();
+              const circleReference = participantData.circle_ref;
+              const participantCircleId =
+                text(participantData.circle_id) ||
+                (
+                  circleReference &&
+                  typeof circleReference === 'object' &&
+                  'id' in circleReference
+                    ? text(
+                        (circleReference as { id?: unknown }).id,
+                      )
+                    : ''
+                );
+
+              if (participantCircleId) {
+                participantLastSeen.set(
+                  participantCircleId,
+                  dateValue(participantData.last_seen_at),
+                );
+              }
+
+              if (
+                circleReference &&
+                typeof circleReference === 'object' &&
+                'path' in circleReference
+              ) {
+                try {
+                  return await getDoc(
+                    circleReference as DocumentReference<DocumentData>,
+                  );
+                } catch (circleReadError) {
+                  console.warn(
+                    'Unable to read joined Shopping Circle reference:',
+                    circleReadError,
+                  );
+                }
+              }
+
+              const circleId = text(participantData.circle_id);
+
+              if (circleId) {
+                try {
+                  return await getDoc(
+                    doc(db, 'ShoppingCircles', circleId),
+                  );
+                } catch (circleIdReadError) {
+                  console.warn(
+                    'Unable to read joined Shopping Circle by ID:',
+                    circleIdReadError,
+                  );
+                }
+              }
+
+              const shareCode = text(participantData.share_code);
+
+              if (shareCode) {
+                try {
+                  const shareCodeSnapshot = await getDocs(
+                    query(
+                      collection(db, 'ShoppingCircles'),
+                      where('share_code', '==', shareCode),
+                      limit(1),
+                    ),
+                  );
+
+                  return shareCodeSnapshot.docs[0] ?? null;
+                } catch (shareCodeReadError) {
+                  console.warn(
+                    'Unable to read joined Shopping Circle by share code:',
+                    shareCodeReadError,
+                  );
+                }
+              }
+
+              return null;
+            }),
+          );
+
+          joinedCircleSnapshots.forEach((circleSnapshot) => {
+            if (circleSnapshot?.exists()) {
+              circleDocuments.set(circleSnapshot.id, {
+                id: circleSnapshot.id,
+                data: circleSnapshot.data(),
+              });
+            }
+          });
+        } catch (participantQueryError) {
+          console.warn(
+            'Shopping Circle participant query failed:',
+            participantQueryError,
           );
         }
 
         if (cancelled) return;
 
-        const loaded = snapshot.docs
-          .map((circleDoc) =>
-            normalizeCircle(circleDoc.id, circleDoc.data()),
-          )
-          .sort(
-            (a, b) =>
-              (b.createdAt?.getTime() ?? 0) -
-              (a.createdAt?.getTime() ?? 0),
-          );
+        const loaded = await Promise.all(
+          Array.from(circleDocuments.values()).map(
+            async (circleDocument) => {
+              let latestMessage = '';
+              let latestSender = '';
+              let latestAt: Date | null = null;
+
+              try {
+                const circleReference = doc(
+                  db,
+                  'ShoppingCircles',
+                  circleDocument.id,
+                );
+
+                const messageSnapshot = await getDocs(
+                  query(
+                    collection(db, 'ShoppingCircleMessages'),
+                    where('circle_ref', '==', circleReference),
+                    limit(100),
+                  ),
+                );
+
+                const latest = messageSnapshot.docs
+                  .map((messageDocument) => {
+                    const messageData = messageDocument.data();
+                    const messageType = text(
+                      messageData.message_type,
+                    );
+                    const vote = text(messageData.vote);
+                    const voiceUrl = text(messageData.voice_url);
+
+                    return {
+                      sender: text(messageData.sender_name) || 'SPOTC User',
+                      body:
+                        messageType === 'voice' || voiceUrl
+                          ? 'Voice message'
+                          : vote
+                            ? text(messageData.message) || 'Voted'
+                            : text(messageData.message),
+                      createdAt: dateValue(messageData.created_at),
+                    };
+                  })
+                  .sort(
+                    (a, b) =>
+                      (b.createdAt?.getTime() ?? 0) -
+                      (a.createdAt?.getTime() ?? 0),
+                  )[0];
+
+                if (latest) {
+                  latestMessage = latest.body;
+                  latestSender = latest.sender;
+                  latestAt = latest.createdAt;
+                }
+              } catch (messageLoadError) {
+                console.warn(
+                  'Unable to load latest Shopping Circle message:',
+                  messageLoadError,
+                );
+              }
+
+              return normalizeCircle(
+                circleDocument.id,
+                circleDocument.data,
+                {
+                  relation: ownedCircleIds.has(circleDocument.id)
+                    ? 'mine'
+                    : 'joined',
+                  latestMessage,
+                  latestSender,
+                  latestAt,
+                  lastSeenAt:
+                    participantLastSeen.get(circleDocument.id) ??
+                    null,
+                },
+              );
+            },
+          ),
+        );
+
+        loaded.sort(
+          (a, b) =>
+            (b.latestAt?.getTime() ??
+              b.createdAt?.getTime() ??
+              0) -
+            (a.latestAt?.getTime() ??
+              a.createdAt?.getTime() ??
+              0),
+        );
 
         setCircles(loaded);
       } catch (loadError) {
@@ -237,6 +507,22 @@ export default function DashboardShoppingCircles() {
           circle.status !== 'expired',
       ),
     [circles],
+  );
+
+  const myActiveCircles = useMemo(
+    () =>
+      activeCircles.filter(
+        (circle) => circle.relation === 'mine',
+      ),
+    [activeCircles],
+  );
+
+  const joinedActiveCircles = useMemo(
+    () =>
+      activeCircles.filter(
+        (circle) => circle.relation === 'joined',
+      ),
+    [activeCircles],
   );
 
   const completedCircles = useMemo(
@@ -356,12 +642,31 @@ export default function DashboardShoppingCircles() {
             ? 'Active'
             : circle.status || 'Active'}
         </span>
+
+        <span className={`circle-relation ${circle.relation}`}>
+          {circle.relation === 'mine' ? 'My Circle' : 'Joined'}
+        </span>
+
+        {circle.hasNewActivity && (
+          <span className="circle-new-badge">New</span>
+        )}
       </div>
 
       <div className="circle-content">
         <p className="circle-business">{circle.businessName}</p>
         <h3>{circle.productTitle}</h3>
         <p className="circle-question">{circle.question}</p>
+
+        {circle.latestMessage && (
+          <div className={circle.hasNewActivity ? 'circle-latest new' : 'circle-latest'}>
+            <MessageCircle />
+            <span>
+              <strong>{circle.latestSender}</strong>
+              <small>{circle.latestMessage}</small>
+            </span>
+            <time>{formatActivityTime(circle.latestAt)}</time>
+          </div>
+        )}
 
         <div className="circle-stats">
           <span>
@@ -546,16 +851,35 @@ export default function DashboardShoppingCircles() {
         <>
           <section className="circles-section">
             <div className="section-title">
-              <h3>Active circles</h3>
-              <span>{activeCircles.length}</span>
+              <h3>My Shopping Circles</h3>
+              <span>{myActiveCircles.length}</span>
             </div>
 
-            {activeCircles.length > 0 ? (
+            {myActiveCircles.length > 0 ? (
               <div className="circles-grid">
-                {activeCircles.map(renderCircleCard)}
+                {myActiveCircles.map(renderCircleCard)}
               </div>
             ) : (
-              <p className="section-empty">You have no active circles.</p>
+              <p className="section-empty">
+                Circles you create will appear here.
+              </p>
+            )}
+          </section>
+
+          <section className="circles-section">
+            <div className="section-title">
+              <h3>Joined Shopping Circles</h3>
+              <span>{joinedActiveCircles.length}</span>
+            </div>
+
+            {joinedActiveCircles.length > 0 ? (
+              <div className="circles-grid">
+                {joinedActiveCircles.map(renderCircleCard)}
+              </div>
+            ) : (
+              <p className="section-empty">
+                Circles shared by friends will appear here after you open them.
+              </p>
             )}
           </section>
 
@@ -1014,6 +1338,97 @@ const styles = `
     border-color: #171814;
     color: #fff;
     background: #171814;
+  }
+
+
+  .circle-relation {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 6px 9px;
+    border-radius: 999px;
+    color: #fff;
+    background: rgba(17, 24, 39, 0.84);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .circle-relation.joined {
+    background: #6d3cdf;
+  }
+
+  .circle-new-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    min-width: 38px;
+    height: 25px;
+    padding: 0 8px;
+    display: grid;
+    place-items: center;
+    border: 2px solid #fff;
+    border-radius: 999px;
+    color: #fff;
+    background: #ef4444;
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    box-shadow: 0 7px 16px rgba(239, 68, 68, 0.28);
+  }
+
+  .circle-latest {
+    margin-top: 12px;
+    padding: 10px;
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #e6e9ee;
+    border-radius: 12px;
+    background: #f7f8fa;
+  }
+
+  .circle-latest.new {
+    border-color: #cbdcf8;
+    background: #eef5ff;
+  }
+
+  .circle-latest > :global(svg) {
+    width: 17px;
+    height: 17px;
+    color: #087e98;
+  }
+
+  .circle-latest span,
+  .circle-latest strong,
+  .circle-latest small {
+    min-width: 0;
+    display: block;
+  }
+
+  .circle-latest strong {
+    overflow: hidden;
+    color: #2d3641;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .circle-latest small {
+    margin-top: 2px;
+    overflow: hidden;
+    color: #66707c;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .circle-latest time {
+    color: #7d8792;
+    font-size: 9px;
+    white-space: nowrap;
   }
 
   .completed-section {
