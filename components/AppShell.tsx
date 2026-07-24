@@ -396,27 +396,34 @@ if (!signedInUser) {
           </Link>
 
           <nav className="spotc-desktop-navigation">
-            {navigation.map((item) => {
-              const active =
-                pathname.startsWith(
-                  item.href,
-                );
+  {navigation.map((item) => {
+    const Icon = item.icon;
 
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={
-                    active
-                      ? 'spotc-navigation-link spotc-navigation-link-active'
-                      : 'spotc-navigation-link'
-                  }
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
+    const active =
+      pathname.startsWith(item.href) ||
+      (item.href === '/shop' && pathname.startsWith('/product/'));
+
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className={
+          active
+            ? 'spotc-navigation-link spotc-navigation-link-active'
+            : 'spotc-navigation-link'
+        }
+        aria-current={active ? 'page' : undefined}
+      >
+        <Icon
+          className="spotc-desktop-nav-icon"
+          aria-hidden="true"
+        />
+
+        <span>{item.label}</span>
+      </Link>
+    );
+  })}
+</nav>
 
           <div className="spotc-header-search">
             <Search
@@ -849,39 +856,87 @@ if (!signedInUser) {
           letter-spacing: 0.4px;
         }
 
-        .spotc-desktop-navigation {
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 34px;
-        }
+        .spotc-desktop-navigation{
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
 
-        .spotc-navigation-link {
-          position: relative;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          color: #6e6962;
-          font-size: 14px;
-          font-weight: 800;
-          text-decoration: none;
-        }
+.spotc-navigation-link{
+  position:relative;
 
-        .spotc-navigation-link-active {
-          color: #171513;
-        }
+  width:110px;
+  height:72px;
 
-        .spotc-navigation-link-active::after {
-          content: '';
-          position: absolute;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          height: 2px;
-          border-radius: 3px;
-          background: #171513;
-        }
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+
+  color:#ffffffcc;
+  text-decoration:none;
+
+  font-size:15px;
+  font-weight:750;
+
+  transition:.2s;
+}
+
+.spotc-navigation-link:not(:last-child)::before{
+  content:'';
+
+  position:absolute;
+  top:16px;
+  right:0;
+  bottom:16px;
+
+  width:1px;
+
+  background:rgba(0,0,0,.12);
+}
+
+.spotc-desktop-nav-icon{
+  width:24px;
+  height:24px;
+  stroke-width:2;
+}
+
+.spotc-navigation-link span{
+  line-height:1;
+}
+
+.spotc-navigation-link-active{
+  color:#f5bd4d;
+  font-weight:850;
+}
+
+.spotc-navigation-link-active .spotc-desktop-nav-icon{
+  stroke-width:2.35;
+  filter:drop-shadow(0 2px 5px rgba(245,189,77,.30));
+}
+
+.spotc-navigation-link-active::after{
+  content:'';
+
+  position:absolute;
+  left:22px;
+  right:22px;
+  bottom:0;
+
+  height:4px;
+
+  border-radius:999px;
+
+  background:linear-gradient(
+    90deg,
+    #d99c2b,
+    #ffd978
+  );
+
+  box-shadow:0 0 10px rgba(245,189,77,.45);
+}
 
         .spotc-header-search {
           height: 40px;
