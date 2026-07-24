@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import {
   BadgeCheck,
+  Bike,
   Eye,
   Flag,
   Heart,
@@ -1060,19 +1061,24 @@ function OfferCard({
         </div>
 
         <div className="offer-top-overlay">
-          <span />
-          <button
-            className="glass-icon"
-            type="button"
-            aria-label={muted ? "Unmute video" : "Mute video"}
-            onClick={(event) => {
-              event.stopPropagation();
-              setMuted((value) => !value);
-            }}
-          >
-            {muted ? <VolumeX /> : <Volume2 />}
-          </button>
-        </div>
+  <div className="offer-delivery-chip">
+    <Bike size={14} />
+    <span>15 MINS DELIVERY</span>
+  </div>
+
+  <button
+    className="glass-icon"
+    type="button"
+    aria-label={muted ? "Unmute video" : "Mute video"}
+    onClick={(event) => {
+      event.stopPropagation();
+      setMuted((value) => !value);
+    }}
+  >
+    {muted ? <VolumeX /> : <Volume2 />}
+  </button>
+</div>
+            
 
         <div className="offer-action-rail">
           <div className="rail-item">
@@ -1209,6 +1215,62 @@ function OfferCard({
          * - Direction is hidden, matching the mobile app.
          * - Call, WhatsApp and View shop use three equal columns.
          */
+        .offer-top-overlay{
+  position:absolute;
+  top:16px;
+  left:16px;
+  right:16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  z-index:20;
+}
+
+.offer-delivery-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+
+  height:34px;
+  padding:0 14px;
+
+  border-radius:999px;
+
+  background:#16a34a;
+  color:#fff;
+
+  font-size:13px;
+  font-weight:800;
+  letter-spacing:.2px;
+
+  box-shadow:0 8px 22px rgba(22,163,74,.30);
+}
+
+.offer-delivery-chip svg{
+  width:15px;
+  height:15px;
+  flex:0 0 15px;
+}
+
+@media (max-width:760px){
+
+.offer-top-overlay{
+  top:12px;
+  left:12px;
+  right:12px;
+}
+
+.offer-delivery-chip{
+  height:30px;
+  padding:0 12px;
+  font-size:11px;
+}
+
+.offer-delivery-chip svg{
+  width:13px;
+  height:13px;
+}
+}
         .offers-page .offer-contact-row-four {
           width: 100% !important;
           max-width: 100% !important;
