@@ -102,9 +102,10 @@ export function AppShell({
     useRef<HTMLDivElement>(null);
 
   const standalonePage =
-    pathname.startsWith('/dashboard') ||
-    pathname.startsWith('/compare-online') ||
-    pathname.startsWith('/order-success');
+  pathname.startsWith('/dashboard') ||
+  pathname.startsWith('/compare-online') ||
+  pathname.startsWith('/order-success') ||
+  pathname.startsWith('/complete-profile');
 
   const mobileNavAtTop =
     pathname.startsWith('/offers') ||
@@ -252,7 +253,13 @@ export function AppShell({
     try {
       const signedInUser = await requireGoogleLogin();
 
-      if (!signedInUser) return;
+/*
+ * On mobile, signInWithRedirect() navigates away from this page.
+ * Returning null here is expected.
+ */
+if (!signedInUser) {
+  return;
+}
 
       setFirebaseUser(signedInUser);
       setMenuOpen(false);

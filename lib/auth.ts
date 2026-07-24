@@ -1,12 +1,15 @@
 import {
   GoogleAuthProvider,
+  getRedirectResult,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   type User,
 } from 'firebase/auth';
 
 import {
   doc,
+  getDoc,
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore';
@@ -19,7 +22,34 @@ import {
 
 let pendingGoogleLogin: Promise<User | null> | null = null;
 
-async function saveGoogleUser(user: User): Promise<void> {
+export type SpotcUserProfile = {
+  uid: string;
+  display_name: string;
+  email: string;
+  photo_url: string;
+  gender: string;
+  date_of_birth: string;
+  phone_number: string;
+  whatsapp_number: string;
+  profile_complete: boolean;
+};
+
+function isMobileBrowser(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  return (
+    window.matchMedia('(max-width: 700px)').matches ||
+    /Android|iPhone|iPad|iPod|Mobile/i.test(
+      window.navigator.userAgent,
+    )
+  );
+}
+
+async function saveGoogleUser(
+  user: User,
+): Promise<void> {
   if (!db || !user || user.isAnonymous) {
     return;
   }
@@ -52,7 +82,76 @@ function createGoogleProvider(): GoogleAuthProvider {
   return provider;
 }
 
-export async function requireGoogleLogin(): Promise<User | null> {
+export async function completeGoogleRedirectLogin():
+  Promise<User | null> {
+  if (!firebaseReady || !auth) {
+    return null;
+  }
+
+  try {
+    const result = await getRedirectResult(auth);
+
+    if (
+      !result?.user ||
+      result.user.isAnonymous
+    ) {
+      return auth.currentUser &&
+        !auth.currentUser.isAnonymous
+        ? auth.currentUser
+        : null;
+    }
+
+    await saveGoogleUser(result.user);
+
+    return result.user;
+  } catch (error) {
+    console.error(
+      'Google redirect login failed:',
+      error,
+    );
+
+    return null;
+  }
+}
+
+export async function isUserProfileComplete(
+  user: User,
+): Promise<boolean> {
+  if (!db || !user || user.isAnonymous) {
+    return false;
+  }
+
+  const snapshot = await getDoc(
+    doc(db, 'Users', user.uid),
+  );
+
+  if (!snapshot.exists()) {
+    return false;
+  }
+
+  return snapshot.data().profile_complete === true;
+}
+
+export async function getSpotcUserProfile(
+  user: User,
+): Promise<Partial<SpotcUserProfile> | null> {
+  if (!db || !user || user.isAnonymous) {
+    return null;
+  }
+
+  const snapshot = await getDoc(
+    doc(db, 'Users', user.uid),
+  );
+
+  if (!snapshot.exists()) {
+    return null;
+  }
+
+  return snapshot.data() as Partial<SpotcUserProfile>;
+}
+
+export async function requireGoogleLogin():
+  Promise<User | null> {
   if (!firebaseReady || !auth) {
     throw new Error(
       'Firebase authentication is not configured.',
@@ -61,7 +160,10 @@ export async function requireGoogleLogin(): Promise<User | null> {
 
   const existingUser = auth.currentUser;
 
-  if (existingUser && !existingUser.isAnonymous) {
+  if (
+    existingUser &&
+    !existingUser.isAnonymous
+  ) {
     await saveGoogleUser(existingUser);
     return existingUser;
   }
@@ -72,14 +174,28 @@ export async function requireGoogleLogin(): Promise<User | null> {
 
   pendingGoogleLogin = (async () => {
     try {
+      const provider = createGoogleProvider();
+
       /*
-       * Popup is intentionally used for desktop and mobile.
-       * It returns the User directly, so checkout and every other
-       * protected action can continue immediately after account selection.
+       * Mobile browsers use redirect because popup login is
+       * frequently blocked or closed.
        */
+      if (isMobileBrowser()) {
+        await signInWithRedirect(
+          auth,
+          provider,
+        );
+
+        /*
+         * Browser leaves this page immediately.
+         * Login completion is handled after returning.
+         */
+        return null;
+      }
+
       const result = await signInWithPopup(
         auth,
-        createGoogleProvider(),
+        provider,
       );
 
       const user = result.user;
@@ -98,25 +214,36 @@ export async function requireGoogleLogin(): Promise<User | null> {
       };
 
       if (
-        firebaseError.code === 'auth/popup-closed-by-user' ||
-        firebaseError.code === 'auth/cancelled-popup-request'
+        firebaseError.code ===
+          'auth/popup-closed-by-user' ||
+        firebaseError.code ===
+          'auth/cancelled-popup-request'
       ) {
         return null;
       }
 
-      if (firebaseError.code === 'auth/unauthorized-domain') {
+      if (
+        firebaseError.code ===
+        'auth/unauthorized-domain'
+      ) {
         throw new Error(
           `This website domain is not authorized in Firebase Authentication. Add "${window.location.hostname}" under Firebase Authentication > Settings > Authorized domains.`,
         );
       }
 
-      if (firebaseError.code === 'auth/popup-blocked') {
+      if (
+        firebaseError.code ===
+        'auth/popup-blocked'
+      ) {
         throw new Error(
-          'The browser blocked the Google sign-in window. Allow pop-ups for this website and tap Sign in again.',
+          'The browser blocked Google sign-in. Please try again.',
         );
       }
 
-      console.error('Google login failed:', error);
+      console.error(
+        'Google login failed:',
+        error,
+      );
 
       throw new Error(
         firebaseError.message ||
@@ -130,7 +257,8 @@ export async function requireGoogleLogin(): Promise<User | null> {
   return pendingGoogleLogin;
 }
 
-export async function logoutUser(): Promise<void> {
+export async function logoutUser():
+  Promise<void> {
   if (!auth) {
     return;
   }

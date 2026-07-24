@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
+
 import './globals.css';
 
 import { AppShell } from '@/components/AppShell';
 import FooterWrapper from '@/components/FooterWrapper';
+import ProfileCompletionGate from '@/components/ProfileCompletionGate';
 
 export const metadata: Metadata = {
   title: 'SPOTC — Namma Area, Namma Kadai',
@@ -17,8 +19,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AppShell>{children}</AppShell>
-        <FooterWrapper />
+        <ProfileCompletionGate>
+          <AppShell>{children}</AppShell>
+          <FooterWrapper />
+        </ProfileCompletionGate>
       </body>
     </html>
   );
