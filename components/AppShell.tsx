@@ -36,7 +36,12 @@ import {
   auth,
   firebaseReady,
 } from '@/lib/firebase';
-import { requireGoogleLogin } from '@/lib/auth';
+import {
+  getProfileCompletionPercentage,
+  getSpotcUserProfile,
+  requireGoogleLogin,
+  type SpotcUserProfile,
+} from '@/lib/auth';
 
 const navigation = [
   {
@@ -89,6 +94,9 @@ export function AppShell({
   const [authLoading, setAuthLoading] =
     useState(true);
 
+  const [spotcProfile, setSpotcProfile] =
+    useState<Partial<SpotcUserProfile> | null>(null);
+
   const [menuOpen, setMenuOpen] =
     useState(false);
 
@@ -102,14 +110,22 @@ export function AppShell({
     useRef<HTMLDivElement>(null);
 
   const standalonePage =
-  pathname.startsWith('/dashboard') ||
-  pathname.startsWith('/compare-online') ||
-  pathname.startsWith('/order-success') ||
-  pathname.startsWith('/complete-profile');
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/compare-online') ||
+    pathname.startsWith('/order-success') ||
+    pathname.startsWith('/complete-profile') ||
+    pathname.startsWith('/profile');
 
   const mobileNavAtTop =
     pathname.startsWith('/offers') ||
     pathname.startsWith('/spots');
+
+  const profileCompletion = useMemo(
+    () => getProfileCompletionPercentage(spotcProfile),
+    [spotcProfile],
+  );
+
+  const profileIsComplete = profileCompletion === 100;
 
   const searchPlaceholder = useMemo(() => {
     if (pathname.startsWith('/shop')) {
@@ -138,8 +154,21 @@ export function AppShell({
           !nextUser.isAnonymous
         ) {
           setFirebaseUser(nextUser);
+
+          void getSpotcUserProfile(nextUser)
+            .then((profile) => {
+              setSpotcProfile(profile);
+            })
+            .catch((error) => {
+              console.error(
+                'SPOTC profile load failed:',
+                error,
+              );
+              setSpotcProfile(null);
+            });
         } else {
           setFirebaseUser(null);
+          setSpotcProfile(null);
         }
 
         setAuthLoading(false);
@@ -149,6 +178,37 @@ export function AppShell({
 
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (!firebaseUser) {
+      return;
+    }
+
+    const refreshProfile = () => {
+      void getSpotcUserProfile(firebaseUser)
+        .then((profile) => {
+          setSpotcProfile(profile);
+        })
+        .catch((error) => {
+          console.error(
+            'SPOTC profile refresh failed:',
+            error,
+          );
+        });
+    };
+
+    window.addEventListener(
+      'spotc-profile-updated',
+      refreshProfile,
+    );
+
+    return () => {
+      window.removeEventListener(
+        'spotc-profile-updated',
+        refreshProfile,
+      );
+    };
+  }, [firebaseUser]);
 
   useEffect(() => {
     const updateCartCount = () => {
@@ -262,6 +322,11 @@ if (!signedInUser) {
 }
 
       setFirebaseUser(signedInUser);
+
+      const profile = await getSpotcUserProfile(
+        signedInUser,
+      );
+      setSpotcProfile(profile);
       setMenuOpen(false);
     } catch (error) {
       console.error('SPOTC Google sign-in failed:', error);
@@ -288,6 +353,7 @@ if (!signedInUser) {
     }
 
     setFirebaseUser(null);
+    setSpotcProfile(null);
     router.replace('/offers');
     router.refresh();
   };
@@ -496,6 +562,49 @@ if (!signedInUser) {
                             </small>
                           </div>
                         </div>
+
+                        <div className="spotc-dropdown-divider" />
+                      </>
+                    )}
+
+                    {firebaseUser && (
+                      <>
+                        {profileIsComplete ? (
+                          <Link
+                            href="/profile"
+                            className="spotc-dropdown-item"
+                            onClick={() =>
+                              setMenuOpen(false)
+                            }
+                          >
+                            <CircleUserRound size={18} />
+                            <span>Profile</span>
+                          </Link>
+                        ) : (
+                          <Link
+                            href="/complete-profile"
+                            className="spotc-profile-completion-link"
+                            onClick={() =>
+                              setMenuOpen(false)
+                            }
+                          >
+                            <div className="spotc-profile-completion-title">
+                              <span>Complete Profile</span>
+                              <strong>{profileCompletion}%</strong>
+                            </div>
+
+                            <div
+                              className="spotc-profile-progress-track"
+                              aria-label={`Profile ${profileCompletion}% complete`}
+                            >
+                              <span
+                                style={{
+                                  width: `${profileCompletion}%`,
+                                }}
+                              />
+                            </div>
+                          </Link>
+                        )}
 
                         <div className="spotc-dropdown-divider" />
                       </>
@@ -1039,6 +1148,53 @@ if (!signedInUser) {
           height: 1px;
           margin: 4px 7px;
           background: #eee9e2;
+        }
+
+        .spotc-profile-completion-link {
+          width: 100%;
+          padding: 10px;
+          display: block;
+          border-radius: 11px;
+          color: #24211d;
+          background: #f7f2e9;
+          text-decoration: none;
+          box-sizing: border-box;
+        }
+
+        .spotc-profile-completion-link:hover {
+          background: #f1eadf;
+        }
+
+        .spotc-profile-completion-title {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          font-size: 14px;
+          font-weight: 750;
+        }
+
+        .spotc-profile-completion-title strong {
+          color: #8a651f;
+          font-size: 13px;
+          font-weight: 900;
+        }
+
+        .spotc-profile-progress-track {
+          width: 100%;
+          height: 6px;
+          margin-top: 9px;
+          overflow: hidden;
+          border-radius: 999px;
+          background: #ded7cc;
+        }
+
+        .spotc-profile-progress-track span {
+          height: 100%;
+          display: block;
+          border-radius: inherit;
+          background: linear-gradient(90deg, #b87a12, #f5bd4d);
+          transition: width 220ms ease;
         }
 
         .spotc-dropdown-item {

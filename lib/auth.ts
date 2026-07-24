@@ -34,6 +34,46 @@ export type SpotcUserProfile = {
   profile_complete: boolean;
 };
 
+export function getProfileCompletionPercentage(
+  profile: Partial<SpotcUserProfile> | null | undefined,
+): number {
+  if (!profile) {
+    return 0;
+  }
+
+  const requiredFields = [
+    profile.gender,
+    profile.date_of_birth,
+    profile.phone_number,
+  ];
+
+  const completedFields = requiredFields.filter(
+    (value) =>
+      typeof value === 'string' &&
+      value.trim().length > 0,
+  ).length;
+
+  if (completedFields === 3) {
+    return 100;
+  }
+
+  if (completedFields === 2) {
+    return 67;
+  }
+
+  if (completedFields === 1) {
+    return 33;
+  }
+
+  return 0;
+}
+
+export function isSpotcProfileComplete(
+  profile: Partial<SpotcUserProfile> | null | undefined,
+): boolean {
+  return getProfileCompletionPercentage(profile) === 100;
+}
+
 function isMobileBrowser(): boolean {
   if (typeof window === 'undefined') {
     return false;
@@ -117,19 +157,8 @@ export async function completeGoogleRedirectLogin():
 export async function isUserProfileComplete(
   user: User,
 ): Promise<boolean> {
-  if (!db || !user || user.isAnonymous) {
-    return false;
-  }
-
-  const snapshot = await getDoc(
-    doc(db, 'Users', user.uid),
-  );
-
-  if (!snapshot.exists()) {
-    return false;
-  }
-
-  return snapshot.data().profile_complete === true;
+  const profile = await getSpotcUserProfile(user);
+  return isSpotcProfileComplete(profile);
 }
 
 export async function getSpotcUserProfile(
@@ -176,20 +205,12 @@ export async function requireGoogleLogin():
     try {
       const provider = createGoogleProvider();
 
-      /*
-       * Mobile browsers use redirect because popup login is
-       * frequently blocked or closed.
-       */
       if (isMobileBrowser()) {
         await signInWithRedirect(
           auth,
           provider,
         );
 
-        /*
-         * Browser leaves this page immediately.
-         * Login completion is handled after returning.
-         */
         return null;
       }
 
