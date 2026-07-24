@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
+  Timestamp,
   collection,
   deleteDoc,
   doc,
@@ -136,6 +137,8 @@ export function ProductGrid({
   const [savingId, setSavingId] = useState('');
   const [compare, setCompare] =
     useState<Set<string>>(new Set());
+  const [compareBusy, setCompareBusy] =
+    useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -332,13 +335,115 @@ export function ProductGrid({
       } else if (next.size < 3) {
         next.add(id);
       } else {
-        alert(
-          'You can compare a maximum of 3 products.',
-        );
+        alert('You can select a maximum of 3 products.');
       }
 
       return next;
     });
+  };
+
+  const openComparisonShoppingCircle = async () => {
+    if (!db || compareBusy) return;
+
+    const selectedProducts = (items || []).filter((product) =>
+      compare.has(String(product.id)),
+    );
+
+    if (selectedProducts.length < 2) {
+      alert('Select at least 2 products to ask friends.');
+      return;
+    }
+
+    let currentUser = user;
+
+    if (!currentUser) {
+      currentUser = await requireGoogleLogin();
+
+      if (!currentUser || currentUser.isAnonymous) {
+        return;
+      }
+
+      setUser(currentUser);
+    }
+
+    setCompareBusy(true);
+
+    try {
+      const circleReference = doc(
+        collection(db, 'ShoppingCircles'),
+      );
+
+      const shareCode = `${circleReference.id}_${Date.now()}`;
+
+      const circleProducts = selectedProducts.map((product) => ({
+        id: String(product.id),
+        title: titleOf(product),
+        image: imageOf(product),
+        price: priceOf(product),
+        old_price: oldPriceOf(product),
+        discount: discountOf(product),
+        business_name: businessNameOf(product),
+        shop_name: businessNameOf(product),
+        business_id: businessIdOf(product),
+      }));
+
+      const productVoteFields: Record<string, number> = {};
+
+      circleProducts.forEach((_product, index) => {
+        productVoteFields[`product_${index}_votes`] = 0;
+      });
+
+      await setDoc(circleReference, {
+        created_by: doc(db, 'users', currentUser.uid),
+        created_by_uid: currentUser.uid,
+        owner_uid: currentUser.uid,
+
+        comparison_mode: true,
+        products: circleProducts,
+        product_ids: circleProducts.map((product) => product.id),
+
+        question: 'Which one should I buy?',
+        share_code: shareCode,
+        status: 'active',
+
+        participants: 0,
+        comments_count: 0,
+        none_votes: 0,
+
+        vote_buy_it: 0,
+        vote_looks_good: 0,
+        vote_not_sure: 0,
+        vote_dont_buy: 0,
+
+        ...productVoteFields,
+
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+
+        expires_at: Timestamp.fromDate(
+          new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        ),
+      });
+
+      setCompare(new Set());
+
+      router.push(
+        `/circle/${encodeURIComponent(shareCode)}`,
+      );
+    } catch (reason) {
+      console.error(
+        'Creating comparison Shopping Circle failed:',
+        reason,
+      );
+
+      alert(
+        reason instanceof Error
+          ? `Shopping Circle failed: ${reason.message}`
+          : 'Could not create the Shopping Circle.',
+      );
+    } finally {
+      setCompareBusy(false);
+    }
   };
 
   const toggleSavedProduct = async (
@@ -602,23 +707,22 @@ export function ProductGrid({
                 </strong>
 
                 <span>
-                  Select up to 3 products to compare.
+                  Select up to 3 products and ask friends.
                 </span>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() =>
-                router.push(
-                  `/compare?ids=${Array.from(
-                    compare,
-                  ).join(',')}`,
-                )
-              }
-            >
-              Compare now
-            </button>
+           <button
+  type="button"
+  onClick={() =>
+    void openComparisonShoppingCircle()
+  }
+  disabled={compareBusy}
+>
+  {compareBusy
+    ? 'Creating circle…'
+    : 'Ask Friends'}
+</button>
           </aside>,
           document.body,
         )}
@@ -815,11 +919,16 @@ export function ProductGrid({
           border: 1px solid rgba(255, 255, 255, 0.12) !important;
           border-radius: 17px !important;
           color: #ffffff !important;
-          background: rgba(18, 18, 18, 0.97) !important;
+          background: linear-gradient(
+  135deg,
+  #0b3d91 0%,
+  #1d4ed8 55%,
+  #2563eb 100%
+) !important;
 
           box-shadow:
-            0 18px 46px rgba(0, 0, 0, 0.24),
-            0 4px 12px rgba(0, 0, 0, 0.12) !important;
+            0 20px 50px rgba(29, 78, 216, 0.35),
+  0 8px 18px rgba(11, 61, 145, 0.25) !important;
 
           backdrop-filter: blur(16px) !important;
           -webkit-backdrop-filter: blur(16px) !important;
@@ -842,7 +951,7 @@ export function ProductGrid({
           place-items: center !important;
           border-radius: 10px !important;
           color: #ffffff !important;
-          background: rgba(255, 255, 255, 0.08) !important;
+          background: rgba(255, 255, 255, 0.18) !important;
         }
 
         .spotc-compare-float__copy {
