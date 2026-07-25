@@ -1630,13 +1630,23 @@ const generateTryOn = async () => {
       </p>
 
       <div className="pd-tryon-guide">
-        <h3>Best photo tips</h3>
+        <div className="pd-tryon-guide-text">
+          <h3>Best photo tips</h3>
 
-        <p>✓ Stand facing the camera</p>
-        <p>✓ Full body visible</p>
-        <p>✓ Arms relaxed</p>
-        <p>✓ Plain background</p>
-        <p>✓ Good lighting</p>
+          <p>✓ Stand facing the camera</p>
+          <p>✓ Full body visible</p>
+          <p>✓ Arms relaxed</p>
+          <p>✓ Plain background</p>
+          <p>✓ Good lighting</p>
+        </div>
+
+        <figure className="pd-tryon-sample">
+          <img
+            src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAyNDAgMzYwJz4KPHJlY3Qgd2lkdGg9JzI0MCcgaGVpZ2h0PSczNjAnIHJ4PScyNCcgZmlsbD0nI2YzZjFlYycvPgo8Y2lyY2xlIGN4PScxMjAnIGN5PSc2Micgcj0nMjgnIGZpbGw9JyNkN2IzOGQnLz4KPHBhdGggZD0nTTkyIDEwM2MxMC0xMSA0Ni0xMSA1NiAwbDE2IDc4LTIwIDEyLTktNTR2MTUwaC0zMFYxMzlsLTkgNTQtMjAtMTJ6JyBmaWxsPScjZmZmZmZmJyBzdHJva2U9JyNkN2Q3ZDcnIHN0cm9rZS13aWR0aD0nMycvPgo8cGF0aCBkPSdNMTA1IDI4OWgzMHY0NmgtMzB6JyBmaWxsPScjMjQyNDI0Jy8+CjxwYXRoIGQ9J003OSAzMzVoNDh2MTJINzl6TTExMyAzMzVoNDh2MTJoLTQ4eicgZmlsbD0nI2ZmZmZmZicgc3Ryb2tlPScjY2ZjZmNmJyBzdHJva2Utd2lkdGg9JzInLz4KPHBhdGggZD0nTTEyMCAzMWMxNiAwIDI5IDEwIDI5IDI0LTktNi0xNy04LTI5LThzLTIwIDItMjkgOGMwLTE0IDEzLTI0IDI5LTI0eicgZmlsbD0nIzJhMjExYycvPgo8Y2lyY2xlIGN4PSc1NScgY3k9Jzc1JyByPScxOCcgZmlsbD0nIzIyYzU1ZScvPgo8cGF0aCBkPSdNNDcgNzVsNiA2IDExLTEzJyBmaWxsPSdub25lJyBzdHJva2U9J3doaXRlJyBzdHJva2Utd2lkdGg9JzUnIHN0cm9rZS1saW5lY2FwPSdyb3VuZCcgc3Ryb2tlLWxpbmVqb2luPSdyb3VuZCcvPgo8dGV4dCB4PScxMjAnIHk9JzIwJyB0ZXh0LWFuY2hvcj0nbWlkZGxlJyBmb250LWZhbWlseT0nQXJpYWwnIGZvbnQtc2l6ZT0nMTMnIGZvbnQtd2VpZ2h0PSc3MDAnIGZpbGw9JyMxNjY1MzQnPkdPT0QgU0FNUExFPC90ZXh0Pgo8L3N2Zz4="
+            alt="Sample full-body photo showing the recommended pose"
+          />
+          <figcaption>Good sample</figcaption>
+        </figure>
       </div>
 
       {tryOnPreview && (
@@ -2724,6 +2734,109 @@ width:200px;
 
           .pd-tryon-actions {
             grid-template-columns: 1fr !important;
+          }
+        }
+
+
+        /* =========================================================
+           TRY ON SAMPLE PHOTO — FINAL
+        ========================================================= */
+
+        .pd-tryon-guide {
+          display: grid !important;
+          grid-template-columns: minmax(0, 1fr) 150px !important;
+          align-items: center !important;
+          gap: 22px !important;
+        }
+
+        .pd-tryon-guide-text {
+          min-width: 0 !important;
+        }
+
+        .pd-tryon-guide-text h3 {
+          margin: 0 0 14px !important;
+        }
+
+        .pd-tryon-guide-text p {
+          margin: 9px 0 !important;
+        }
+
+        .pd-tryon-sample {
+          width: 150px !important;
+          margin: 0 !important;
+          padding: 10px !important;
+          border: 1px solid #34363c !important;
+          border-radius: 18px !important;
+          background: #0f1014 !important;
+          box-sizing: border-box !important;
+        }
+
+        .pd-tryon-sample img {
+          display: block !important;
+          width: 100% !important;
+          aspect-ratio: 2 / 3 !important;
+          object-fit: cover !important;
+          border-radius: 13px !important;
+          background: #f3f1ec !important;
+        }
+
+        .pd-tryon-sample figcaption {
+          margin-top: 8px !important;
+          color: #31d778 !important;
+          font-size: 12px !important;
+          font-weight: 900 !important;
+          line-height: 1.2 !important;
+          text-align: center !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.04em !important;
+        }
+
+        @media (max-width: 700px) {
+          .pd-tryon-guide {
+            grid-template-columns: minmax(0, 1fr) 108px !important;
+            gap: 14px !important;
+            padding: 16px !important;
+          }
+
+          .pd-tryon-sample {
+            width: 108px !important;
+            padding: 7px !important;
+            border-radius: 14px !important;
+          }
+
+          .pd-tryon-sample img {
+            border-radius: 10px !important;
+          }
+
+          .pd-tryon-sample figcaption {
+            margin-top: 6px !important;
+            font-size: 10px !important;
+          }
+
+          .pd-tryon-guide-text h3 {
+            font-size: 17px !important;
+          }
+
+          .pd-tryon-guide-text p {
+            margin: 7px 0 !important;
+            font-size: 12px !important;
+          }
+        }
+
+        @media (max-width: 430px) {
+          .pd-tryon-guide {
+            grid-template-columns: 1fr 92px !important;
+            gap: 10px !important;
+            padding: 14px !important;
+          }
+
+          .pd-tryon-sample {
+            width: 92px !important;
+            padding: 6px !important;
+          }
+
+          .pd-tryon-guide-text p {
+            font-size: 11px !important;
           }
         }
 
