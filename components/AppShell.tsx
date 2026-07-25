@@ -821,23 +821,28 @@ if (!signedInUser) {
           backdrop-filter: blur(16px);
         }
 
-        .spotc-header-inner {
-          width: min(
-            1280px,
-            calc(100% - 40px)
-          );
-          height: 100%;
-          margin: 0 auto;
-          display: grid;
-          grid-template-columns:
-            230px
-            auto
-            minmax(240px, 340px)
-            auto;
-          align-items: center;
-          gap: 24px;
-          overflow: visible;
-        }
+       .spotc-header-inner {
+  width: min(1600px, calc(100vw - 48px));
+  max-width: 1600px;
+
+  height: 100%;
+  margin: 0 auto;
+
+  display: grid;
+  grid-template-columns:
+    240px
+    auto
+    minmax(420px, 1fr)
+    auto;
+
+  align-items: center;
+  gap: 28px;
+
+  padding: 0 8px;
+  box-sizing: border-box;
+
+  overflow: visible;
+}
 
         .spotc-header-brand {
           display: flex;
