@@ -225,6 +225,7 @@ function ProductPageLoader() {
           <div className="pd-loader-actions"><span /><span /></div>
         </div>
       </section>
+
     </main>
   );
 }
@@ -271,6 +272,12 @@ export default function ProductDetailPage() {
   } | null>(null);
   const [coinBackOpen, setCoinBackOpen] = useState(false);
   const [rewardsSheetOpen, setRewardsSheetOpen] = useState(false);
+  const [tryOnOpen, setTryOnOpen] = useState(false);
+const [tryOnImage, setTryOnImage] = useState<File | null>(null);
+const [tryOnPreview, setTryOnPreview] = useState('');
+const [tryOnResult, setTryOnResult] = useState('');
+const [tryOnLoading, setTryOnLoading] = useState(false);
+    
 
   useEffect(() => {
     let active = true;
@@ -798,7 +805,43 @@ export default function ProductDetailPage() {
       // The user can cancel the native share sheet.
     }
   };
+const onTryOnImage = (
+  event: React.ChangeEvent<HTMLInputElement>,
+) => {
+  const file = event.target.files?.[0];
 
+  if (!file) return;
+
+  setTryOnImage(file);
+  setTryOnResult('');
+
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    setTryOnPreview(reader.result as string);
+  };
+
+  reader.readAsDataURL(file);
+};
+
+const generateTryOn = async () => {
+  if (!tryOnImage) {
+    alert('Please upload a full-body photo.');
+    return;
+  }
+
+  setTryOnLoading(true);
+
+  try {
+    // RunPod API will be added here
+    await new Promise(resolve => setTimeout(resolve, 2500));
+
+    // Temporary preview until API is connected
+    setTryOnResult(tryOnPreview);
+  } finally {
+    setTryOnLoading(false);
+  }
+};
   const submitReview = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setReviewMessage('');
@@ -1131,6 +1174,14 @@ export default function ProductDetailPage() {
               <Clock3 aria-hidden="true" />
               <span>{deliveryMinutes} mins delivery</span>
             </span>
+
+            <button
+              type="button"
+              className="pd-tryon-chip"
+              onClick={() => setTryOnOpen(true)}
+            >
+              👕 <span>Try On</span>
+            </button>
           </div>
 
           {images.length > 1 && (
@@ -1547,6 +1598,121 @@ export default function ProductDetailPage() {
           </section>
         </div>
       )}
+
+
+      {tryOnOpen && (
+  <div
+    className="pd-modal-backdrop"
+    onMouseDown={() => setTryOnOpen(false)}
+  >
+    <section
+      className="pd-modal pd-tryon-sheet"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <button
+        className="pd-modal-close"
+        type="button"
+        onClick={() => setTryOnOpen(false)}
+      >
+        <X />
+      </button>
+
+      <div className="pd-modal-handle" />
+
+      <h2 className="pd-tryon-title">
+        AI Virtual Try On
+      </h2>
+
+      <p className="pd-tryon-subtitle">
+        Upload one full-body photo to see yourself wearing this product.
+      </p>
+
+      <div className="pd-tryon-guide">
+        <h3>Best photo tips</h3>
+
+        <p>✓ Stand facing the camera</p>
+        <p>✓ Full body visible</p>
+        <p>✓ Arms relaxed</p>
+        <p>✓ Plain background</p>
+        <p>✓ Good lighting</p>
+      </div>
+
+      {tryOnPreview && (
+        <div
+          className="pd-tryon-preview"
+          style={{
+            backgroundImage: `url("${tryOnPreview}")`,
+          }}
+        />
+      )}
+
+      <input
+        id="spotc-tryon-upload"
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={onTryOnImage}
+      />
+
+      <button
+        className="pd-tryon-upload"
+        type="button"
+        onClick={() =>
+          document
+            .getElementById("spotc-tryon-upload")
+            ?.click()
+        }
+      >
+        {tryOnImage
+          ? "Change Photo"
+          : "Upload Full Body Photo"}
+      </button>
+
+      <button
+        className="pd-tryon-generate"
+        type="button"
+        disabled={
+          !tryOnImage || tryOnLoading
+        }
+        onClick={generateTryOn}
+      >
+        {tryOnLoading
+          ? "Generating..."
+          : "Generate AI Try On"}
+      </button>
+
+      {tryOnResult && (
+        <>
+          <div className="pd-tryon-result">
+            <img
+              src={tryOnResult}
+              alt="AI Try On"
+            />
+          </div>
+
+          <div className="pd-tryon-actions">
+            <button
+              className="pd-tryon-save"
+              type="button"
+            >
+              Save Image
+            </button>
+
+            <button
+              className="pd-tryon-circle"
+              type="button"
+              onClick={openShoppingCircle}
+            >
+              Add to Shopping Circle
+            </button>
+          </div>
+        </>
+      )}
+    </section>
+  </div>
+)}
 
       <style jsx global>{`
         .pd-page{max-width:1240px;margin:0 auto;padding:24px 24px 0;color:#17120d}.pd-top{display:flex;justify-content:space-between;margin-bottom:22px}.pd-top button,.pd-top a{display:inline-flex;align-items:center;gap:7px;border:0;background:#fff;color:#17120d;text-decoration:none;padding:10px 14px;border-radius:999px;font-weight:800;box-shadow:0 6px 22px rgba(37,24,12,.08);cursor:pointer}.pd-top svg{width:18px}.pd-main{display:grid;grid-template-columns:minmax(0,1.06fr) minmax(380px,.94fr);gap:48px;align-items:start}.pd-image{position:relative;width:100%;aspect-ratio:4/5;border-radius:26px;background:#eee center/cover no-repeat;box-shadow:0 14px 45px rgba(37,24,12,.1)}.pd-discount-chip{position:absolute;left:16px;top:16px;padding:8px 11px;border-radius:10px;background:#f1b46d;color:#181008;font-size:12px;font-weight:900}
@@ -2333,6 +2499,231 @@ width:200px;
           .pd-buy-primary {
             padding: 0 5px !important;
             font-size: 12px !important;
+          }
+        }
+
+
+        /* =========================================================
+           SPOTC AI VIRTUAL TRY ON — FINAL
+        ========================================================= */
+
+        .pd-image > .pd-tryon-chip {
+          position: absolute !important;
+          left: auto !important;
+          top: auto !important;
+          right: 16px !important;
+          bottom: 16px !important;
+          z-index: 40 !important;
+          min-width: 112px !important;
+          height: 44px !important;
+          padding: 0 16px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: 7px !important;
+          border: 0 !important;
+          border-radius: 999px !important;
+          background: #171717 !important;
+          color: #ffffff !important;
+          font-family: inherit !important;
+          font-size: 14px !important;
+          font-weight: 900 !important;
+          line-height: 1 !important;
+          cursor: pointer !important;
+          box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28) !important;
+          transition: transform 0.2s ease, background 0.2s ease !important;
+        }
+
+        .pd-image > .pd-tryon-chip span {
+          color: #ffffff !important;
+        }
+
+        .pd-image > .pd-tryon-chip:hover {
+          transform: translateY(-2px) !important;
+          background: #000000 !important;
+        }
+
+        .pd-modal-backdrop:has(.pd-tryon-sheet) {
+          z-index: 5000 !important;
+        }
+
+        .pd-tryon-sheet {
+          position: relative !important;
+          width: min(620px, calc(100vw - 32px)) !important;
+          max-height: 90vh !important;
+          padding: 28px !important;
+          overflow-x: hidden !important;
+          overflow-y: auto !important;
+          box-sizing: border-box !important;
+          border: 1px solid #34353a !important;
+          border-radius: 28px !important;
+          background: #090a0d !important;
+          color: #ffffff !important;
+        }
+
+        .pd-tryon-title {
+          margin: 0 54px 8px 0 !important;
+          color: #ffffff !important;
+          font-size: 30px !important;
+          font-weight: 900 !important;
+          line-height: 1.1 !important;
+        }
+
+        .pd-tryon-subtitle {
+          margin: 0 0 22px !important;
+          color: #c7c8cc !important;
+          font-size: 15px !important;
+          line-height: 1.5 !important;
+        }
+
+        .pd-tryon-guide {
+          margin: 0 0 20px !important;
+          padding: 18px !important;
+          border: 1px solid #303238 !important;
+          border-radius: 18px !important;
+          background: #15161a !important;
+        }
+
+        .pd-tryon-guide h3 {
+          margin: 0 0 14px !important;
+          color: #ffffff !important;
+          font-size: 18px !important;
+          font-weight: 900 !important;
+        }
+
+        .pd-tryon-guide p {
+          margin: 9px 0 !important;
+          color: #eeeeef !important;
+          font-size: 14px !important;
+          line-height: 1.35 !important;
+        }
+
+        .pd-tryon-preview {
+          width: min(320px, 100%) !important;
+          aspect-ratio: 3 / 4 !important;
+          margin: 0 auto 20px !important;
+          border: 1px solid #34353a !important;
+          border-radius: 20px !important;
+          background-color: #1b1c20 !important;
+          background-position: center !important;
+          background-repeat: no-repeat !important;
+          background-size: cover !important;
+        }
+
+        .pd-tryon-upload,
+        .pd-tryon-generate {
+          width: 100% !important;
+          min-height: 54px !important;
+          margin: 0 !important;
+          padding: 0 18px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          border-radius: 15px !important;
+          font-family: inherit !important;
+          font-size: 15px !important;
+          font-weight: 900 !important;
+          cursor: pointer !important;
+          box-sizing: border-box !important;
+        }
+
+        .pd-tryon-upload {
+          border: 1px solid #44464d !important;
+          background: #ffffff !important;
+          color: #171717 !important;
+        }
+
+        .pd-tryon-generate {
+          margin-top: 12px !important;
+          border: 0 !important;
+          background: #eaa13a !important;
+          color: #17120d !important;
+        }
+
+        .pd-tryon-generate:disabled {
+          background: #383a40 !important;
+          color: #8f9197 !important;
+          opacity: 1 !important;
+          cursor: not-allowed !important;
+        }
+
+        .pd-tryon-result {
+          width: min(380px, 100%) !important;
+          margin: 22px auto 0 !important;
+        }
+
+        .pd-tryon-result img {
+          display: block !important;
+          width: 100% !important;
+          height: auto !important;
+          border: 1px solid #34353a !important;
+          border-radius: 20px !important;
+        }
+
+        .pd-tryon-actions {
+          display: grid !important;
+          grid-template-columns: 1fr 1fr !important;
+          gap: 12px !important;
+          margin-top: 16px !important;
+        }
+
+        .pd-tryon-save,
+        .pd-tryon-circle {
+          min-height: 52px !important;
+          padding: 0 14px !important;
+          border-radius: 14px !important;
+          font-family: inherit !important;
+          font-size: 14px !important;
+          font-weight: 900 !important;
+          cursor: pointer !important;
+        }
+
+        .pd-tryon-save {
+          border: 1px solid #484a50 !important;
+          background: #1c1d22 !important;
+          color: #ffffff !important;
+        }
+
+        .pd-tryon-circle {
+          border: 0 !important;
+          background: #22c765 !important;
+          color: #07150c !important;
+        }
+
+        @media (max-width: 700px) {
+          .pd-image > .pd-tryon-chip {
+            top: auto !important;
+            left: auto !important;
+            right: 10px !important;
+            bottom: 10px !important;
+            min-width: 96px !important;
+            height: 38px !important;
+            padding: 0 12px !important;
+            font-size: 12px !important;
+          }
+
+          .pd-modal-backdrop:has(.pd-tryon-sheet) {
+            align-items: flex-end !important;
+            padding: 0 !important;
+          }
+
+          .pd-tryon-sheet {
+            width: 100% !important;
+            max-width: 100% !important;
+            max-height: 92dvh !important;
+            padding: 22px 18px calc(22px + env(safe-area-inset-bottom)) !important;
+            border-right: 0 !important;
+            border-bottom: 0 !important;
+            border-left: 0 !important;
+            border-radius: 26px 26px 0 0 !important;
+          }
+
+          .pd-tryon-title {
+            font-size: 25px !important;
+          }
+
+          .pd-tryon-actions {
+            grid-template-columns: 1fr !important;
           }
         }
 
