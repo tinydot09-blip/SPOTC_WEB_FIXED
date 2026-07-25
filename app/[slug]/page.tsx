@@ -1012,7 +1012,7 @@ export default function BusinessPage() {
 
   return (
     <>
-      <main className="business-page">
+      <main className="page business-page">
         <section className="business-hero">
           <div
             className="business-cover"
