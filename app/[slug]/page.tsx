@@ -204,7 +204,7 @@ function getPartnerDocumentId(
 function BusinessPageLoader() {
   return (
     <main
-      className="business-page business-page-loading"
+      className="page business-page business-page-loading"
       aria-label="Loading business"
       aria-busy="true"
     >
@@ -1411,7 +1411,7 @@ export default function BusinessPage() {
                           SPOTC points
                         </div>
 
-                        <div className="product-actions">
+                        <div className="product-actions business-product-actions">
                           <a
                             className="product-compare-online"
                             target="_blank"
@@ -1425,9 +1425,25 @@ export default function BusinessPage() {
                             <GitCompareArrows
                               size={16}
                             />
-                            Compare
-                            Online
+                            Compare Online
                           </a>
+
+                          <button
+                            type="button"
+                            className="product-ask-friends"
+                            onClick={() => {
+                              router.push(
+                                `/product/${encodeURIComponent(
+                                  String(product.id),
+                                )}?askFriends=1`,
+                              );
+                            }}
+                          >
+                            <MessageCircle
+                              size={16}
+                            />
+                            Ask Friends
+                          </button>
 
                           <button
                             type="button"
@@ -1675,6 +1691,112 @@ export default function BusinessPage() {
         )}
 
       <style jsx global>{`
+        /* =========================================================
+           BUSINESS PAGE — HEADER-MATCHED CONTENT WIDTH
+        ========================================================= */
+
+        .business-page {
+          width: 100% !important;
+          max-width: 1440px !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+          padding-left: 24px !important;
+          padding-right: 24px !important;
+          box-sizing: border-box !important;
+        }
+
+        .business-page > .business-hero,
+        .business-page > .business-shop,
+        .business-page .business-profile,
+        .business-page .shop-partner-card,
+        .business-page .business-shop-title,
+        .business-page .shop-toolbar,
+        .business-page .category-strip,
+        .business-page .product-grid,
+        .business-page .business-product-loading-grid {
+          width: 100% !important;
+          max-width: none !important;
+          margin-left: 0 !important;
+          margin-right: 0 !important;
+          box-sizing: border-box !important;
+        }
+
+        .business-product-actions {
+          display: grid !important;
+          grid-template-columns:
+            minmax(0, 1fr)
+            minmax(0, 1fr)
+            auto;
+          gap: 8px !important;
+          align-items: stretch !important;
+        }
+
+        .product-ask-friends {
+          min-width: 0;
+          min-height: 38px;
+          padding: 0 12px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          border: 1px solid #d7c08e;
+          border-radius: 999px;
+          color: #604313;
+          background: #fff8e8;
+          font-family: inherit;
+          font-size: 13px;
+          font-weight: 800;
+          white-space: nowrap;
+          cursor: pointer;
+          transition:
+            background 160ms ease,
+            border-color 160ms ease,
+            transform 160ms ease;
+        }
+
+        .product-ask-friends:hover {
+          border-color: #bd9651;
+          background: #ffefca;
+          transform: translateY(-1px);
+        }
+
+        @media (max-width: 900px) {
+          .business-product-actions {
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+          }
+
+          .business-product-actions
+            .product-add-button {
+            grid-column: 1 / -1;
+          }
+        }
+
+        @media (max-width: 700px) {
+          .business-page {
+            max-width: 100% !important;
+            padding-left: 14px !important;
+            padding-right: 14px !important;
+          }
+
+          .business-product-actions {
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+            gap: 7px !important;
+          }
+
+          .business-product-actions
+            .product-add-button {
+            grid-column: 1 / -1;
+          }
+
+          .product-ask-friends {
+            min-height: 36px;
+            padding: 0 9px;
+            font-size: 12px;
+          }
+        }
+
         .shop-partner-card {
           width: 100%;
           margin: 0 0 30px;
