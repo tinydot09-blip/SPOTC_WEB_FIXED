@@ -1630,22 +1630,26 @@ const generateTryOn = async () => {
       </p>
 
       <div className="pd-tryon-guide">
-        <div className="pd-tryon-guide-text">
-          <h3>Best photo tips</h3>
+        <div className="pd-tryon-guide-copy">
+          <span className="pd-tryon-guide-kicker">PHOTO GUIDE</span>
 
-          <p>✓ Stand facing the camera</p>
-          <p>✓ Full body visible</p>
-          <p>✓ Arms relaxed</p>
-          <p>✓ Plain background</p>
-          <p>✓ Good lighting</p>
+          <h3>Use a clear full-body photo</h3>
+
+          <ul className="pd-tryon-tip-list">
+            <li><span>✓</span>Stand facing the camera</li>
+            <li><span>✓</span>Keep your full body visible</li>
+            <li><span>✓</span>Keep your arms relaxed</li>
+            <li><span>✓</span>Use a plain background</li>
+            <li><span>✓</span>Use bright, even lighting</li>
+          </ul>
         </div>
 
         <figure className="pd-tryon-sample">
           <img
-            src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAyNDAgMzYwJz4KPHJlY3Qgd2lkdGg9JzI0MCcgaGVpZ2h0PSczNjAnIHJ4PScyNCcgZmlsbD0nI2YzZjFlYycvPgo8Y2lyY2xlIGN4PScxMjAnIGN5PSc2Micgcj0nMjgnIGZpbGw9JyNkN2IzOGQnLz4KPHBhdGggZD0nTTkyIDEwM2MxMC0xMSA0Ni0xMSA1NiAwbDE2IDc4LTIwIDEyLTktNTR2MTUwaC0zMFYxMzlsLTkgNTQtMjAtMTJ6JyBmaWxsPScjZmZmZmZmJyBzdHJva2U9JyNkN2Q3ZDcnIHN0cm9rZS13aWR0aD0nMycvPgo8cGF0aCBkPSdNMTA1IDI4OWgzMHY0NmgtMzB6JyBmaWxsPScjMjQyNDI0Jy8+CjxwYXRoIGQ9J003OSAzMzVoNDh2MTJINzl6TTExMyAzMzVoNDh2MTJoLTQ4eicgZmlsbD0nI2ZmZmZmZicgc3Ryb2tlPScjY2ZjZmNmJyBzdHJva2Utd2lkdGg9JzInLz4KPHBhdGggZD0nTTEyMCAzMWMxNiAwIDI5IDEwIDI5IDI0LTktNi0xNy04LTI5LThzLTIwIDItMjkgOGMwLTE0IDEzLTI0IDI5LTI0eicgZmlsbD0nIzJhMjExYycvPgo8Y2lyY2xlIGN4PSc1NScgY3k9Jzc1JyByPScxOCcgZmlsbD0nIzIyYzU1ZScvPgo8cGF0aCBkPSdNNDcgNzVsNiA2IDExLTEzJyBmaWxsPSdub25lJyBzdHJva2U9J3doaXRlJyBzdHJva2Utd2lkdGg9JzUnIHN0cm9rZS1saW5lY2FwPSdyb3VuZCcgc3Ryb2tlLWxpbmVqb2luPSdyb3VuZCcvPgo8dGV4dCB4PScxMjAnIHk9JzIwJyB0ZXh0LWFuY2hvcj0nbWlkZGxlJyBmb250LWZhbWlseT0nQXJpYWwnIGZvbnQtc2l6ZT0nMTMnIGZvbnQtd2VpZ2h0PSc3MDAnIGZpbGw9JyMxNjY1MzQnPkdPT0QgU0FNUExFPC90ZXh0Pgo8L3N2Zz4="
-            alt="Sample full-body photo showing the recommended pose"
+            src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgNDgwIj4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYmciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZjRmMWVhIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI2RlZDhjZCIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0ic2hpcnQiIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZmZmZmZmIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI2VjZWNlYyIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxmaWx0ZXIgaWQ9InNoYWRvdyIgeD0iLTMwJSIgeT0iLTMwJSIgd2lkdGg9IjE2MCUiIGhlaWdodD0iMTYwJSI+CiAgICAgIDxmZURyb3BTaGFkb3cgZHg9IjAiIGR5PSIxMCIgc3RkRGV2aWF0aW9uPSIxMiIgZmxvb2QtY29sb3I9IiMwMDAwMDAiIGZsb29kLW9wYWNpdHk9Ii4xNiIvPgogICAgPC9maWx0ZXI+CiAgPC9kZWZzPgoKICA8cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjQ4MCIgcng9IjI4IiBmaWxsPSJ1cmwoI2JnKSIvPgogIDxlbGxpcHNlIGN4PSIxNjAiIGN5PSI0MzgiIHJ4PSI3NCIgcnk9IjE0IiBmaWxsPSIjMDAwMDAwIiBvcGFjaXR5PSIuMTIiLz4KCiAgPGcgZmlsdGVyPSJ1cmwoI3NoYWRvdykiPgogICAgPGNpcmNsZSBjeD0iMTYwIiBjeT0iOTIiIHI9IjM0IiBmaWxsPSIjYzg5NjZmIi8+CiAgICA8cGF0aCBkPSJNMTI3IDg3YzMtMjggMTgtNDQgMzUtNDQgMjQgMCAzOSAxNyAzNyA0NS0xMy05LTI0LTEzLTM4LTEzLTEzIDAtMjQgNC0zNCAxMnoiIGZpbGw9IiMyMjIwMWYiLz4KCiAgICA8cGF0aCBkPSJNMTE3IDE0MWMxNC0xMyA3Mi0xMyA4NiAwbDIyIDEwNC0yOCAxMC0xNC02OXYxMThoLTQ2VjE4NmwtMTQgNjktMjgtMTB6IgogICAgICAgICAgZmlsbD0idXJsKCNzaGlydCkiIHN0cm9rZT0iI2M4YzhjOCIgc3Ryb2tlLXdpZHRoPSIyLjUiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KCiAgICA8cGF0aCBkPSJNMTM3IDMwM2g0NnYxMDFoLTQ2eiIgZmlsbD0iIzIzMjMyMyIvPgogICAgPHBhdGggZD0iTTEzNyA0MDRoMjB2MjloLTM3di0xMGMwLTEwIDctMTkgMTctMTl6IiBmaWxsPSIjZmZmZmZmIiBzdHJva2U9IiNjN2M3YzciIHN0cm9rZS13aWR0aD0iMiIvPgogICAgPHBhdGggZD0iTTE2MyA0MDRoMjBjMTAgMCAxNyA5IDE3IDE5djEwaC0zN3oiIGZpbGw9IiNmZmZmZmYiIHN0cm9rZT0iI2M3YzdjNyIgc3Ryb2tlLXdpZHRoPSIyIi8+CgogICAgPHBhdGggZD0iTTEwOCAxNTRsLTI2IDEwMyIgc3Ryb2tlPSIjYzg5NjZmIiBzdHJva2Utd2lkdGg9IjE4IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICAgIDxwYXRoIGQ9Ik0yMTIgMTU0bDI2IDEwMyIgc3Ryb2tlPSIjYzg5NjZmIiBzdHJva2Utd2lkdGg9IjE4IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8L2c+CgogIDxnPgogICAgPHJlY3QgeD0iMjYiIHk9IjI0IiB3aWR0aD0iMTE2IiBoZWlnaHQ9IjM0IiByeD0iMTciIGZpbGw9IiMwZDdhNDYiLz4KICAgIDxjaXJjbGUgY3g9IjQ1IiBjeT0iNDEiIHI9IjkiIGZpbGw9IiNmZmZmZmYiLz4KICAgIDxwYXRoIGQ9Ik00MC41IDQxbDMgMyA2LTciIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzBkN2E0NiIgc3Ryb2tlLXdpZHRoPSIyLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgogICAgPHRleHQgeD0iNTkiIHk9IjQ2IiBmb250LWZhbWlseT0iQXJpYWwsIEhlbHZldGljYSwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjcwMCIgZmlsbD0iI2ZmZmZmZiI+UmVjb21tZW5kZWQ8L3RleHQ+CiAgPC9nPgo8L3N2Zz4="
+            alt="Recommended full-body pose for virtual try-on"
           />
-          <figcaption>Good sample</figcaption>
+          <figcaption>Recommended pose</figcaption>
         </figure>
       </div>
 
@@ -2837,6 +2841,229 @@ width:200px;
 
           .pd-tryon-guide-text p {
             font-size: 11px !important;
+          }
+        }
+
+
+        /* =========================================================
+           AI TRY ON — PROFESSIONAL GUIDE OVERRIDES
+        ========================================================= */
+
+        .pd-tryon-sheet {
+          width: min(640px, calc(100vw - 32px)) !important;
+          padding: 30px !important;
+          border: 1px solid rgba(255,255,255,.12) !important;
+          border-radius: 28px !important;
+          background:
+            radial-gradient(circle at top right, rgba(255,255,255,.035), transparent 34%),
+            #090a0d !important;
+          box-shadow: 0 34px 90px rgba(0,0,0,.56) !important;
+        }
+
+        .pd-tryon-title {
+          margin: 0 56px 8px 0 !important;
+          font-size: 31px !important;
+          font-weight: 950 !important;
+          letter-spacing: -.03em !important;
+        }
+
+        .pd-tryon-subtitle {
+          margin: 0 0 22px !important;
+          color: #b8bbc2 !important;
+          font-size: 15px !important;
+          line-height: 1.5 !important;
+        }
+
+        .pd-tryon-guide {
+          display: grid !important;
+          grid-template-columns: minmax(0, 1fr) 156px !important;
+          align-items: center !important;
+          gap: 24px !important;
+          margin: 0 0 20px !important;
+          padding: 22px !important;
+          border: 1px solid rgba(255,255,255,.105) !important;
+          border-radius: 22px !important;
+          background:
+            linear-gradient(145deg, rgba(255,255,255,.035), rgba(255,255,255,.015)),
+            #121318 !important;
+        }
+
+        .pd-tryon-guide-copy {
+          min-width: 0 !important;
+        }
+
+        .pd-tryon-guide-kicker {
+          display: block !important;
+          margin: 0 0 7px !important;
+          color: #34d17c !important;
+          font-size: 10px !important;
+          font-weight: 900 !important;
+          letter-spacing: .15em !important;
+        }
+
+        .pd-tryon-guide-copy h3 {
+          margin: 0 0 16px !important;
+          color: #ffffff !important;
+          font-size: 20px !important;
+          font-weight: 900 !important;
+          line-height: 1.2 !important;
+          letter-spacing: -.015em !important;
+        }
+
+        .pd-tryon-tip-list {
+          display: grid !important;
+          gap: 10px !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          list-style: none !important;
+        }
+
+        .pd-tryon-tip-list li {
+          display: flex !important;
+          align-items: flex-start !important;
+          gap: 9px !important;
+          color: #e4e6ea !important;
+          font-size: 14px !important;
+          font-weight: 650 !important;
+          line-height: 1.35 !important;
+        }
+
+        .pd-tryon-tip-list li span {
+          width: 18px !important;
+          height: 18px !important;
+          flex: 0 0 18px !important;
+          display: grid !important;
+          place-items: center !important;
+          margin-top: 1px !important;
+          border-radius: 50% !important;
+          color: #07150c !important;
+          background: #34d17c !important;
+          font-size: 11px !important;
+          font-weight: 950 !important;
+        }
+
+        .pd-tryon-sample {
+          position: relative !important;
+          width: 156px !important;
+          margin: 0 !important;
+          padding: 8px !important;
+          overflow: hidden !important;
+          border: 1px solid rgba(255,255,255,.12) !important;
+          border-radius: 18px !important;
+          background: #0d0e12 !important;
+          box-sizing: border-box !important;
+        }
+
+        .pd-tryon-sample img {
+          display: block !important;
+          width: 100% !important;
+          aspect-ratio: 2 / 3 !important;
+          object-fit: cover !important;
+          border-radius: 13px !important;
+          background: #e9e4da !important;
+        }
+
+        .pd-tryon-sample figcaption {
+          margin-top: 8px !important;
+          color: #c8cbd1 !important;
+          font-size: 10px !important;
+          font-weight: 800 !important;
+          line-height: 1.2 !important;
+          text-align: center !important;
+          text-transform: uppercase !important;
+          letter-spacing: .08em !important;
+        }
+
+        .pd-tryon-upload,
+        .pd-tryon-generate {
+          min-height: 54px !important;
+          border-radius: 16px !important;
+          font-size: 15px !important;
+          font-weight: 900 !important;
+        }
+
+        .pd-tryon-upload {
+          border: 1px solid rgba(255,255,255,.12) !important;
+          background: #ffffff !important;
+          color: #171717 !important;
+          box-shadow: 0 8px 22px rgba(0,0,0,.16) !important;
+        }
+
+        .pd-tryon-generate {
+          margin-top: 12px !important;
+          background: linear-gradient(135deg, #f2b35f, #e49b37) !important;
+          color: #18120b !important;
+        }
+
+        .pd-tryon-generate:disabled {
+          background: #34363d !important;
+          color: #8b8e96 !important;
+          box-shadow: none !important;
+        }
+
+        @media (max-width: 700px) {
+          .pd-tryon-sheet {
+            width: 100% !important;
+            max-height: 92dvh !important;
+            padding: 22px 18px calc(22px + env(safe-area-inset-bottom)) !important;
+            border-radius: 26px 26px 0 0 !important;
+          }
+
+          .pd-tryon-title {
+            font-size: 26px !important;
+          }
+
+          .pd-tryon-guide {
+            grid-template-columns: minmax(0, 1fr) 112px !important;
+            gap: 14px !important;
+            padding: 16px !important;
+          }
+
+          .pd-tryon-sample {
+            width: 112px !important;
+            padding: 6px !important;
+            border-radius: 15px !important;
+          }
+
+          .pd-tryon-guide-copy h3 {
+            margin-bottom: 12px !important;
+            font-size: 16px !important;
+          }
+
+          .pd-tryon-tip-list {
+            gap: 7px !important;
+          }
+
+          .pd-tryon-tip-list li {
+            gap: 7px !important;
+            font-size: 12px !important;
+          }
+
+          .pd-tryon-tip-list li span {
+            width: 16px !important;
+            height: 16px !important;
+            flex-basis: 16px !important;
+            font-size: 9px !important;
+          }
+        }
+
+        @media (max-width: 430px) {
+          .pd-tryon-guide {
+            grid-template-columns: minmax(0, 1fr) 94px !important;
+            gap: 10px !important;
+            padding: 14px !important;
+          }
+
+          .pd-tryon-sample {
+            width: 94px !important;
+          }
+
+          .pd-tryon-tip-list li {
+            font-size: 11px !important;
+          }
+
+          .pd-tryon-guide-kicker {
+            font-size: 9px !important;
           }
         }
 
