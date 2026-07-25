@@ -769,9 +769,10 @@ if (!signedInUser) {
 
       <style jsx global>{`
         .spotc-app-shell {
+          position: relative;
           width: 100%;
           max-width: 100vw;
-          min-height: 0;
+          min-height: 100vh;
           height: auto;
           overflow: visible;
           background: #f8f6f1;
@@ -1303,8 +1304,32 @@ if (!signedInUser) {
         }
 
         .spotc-site-content {
+          position: relative;
+          z-index: 1;
           min-height: 0;
           height: auto;
+        }
+
+        /*
+         * DESKTOP HEADER FIX
+         * The header is fixed to the browser viewport instead of relying on
+         * sticky positioning inside page-specific scrolling containers.
+         * This keeps it fixed on Shop, Business, Cart and Product pages.
+         */
+        @media (min-width: 701px) {
+          .spotc-site-header {
+            position: fixed !important;
+            top: 0 !important;
+            right: 0 !important;
+            left: 0 !important;
+            z-index: 10000 !important;
+            width: 100% !important;
+            transform: none !important;
+          }
+
+          .spotc-site-content {
+            padding-top: 72px;
+          }
         }
 
         .spotc-mobile-navigation {
