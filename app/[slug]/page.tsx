@@ -1339,6 +1339,21 @@ export default function BusinessPage() {
                             size={18}
                           />
                         </button>
+
+                        <button
+                          type="button"
+                          className="compare-check"
+                          onClick={() => {
+                            router.push(
+                              `/product/${encodeURIComponent(
+                                String(product.id),
+                              )}?askFriends=1`,
+                            );
+                          }}
+                        >
+                          <GitCompareArrows size={15} />
+                          Ask Friends
+                        </button>
                       </div>
 
                       <div className="product-copy">
@@ -1411,7 +1426,7 @@ export default function BusinessPage() {
                           SPOTC points
                         </div>
 
-                        <div className="product-actions business-product-actions">
+                        <div className="product-actions">
                           <a
                             className="product-compare-online"
                             target="_blank"
@@ -1427,23 +1442,6 @@ export default function BusinessPage() {
                             />
                             Compare Online
                           </a>
-
-                          <button
-                            type="button"
-                            className="product-ask-friends"
-                            onClick={() => {
-                              router.push(
-                                `/product/${encodeURIComponent(
-                                  String(product.id),
-                                )}?askFriends=1`,
-                              );
-                            }}
-                          >
-                            <MessageCircle
-                              size={16}
-                            />
-                            Ask Friends
-                          </button>
 
                           <button
                             type="button"
@@ -1721,79 +1719,48 @@ export default function BusinessPage() {
           box-sizing: border-box !important;
         }
 
-        .business-product-actions {
-          display: grid !important;
-          grid-template-columns:
-            minmax(0, 1fr)
-            minmax(0, 1fr)
-            auto;
-          gap: 8px !important;
-          align-items: stretch !important;
+        .business-page .product-image-wrap {
+          position: relative;
         }
 
-        .product-ask-friends {
-          min-width: 0;
-          min-height: 38px;
-          padding: 0 12px;
+        .business-page .compare-check {
+          position: absolute;
+          left: 12px;
+          bottom: 12px;
+          z-index: 5;
+          min-height: 34px;
+          padding: 0 13px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
           gap: 7px;
-          border: 1px solid #d7c08e;
+          border: 1px solid rgba(17, 17, 17, 0.08);
           border-radius: 999px;
-          color: #604313;
-          background: #fff8e8;
+          color: #171717;
+          background: rgba(255, 255, 255, 0.96);
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
           font-family: inherit;
-          font-size: 13px;
-          font-weight: 800;
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1;
           white-space: nowrap;
           cursor: pointer;
-          transition:
-            background 160ms ease,
-            border-color 160ms ease,
-            transform 160ms ease;
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
         }
 
-        .product-ask-friends:hover {
-          border-color: #bd9651;
-          background: #ffefca;
+        .business-page .compare-check:hover {
+          background: #ffffff;
           transform: translateY(-1px);
         }
 
-        @media (max-width: 900px) {
-          .business-product-actions {
-            grid-template-columns:
-              repeat(2, minmax(0, 1fr));
-          }
-
-          .business-product-actions
-            .product-add-button {
-            grid-column: 1 / -1;
-          }
-        }
-
         @media (max-width: 700px) {
-          .business-page {
-            max-width: 100% !important;
-            padding-left: 14px !important;
-            padding-right: 14px !important;
-          }
-
-          .business-product-actions {
-            grid-template-columns:
-              repeat(2, minmax(0, 1fr));
-            gap: 7px !important;
-          }
-
-          .business-product-actions
-            .product-add-button {
-            grid-column: 1 / -1;
-          }
-
-          .product-ask-friends {
-            min-height: 36px;
-            padding: 0 9px;
-            font-size: 12px;
+          .business-page .compare-check {
+            left: 10px;
+            bottom: 10px;
+            min-height: 32px;
+            padding: 0 11px;
+            font-size: 11px;
           }
         }
 
