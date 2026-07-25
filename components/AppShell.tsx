@@ -822,22 +822,23 @@ if (!signedInUser) {
         }
 
       .spotc-header-inner {
-  width: min(1200px, calc(100% - 40px));
-  max-width: 1200px;
+  width: 100%;
+  max-width: 1440px;
   height: 100%;
+
   margin: 0 auto;
+  padding: 0 24px;
 
   display: grid;
   grid-template-columns:
-    190px
-    360px
-    minmax(280px, 1fr)
+    220px
+    auto
+    minmax(320px, 1fr)
     auto;
 
   align-items: center;
-  gap: 20px;
+  gap: 24px;
 
-  padding: 0;
   box-sizing: border-box;
   overflow: visible;
 }
