@@ -322,19 +322,101 @@
     grid-template-columns: 1fr;
     gap: 0;
   }
-  /* =========================================================
-   SPOTC DESKTOP — SHARED HEADER AND PAGE WIDTH
-   Header and page content use the same 1200px container
+/* =========================================================
+   SPOTC DESKTOP — ONE SHARED WIDTH FOR ALL PAGE CONTENT
 ========================================================= */
 
 @media (min-width: 981px) {
-  .spotc-header-inner,
-  .spotc-site-content > .page {
-    width: min(1440px, calc(100% - 40px)) !important;
+  /*
+   * Shared outer page containers
+   */
+  .page,
+  .business-page,
+  .business-public-page,
+  .product-page,
+  .pd-page,
+  .offers-page,
+  .shop-page,
+  .spots-page {
+    width: 100% !important;
     max-width: 1440px !important;
     margin-left: auto !important;
     margin-right: auto !important;
+    padding-left: 24px !important;
+    padding-right: 24px !important;
     box-sizing: border-box !important;
+  }
+
+  /*
+   * Remove narrower limits from common inner wrappers.
+   * They should fill the shared 1392px inner content width.
+   */
+  .business-page > *,
+  .business-public-page > *,
+  .product-page > *,
+  .pd-page > *,
+  .offers-page > *,
+  .shop-page > *,
+  .spots-page > * {
+    max-width: none !important;
+  }
+
+  /*
+   * Business page full-width sections
+   */
+  .business-page .business-hero,
+  .business-page .business-header,
+  .business-page .business-banner,
+  .business-page .business-profile-card,
+  .business-page .business-partner-card,
+  .business-page .business-products,
+  .business-page .shop-toolbar,
+  .business-page .product-grid,
+  .business-public-page .business-hero,
+  .business-public-page .business-header,
+  .business-public-page .business-banner,
+  .business-public-page .business-profile-card,
+  .business-public-page .business-partner-card,
+  .business-public-page .business-products,
+  .business-public-page .shop-toolbar,
+  .business-public-page .product-grid {
+    width: 100% !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  /*
+   * Product detail full-width content block
+   */
+  .product-page .product-detail,
+  .product-page .product-detail-grid,
+  .product-page .pd-shell,
+  .product-page .pd-main,
+  .pd-page .product-detail,
+  .pd-page .product-detail-grid,
+  .pd-page .pd-shell,
+  .pd-page .pd-main {
+    width: 100% !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  /*
+   * Shop and Spots grids
+   */
+  .shop-page .shop-toolbar,
+  .shop-page .category-strip,
+  .shop-page .product-grid,
+  .spots-page .video-grid,
+  .spots-page .spots-grid {
+    width: 100% !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
 }
 }
