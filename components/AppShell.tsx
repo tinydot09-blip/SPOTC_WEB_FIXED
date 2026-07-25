@@ -821,26 +821,24 @@ if (!signedInUser) {
           backdrop-filter: blur(16px);
         }
 
-       .spotc-header-inner {
-  width: min(1600px, calc(100vw - 48px));
-  max-width: 1600px;
-
+      .spotc-header-inner {
+  width: min(1200px, calc(100% - 40px));
+  max-width: 1200px;
   height: 100%;
   margin: 0 auto;
 
   display: grid;
   grid-template-columns:
-    240px
-    auto
-    minmax(420px, 1fr)
+    190px
+    360px
+    minmax(280px, 1fr)
     auto;
 
   align-items: center;
-  gap: 28px;
+  gap: 20px;
 
-  padding: 0 8px;
+  padding: 0;
   box-sizing: border-box;
-
   overflow: visible;
 }
 
