@@ -816,7 +816,16 @@ export function ProductGrid({
                 </Link>
 
                 <div className="product-stock-row">
-                  <small>
+                  <span className="product-delivery-badge">
+                    <ShoppingBag
+                      size={13}
+                      strokeWidth={2}
+                      aria-hidden="true"
+                    />
+                    <span>15 mins delivery</span>
+                  </span>
+
+                  <small className="product-stock-text">
                     {stock > 0
                       ? `${stock} left`
                       : 'In stock'}
@@ -894,6 +903,71 @@ export function ProductGrid({
       )}
 
       <style jsx global>{`
+        /*
+         * SHOP PRODUCT CARD — DELIVERY + STOCK ROW
+         * Matches the placement used on the Business product cards.
+         */
+        .product-card.rich .product-stock-row {
+          width: 100%;
+          min-height: 25px;
+          margin: 7px 0 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .product-card.rich .product-delivery-badge {
+          min-width: 0;
+          height: 24px;
+          padding: 0 9px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          border-radius: 999px;
+          color: #087b3f;
+          background: #e8f7ed;
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1;
+          white-space: nowrap;
+        }
+
+        .product-card.rich .product-delivery-badge svg {
+          width: 13px;
+          height: 13px;
+          flex: 0 0 13px;
+        }
+
+        .product-card.rich .product-stock-text {
+          flex: 0 0 auto;
+          margin: 0;
+          color: #7b6a43;
+          font-size: 12px;
+          font-weight: 500;
+          line-height: 1;
+          white-space: nowrap;
+        }
+
+        @media (max-width: 700px) {
+          .product-card.rich .product-stock-row {
+            margin-top: 6px;
+            margin-bottom: 8px;
+          }
+
+          .product-card.rich .product-delivery-badge {
+            height: 23px;
+            padding: 0 8px;
+            gap: 4px;
+            font-size: 11px;
+          }
+
+          .product-card.rich .product-stock-text {
+            font-size: 11px;
+          }
+        }
+
         .spotc-compare-float {
           position: fixed !important;
           top: 88px !important;

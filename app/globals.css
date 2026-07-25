@@ -18,7 +18,7 @@
 
 /* =========================================================
    SHOP MOBILE — FINAL LIVE FOOTER GAP
-   KEEP THIS AT THE ABSOLUTE END OF globals.css
+   KEEP THIS AFTER ALL IMPORTS
 ========================================================= */
 
 @media (max-width: 760px) {
@@ -41,147 +41,300 @@
   body:has(.shop-page) .spotc-footer {
     display: block !important;
     margin-top: 40px !important;
+  }
 }
-/* ===========================
+
+/* =========================================================
    SPOTC AI TRY ON
-=========================== */
+========================================================= */
 
-.pd-tryon-chip{
-position:absolute;
-top:16px;
-left:16px;
-z-index:25;
-display:flex;
-align-items:center;
-gap:8px;
-padding:10px 16px;
-border:none;
-border-radius:999px;
-background:#ffffff;
-color:#171717;
-font-weight:800;
-cursor:pointer;
-box-shadow:0 10px 25px rgba(0,0,0,.15);
+.pd-tryon-chip {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 25;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 10px 16px;
+
+  border: none;
+  border-radius: 999px;
+
+  background: #ffffff;
+  color: #171717;
+
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+
+  cursor: pointer;
+
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease;
 }
 
-.pd-tryon-sheet{
-width:min(560px,95vw);
-padding:28px;
+.pd-tryon-chip:hover {
+  background: #f8f8f8;
+  transform: translateY(-1px);
+  box-shadow: 0 13px 30px rgba(0, 0, 0, 0.18);
 }
 
-.pd-tryon-title{
-margin:0;
-font-size:34px;
-font-weight:900;
+.pd-tryon-chip:active {
+  transform: scale(0.98);
 }
 
-.pd-tryon-subtitle{
-margin:12px 0 24px;
-color:#cfcfcf;
-font-size:16px;
+.pd-tryon-sheet {
+  width: min(560px, 95vw);
+  max-height: 90vh;
+
+  padding: 28px;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  border-radius: 26px;
+
+  background: #0f0f0f;
+  color: #ffffff;
+
+  box-sizing: border-box;
 }
 
-.pd-tryon-guide{
-padding:18px;
-border-radius:18px;
-background:#151515;
-margin-bottom:24px;
+.pd-tryon-title {
+  margin: 0;
+
+  color: #ffffff;
+
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1.08;
 }
 
-.pd-tryon-guide h3{
-margin:0 0 14px;
-font-size:20px;
+.pd-tryon-subtitle {
+  margin: 12px 0 24px;
+
+  color: #cfcfcf;
+
+  font-size: 16px;
+  line-height: 1.5;
 }
 
-.pd-tryon-guide p{
-margin:10px 0;
-font-size:16px;
+.pd-tryon-guide {
+  margin-bottom: 24px;
+  padding: 18px;
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+
+  background: #151515;
 }
 
-.pd-tryon-preview{
-width:100%;
-aspect-ratio:3/4;
-border-radius:20px;
-background:#222 center/cover no-repeat;
-margin-bottom:22px;
+.pd-tryon-guide h3 {
+  margin: 0 0 14px;
+
+  color: #ffffff;
+
+  font-size: 20px;
+  font-weight: 850;
 }
 
-.pd-tryon-result img{
-width:100%;
-display:block;
-border-radius:20px;
-margin-top:20px;
+.pd-tryon-guide p {
+  margin: 10px 0;
+
+  color: #dedede;
+
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.pd-tryon-preview {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+
+  margin-bottom: 22px;
+
+  overflow: hidden;
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+
+  background-color: #222222;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.pd-tryon-result {
+  width: 100%;
+}
+
+.pd-tryon-result img {
+  width: 100%;
+  height: auto;
+
+  display: block;
+
+  margin-top: 20px;
+
+  border-radius: 20px;
+
+  object-fit: cover;
 }
 
 .pd-tryon-upload,
 .pd-tryon-generate,
 .pd-tryon-save,
-.pd-tryon-circle{
+.pd-tryon-circle {
+  width: 100%;
+  height: 54px;
 
-width:100%;
-height:54px;
-border:none;
-border-radius:16px;
-font-size:16px;
-font-weight:800;
-cursor:pointer;
-margin-top:14px;
-transition:.2s;
+  margin-top: 14px;
+  padding: 0 18px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+  border-radius: 16px;
+
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+
+  cursor: pointer;
+
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    filter 180ms ease;
+
+  box-sizing: border-box;
 }
 
-.pd-tryon-upload{
-background:#ffffff;
-color:#171717;
+.pd-tryon-upload:hover,
+.pd-tryon-generate:hover,
+.pd-tryon-save:hover,
+.pd-tryon-circle:hover {
+  filter: brightness(0.96);
 }
 
-.pd-tryon-generate{
-background:#0ea5e9;
-color:white;
+.pd-tryon-upload:active,
+.pd-tryon-generate:active,
+.pd-tryon-save:active,
+.pd-tryon-circle:active {
+  transform: scale(0.99);
 }
 
-.pd-tryon-generate:disabled{
-opacity:.45;
-cursor:not-allowed;
+.pd-tryon-upload {
+  background: #ffffff;
+  color: #171717;
 }
 
-.pd-tryon-actions{
-display:grid;
-grid-template-columns:1fr 1fr;
-gap:14px;
-margin-top:18px;
+.pd-tryon-generate {
+  background: #0ea5e9;
+  color: #ffffff;
 }
 
-.pd-tryon-save{
-background:#2b2b2b;
-color:#fff;
+.pd-tryon-generate:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
 }
 
-.pd-tryon-circle{
-background:#16a34a;
-color:#fff;
+.pd-tryon-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+
+  margin-top: 18px;
 }
 
-@media(max-width:700px){
-
-.pd-tryon-sheet{
-width:100%;
-max-height:92vh;
-border-radius:28px 28px 0 0;
-position:fixed;
-left:0;
-right:0;
-bottom:0;
-padding:24px;
-overflow:auto;
+.pd-tryon-save {
+  background: #2b2b2b;
+  color: #ffffff;
 }
 
-.pd-tryon-actions{
-grid-template-columns:1fr;
+.pd-tryon-circle {
+  background: #16a34a;
+  color: #ffffff;
 }
 
-.pd-tryon-title{
-font-size:28px;
-}
+/* =========================================================
+   SPOTC AI TRY ON — MOBILE
+========================================================= */
 
+@media (max-width: 700px) {
+  .pd-tryon-chip {
+    top: 12px;
+    left: 12px;
+
+    padding: 9px 13px;
+
+    font-size: 13px;
+  }
+
+  .pd-tryon-sheet {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+
+    width: 100%;
+    max-width: 100%;
+    max-height: 92vh;
+
+    padding:
+      24px
+      20px
+      calc(24px + env(safe-area-inset-bottom, 0px));
+
+    overflow-x: hidden;
+    overflow-y: auto;
+
+    border-radius: 28px 28px 0 0;
+
+    box-sizing: border-box;
+  }
+
+  .pd-tryon-title {
+    font-size: 28px;
+  }
+
+  .pd-tryon-subtitle {
+    font-size: 15px;
+  }
+
+  .pd-tryon-guide p {
+    font-size: 15px;
+  }
+
+  .pd-tryon-actions {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  /* =========================================================
+   SPOTC DESKTOP — SHARED HEADER AND PAGE WIDTH
+   Header and page content use the same 1200px container
+========================================================= */
+
+@media (min-width: 981px) {
+  .spotc-header-inner,
+  .spotc-site-content > .page {
+    width: min(1440px, calc(100% - 40px)) !important;
+    max-width: 1440px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
 }
 }
