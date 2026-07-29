@@ -91,7 +91,6 @@ const numberValue = (value: unknown): number | null => {
   const parsed = Number(String(value).replace(/[₹,%]/g, '').trim());
   return Number.isFinite(parsed) ? parsed : null;
 };
-
 const booleanValue = (value: unknown): boolean | null => {
   if (typeof value === 'boolean') return value;
 
@@ -277,6 +276,7 @@ const [tryOnImage, setTryOnImage] = useState<File | null>(null);
 const [tryOnPreview, setTryOnPreview] = useState('');
 const [tryOnResult, setTryOnResult] = useState('');
 const [tryOnLoading, setTryOnLoading] = useState(false);
+const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     
 
   useEffect(() => {
@@ -729,12 +729,27 @@ const [tryOnLoading, setTryOnLoading] = useState(false);
       let shareCode = '';
 
       if (!existingSnapshot.empty) {
-        const existingCircle = existingSnapshot.docs[0];
-        circleId = existingCircle.id;
-        shareCode =
-          text(existingCircle.data().share_code) ||
-          `${circleId}_${Date.now()}`;
-      } else {
+  const existingCircle = existingSnapshot.docs[0];
+
+  circleId = existingCircle.id;
+  shareCode =
+    text(existingCircle.data().share_code) ||
+    `${circleId}_${Date.now()}`;
+
+  if (tryOnResult) {
+    await setDoc(
+      existingCircle.ref,
+      {
+        product_image: tryOnResult,
+        tryon_image: tryOnResult,
+        selected_size: size || null,
+        selected_color: color || null,
+        updated_at: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  }
+} else {
         const circleRef = doc(collection(db, 'ShoppingCircles'));
         circleId = circleRef.id;
         shareCode = `${circleId}_${Date.now()}`;
@@ -749,7 +764,8 @@ const [tryOnLoading, setTryOnLoading] = useState(false);
           product_source_key: sourceKey,
           product_no: productNumber,
           product_title: titleOf(product),
-          product_image: productImage,
+          product_image: tryOnResult || productImage,
+          tryon_image: tryOnResult || null,
           product_price: price,
           selected_size: size || null,
           selected_color: color || null,
@@ -1033,11 +1049,44 @@ const generateTryOn = async () => {
         ? `Try On failed: ${error.message}`
         : 'Try On failed. Please try again.',
     );
-  } finally {
+   } finally {
     setTryOnLoading(false);
   }
 };
-  const submitReview = async (event: FormEvent<HTMLFormElement>) => {
+
+const saveTryOnImage = async () => {
+  if (!tryOnResult) return;
+
+  try {
+    const response = await fetch(tryOnResult);
+    const blob = await response.blob();
+    const downloadUrl = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `spotc-tryon-${product.id}.png`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    console.error('Saving Try On image failed:', error);
+
+    const link = document.createElement('a');
+    link.href = tryOnResult;
+    link.download = `spotc-tryon-${product.id}.png`;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+};
+
+const submitReview = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setReviewMessage('');
 
@@ -1848,14 +1897,14 @@ const generateTryOn = async () => {
         </figure>
       </div>
 
-      {tryOnPreview && (
-        <div
-          className="pd-tryon-preview"
-          style={{
-            backgroundImage: `url("${tryOnPreview}")`,
-          }}
-        />
-      )}
+      {tryOnPreview && !tryOnResult && (
+  <div
+    className="pd-tryon-preview"
+    style={{
+      backgroundImage: `url("${tryOnPreview}")`,
+    }}
+  />
+)}
 
       <input
         id="spotc-tryon-upload"
@@ -1894,26 +1943,57 @@ const generateTryOn = async () => {
 
       {tryOnResult && (
         <>
-          <div className="pd-tryon-result">
-            <img
-              src={tryOnResult}
-              alt="AI Try On"
-            />
-          </div>
+          <div
+    className="pd-tryon-result"
+    onClick={() => setFullscreenTryOn(true)}
+>
+    <img
+        src={tryOnResult}
+        alt="AI Try On"
+    />
+</div>
+{fullscreenTryOn && (
+  <div
+    className="pd-tryon-fullscreen"
+    role="presentation"
+    onClick={() => setFullscreenTryOn(false)}
+  >
+    <button
+      type="button"
+      className="pd-tryon-fullscreen-close"
+      aria-label="Close fullscreen image"
+      onClick={() => setFullscreenTryOn(false)}
+    >
+      <X />
+    </button>
+
+    <div
+      className="pd-fullscreen-image"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <img
+        src={tryOnResult}
+        alt="AI virtual try-on fullscreen result"
+      />
+    </div>
+  </div>
+)}
 
           <div className="pd-tryon-actions">
-            <button
-              className="pd-tryon-save"
-              type="button"
-            >
-              Save Image
-            </button>
+           <button
+className="pd-tryon-save"
+type="button"
+onClick={saveTryOnImage}
+>
+Save Image
+</button>
 
-            <button
-              className="pd-tryon-circle"
-              type="button"
-              onClick={openShoppingCircle}
-            >
+           <button
+className="pd-tryon-circle"
+type="button"
+disabled={!tryOnResult}
+onClick={openShoppingCircle}
+>
               Add to Shopping Circle
             </button>
           </div>
@@ -3261,8 +3341,66 @@ width:200px;
             font-size: 9px !important;
           }
         }
+          .pd-tryon-result {
+  cursor: zoom-in;
+}
+
+.pd-tryon-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.94);
+  overflow: auto;
+}
+
+.pd-fullscreen-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.pd-fullscreen-image img {
+  display: block;
+  max-width: 95vw;
+  max-height: 92vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 14px;
+  user-select: none;
+}
+
+.pd-tryon-fullscreen-close {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 10001;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #17120d;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+.pd-tryon-fullscreen-close svg {
+  width: 22px;
+  height: 22px;
+}
 
               `}</style>
     </main>
   );
+
 }
