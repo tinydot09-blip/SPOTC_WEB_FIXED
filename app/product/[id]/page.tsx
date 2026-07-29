@@ -126,7 +126,7 @@ const stringList = (...values: unknown[]): string[] => {
 };
 
 const imageList = (product: ProductRecord): string[] => {
-  const images: string[] = [];
+  const customerImages: string[] = [];
 
   const add = (value: unknown) => {
     if (Array.isArray(value)) {
@@ -135,21 +135,54 @@ const imageList = (product: ProductRecord): string[] => {
     }
 
     const url = text(value).trim();
-    if (url.startsWith('http') && !images.includes(url)) images.push(url);
+
+    if (
+      url.startsWith('http') &&
+      !customerImages.includes(url)
+    ) {
+      customerImages.push(url);
+    }
   };
 
-  add(product.images);
-  add(product.product_thumbnail);
-  add(product.image);
-  add(product.image_url);
-  add(product.product_image);
-  add(product.image1);
-  add(product.image2);
-  add(product.image3);
-  add(product.image4);
-  add(product.image5);
+  /*
+   * product_thumbnail is the final customer-facing
+   * AI Studio image. When it exists, do not expose
+   * the raw business-upload images from product.images.
+   */
+  const studioThumbnail = text(product.product_thumbnail).trim();
 
-  return images;
+  if (studioThumbnail.startsWith('http')) {
+    add(studioThumbnail);
+
+    /*
+     * Add only separately stored finished/studio images.
+     * Do not add product.images here because that array
+     * contains the original raw business upload.
+     */
+    add(product.product_image);
+    add(product.image_url);
+    add(product.image1);
+    add(product.image2);
+    add(product.image3);
+    add(product.image4);
+    add(product.image5);
+
+    return customerImages;
+  }
+
+  /*
+   * Fallback for older products that do not yet have
+   * an AI Studio thumbnail.
+   */
+  add(product.image);
+  add(product.product_image);
+  add(product.image_url);
+
+  if (customerImages.length === 0 && Array.isArray(product.images)) {
+    add(product.images[0]);
+  }
+
+  return customerImages;
 };
 
 const dateText = (value: unknown): string => {
