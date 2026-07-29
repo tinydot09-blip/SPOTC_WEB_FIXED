@@ -81,6 +81,7 @@ type CircleData = {
   products?: CircleProduct[];
   product_title?: string;
   product_image?: string;
+  tryon_image?: string;
   product_price?: number | string;
   product_old_price?: number | string;
   product_discount?: number | string;
@@ -188,6 +189,7 @@ export default function ShoppingCirclePage({ shareCode }: ShoppingCirclePageProp
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [playingUrl, setPlayingUrl] = useState('');
+  const [circleImageOpen, setCircleImageOpen] = useState(false);
   const [activeTab, setActiveTab] =
   useState<CircleTab>('discussion');
 
@@ -942,6 +944,8 @@ useEffect(() => {
       n(circle.vote_dont_buy) +
       n(circle.none_votes);
 
+  const heroImage = String(circle.tryon_image || circle.product_image || '').trim();
+
   const recentMessages = messages.filter(
     (item) => item.message_type !== 'vote',
   );
@@ -1069,19 +1073,41 @@ useEffect(() => {
               </button>
             </section>
           ) : (
-            <section className="product-card">
-              <div className="product-summary">
-                <div className="product-image">
-                  {circle.product_image ? (
-                    <img
-                      src={circle.product_image}
-                      alt={circle.product_title || 'Product'}
-                    />
-                  ) : (
-                    <ShoppingBag size={52} />
-                  )}
-                </div>
+            <section className="product-card product-card-hero">
+              <button
+                type="button"
+                className="product-hero"
+                onClick={() => heroImage && setCircleImageOpen(true)}
+                disabled={!heroImage}
+                aria-label={heroImage ? 'Open product image fullscreen' : 'Product image unavailable'}
+              >
+                {heroImage ? (
+                  <img
+                    src={heroImage}
+                    alt={circle.product_title || 'Product'}
+                  />
+                ) : (
+                  <span className="product-hero-placeholder">
+                    <ShoppingBag size={58} />
+                    <strong>Product image unavailable</strong>
+                  </span>
+                )}
 
+                {circle.tryon_image && (
+                  <span className="tryon-badge">
+                    <Sparkles size={15} />
+                    AI Try-On
+                  </span>
+                )}
+
+                {heroImage && (
+                  <span className="tap-to-view">
+                    Tap image to view fullscreen
+                  </span>
+                )}
+              </button>
+
+              <div className="product-summary product-summary-below">
                 <div className="product-info">
                   <h1>{circle.product_title || 'Product'}</h1>
 
@@ -1550,6 +1576,33 @@ useEffect(() => {
         </span>
       </button>
 
+      {circleImageOpen && heroImage && (
+        <div
+          className="circle-image-backdrop"
+          role="presentation"
+          onClick={() => setCircleImageOpen(false)}
+        >
+          <button
+            type="button"
+            className="circle-image-close"
+            aria-label="Close fullscreen product image"
+            onClick={() => setCircleImageOpen(false)}
+          >
+            <X size={24} />
+          </button>
+
+          <div
+            className="circle-image-fullscreen"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <img
+              src={heroImage}
+              alt={circle.product_title || 'Product'}
+            />
+          </div>
+        </div>
+      )}
+
       {menuMessage && (
         <div
           className="modal-backdrop"
@@ -1920,28 +1973,77 @@ const styles = `
     border-radius: 24px;
   }
 
+  .product-hero {
+    width: 100%;
+    height: clamp(430px, 62vh, 690px);
+    padding: 0;
+    position: relative;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border: 0;
+    color: #575164;
+    background: linear-gradient(135deg, #f8f4fb, #f3edf8);
+    cursor: zoom-in;
+  }
+
+  .product-hero:disabled {
+    cursor: default;
+  }
+
+  .product-hero img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: contain;
+    background: #f7f5f8;
+  }
+
+  .product-hero-placeholder {
+    display: grid;
+    place-items: center;
+    gap: 12px;
+    color: #777184;
+  }
+
+  .tryon-badge,
+  .tap-to-view {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border-radius: 999px;
+    font-weight: 850;
+    backdrop-filter: blur(10px);
+  }
+
+  .tryon-badge {
+    top: 16px;
+    left: 16px;
+    padding: 9px 13px;
+    color: #fff;
+    background: rgba(124, 58, 237, .92);
+    box-shadow: 0 8px 24px rgba(76, 29, 149, .24);
+  }
+
+  .tap-to-view {
+    right: 16px;
+    bottom: 16px;
+    padding: 9px 13px;
+    color: #fff;
+    background: rgba(24, 21, 31, .72);
+    font-size: 12px;
+  }
+
   .product-summary {
     padding: 18px;
     display: grid;
-    grid-template-columns: 150px minmax(0, 1fr);
     gap: 18px;
     align-items: center;
   }
 
-  .product-image {
-    width: 150px;
-    aspect-ratio: 1 / 1;
-    display: grid;
-    place-items: center;
-    overflow: hidden;
-    border-radius: 18px;
-    background: linear-gradient(135deg, #fde7ed, #f7dce8);
-  }
-
-  .product-image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+  .product-summary-below {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .product-info {
@@ -2554,6 +2656,52 @@ const styles = `
     background: #f3f1f6;
   }
 
+  .circle-image-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(8, 7, 12, .94);
+  }
+
+  .circle-image-fullscreen {
+    max-width: 96vw;
+    max-height: 94vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .circle-image-fullscreen img {
+    max-width: 96vw;
+    max-height: 94vh;
+    width: auto;
+    height: auto;
+    display: block;
+    object-fit: contain;
+    border-radius: 16px;
+  }
+
+  .circle-image-close {
+    width: 46px;
+    height: 46px;
+    position: fixed;
+    top: 18px;
+    right: 18px;
+    z-index: 1001;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    color: #201d27;
+    background: #fff;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .28);
+    cursor: pointer;
+  }
+
   .sc-side {
     position: sticky;
     top: 104px;
@@ -3143,13 +3291,31 @@ const styles = `
 
     .product-card { border-top: 0; }
 
-    .product-summary {
-      padding: 16px;
-      grid-template-columns: 132px minmax(0, 1fr);
-      gap: 16px;
+    .product-hero {
+      height: min(72vh, 560px);
+      min-height: 390px;
     }
 
-    .product-image { width: 132px; border-radius: 16px; }
+    .product-summary {
+      padding: 16px;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 14px;
+    }
+
+    .tryon-badge {
+      top: 12px;
+      left: 12px;
+      padding: 8px 11px;
+      font-size: 12px;
+    }
+
+    .tap-to-view {
+      right: 12px;
+      bottom: 12px;
+      padding: 8px 10px;
+      font-size: 11px;
+    }
+
     .product-info h1 { font-size: 21px; line-height: 1.2; }
     .price-row.large { margin-top: 11px; }
     .price-row strong { font-size: 25px; }
@@ -3378,13 +3544,14 @@ const styles = `
   font-size: 13px;
 }
   @media (max-width: 420px) {
-    .product-summary {
-      grid-template-columns: 112px minmax(0, 1fr);
-      gap: 13px;
+    .product-hero {
+      height: 440px;
+      min-height: 360px;
     }
 
-    .product-image {
-      width: 112px;
+    .product-summary {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
     }
 
     .product-info h1 {
