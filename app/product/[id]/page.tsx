@@ -824,20 +824,215 @@ const onTryOnImage = (
   reader.readAsDataURL(file);
 };
 
+const wait = (milliseconds: number) =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
+
+const fileToDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        reject(new Error('Unable to read the uploaded photo.'));
+        return;
+      }
+
+      resolve(reader.result);
+    };
+
+    reader.onerror = () => {
+      reject(new Error('Unable to read the uploaded photo.'));
+    };
+
+    reader.readAsDataURL(file);
+  });
+
+
+
+const getGeneratedImage = (value: unknown): string => {
+  if (!value) return '';
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+
+    if (
+      trimmed.startsWith('data:image/') ||
+      trimmed.startsWith('http://') ||
+      trimmed.startsWith('https://') ||
+      trimmed.startsWith('/9j/') ||
+      trimmed.startsWith('iVBOR')
+    ) {
+      if (trimmed.startsWith('/9j/')) {
+        return `data:image/jpeg;base64,${trimmed}`;
+      }
+
+      if (trimmed.startsWith('iVBOR')) {
+        return `data:image/png;base64,${trimmed}`;
+      }
+
+      return trimmed;
+    }
+
+    return '';
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const image = getGeneratedImage(item);
+      if (image) return image;
+    }
+
+    return '';
+  }
+
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+
+    const likelyFields = [
+      'image',
+      'image_url',
+      'result',
+      'result_image',
+      'result_image_base64',
+      'output',
+      'outputs',
+      'images',
+      'generated_image',
+      'generated_images',
+    ];
+
+    for (const field of likelyFields) {
+      const image = getGeneratedImage(record[field]);
+      if (image) return image;
+    }
+
+    for (const nestedValue of Object.values(record)) {
+      const image = getGeneratedImage(nestedValue);
+      if (image) return image;
+    }
+  }
+
+  return '';
+};
+
 const generateTryOn = async () => {
   if (!tryOnImage) {
     alert('Please upload a full-body photo.');
     return;
   }
 
+  if (!productImage) {
+    alert('The product image is missing.');
+    return;
+  }
+
+  if (tryOnLoading) return;
+
   setTryOnLoading(true);
+  setTryOnResult('');
 
   try {
-    // RunPod API will be added here
-    await new Promise(resolve => setTimeout(resolve, 2500));
+    const personImageBase64 = await fileToDataUrl(tryOnImage);
 
-    // Temporary preview until API is connected
-    setTryOnResult(tryOnPreview);
+    const startResponse = await fetch('/api/try-on', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+     body: JSON.stringify({
+  person_image_base64: personImageBase64,
+  garment_image_url: productImage,
+  category: 'tops',
+  garment_photo_type: 'model',
+  quality: 'Balanced',
+  tryon_mode: 'Natural / Maskless',
+  seed_mode: 'Random',
+  clean_flatlay: false,
+}),
+    });
+
+    const startData = await startResponse.json();
+
+    if (!startResponse.ok || !startData.success) {
+      throw new Error(
+        startData.error || 'Unable to start the AI try-on.',
+      );
+    }
+
+    const jobId = String(startData.job_id || '').trim();
+
+    if (!jobId) {
+      throw new Error('RunPod did not return a job ID.');
+    }
+
+    const maximumChecks = 120;
+
+    for (let check = 0; check < maximumChecks; check += 1) {
+      await wait(3000);
+
+      const statusResponse = await fetch(
+        `/api/try-on?jobId=${encodeURIComponent(jobId)}`,
+        {
+          method: 'GET',
+          cache: 'no-store',
+        },
+      );
+
+      const statusData = await statusResponse.json();
+
+      if (!statusResponse.ok || !statusData.success) {
+        throw new Error(
+          statusData.error || 'Unable to check the AI try-on status.',
+        );
+      }
+
+      const status = String(statusData.status || '').toUpperCase();
+
+      if (status === 'COMPLETED') {
+        const generatedImage = getGeneratedImage(statusData.output);
+
+        if (!generatedImage) {
+          console.error(
+            'RunPod completed without a recognised image:',
+            statusData,
+          );
+
+          throw new Error(
+            'RunPod completed, but no generated image was returned.',
+          );
+        }
+
+        setTryOnResult(generatedImage);
+        return;
+      }
+
+      if (
+        status === 'FAILED' ||
+        status === 'CANCELLED' ||
+        status === 'TIMED_OUT'
+      ) {
+        const errorMessage =
+          typeof statusData.error === 'string'
+            ? statusData.error
+            : `RunPod job ended with status ${status}.`;
+
+        throw new Error(errorMessage);
+      }
+    }
+
+    throw new Error(
+      'The AI try-on is taking too long. Please try again.',
+    );
+  } catch (error) {
+    console.error('AI try-on failed:', error);
+
+    alert(
+      error instanceof Error
+        ? `Try On failed: ${error.message}`
+        : 'Try On failed. Please try again.',
+    );
   } finally {
     setTryOnLoading(false);
   }
