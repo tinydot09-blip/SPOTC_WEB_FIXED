@@ -236,6 +236,90 @@ const referenceId = (value: unknown): string => {
   const path = text(candidate.path).trim();
   return path ? path.split('/').filter(Boolean).pop() || '' : '';
 };
+const isTryOnSupported = (product: ProductRecord): boolean => {
+  const categoryText = [
+    product.main_category,
+    product.sub_category,
+    product.category,
+    product.product_type,
+    product.audience,
+    product.title,
+    product.product_name,
+  ]
+    .map((value) => text(value).trim().toLowerCase())
+    .filter(Boolean)
+    .join(' ');
+
+  const blockedCategories = [
+    'shoe',
+    'shoes',
+    'footwear',
+    'sandal',
+    'sandals',
+    'slipper',
+    'slippers',
+    'sneaker',
+    'sneakers',
+    'boot',
+    'boots',
+    'watch',
+    'watches',
+    'bag',
+    'bags',
+    'handbag',
+    'wallet',
+    'belt',
+    'cap',
+    'caps',
+    'hat',
+    'hats',
+    'sunglass',
+    'sunglasses',
+    'jewellery',
+    'jewelry',
+    'accessory',
+    'accessories',
+  ];
+
+  if (
+    blockedCategories.some((blockedCategory) =>
+      categoryText.includes(blockedCategory),
+    )
+  ) {
+    return false;
+  }
+
+  const supportedCategories = [
+    'shirt',
+    't-shirt',
+    'tshirt',
+    'polo',
+    'top',
+    'blouse',
+    'pant',
+    'pants',
+    'jeans',
+    'trouser',
+    'trousers',
+    'dress',
+    'gown',
+    'kurti',
+    'kurta',
+    'salwar',
+    'chudi',
+    'churidar',
+    'saree',
+    'lehenga',
+    'jacket',
+    'blazer',
+    'hoodie',
+    'sweater',
+  ];
+
+  return supportedCategories.some((supportedCategory) =>
+    categoryText.includes(supportedCategory),
+  );
+};
 
 function ProductPageLoader() {
   return (
@@ -1452,13 +1536,15 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
               <span>{deliveryMinutes} mins delivery</span>
             </span>
 
-            <button
-              type="button"
-              className="pd-tryon-chip"
-              onClick={() => setTryOnOpen(true)}
-            >
-              👕 <span>Try On</span>
-            </button>
+           {isTryOnSupported(record) && (
+  <button
+    type="button"
+    className="pd-tryon-chip"
+    onClick={() => setTryOnOpen(true)}
+  >
+    👕 <span>Try On</span>
+  </button>
+)}
           </div>
 
           {images.length > 1 && (
