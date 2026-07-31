@@ -2033,7 +2033,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
         onChange={onTryOnImage}
       />
 
-      <div className="pd-tryon-sticky-actions">
+      <div className="pd-tryon-actions-row">
   <button
     className="pd-tryon-upload"
     type="button"
@@ -2169,22 +2169,6 @@ onClick={openShoppingCircle}
    TRY ON — KEEP ACTION BUTTONS VISIBLE ON MOBILE
 ========================================================= */
 
-.pd-tryon-sticky-actions {
-  width: 100% !important;
-  margin-top: 14px !important;
-  display: grid !important;
-  grid-template-columns: 1fr !important;
-  gap: 12px !important;
-  box-sizing: border-box !important;
-}
-
-.pd-tryon-sticky-actions .pd-tryon-upload,
-.pd-tryon-sticky-actions .pd-tryon-generate {
-  width: 100% !important;
-  min-height: 54px !important;
-  margin: 0 !important;
-  flex: 0 0 auto !important;
-}
 
 @media (max-width: 700px) {
   .pd-modal-backdrop:has(.pd-tryon-sheet) {
@@ -2219,45 +2203,7 @@ onClick={openShoppingCircle}
     background-size: contain !important;
   }
 
-  .pd-tryon-sticky-actions {
-    position: sticky !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    z-index: 30 !important;
-
-    margin:
-      16px
-      -16px
-      calc(-118px - env(safe-area-inset-bottom))
-      !important;
-
-    width: calc(100% + 32px) !important;
-    padding:
-      12px
-      16px
-      calc(14px + env(safe-area-inset-bottom))
-      !important;
-
-    gap: 10px !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
-    background:
-      linear-gradient(
-        180deg,
-        rgba(9, 10, 13, 0.94),
-        #090a0d 24%
-      ) !important;
-
-    box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.35) !important;
-    backdrop-filter: blur(14px) !important;
-    -webkit-backdrop-filter: blur(14px) !important;
-  }
-
-  .pd-tryon-sticky-actions .pd-tryon-upload,
-  .pd-tryon-sticky-actions .pd-tryon-generate {
-    min-height: 52px !important;
-    border-radius: 14px !important;
-  }
+  
 }
         /* =========================================
    QUANTITY SELECTOR
@@ -3621,40 +3567,7 @@ width:200px;
            - Prevents overlap with the mobile bottom navigation
         ========================================================= */
 
-        .pd-tryon-sticky-actions {
-          position: static !important;
-          inset: auto !important;
-          right: auto !important;
-          bottom: auto !important;
-          left: auto !important;
-          z-index: auto !important;
-
-          width: 100% !important;
-          margin: 16px 0 0 !important;
-          padding: 0 !important;
-
-          display: grid !important;
-          grid-template-columns: 1fr !important;
-          gap: 10px !important;
-
-          border: 0 !important;
-          background: transparent !important;
-          box-shadow: none !important;
-          backdrop-filter: none !important;
-          -webkit-backdrop-filter: none !important;
-          transform: none !important;
-          box-sizing: border-box !important;
-        }
-
-        .pd-tryon-sticky-actions .pd-tryon-upload,
-        .pd-tryon-sticky-actions .pd-tryon-generate {
-          width: 100% !important;
-          min-height: 54px !important;
-          margin: 0 !important;
-          position: static !important;
-          inset: auto !important;
-          transform: none !important;
-        }
+        
 
         .pd-tryon-sample img {
           width: 100% !important;
@@ -3699,34 +3612,73 @@ width:200px;
             background-position: center !important;
             background-repeat: no-repeat !important;
             background-size: contain !important;
-          }
-
-          .pd-tryon-sticky-actions {
-            position: static !important;
-            inset: auto !important;
-            right: auto !important;
-            bottom: auto !important;
-            left: auto !important;
-            z-index: auto !important;
-
-            width: 100% !important;
-            margin: 16px 0 0 !important;
-            padding: 0 !important;
-
-            background: transparent !important;
-            border: 0 !important;
-            box-shadow: none !important;
-            backdrop-filter: none !important;
-            -webkit-backdrop-filter: none !important;
-          }
-
-          .pd-tryon-sticky-actions .pd-tryon-upload,
-          .pd-tryon-sticky-actions .pd-tryon-generate {
-            min-height: 52px !important;
-            margin: 0 !important;
-            border-radius: 14px !important;
-          }
+          }      
         }
+          /* ---------- TRY ON MOBILE FIX ---------- */
+
+.pd-tryon-actions-row {
+    position: static !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 12px !important;
+    width: 100% !important;
+    margin: 18px 0 0 !important;
+    padding: 0 !important;
+}
+
+.pd-tryon-actions-row .pd-tryon-upload,
+.pd-tryon-actions-row .pd-tryon-generate {
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 54px !important;
+    margin: 0 !important;
+    z-index: auto !important;
+}
+
+@media (max-width: 760px) {
+    .pd-modal-backdrop:has(.pd-tryon-sheet) {
+        align-items: flex-end !important;
+        padding: 0 !important;
+    }
+
+    .pd-tryon-sheet {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        max-height: calc(
+            100dvh - 58px - env(safe-area-inset-bottom)
+        ) !important;
+        padding:
+            22px
+            16px
+            calc(110px + env(safe-area-inset-bottom))
+            !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain !important;
+        -webkit-overflow-scrolling: touch !important;
+        border-radius: 26px 26px 0 0 !important;
+        box-sizing: border-box !important;
+    }
+
+    .pd-tryon-actions-row {
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 12px !important;
+        margin-top: 18px !important;
+    }
+
+    .pd-tryon-actions-row .pd-tryon-upload,
+    .pd-tryon-actions-row .pd-tryon-generate {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        flex-shrink: 0 !important;
+    }
+}
 
               `}</style>
     </main>
