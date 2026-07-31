@@ -2009,7 +2009,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
 
         <figure className="pd-tryon-sample">
   <img
-    src="data:image/svg+xml;base64,........"
+    src="/images/tryon-photo-guide-girl.png"
     alt="Recommended full-body pose for virtual try-on"
   />
   <figcaption>Recommended pose</figcaption>
@@ -3611,6 +3611,122 @@ width:200px;
   width: 22px;
   height: 22px;
 }
+
+
+
+        /* =========================================================
+           FINAL TRY-ON MOBILE FIX
+           - Removes sticky Upload/Generate buttons
+           - Keeps both buttons in normal scroll flow
+           - Prevents overlap with the mobile bottom navigation
+        ========================================================= */
+
+        .pd-tryon-sticky-actions {
+          position: static !important;
+          inset: auto !important;
+          right: auto !important;
+          bottom: auto !important;
+          left: auto !important;
+          z-index: auto !important;
+
+          width: 100% !important;
+          margin: 16px 0 0 !important;
+          padding: 0 !important;
+
+          display: grid !important;
+          grid-template-columns: 1fr !important;
+          gap: 10px !important;
+
+          border: 0 !important;
+          background: transparent !important;
+          box-shadow: none !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+          transform: none !important;
+          box-sizing: border-box !important;
+        }
+
+        .pd-tryon-sticky-actions .pd-tryon-upload,
+        .pd-tryon-sticky-actions .pd-tryon-generate {
+          width: 100% !important;
+          min-height: 54px !important;
+          margin: 0 !important;
+          position: static !important;
+          inset: auto !important;
+          transform: none !important;
+        }
+
+        .pd-tryon-sample img {
+          width: 100% !important;
+          height: auto !important;
+          aspect-ratio: 2 / 3 !important;
+          object-fit: cover !important;
+          object-position: center top !important;
+        }
+
+        @media (max-width: 700px) {
+          .pd-modal-backdrop:has(.pd-tryon-sheet) {
+            align-items: flex-end !important;
+            padding: 0 !important;
+          }
+
+          .pd-tryon-sheet {
+            width: 100% !important;
+            height: auto !important;
+            max-height: calc(
+              100dvh - 58px - env(safe-area-inset-bottom)
+            ) !important;
+
+            padding:
+              22px
+              16px
+              calc(28px + env(safe-area-inset-bottom))
+              !important;
+
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            overscroll-behavior: contain !important;
+            border-radius: 26px 26px 0 0 !important;
+            box-sizing: border-box !important;
+          }
+
+          .pd-tryon-preview {
+            width: min(320px, 100%) !important;
+            height: auto !important;
+            max-height: none !important;
+            aspect-ratio: 3 / 4 !important;
+            margin: 18px auto !important;
+            background-position: center !important;
+            background-repeat: no-repeat !important;
+            background-size: contain !important;
+          }
+
+          .pd-tryon-sticky-actions {
+            position: static !important;
+            inset: auto !important;
+            right: auto !important;
+            bottom: auto !important;
+            left: auto !important;
+            z-index: auto !important;
+
+            width: 100% !important;
+            margin: 16px 0 0 !important;
+            padding: 0 !important;
+
+            background: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+          }
+
+          .pd-tryon-sticky-actions .pd-tryon-upload,
+          .pd-tryon-sticky-actions .pd-tryon-generate {
+            min-height: 52px !important;
+            margin: 0 !important;
+            border-radius: 14px !important;
+          }
+        }
 
               `}</style>
     </main>
