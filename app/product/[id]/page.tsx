@@ -2034,6 +2034,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
       />
 
       <div className="pd-tryon-sticky-actions">
+  <div className="pd-tryon-action-bar">
   <button
     className="pd-tryon-upload"
     type="button"
@@ -2058,6 +2059,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
       ? 'Generating...'
       : 'Generate AI Try On'}
   </button>
+</div>
 </div>
 
       {tryOnResult && (
@@ -3228,7 +3230,113 @@ width:200px;
             grid-template-columns: 1fr !important;
           }
         }
+/* =========================================================
+   TRY-ON MOBILE SHEET AND VISIBLE ACTION BUTTONS
+========================================================= */
 
+.pd-tryon-action-bar {
+  width: 100% !important;
+  margin-top: 14px !important;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+}
+
+.pd-tryon-action-bar .pd-tryon-upload,
+.pd-tryon-action-bar .pd-tryon-generate {
+  width: 100% !important;
+  min-height: 54px !important;
+  margin: 0 !important;
+}
+
+@media (max-width: 700px) {
+  .pd-modal-backdrop:has(.pd-tryon-sheet) {
+    padding: 0 !important;
+    align-items: flex-end !important;
+  }
+
+  .pd-tryon-sheet {
+    position: relative !important;
+    width: 100% !important;
+    height: calc(
+      100dvh - 58px - env(safe-area-inset-bottom)
+    ) !important;
+    max-height: calc(
+      100dvh - 58px - env(safe-area-inset-bottom)
+    ) !important;
+
+    padding:
+      18px
+      16px
+      calc(145px + env(safe-area-inset-bottom))
+      !important;
+
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+
+    border-radius: 22px 22px 0 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .pd-tryon-guide {
+    width: 100% !important;
+  }
+
+  .pd-tryon-sample img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    object-position: center top !important;
+  }
+
+  .pd-tryon-preview {
+    width: min(320px, 100%) !important;
+    height: auto !important;
+    max-height: 52dvh !important;
+    aspect-ratio: 3 / 4 !important;
+
+    margin: 18px auto !important;
+
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-size: contain !important;
+  }
+
+  .pd-tryon-action-bar {
+    position: sticky !important;
+    bottom: calc(
+      -145px - env(safe-area-inset-bottom)
+    ) !important;
+    z-index: 100 !important;
+
+    width: calc(100% + 32px) !important;
+
+    margin:
+      16px
+      -16px
+      calc(-145px - env(safe-area-inset-bottom))
+      !important;
+
+    padding:
+      12px
+      16px
+      calc(16px + env(safe-area-inset-bottom))
+      !important;
+
+    background: #090a0d !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.45) !important;
+
+    box-sizing: border-box !important;
+  }
+
+  .pd-tryon-action-bar .pd-tryon-upload,
+  .pd-tryon-action-bar .pd-tryon-generate {
+    min-height: 52px !important;
+    border-radius: 14px !important;
+  }
+}
 
         /* =========================================================
            TRY ON SAMPLE PHOTO — FINAL
