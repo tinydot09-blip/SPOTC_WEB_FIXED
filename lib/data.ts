@@ -42,30 +42,33 @@ export async function getOffers(): Promise<BusinessListing[]> {
   })) as BusinessListing[];
 
   return newestFirst(items)
-    .filter((item) => item.isActive !== false)
-    .filter((item) => {
-      const approvalStatus = String(
-        item.approval_status ?? item.status ?? '',
-      )
-        .trim()
-        .toLowerCase();
+  .filter((item) => item.isActive !== false)
+  .filter((item) => item.isDeleted !== true)
+  .filter((item) => item.isHidden !== true)
+  .filter((item) => item.offer_is_active !== false)
+  .filter((item) => {
+    const approvalStatus = String(
+      item.approval_status ?? item.status ?? '',
+    )
+      .trim()
+      .toLowerCase();
 
-      return (
-        item.approved === true ||
-        item.isApproved === true ||
-        approvalStatus === 'approved'
-      );
-    })
-    .filter((item) => {
-      const processingStatus = String(
-        item.processing_status ?? '',
-      )
-        .trim()
-        .toLowerCase();
+    return (
+      item.approved === true ||
+      item.isApproved === true ||
+      approvalStatus === 'approved'
+    );
+  })
+  .filter((item) => {
+    const processingStatus = String(
+      item.processing_status ?? '',
+    )
+      .trim()
+      .toLowerCase();
 
-      return !processingStatus || processingStatus === 'ready';
-    })
-    .slice(0, 30);
+    return !processingStatus || processingStatus === 'ready';
+  })
+  .slice(0, 30);
 }
 
 export async function getProducts(): Promise<BusinessProduct[]> {
