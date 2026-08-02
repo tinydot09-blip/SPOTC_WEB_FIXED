@@ -1467,6 +1467,13 @@ export function OfferFeed() {
 
       if (!normalizedVideo || seenVideos.has(normalizedVideo)) return false;
       if (item.isActive === false) return false;
+      const approved =
+  item.isApproved === true ||
+  item.approved === true ||
+  text(item.approval_status).toLowerCase() === "approved" ||
+  text(item.status).toLowerCase() === "approved";
+
+if (!approved) return false;
 
       const processingStatus = text(item.processing_status).toLowerCase();
       if (processingStatus && processingStatus !== "ready") return false;
