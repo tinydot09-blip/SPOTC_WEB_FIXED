@@ -30,6 +30,7 @@ function ensureFirestore() {
 
 export async function getOffers(): Promise<BusinessListing[]> {
   const firestore = ensureFirestore();
+
   const snapshot = await getDocs(
     query(collection(firestore, 'BusinessListings'), limit(100)),
   );
@@ -42,11 +43,28 @@ export async function getOffers(): Promise<BusinessListing[]> {
 
   return newestFirst(items)
     .filter((item) => item.isActive !== false)
-    .filter(
-      (item) =>
-        !item.processing_status ||
-        item.processing_status === 'ready',
-    )
+    .filter((item) => {
+      const approvalStatus = String(
+        item.approval_status ?? item.status ?? '',
+      )
+        .trim()
+        .toLowerCase();
+
+      return (
+        item.approved === true ||
+        item.isApproved === true ||
+        approvalStatus === 'approved'
+      );
+    })
+    .filter((item) => {
+      const processingStatus = String(
+        item.processing_status ?? '',
+      )
+        .trim()
+        .toLowerCase();
+
+      return !processingStatus || processingStatus === 'ready';
+    })
     .slice(0, 30);
 }
 
