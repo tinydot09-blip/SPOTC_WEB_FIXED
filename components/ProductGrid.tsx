@@ -727,7 +727,13 @@ export function ProductGrid({
           document.body,
         )}
 
-      <section className="product-grid rich">
+      <section
+        className={`product-grid rich ${
+          hideBusinessName
+            ? 'business-product-grid'
+            : 'shop-product-grid'
+        }`}
+      >
         {filteredProducts.map((item) => {
           const price = priceOf(item);
           const oldPrice = oldPriceOf(item);
@@ -1088,6 +1094,140 @@ export function ProductGrid({
           to {
             opacity: 1;
             transform: translate(-50%, 0);
+          }
+        }
+
+        /*
+         * BUSINESS PAGE MOBILE GRID FIX
+         * Applied only when ProductGrid is rendered with hideBusinessName=true.
+         * The /shop page keeps its current working width and alignment.
+         */
+        @media (max-width: 700px) {
+          .business-product-grid {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            column-gap: 10px !important;
+            row-gap: 14px !important;
+            box-sizing: border-box !important;
+            overflow: visible !important;
+          }
+
+          .business-product-grid > .product-card.rich {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            margin: 0 !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+          }
+
+          .business-product-grid .product-image-wrap,
+          .business-product-grid .product-image,
+          .business-product-grid .product-copy,
+          .business-product-grid .product-title-link,
+          .business-product-grid .product-actions {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            box-sizing: border-box !important;
+          }
+
+          .business-product-grid .product-copy {
+            padding-left: 11px !important;
+            padding-right: 11px !important;
+          }
+
+          .business-product-grid .product-title-link,
+          .business-product-grid .product-title-link h3 {
+            overflow-wrap: anywhere !important;
+            word-break: normal !important;
+          }
+
+          .business-product-grid .product-stock-row {
+            min-width: 0 !important;
+            gap: 4px !important;
+            overflow: hidden !important;
+          }
+
+          .business-product-grid .product-delivery-badge {
+            min-width: 0 !important;
+            max-width: calc(100% - 40px) !important;
+            padding-left: 7px !important;
+            padding-right: 7px !important;
+            overflow: hidden !important;
+          }
+
+          .business-product-grid .product-delivery-badge span {
+            min-width: 0 !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+          }
+
+          .business-product-grid .product-stock-text {
+            flex: 0 0 auto !important;
+            max-width: 38px !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+          }
+
+          .business-product-grid .price {
+            min-width: 0 !important;
+            max-width: 100% !important;
+            display: flex !important;
+            flex-wrap: wrap !important;
+            align-items: baseline !important;
+            gap: 3px 6px !important;
+          }
+
+          .business-product-grid .price strong,
+          .business-product-grid .price del,
+          .business-product-grid .price span,
+          .business-product-grid .reward-row {
+            max-width: 100% !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .business-product-grid .product-actions {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) auto !important;
+            align-items: stretch !important;
+            gap: 7px !important;
+          }
+
+          .business-product-grid .product-compare-online,
+          .business-product-grid .product-add-button {
+            min-width: 0 !important;
+            max-width: 100% !important;
+            height: 44px !important;
+            margin: 0 !important;
+            padding: 0 9px !important;
+            box-sizing: border-box !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 5px !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+          }
+
+          .business-product-grid .product-compare-online span {
+            min-width: 0 !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+          }
+
+          .business-product-grid .product-add-button {
+            width: auto !important;
+            min-width: 70px !important;
+            flex: 0 0 auto !important;
           }
         }
 
