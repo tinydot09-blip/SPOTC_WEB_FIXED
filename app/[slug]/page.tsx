@@ -2545,7 +2545,7 @@
   }
 
   .business-page {
-    padding-top: 0 !important;
+    padding-top: 24px !important;
   }
 }
         `}</style>
