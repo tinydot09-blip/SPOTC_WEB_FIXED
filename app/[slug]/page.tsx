@@ -1698,8 +1698,8 @@
             max-width: 1440px !important;
             margin-left: auto !important;
             margin-right: auto !important;
-            padding-left: 24px !important;
-            padding-right: 24px !important;
+            padding-left: 12px !important;
+            padding-right: 12px !important;
             box-sizing: border-box !important;
           }
 
@@ -2496,6 +2496,22 @@
               flex: 1;
             }
           }
+            @media (max-width: 700px) {
+  .business-page {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .business-page > .business-shop {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .business-page .product-grid.rich {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+}
         `}</style>
       </>
     );
