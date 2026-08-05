@@ -2512,6 +2512,42 @@
     gap: 10px !important;
   }
 }
+  /* BUSINESS HERO MOBILE — WIDTH + TOP GAP FIX */
+@media (max-width: 700px) {
+  .business-page > .business-hero {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    margin: 0 !important;
+    margin-top: 0 !important;
+
+    padding: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .business-page .business-cover {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    margin: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .business-page .business-profile {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    margin: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .business-page {
+    padding-top: 0 !important;
+  }
+}
         `}</style>
       </>
     );
