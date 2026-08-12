@@ -8,7 +8,6 @@ import {
 import {
   usePathname,
   useRouter,
-  useSearchParams,
 } from 'next/navigation';
 
 import {
@@ -129,9 +128,6 @@ export default function ProfileCompletionGate({
   const pathname =
     usePathname();
 
-  const searchParams =
-    useSearchParams();
-
   const router =
     useRouter();
 
@@ -148,19 +144,38 @@ export default function ProfileCompletionGate({
       return;
     }
 
+    // Keep a non-null Firebase Auth reference for this entire effect.
+    // TypeScript does not preserve narrowing of the imported nullable `auth`
+    // inside nested callbacks such as refreshProfile.
+    const firebaseAuth = auth;
+
     let active = true;
 
+    const browserSearch =
+      typeof window !== 'undefined'
+        ? window.location.search
+        : '';
+
     const currentQuery =
-      searchParams.toString();
+      browserSearch.startsWith('?')
+        ? browserSearch.slice(1)
+        : browserSearch;
 
     const currentPath =
       currentQuery
         ? `${pathname}?${currentQuery}`
         : pathname;
 
+    const browserParams =
+      typeof window !== 'undefined'
+        ? new URLSearchParams(
+            window.location.search,
+          )
+        : new URLSearchParams();
+
     const nextFromQuery =
       safeReturnPath(
-        searchParams.get('next'),
+        browserParams.get('next'),
       );
 
     if (nextFromQuery) {
@@ -315,7 +330,7 @@ export default function ProfileCompletionGate({
 
         await checkProfile(
           redirectUser ||
-            auth.currentUser,
+            firebaseAuth.currentUser,
         );
       } catch (
         redirectError
@@ -326,14 +341,14 @@ export default function ProfileCompletionGate({
         );
 
         await checkProfile(
-          auth.currentUser,
+          firebaseAuth.currentUser,
         );
       }
     })();
 
     const unsubscribe =
       onAuthStateChanged(
-        auth,
+        firebaseAuth,
         (user) => {
           void checkProfile(
             user,
@@ -344,7 +359,7 @@ export default function ProfileCompletionGate({
     const refreshProfile =
       () => {
         void checkProfile(
-          auth.currentUser,
+          firebaseAuth.currentUser,
         );
       };
 
@@ -365,7 +380,6 @@ export default function ProfileCompletionGate({
   }, [
     pathname,
     router,
-    searchParams,
   ]);
 
   return <>{children}</>;

@@ -670,6 +670,11 @@ export default function AdminOrdersPage() {
   ) {
     if (!db || busyId) return;
 
+    // Keep a non-null Firestore reference for the entire async transaction.
+    // TypeScript does not preserve narrowing of the imported nullable `db`
+    // inside nested async callbacks.
+    const firestore = db;
+
     const currentStatus = normalizeStatus(
       row.data.order_status,
     );
@@ -725,13 +730,13 @@ export default function AdminOrdersPage() {
 
     try {
       const orderRef = doc(
-        db,
+        firestore,
         'Orders',
         row.id,
       );
 
       await runTransaction(
-        db,
+        firestore,
         async (transaction) => {
           const orderSnap =
             await transaction.get(orderRef);
@@ -786,7 +791,7 @@ export default function AdminOrdersPage() {
             productId,
           ] of quantitiesByProduct) {
             const productRef = doc(
-              db,
+              firestore,
               'BusinessProducts',
               productId,
             );

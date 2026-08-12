@@ -23,7 +23,6 @@ import {
 
 import {
   useRouter,
-  useSearchParams,
 } from 'next/navigation';
 
 import {
@@ -78,18 +77,30 @@ function isValidPhone(
 
 export default function CompleteProfilePage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
 
-  const requestedNext =
-    searchParams.get('next');
+  const [nextPath, setNextPath] =
+    useState('/offers');
 
-  const nextPath =
-    requestedNext &&
-    requestedNext.startsWith('/') &&
-    !requestedNext.startsWith('//') &&
-    !requestedNext.startsWith('/complete-profile')
-      ? requestedNext
-      : '/offers';
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const requestedNext =
+      new URLSearchParams(
+        window.location.search,
+      ).get('next');
+
+    const safeNext =
+      requestedNext &&
+      requestedNext.startsWith('/') &&
+      !requestedNext.startsWith('//') &&
+      !requestedNext.startsWith('/complete-profile')
+        ? requestedNext
+        : '/offers';
+
+    setNextPath(safeNext);
+  }, []);
 
   const [user, setUser] =
     useState<User | null>(null);
