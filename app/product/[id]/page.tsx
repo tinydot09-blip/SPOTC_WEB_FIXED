@@ -29,7 +29,7 @@ import {
   X,
 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   collection,
   deleteDoc,
@@ -557,6 +557,7 @@ export default function ProductDetailPage() {
   const [giftSearch, setGiftSearch] = useState('');
   const [giftCategory, setGiftCategory] = useState('All');
   const [selectedGiftIds, setSelectedGiftIds] = useState<string[]>([]);
+  const giftProductsRef = useRef<HTMLDivElement | null>(null);
   const [tryOnOpen, setTryOnOpen] = useState(false);
 const [tryOnImage, setTryOnImage] = useState<File | null>(null);
 const [tryOnPreview, setTryOnPreview] = useState('');
@@ -564,6 +565,18 @@ const [tryOnResult, setTryOnResult] = useState('');
 const [tryOnLoading, setTryOnLoading] = useState(false);
 const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     
+
+  useEffect(() => {
+    if (!giftPreviewOpen) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      if (giftProductsRef.current) {
+        giftProductsRef.current.scrollTop = 0;
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [giftPreviewOpen, giftCategory, giftSearch]);
 
   useEffect(() => {
     let active = true;
@@ -2362,7 +2375,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
               </div>
             )}
 
-            <div className="pd-gift-products">
+            <div className="pd-gift-products" ref={giftProductsRef}>
               {visibleGiftProducts.length ? (
                 visibleGiftProducts.map((gift) => {
                   const giftId = String(gift.id);
@@ -4187,8 +4200,11 @@ width:200px;
         ========================================================= */
 
         .pd-gift-selector-backdrop {
-          z-index: 5200 !important;
+          position: fixed !important;
+          inset: 0 !important;
+          z-index: 2147483000 !important;
           padding: 24px !important;
+          isolation: isolate !important;
         }
 
         .pd-gift-selector {
@@ -4627,6 +4643,9 @@ width:200px;
 
         @media (max-width: 700px) {
           .pd-gift-selector-backdrop {
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 2147483000 !important;
             align-items: flex-end !important;
             padding: 0 !important;
           }
@@ -4634,8 +4653,9 @@ width:200px;
           .pd-gift-selector {
             width: 100% !important;
             max-width: 100% !important;
-            height: 94dvh !important;
-            max-height: 94dvh !important;
+            height: calc(100dvh - 8px) !important;
+            max-height: calc(100dvh - 8px) !important;
+            margin: 0 !important;
             border-right: 0 !important;
             border-bottom: 0 !important;
             border-left: 0 !important;
@@ -4687,11 +4707,20 @@ width:200px;
           }
 
           .pd-gift-products {
-            padding: 11px 12px 16px !important;
+            width: 100% !important;
+            min-height: 0 !important;
+            height: 100% !important;
+            padding: 11px 12px 18px !important;
             grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            grid-auto-flow: row !important;
             grid-auto-rows: max-content !important;
             align-items: start !important;
+            align-content: start !important;
             gap: 10px !important;
+            overflow-y: auto !important;
+            overscroll-behavior: contain !important;
+            -webkit-overflow-scrolling: touch !important;
+            box-sizing: border-box !important;
           }
 
           .pd-gift-product {
@@ -4735,12 +4764,18 @@ width:200px;
           }
 
           .pd-gift-selector-footer {
+            position: relative !important;
+            z-index: 5 !important;
+            min-height: 72px !important;
             padding:
               10px
               12px
               calc(10px + env(safe-area-inset-bottom)) !important;
             grid-template-columns: minmax(0, 1fr) auto !important;
             gap: 8px !important;
+            flex-shrink: 0 !important;
+            background: #ffffff !important;
+            box-sizing: border-box !important;
           }
 
           .pd-gift-selector-footer > div strong {
@@ -4752,10 +4787,11 @@ width:200px;
           }
 
           .pd-gift-selector-footer > button {
-            min-width: 132px !important;
-            min-height: 42px !important;
-            padding: 0 11px !important;
+            min-width: 138px !important;
+            min-height: 46px !important;
+            padding: 0 12px !important;
             font-size: 11px !important;
+            border-radius: 12px !important;
           }
         }
 
