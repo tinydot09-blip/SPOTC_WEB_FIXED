@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   GitCompareArrows,
+  Gift,
   Heart,
   Search,
   ShoppingBag,
@@ -75,6 +76,12 @@ const oldPriceOf = (product: BusinessProduct): number =>
       product.original_price ??
       product.mrp,
   );
+
+const freeGiftCount = (price: number): number => {
+  if (price < 80) return 0;
+  if (price < 200) return 1;
+  return Math.floor(price / 100);
+};
 
 const discountOf = (product: BusinessProduct): number => {
   const price = priceOf(product);
@@ -738,6 +745,7 @@ export function ProductGrid({
           const price = priceOf(item);
           const oldPrice = oldPriceOf(item);
           const discount = discountOf(item);
+          const giftCount = freeGiftCount(price);
           const image = imageOf(item);
           const stock = numberValue(
             item.stock_qty ??
@@ -808,12 +816,6 @@ export function ProductGrid({
               </div>
 
               <div className="product-copy">
-                {!hideBusinessName && (
-                  <p className="product-brand">
-                    {businessNameOf(item)}
-                  </p>
-                )}
-
                 <Link
                   href={`/product/${item.id}`}
                   className="product-title-link"
@@ -837,6 +839,19 @@ export function ProductGrid({
                       : 'In stock'}
                   </small>
                 </div>
+
+                {giftCount > 0 && (
+                  <Link
+                    href={`/product/${item.id}?gift=1`}
+                    className="product-free-gift-chip"
+                    aria-label={`Select ${giftCount} free ${giftCount === 1 ? 'gift' : 'gifts'} with ${titleOf(item)}`}
+                  >
+                    <Gift size={14} strokeWidth={2.2} aria-hidden="true" />
+                    <span>
+                      {giftCount} FREE {giftCount === 1 ? 'gift' : 'gifts'} included
+                    </span>
+                  </Link>
+                )}
 
                 <div className="price">
                   <strong>
@@ -913,10 +928,49 @@ export function ProductGrid({
          * SHOP PRODUCT CARD — DELIVERY + STOCK ROW
          * Matches the placement used on the Business product cards.
          */
+        .product-card.rich .product-free-gift-chip {
+          width: fit-content;
+          max-width: 100%;
+          min-height: 28px;
+          margin: 0 0 10px;
+          padding: 0 9px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: flex-start;
+          gap: 6px;
+          border: 1px solid rgba(247, 183, 51, 0.42);
+          border-radius: 9px;
+          color: #3a2505;
+          background: rgba(255, 250, 240, 0.96);
+          box-shadow: none;
+          font-size: 12px;
+          font-weight: 600;
+          line-height: 1;
+          text-decoration: none;
+          white-space: nowrap;
+          box-sizing: border-box;
+          text-shadow: none;
+        }
+
+        .product-card.rich .product-free-gift-chip:hover {
+          transform: none;
+          box-shadow: none;
+        }
+
+        .product-card.rich .product-free-gift-chip:active {
+          transform: none;
+        }
+
+        .product-card.rich .product-free-gift-chip svg {
+          width: 14px;
+          height: 14px;
+          flex: 0 0 14px;
+        }
+
         .product-card.rich .product-stock-row {
           width: 100%;
           min-height: 25px;
-          margin: 7px 0 8px;
+          margin: 7px 0 9px;
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -956,7 +1010,63 @@ export function ProductGrid({
           white-space: nowrap;
         }
 
+        /*
+         * PRODUCT CARD CONTENT SPACING FIX
+         * Keeps title, delivery, gift, price, rewards and actions compact
+         * and removes the large empty gaps visible in the card.
+         */
+        .product-card.rich .product-copy {
+          padding-top: 14px !important;
+          padding-bottom: 14px !important;
+        }
+
+        .product-card.rich .product-title-link,
+        .product-card.rich .product-title-link h3 {
+          margin-top: 0 !important;
+          margin-bottom: 0 !important;
+        }
+
+        .product-card.rich .product-stock-row {
+          margin-top: 6px !important;
+          margin-bottom: 8px !important;
+        }
+
+        .product-card.rich .product-free-gift-chip {
+          margin-top: 0 !important;
+          margin-bottom: 12px !important;
+        }
+
+        .product-card.rich .price {
+          margin-top: 0 !important;
+          margin-bottom: 6px !important;
+        }
+
+        .product-card.rich .reward-row {
+          margin-top: 0 !important;
+          margin-bottom: 10px !important;
+        }
+
+        .product-card.rich .product-actions {
+          margin-top: 0 !important;
+        }
+
         @media (max-width: 700px) {
+          .product-card.rich .product-free-gift-chip {
+            max-width: 100%;
+            min-height: 27px;
+            margin-bottom: 9px;
+            padding: 0 8px;
+            gap: 5px;
+            border-radius: 8px;
+            font-size: 11px;
+          }
+
+          .product-card.rich .product-free-gift-chip svg {
+            width: 13px;
+            height: 13px;
+            flex-basis: 13px;
+          }
+
           .product-card.rich .product-stock-row {
             margin-top: 6px;
             margin-bottom: 8px;
@@ -971,6 +1081,35 @@ export function ProductGrid({
 
           .product-card.rich .product-stock-text {
             font-size: 11px;
+          }
+
+
+          .product-card.rich .product-copy {
+            padding-top: 12px !important;
+            padding-bottom: 12px !important;
+          }
+
+          .product-card.rich .product-stock-row {
+            margin-top: 6px !important;
+            margin-bottom: 8px !important;
+          }
+
+          .product-card.rich .product-free-gift-chip {
+            margin-bottom: 10px !important;
+          }
+
+          .product-card.rich .price {
+            margin-top: 0 !important;
+            margin-bottom: 5px !important;
+          }
+
+          .product-card.rich .reward-row {
+            margin-top: 0 !important;
+            margin-bottom: 9px !important;
+          }
+
+          .product-card.rich .product-actions {
+            margin-top: 0 !important;
           }
         }
 

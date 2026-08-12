@@ -6,7 +6,6 @@ import {
   CircleUserRound,
   LayoutDashboard,
   LogOut,
-  MapPin,
   Search,
   ShoppingBag,
   Tag,
@@ -53,11 +52,6 @@ const navigation = [
     href: '/shop',
     label: 'Shop',
     icon: ShoppingBag,
-  },
-  {
-    href: '/spots',
-    label: 'Spots',
-    icon: MapPin,
   },
 ] as const;
 
@@ -1480,7 +1474,7 @@ if (!signedInUser) {
 
   display: grid;
   grid-template-columns:
-    repeat(3, minmax(0, 1fr));
+    repeat(2, minmax(0, 1fr));
   align-items: stretch;
   gap: 0;
 
