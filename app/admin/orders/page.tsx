@@ -1,0 +1,2298 @@
+'use client';
+
+import {
+  collection,
+  doc,
+  getDocs,
+  orderBy,
+  query,
+  runTransaction,
+  serverTimestamp,
+  type DocumentData,
+  type DocumentReference,
+} from 'firebase/firestore';
+import { useEffect, useMemo, useState } from 'react';
+
+import { db } from '@/lib/firebase';
+
+type OrderRow = {
+  id: string;
+  data: DocumentData;
+};
+
+type ProductInfo = {
+  id: string;
+  title: string;
+  image: string;
+  sku: string;
+  rack: string;
+  box: string;
+  slot: string;
+  stock: number;
+  reserved: number;
+  sold: number;
+  available: number;
+};
+
+type OrderStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'picking'
+  | 'packed'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'cancelled';
+
+type InventoryState = 'none' | 'reserved' | 'sold' | 'released';
+
+type StatusFilter = 'all' | OrderStatus;
+type SortOption = 'newest' | 'oldest' | 'total_high' | 'total_low';
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+const STATUS_FLOW: Array<{
+  value: OrderStatus;
+  label: string;
+}> = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'picking', label: 'Picking' },
+  { value: 'packed', label: 'Packed' },
+  { value: 'out_for_delivery', label: 'Out for Delivery' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
+function text(value: unknown): string {
+  return String(value ?? '').trim();
+}
+
+function numberValue(value: unknown): number {
+  return Number(value) || 0;
+}
+
+function createdMillis(data: DocumentData): number {
+  const value = data.created_at;
+
+  if (value?.toMillis) return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+
+  const parsed = Date.parse(text(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatDate(data: DocumentData): string {
+  const value = data.created_at;
+
+  try {
+    if (value?.toDate) {
+      return value.toDate().toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    }
+
+    const millis = createdMillis(data);
+    if (!millis) return '—';
+
+    return new Date(millis).toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '—';
+  }
+}
+
+function normalizeStatus(value: unknown): OrderStatus {
+  const raw = text(value).toLowerCase().replace(/\s+/g, '_');
+
+  if (
+    raw === 'confirmed' ||
+    raw === 'accepted' ||
+    raw === 'processing'
+  ) {
+    return 'confirmed';
+  }
+
+  if (raw === 'picking' || raw === 'picked') {
+    return 'picking';
+  }
+
+  if (raw === 'packed' || raw === 'ready') {
+    return 'packed';
+  }
+
+  if (
+    raw === 'out_for_delivery' ||
+    raw === 'out_for_delivery_' ||
+    raw === 'shipped' ||
+    raw === 'dispatch' ||
+    raw === 'dispatched'
+  ) {
+    return 'out_for_delivery';
+  }
+
+  if (
+    raw === 'delivered' ||
+    raw === 'completed' ||
+    raw === 'complete'
+  ) {
+    return 'delivered';
+  }
+
+  if (
+    raw === 'cancelled' ||
+    raw === 'canceled' ||
+    raw === 'rejected'
+  ) {
+    return 'cancelled';
+  }
+
+  return 'pending';
+}
+
+function normalizeInventoryState(value: unknown): InventoryState {
+  const raw = text(value).toLowerCase();
+
+  if (raw === 'reserved') return 'reserved';
+  if (raw === 'sold') return 'sold';
+  if (raw === 'released') return 'released';
+
+  return 'none';
+}
+
+function orderNumber(row: OrderRow): string {
+  return (
+    text(row.data.order_number) ||
+    text(row.data.order_id) ||
+    row.id
+  );
+}
+
+function orderItems(data: DocumentData): DocumentData[] {
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+function quantityOf(item: DocumentData): number {
+  return Math.max(
+    1,
+    Number.parseInt(
+      text(item.quantity ?? item.qty ?? 1),
+      10,
+    ) || 1,
+  );
+}
+
+function itemTitle(item: DocumentData): string {
+  return text(
+    item.title ??
+      item.product_name ??
+      item.name ??
+      'Product',
+  );
+}
+
+function itemImage(item: DocumentData): string {
+  return text(
+    item.image ??
+      item.image_url ??
+      item.product_image ??
+      item.thumbnail_url,
+  );
+}
+
+function productIdFromItem(item: DocumentData): string {
+  const candidate =
+    item.product_ref ??
+    item.product_id ??
+    item.productId ??
+    item.business_product_id ??
+    item.id;
+
+  if (!candidate) return '';
+
+  if (typeof candidate === 'string') {
+    const trimmed = candidate.trim();
+
+    if (trimmed.includes('/')) {
+      return trimmed.split('/').filter(Boolean).pop() || '';
+    }
+
+    return trimmed;
+  }
+
+  if (
+    typeof candidate === 'object' &&
+    candidate !== null &&
+    'id' in candidate
+  ) {
+    return text(
+      (candidate as { id?: unknown }).id,
+    );
+  }
+
+  return '';
+}
+
+function customerName(data: DocumentData): string {
+  return text(
+    data.customer_name ??
+      data.user_name ??
+      data.name ??
+      data.delivery_name ??
+      data.address?.name ??
+      'Customer',
+  );
+}
+
+function customerPhone(data: DocumentData): string {
+  return text(
+    data.customer_phone ??
+      data.phone ??
+      data.phone_number ??
+      data.delivery_phone ??
+      data.address?.phone ??
+      data.address?.phone_number,
+  );
+}
+
+function addressText(data: DocumentData): string {
+  const address = data.address ?? data.delivery_address;
+
+  if (typeof address === 'string') {
+    return address.trim();
+  }
+
+  if (address && typeof address === 'object') {
+    return [
+      address.house_no,
+      address.street,
+      address.area,
+      address.city,
+      address.pincode,
+    ]
+      .map(text)
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  return text(
+    data.address_text ??
+      data.delivery_address_text ??
+      data.shipping_address,
+  );
+}
+
+function paymentLabel(data: DocumentData): string {
+  const payment = text(
+    data.payment_method ??
+      data.payment_mode ??
+      data.payment_type,
+  ).toLowerCase();
+
+  if (!payment) return '—';
+
+  if (
+    payment === 'cod' ||
+    payment.includes('cash')
+  ) {
+    return 'COD';
+  }
+
+  return payment.toUpperCase();
+}
+
+function orderTotal(data: DocumentData): number {
+  return numberValue(
+    data.total ??
+      data.grand_total ??
+      data.total_amount ??
+      data.amount ??
+      0,
+  );
+}
+
+function productInfoFromData(
+  id: string,
+  data: DocumentData,
+): ProductInfo {
+  const images = Array.isArray(data.images)
+    ? data.images
+    : [];
+
+  const stock = Math.max(
+    0,
+    numberValue(
+      data.stock_qty ??
+        data.stock_quantity ??
+        0,
+    ),
+  );
+
+  const reserved = Math.max(
+    0,
+    numberValue(data.reserved_qty ?? 0),
+  );
+
+  const sold = Math.max(
+    0,
+    numberValue(data.sold_qty ?? 0),
+  );
+
+  const storedAvailable = Number(
+    data.available_qty,
+  );
+
+  const available =
+    Number.isFinite(storedAvailable) &&
+    storedAvailable >= 0
+      ? storedAvailable
+      : Math.max(0, stock - reserved);
+
+  return {
+    id,
+    title: text(
+      data.title ??
+        data.product_name ??
+        'Product',
+    ),
+    image: text(
+      images[0] ??
+        data.image_url ??
+        data.image ??
+        data.product_image_url ??
+        data.thumbnail_url,
+    ),
+    sku: text(data.sku),
+    rack: text(
+      data.rack ?? data.rack_location,
+    ),
+    box: text(
+      data.box ?? data.box_location,
+    ),
+    slot: text(
+      data.slot ?? data.slot_location,
+    ),
+    stock,
+    reserved,
+    sold,
+    available,
+  };
+}
+
+export default function AdminOrdersPage() {
+  const [orders, setOrders] =
+    useState<OrderRow[]>([]);
+  const [products, setProducts] = useState<
+    Record<string, ProductInfo>
+  >({});
+
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState('');
+  const [message, setMessage] = useState('');
+
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] =
+    useState<StatusFilter>('all');
+  const [sortBy, setSortBy] =
+    useState<SortOption>('newest');
+
+  const [pageSize, setPageSize] = useState(20);
+  const [page, setPage] = useState(1);
+
+  const [expandedOrderId, setExpandedOrderId] =
+    useState('');
+
+  async function loadData(showLoader = true) {
+    if (!db) {
+      setLoading(false);
+      setMessage('Firebase is not available.');
+      return;
+    }
+
+    if (showLoader) setLoading(true);
+
+    try {
+      let orderSnap;
+
+      try {
+        orderSnap = await getDocs(
+          query(
+            collection(db, 'Orders'),
+            orderBy('created_at', 'desc'),
+          ),
+        );
+      } catch {
+        orderSnap = await getDocs(
+          collection(db, 'Orders'),
+        );
+      }
+
+      const productSnap = await getDocs(
+        collection(db, 'BusinessProducts'),
+      );
+
+      const productMap: Record<
+        string,
+        ProductInfo
+      > = {};
+
+      productSnap.docs.forEach((item) => {
+        productMap[item.id] =
+          productInfoFromData(
+            item.id,
+            item.data(),
+          );
+      });
+
+      setProducts(productMap);
+
+      setOrders(
+        orderSnap.docs.map((item) => ({
+          id: item.id,
+          data: item.data(),
+        })),
+      );
+
+      setMessage('');
+    } catch (error) {
+      console.error(
+        'Admin orders load failed:',
+        error,
+      );
+
+      setMessage(
+        error instanceof Error
+          ? `Load failed: ${error.message}`
+          : 'Failed to load orders.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  const summary = useMemo(() => {
+    const pending = orders.filter(
+      ({ data }) =>
+        normalizeStatus(data.order_status) ===
+        'pending',
+    ).length;
+
+    const processing = orders.filter(
+      ({ data }) => {
+        const status = normalizeStatus(
+          data.order_status,
+        );
+
+        return (
+          status === 'confirmed' ||
+          status === 'picking' ||
+          status === 'packed' ||
+          status === 'out_for_delivery'
+        );
+      },
+    ).length;
+
+    const delivered = orders.filter(
+      ({ data }) =>
+        normalizeStatus(data.order_status) ===
+        'delivered',
+    ).length;
+
+    const cancelled = orders.filter(
+      ({ data }) =>
+        normalizeStatus(data.order_status) ===
+        'cancelled',
+    ).length;
+
+    const revenue = orders.reduce(
+      (sum, { data }) =>
+        normalizeStatus(data.order_status) ===
+        'delivered'
+          ? sum + orderTotal(data)
+          : sum,
+      0,
+    );
+
+    return {
+      total: orders.length,
+      pending,
+      processing,
+      delivered,
+      cancelled,
+      revenue,
+    };
+  }, [orders]);
+
+  const filtered = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+
+    const next = orders.filter((row) => {
+      const status = normalizeStatus(
+        row.data.order_status,
+      );
+
+      if (
+        statusFilter !== 'all' &&
+        status !== statusFilter
+      ) {
+        return false;
+      }
+
+      if (!needle) return true;
+
+      const productTerms = orderItems(
+        row.data,
+      ).flatMap((item) => {
+        const productId =
+          productIdFromItem(item);
+        const product = productId
+          ? products[productId]
+          : undefined;
+
+        return [
+          itemTitle(item),
+          productId,
+          product?.sku,
+          product?.rack,
+          product?.box,
+          product?.slot,
+        ];
+      });
+
+      return [
+        row.id,
+        orderNumber(row),
+        customerName(row.data),
+        customerPhone(row.data),
+        paymentLabel(row.data),
+        addressText(row.data),
+        ...productTerms,
+      ].some((value) =>
+        text(value)
+          .toLowerCase()
+          .includes(needle),
+      );
+    });
+
+    next.sort((a, b) => {
+      switch (sortBy) {
+        case 'oldest':
+          return (
+            createdMillis(a.data) -
+            createdMillis(b.data)
+          );
+
+        case 'total_high':
+          return (
+            orderTotal(b.data) -
+            orderTotal(a.data)
+          );
+
+        case 'total_low':
+          return (
+            orderTotal(a.data) -
+            orderTotal(b.data)
+          );
+
+        case 'newest':
+        default:
+          return (
+            createdMillis(b.data) -
+            createdMillis(a.data)
+          );
+      }
+    });
+
+    return next;
+  }, [
+    orders,
+    products,
+    search,
+    statusFilter,
+    sortBy,
+  ]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [
+    search,
+    statusFilter,
+    sortBy,
+    pageSize,
+  ]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filtered.length / pageSize),
+  );
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const paginated = useMemo(() => {
+    const start = (page - 1) * pageSize;
+
+    return filtered.slice(
+      start,
+      start + pageSize,
+    );
+  }, [filtered, page, pageSize]);
+
+  const pageStart =
+    filtered.length === 0
+      ? 0
+      : (page - 1) * pageSize + 1;
+
+  const pageEnd = Math.min(
+    page * pageSize,
+    filtered.length,
+  );
+
+  async function changeOrderStatus(
+    row: OrderRow,
+    nextStatus: OrderStatus,
+  ) {
+    if (!db || busyId) return;
+
+    const currentStatus = normalizeStatus(
+      row.data.order_status,
+    );
+
+    if (currentStatus === nextStatus) {
+      return;
+    }
+
+    if (
+      currentStatus === 'delivered' &&
+      nextStatus !== 'delivered'
+    ) {
+      setMessage(
+        'Delivered orders cannot be moved backwards from this page.',
+      );
+      return;
+    }
+
+    if (
+      currentStatus === 'cancelled' &&
+      nextStatus !== 'cancelled'
+    ) {
+      setMessage(
+        'Cancelled orders cannot be reactivated from this page.',
+      );
+      return;
+    }
+
+    if (
+      nextStatus === 'cancelled' &&
+      !window.confirm(
+        `Cancel order ${orderNumber(
+          row,
+        )}? Reserved stock will be released.`,
+      )
+    ) {
+      return;
+    }
+
+    if (
+      nextStatus === 'delivered' &&
+      !window.confirm(
+        `Mark order ${orderNumber(
+          row,
+        )} as delivered?\n\nThis will reduce physical stock and increase Sold Qty.`,
+      )
+    ) {
+      return;
+    }
+
+    setBusyId(row.id);
+    setMessage('');
+
+    try {
+      const orderRef = doc(
+        db,
+        'Orders',
+        row.id,
+      );
+
+      await runTransaction(
+        db,
+        async (transaction) => {
+          const orderSnap =
+            await transaction.get(orderRef);
+
+          if (!orderSnap.exists()) {
+            throw new Error(
+              'Order no longer exists.',
+            );
+          }
+
+          const liveOrder =
+            orderSnap.data();
+
+          const liveStatus = normalizeStatus(
+            liveOrder.order_status,
+          );
+
+          const liveInventoryState =
+            normalizeInventoryState(
+              liveOrder.inventory_state,
+            );
+
+          const items =
+            orderItems(liveOrder);
+
+          const quantitiesByProduct =
+            new Map<string, number>();
+
+          for (const item of items) {
+            const productId =
+              productIdFromItem(item);
+
+            if (!productId) continue;
+
+            quantitiesByProduct.set(
+              productId,
+              (quantitiesByProduct.get(
+                productId,
+              ) || 0) + quantityOf(item),
+            );
+          }
+
+          const productSnaps = new Map<
+            string,
+            {
+              ref: DocumentReference;
+              data: DocumentData;
+            }
+          >();
+
+          for (const [
+            productId,
+          ] of quantitiesByProduct) {
+            const productRef = doc(
+              db,
+              'BusinessProducts',
+              productId,
+            );
+
+            const productSnap =
+              await transaction.get(
+                productRef,
+              );
+
+            if (!productSnap.exists()) {
+              throw new Error(
+                `Product ${productId} was not found.`,
+              );
+            }
+
+            productSnaps.set(productId, {
+              ref: productRef,
+              data: productSnap.data(),
+            });
+          }
+
+          let nextInventoryState =
+            liveInventoryState;
+
+          const movingIntoReservedFlow =
+            nextStatus === 'confirmed' ||
+            nextStatus === 'picking' ||
+            nextStatus === 'packed' ||
+            nextStatus ===
+              'out_for_delivery';
+
+          if (
+            movingIntoReservedFlow &&
+            liveInventoryState === 'none'
+          ) {
+            for (const [
+              productId,
+              qty,
+            ] of quantitiesByProduct) {
+              const product =
+                productSnaps.get(
+                  productId,
+                );
+
+              if (!product) continue;
+
+              const currentStock =
+                Math.max(
+                  0,
+                  numberValue(
+                    product.data.stock_qty ??
+                      product.data
+                        .stock_quantity ??
+                      0,
+                  ),
+                );
+
+              const currentReserved =
+                Math.max(
+                  0,
+                  numberValue(
+                    product.data
+                      .reserved_qty ?? 0,
+                  ),
+                );
+
+              const currentAvailable =
+                Math.max(
+                  0,
+                  currentStock -
+                    currentReserved,
+                );
+
+              if (
+                currentAvailable < qty
+              ) {
+                throw new Error(
+                  `${text(
+                    product.data.title ??
+                      product.data
+                        .product_name ??
+                      productId,
+                  )} has only ${currentAvailable} available, but order needs ${qty}.`,
+                );
+              }
+
+              const nextReserved =
+                currentReserved + qty;
+
+              transaction.update(
+                product.ref,
+                {
+                  reserved_qty:
+                    nextReserved,
+                  available_qty:
+                    Math.max(
+                      0,
+                      currentStock -
+                        nextReserved,
+                    ),
+                  is_in_stock:
+                    currentStock -
+                      nextReserved >
+                    0,
+                  updated_at:
+                    serverTimestamp(),
+                },
+              );
+            }
+
+            nextInventoryState =
+              'reserved';
+          }
+
+          if (
+            nextStatus === 'cancelled' &&
+            liveInventoryState ===
+              'reserved'
+          ) {
+            for (const [
+              productId,
+              qty,
+            ] of quantitiesByProduct) {
+              const product =
+                productSnaps.get(
+                  productId,
+                );
+
+              if (!product) continue;
+
+              const currentStock =
+                Math.max(
+                  0,
+                  numberValue(
+                    product.data.stock_qty ??
+                      product.data
+                        .stock_quantity ??
+                      0,
+                  ),
+                );
+
+              const currentReserved =
+                Math.max(
+                  0,
+                  numberValue(
+                    product.data
+                      .reserved_qty ?? 0,
+                  ),
+                );
+
+              const nextReserved =
+                Math.max(
+                  0,
+                  currentReserved - qty,
+                );
+
+              transaction.update(
+                product.ref,
+                {
+                  reserved_qty:
+                    nextReserved,
+                  available_qty:
+                    Math.max(
+                      0,
+                      currentStock -
+                        nextReserved,
+                    ),
+                  is_in_stock:
+                    currentStock -
+                      nextReserved >
+                    0,
+                  updated_at:
+                    serverTimestamp(),
+                },
+              );
+            }
+
+            nextInventoryState =
+              'released';
+          }
+
+          if (
+            nextStatus === 'delivered' &&
+            liveInventoryState !== 'sold'
+          ) {
+            if (
+              liveInventoryState !==
+              'reserved'
+            ) {
+              throw new Error(
+                'This order has not reserved inventory yet. Confirm it before marking it delivered.',
+              );
+            }
+
+            for (const [
+              productId,
+              qty,
+            ] of quantitiesByProduct) {
+              const product =
+                productSnaps.get(
+                  productId,
+                );
+
+              if (!product) continue;
+
+              const currentStock =
+                Math.max(
+                  0,
+                  numberValue(
+                    product.data.stock_qty ??
+                      product.data
+                        .stock_quantity ??
+                      0,
+                  ),
+                );
+
+              const currentReserved =
+                Math.max(
+                  0,
+                  numberValue(
+                    product.data
+                      .reserved_qty ?? 0,
+                  ),
+                );
+
+              const currentSold =
+                Math.max(
+                  0,
+                  numberValue(
+                    product.data.sold_qty ??
+                      0,
+                  ),
+                );
+
+              if (currentStock < qty) {
+                throw new Error(
+                  `${text(
+                    product.data.title ??
+                      product.data
+                        .product_name ??
+                      productId,
+                  )} physical stock is below ordered quantity.`,
+                );
+              }
+
+              const nextStock =
+                Math.max(
+                  0,
+                  currentStock - qty,
+                );
+
+              const nextReserved =
+                Math.max(
+                  0,
+                  currentReserved - qty,
+                );
+
+              transaction.update(
+                product.ref,
+                {
+                  stock_qty: nextStock,
+                  stock_quantity:
+                    nextStock,
+                  reserved_qty:
+                    nextReserved,
+                  available_qty:
+                    Math.max(
+                      0,
+                      nextStock -
+                        nextReserved,
+                    ),
+                  sold_qty:
+                    currentSold + qty,
+                  is_in_stock:
+                    nextStock -
+                      nextReserved >
+                    0,
+                  updated_at:
+                    serverTimestamp(),
+                },
+              );
+            }
+
+            nextInventoryState = 'sold';
+          }
+
+          const orderUpdate: DocumentData =
+            {
+              order_status:
+                nextStatus,
+              status: nextStatus,
+              inventory_state:
+                nextInventoryState,
+              updated_at:
+                serverTimestamp(),
+            };
+
+          if (
+            nextStatus === 'confirmed' &&
+            liveStatus !== 'confirmed'
+          ) {
+            orderUpdate.confirmed_at =
+              serverTimestamp();
+          }
+
+          if (nextStatus === 'picking') {
+            orderUpdate.picking_at =
+              serverTimestamp();
+          }
+
+          if (nextStatus === 'packed') {
+            orderUpdate.packed_at =
+              serverTimestamp();
+          }
+
+          if (
+            nextStatus ===
+            'out_for_delivery'
+          ) {
+            orderUpdate
+              .out_for_delivery_at =
+              serverTimestamp();
+          }
+
+          if (
+            nextStatus === 'delivered'
+          ) {
+            orderUpdate.delivered_at =
+              serverTimestamp();
+          }
+
+          if (
+            nextStatus === 'cancelled'
+          ) {
+            orderUpdate.cancelled_at =
+              serverTimestamp();
+          }
+
+          transaction.update(
+            orderRef,
+            orderUpdate,
+          );
+        },
+      );
+
+      await loadData(false);
+
+      setMessage(
+        `Order ${orderNumber(
+          row,
+        )} updated to ${
+          STATUS_FLOW.find(
+            (item) =>
+              item.value === nextStatus,
+          )?.label ?? nextStatus
+        }.`,
+      );
+    } catch (error) {
+      console.error(
+        'Order status update failed:',
+        error,
+      );
+
+      setMessage(
+        error instanceof Error
+          ? `Update failed: ${error.message}`
+          : 'Order update failed.',
+      );
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  function nextPrimaryStatus(
+    status: OrderStatus,
+  ): OrderStatus | null {
+    switch (status) {
+      case 'pending':
+        return 'confirmed';
+      case 'confirmed':
+        return 'picking';
+      case 'picking':
+        return 'packed';
+      case 'packed':
+        return 'out_for_delivery';
+      case 'out_for_delivery':
+        return 'delivered';
+      default:
+        return null;
+    }
+  }
+
+  function clearFilters() {
+    setSearch('');
+    setStatusFilter('all');
+    setSortBy('newest');
+  }
+
+  return (
+    <div>
+      <div style={pageHeader}>
+        <div>
+          <h1 style={pageTitle}>
+            Orders
+          </h1>
+
+          <p style={pageSubtitle}>
+            Confirm, pick, pack and complete
+            customer orders with inventory
+            tracking.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() =>
+            void loadData(false)
+          }
+          style={refreshButton}
+        >
+          ↻ Refresh
+        </button>
+      </div>
+
+      <div style={summaryGrid}>
+        <SummaryCard
+          label="Total Orders"
+          value={summary.total}
+        />
+        <SummaryCard
+          label="Pending"
+          value={summary.pending}
+          warning={summary.pending > 0}
+        />
+        <SummaryCard
+          label="Processing"
+          value={summary.processing}
+        />
+        <SummaryCard
+          label="Delivered"
+          value={summary.delivered}
+        />
+        <SummaryCard
+          label="Cancelled"
+          value={summary.cancelled}
+        />
+        <SummaryCard
+          label="Delivered Revenue"
+          value={`₹${summary.revenue.toFixed(
+            0,
+          )}`}
+        />
+      </div>
+
+      <div style={controlsCard}>
+        <input
+          value={search}
+          onChange={(event) =>
+            setSearch(
+              event.target.value,
+            )
+          }
+          placeholder="Search order, customer, phone, product, SKU, rack, box…"
+          style={searchInput}
+        />
+
+        <div style={filterRow}>
+          <label style={filterLabelWrap}>
+            <span style={filterLabel}>
+              Status
+            </span>
+
+            <select
+              value={statusFilter}
+              onChange={(event) =>
+                setStatusFilter(
+                  event.target
+                    .value as StatusFilter,
+                )
+              }
+              style={filterSelect}
+            >
+              <option value="all">
+                All Status
+              </option>
+
+              {STATUS_FLOW.map(
+                (status) => (
+                  <option
+                    key={status.value}
+                    value={status.value}
+                  >
+                    {status.label}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+
+          <label style={filterLabelWrap}>
+            <span style={filterLabel}>
+              Sort
+            </span>
+
+            <select
+              value={sortBy}
+              onChange={(event) =>
+                setSortBy(
+                  event.target
+                    .value as SortOption,
+                )
+              }
+              style={filterSelect}
+            >
+              <option value="newest">
+                Newest First
+              </option>
+              <option value="oldest">
+                Oldest First
+              </option>
+              <option value="total_high">
+                Total High–Low
+              </option>
+              <option value="total_low">
+                Total Low–High
+              </option>
+            </select>
+          </label>
+
+          <button
+            type="button"
+            onClick={clearFilters}
+            style={clearButton}
+          >
+            Clear Filters
+          </button>
+
+          <div style={matchCount}>
+            {filtered.length} matching
+            order
+            {filtered.length === 1
+              ? ''
+              : 's'}
+          </div>
+        </div>
+      </div>
+
+      {message && (
+        <div style={messageBox}>
+          <span>{message}</span>
+
+          <button
+            type="button"
+            onClick={() =>
+              setMessage('')
+            }
+            style={messageClose}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={loadingBox}>
+          Loading orders…
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={emptyBox}>
+          No matching orders.
+        </div>
+      ) : (
+        <div style={orderList}>
+          {paginated.map((row) => {
+            const status =
+              normalizeStatus(
+                row.data.order_status,
+              );
+
+            const inventoryState =
+              normalizeInventoryState(
+                row.data.inventory_state,
+              );
+
+            const items =
+              orderItems(row.data);
+
+            const expanded =
+              expandedOrderId === row.id;
+
+            const nextStatus =
+              nextPrimaryStatus(status);
+
+            const busy =
+              busyId === row.id;
+
+            return (
+              <article
+                key={row.id}
+                style={orderCard}
+              >
+                <div style={orderTop}>
+                  <div>
+                    <div
+                      style={orderNumberStyle}
+                    >
+                      {orderNumber(row)}
+                    </div>
+
+                    <div style={orderDate}>
+                      {formatDate(
+                        row.data,
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={topRight}>
+                    <StatusBadge
+                      status={status}
+                    />
+
+                    <span
+                      style={inventoryBadge}
+                      title="Inventory state"
+                    >
+                      {inventoryState}
+                    </span>
+
+                    <span style={totalText}>
+                      ₹
+                      {orderTotal(
+                        row.data,
+                      ).toFixed(0)}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={orderMetaGrid}>
+                  <div>
+                    <span style={metaLabel}>
+                      Customer
+                    </span>
+                    <div>
+                      {customerName(
+                        row.data,
+                      )}
+                    </div>
+                    <div style={mutedText}>
+                      {customerPhone(
+                        row.data,
+                      ) || 'No phone'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span style={metaLabel}>
+                      Payment
+                    </span>
+                    <div>
+                      {paymentLabel(
+                        row.data,
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span style={metaLabel}>
+                      Delivery
+                    </span>
+                    <div style={addressLine}>
+                      {addressText(
+                        row.data,
+                      ) ||
+                        'Address not stored in order'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span style={metaLabel}>
+                      Items
+                    </span>
+                    <div>
+                      {items.reduce(
+                        (sum, item) =>
+                          sum +
+                          quantityOf(
+                            item,
+                          ),
+                        0,
+                      )}{' '}
+                      unit(s)
+                    </div>
+                  </div>
+                </div>
+
+                <div style={itemsWrap}>
+                  {items
+                    .slice(
+                      0,
+                      expanded
+                        ? items.length
+                        : 2,
+                    )
+                    .map(
+                      (
+                        item,
+                        itemIndex,
+                      ) => {
+                        const productId =
+                          productIdFromItem(
+                            item,
+                          );
+
+                        const product =
+                          productId
+                            ? products[
+                                productId
+                              ]
+                            : undefined;
+
+                        const image =
+                          product?.image ||
+                          itemImage(item);
+
+                        return (
+                          <div
+                            key={`${row.id}-${productId}-${itemIndex}`}
+                            style={itemRow}
+                          >
+                            {image ? (
+                              <img
+                                src={image}
+                                alt=""
+                                style={itemImageStyle}
+                              />
+                            ) : (
+                              <div
+                                style={itemImagePlaceholder}
+                              />
+                            )}
+
+                            <div
+                              style={itemMain}
+                            >
+                              <div
+                                style={itemTitleStyle}
+                              >
+                                {product?.title ||
+                                  itemTitle(
+                                    item,
+                                  )}
+                              </div>
+
+                              <div
+                                style={itemSub}
+                              >
+                                Qty{' '}
+                                {quantityOf(
+                                  item,
+                                )}
+                                {product?.sku
+                                  ? ` • SKU ${product.sku}`
+                                  : ''}
+                              </div>
+                            </div>
+
+                            <div
+                              style={pickLocation}
+                            >
+                              {product ? (
+                                product.rack ||
+                                product.box ||
+                                product.slot ? (
+                                  <>
+                                    <div
+                                      style={locationMain}
+                                    >
+                                      📍{' '}
+                                      {product.rack ||
+                                        'Rack —'}
+                                    </div>
+                                    <div
+                                      style={itemSub}
+                                    >
+                                      {[
+                                        product.box,
+                                        product.slot,
+                                      ]
+                                        .filter(
+                                          Boolean,
+                                        )
+                                        .join(
+                                          ' • ',
+                                        ) ||
+                                        'Box / Slot not set'}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <span
+                                    style={locationMissing}
+                                  >
+                                    Location missing
+                                  </span>
+                                )
+                              ) : (
+                                <span
+                                  style={locationMissing}
+                                >
+                                  Product link missing
+                                </span>
+                              )}
+                            </div>
+
+                            <div
+                              style={stockInfo}
+                            >
+                              {product ? (
+                                <>
+                                  <div>
+                                    Avail{' '}
+                                    {product.available}
+                                  </div>
+                                  <div
+                                    style={itemSub}
+                                  >
+                                    Reserved{' '}
+                                    {product.reserved}
+                                    {' • '}
+                                    Sold{' '}
+                                    {product.sold}
+                                  </div>
+                                </>
+                              ) : (
+                                '—'
+                              )}
+                            </div>
+                          </div>
+                        );
+                      },
+                    )}
+
+                  {items.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedOrderId(
+                          expanded
+                            ? ''
+                            : row.id,
+                        )
+                      }
+                      style={expandButton}
+                    >
+                      {expanded
+                        ? 'Show less'
+                        : `Show ${
+                            items.length -
+                            2
+                          } more item(s)`}
+                    </button>
+                  )}
+                </div>
+
+                <div style={orderActions}>
+                  {nextStatus && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        void changeOrderStatus(
+                          row,
+                          nextStatus,
+                        )
+                      }
+                      style={{
+                        ...primaryAction,
+                        opacity: busy
+                          ? 0.5
+                          : 1,
+                      }}
+                    >
+                      {nextStatus ===
+                      'confirmed'
+                        ? 'Confirm Order'
+                        : nextStatus ===
+                            'picking'
+                          ? 'Start Picking'
+                          : nextStatus ===
+                              'packed'
+                            ? 'Mark Packed'
+                            : nextStatus ===
+                                'out_for_delivery'
+                              ? 'Out for Delivery'
+                              : 'Mark Delivered'}
+                    </button>
+                  )}
+
+                  {status !== 'delivered' &&
+                    status !==
+                      'cancelled' && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void changeOrderStatus(
+                            row,
+                            'cancelled',
+                          )
+                        }
+                        style={{
+                          ...cancelButton,
+                          opacity: busy
+                            ? 0.5
+                            : 1,
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {!loading &&
+        filtered.length > 0 && (
+          <div style={paginationBar}>
+            <div style={paginationInfo}>
+              Showing {pageStart}–
+              {pageEnd} of{' '}
+              {filtered.length}
+            </div>
+
+            <div
+              style={paginationRight}
+            >
+              <label style={rowsLabel}>
+                Rows
+                <select
+                  value={pageSize}
+                  onChange={(event) => {
+                    setPageSize(
+                      Number(
+                        event.target
+                          .value,
+                      ),
+                    );
+                    setPage(1);
+                  }}
+                  style={pageSizeSelect}
+                >
+                  {PAGE_SIZE_OPTIONS.map(
+                    (size) => (
+                      <option
+                        key={size}
+                        value={size}
+                      >
+                        {size}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() =>
+                  setPage((prev) =>
+                    Math.max(
+                      1,
+                      prev - 1,
+                    ),
+                  )
+                }
+                style={{
+                  ...pageButton,
+                  opacity:
+                    page <= 1
+                      ? 0.4
+                      : 1,
+                }}
+              >
+                ‹
+              </button>
+
+              <div style={pageNumber}>
+                Page {page} of{' '}
+                {totalPages}
+              </div>
+
+              <button
+                type="button"
+                disabled={
+                  page >= totalPages
+                }
+                onClick={() =>
+                  setPage((prev) =>
+                    Math.min(
+                      totalPages,
+                      prev + 1,
+                    ),
+                  )
+                }
+                style={{
+                  ...pageButton,
+                  opacity:
+                    page >=
+                    totalPages
+                      ? 0.4
+                      : 1,
+                }}
+              >
+                ›
+              </button>
+            </div>
+          </div>
+        )}
+    </div>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  warning = false,
+}: {
+  label: string;
+  value: string | number;
+  warning?: boolean;
+}) {
+  return (
+    <div style={summaryCard}>
+      <div style={summaryLabel}>
+        {label}
+      </div>
+
+      <div
+        style={{
+          ...summaryValue,
+          color: warning
+            ? '#a34a00'
+            : '#111',
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({
+  status,
+}: {
+  status: OrderStatus;
+}) {
+  const config: Record<
+    OrderStatus,
+    React.CSSProperties
+  > = {
+    pending: {
+      background: '#fff4dc',
+      color: '#9a6100',
+    },
+    confirmed: {
+      background: '#eaf2ff',
+      color: '#3157a4',
+    },
+    picking: {
+      background: '#eee9ff',
+      color: '#6941c6',
+    },
+    packed: {
+      background: '#e8f7f2',
+      color: '#08775e',
+    },
+    out_for_delivery: {
+      background: '#e7f3ff',
+      color: '#0068a8',
+    },
+    delivered: {
+      background: '#ebf8ee',
+      color: '#137333',
+    },
+    cancelled: {
+      background: '#fff0f0',
+      color: '#b42318',
+    },
+  };
+
+  return (
+    <span
+      style={{
+        ...statusBadgeBase,
+        ...config[status],
+      }}
+    >
+      {STATUS_FLOW.find(
+        (item) =>
+          item.value === status,
+      )?.label ?? status}
+    </span>
+  );
+}
+
+const pageHeader: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  gap: 16,
+  alignItems: 'flex-start',
+  flexWrap: 'wrap',
+};
+
+const pageTitle: React.CSSProperties = {
+  margin: '0 0 6px',
+  fontSize: 30,
+  fontWeight: 400,
+};
+
+const pageSubtitle: React.CSSProperties = {
+  margin: 0,
+  color: '#666',
+};
+
+const refreshButton: React.CSSProperties = {
+  border: '1px solid #ddd',
+  background: '#fff',
+  color: '#222',
+  borderRadius: 10,
+  padding: '10px 14px',
+  cursor: 'pointer',
+  fontWeight: 400,
+};
+
+const summaryGrid: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns:
+    'repeat(auto-fit,minmax(150px,1fr))',
+  gap: 12,
+  margin: '22px 0',
+};
+
+const summaryCard: React.CSSProperties = {
+  background: '#fff',
+  border: '1px solid #e7e7e7',
+  borderRadius: 14,
+  padding: 15,
+};
+
+const summaryLabel: React.CSSProperties = {
+  fontSize: 12,
+  color: '#777',
+  fontWeight: 400,
+};
+
+const summaryValue: React.CSSProperties = {
+  marginTop: 4,
+  fontSize: 25,
+  fontWeight: 400,
+};
+
+const controlsCard: React.CSSProperties = {
+  background: '#fff',
+  border: '1px solid #e7e7e7',
+  borderRadius: 15,
+  padding: 14,
+  marginBottom: 15,
+};
+
+const searchInput: React.CSSProperties = {
+  width: '100%',
+  boxSizing: 'border-box',
+  border: '1px solid #ddd',
+  borderRadius: 10,
+  padding: '12px 13px',
+  fontSize: 14,
+  outline: 'none',
+  marginBottom: 10,
+};
+
+const filterRow: React.CSSProperties = {
+  display: 'flex',
+  gap: 10,
+  alignItems: 'end',
+  flexWrap: 'wrap',
+};
+
+const filterLabelWrap: React.CSSProperties = {
+  display: 'grid',
+  gap: 5,
+  minWidth: 170,
+};
+
+const filterLabel: React.CSSProperties = {
+  fontSize: 11,
+  color: '#666',
+  fontWeight: 400,
+};
+
+const filterSelect: React.CSSProperties = {
+  border: '1px solid #ddd',
+  borderRadius: 9,
+  padding: '9px 10px',
+  background: '#fff',
+  fontWeight: 400,
+};
+
+const clearButton: React.CSSProperties = {
+  border: '1px solid #ddd',
+  borderRadius: 9,
+  background: '#fff',
+  padding: '9px 11px',
+  cursor: 'pointer',
+  fontWeight: 400,
+};
+
+const matchCount: React.CSSProperties = {
+  marginLeft: 'auto',
+  fontSize: 12,
+  color: '#777',
+};
+
+const messageBox: React.CSSProperties = {
+  position: 'relative',
+  display: 'flex',
+  gap: 10,
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  marginBottom: 14,
+  padding: '11px 13px',
+  background: '#fff8e8',
+  border: '1px solid #f0d598',
+  borderRadius: 10,
+  fontSize: 13,
+};
+
+const messageClose: React.CSSProperties = {
+  border: 0,
+  background: 'transparent',
+  fontSize: 20,
+  cursor: 'pointer',
+};
+
+const loadingBox: React.CSSProperties = {
+  padding: 28,
+  background: '#fff',
+  border: '1px solid #e7e7e7',
+  borderRadius: 15,
+};
+
+const emptyBox: React.CSSProperties = {
+  padding: 36,
+  background: '#fff',
+  border: '1px solid #e7e7e7',
+  borderRadius: 15,
+  textAlign: 'center',
+  color: '#777',
+};
+
+const orderList: React.CSSProperties = {
+  display: 'grid',
+  gap: 14,
+};
+
+const orderCard: React.CSSProperties = {
+  background: '#fff',
+  border: '1px solid #e5e5e5',
+  borderRadius: 16,
+  overflow: 'hidden',
+};
+
+const orderTop: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: 12,
+  flexWrap: 'wrap',
+  padding: '14px 16px',
+  borderBottom: '1px solid #eee',
+  background: '#fafafa',
+};
+
+const orderNumberStyle: React.CSSProperties = {
+  fontSize: 15,
+  fontWeight: 400,
+};
+
+const orderDate: React.CSSProperties = {
+  fontSize: 11,
+  color: '#888',
+  marginTop: 3,
+};
+
+const topRight: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  flexWrap: 'wrap',
+};
+
+const statusBadgeBase: React.CSSProperties = {
+  display: 'inline-flex',
+  padding: '5px 8px',
+  borderRadius: 8,
+  fontSize: 11,
+  fontWeight: 400,
+};
+
+const inventoryBadge: React.CSSProperties = {
+  display: 'inline-flex',
+  padding: '5px 8px',
+  background: '#f0f0f0',
+  color: '#666',
+  borderRadius: 8,
+  fontSize: 10,
+  textTransform: 'uppercase',
+};
+
+const totalText: React.CSSProperties = {
+  fontSize: 16,
+  fontWeight: 400,
+  marginLeft: 6,
+};
+
+const orderMetaGrid: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns:
+    'repeat(auto-fit,minmax(150px,1fr))',
+  gap: 14,
+  padding: '14px 16px',
+  borderBottom: '1px solid #eee',
+  fontSize: 13,
+};
+
+const metaLabel: React.CSSProperties = {
+  display: 'block',
+  color: '#888',
+  fontSize: 10,
+  marginBottom: 4,
+};
+
+const mutedText: React.CSSProperties = {
+  fontSize: 11,
+  color: '#888',
+};
+
+const addressLine: React.CSSProperties = {
+  maxWidth: 360,
+  lineHeight: 1.4,
+};
+
+const itemsWrap: React.CSSProperties = {
+  padding: '0 16px',
+};
+
+const itemRow: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns:
+    '52px minmax(200px,1.6fr) minmax(150px,1fr) minmax(110px,.6fr)',
+  alignItems: 'center',
+  gap: 12,
+  padding: '12px 0',
+  borderBottom: '1px solid #f0f0f0',
+};
+
+const itemImageStyle: React.CSSProperties = {
+  width: 50,
+  height: 50,
+  objectFit: 'contain',
+  objectPosition: 'center',
+  background: '#f7f7f7',
+  border: '1px solid #eee',
+  borderRadius: 9,
+};
+
+const itemImagePlaceholder: React.CSSProperties = {
+  width: 50,
+  height: 50,
+  background: '#f2f2f2',
+  borderRadius: 9,
+};
+
+const itemMain: React.CSSProperties = {
+  minWidth: 0,
+};
+
+const itemTitleStyle: React.CSSProperties = {
+  fontSize: 13,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+};
+
+const itemSub: React.CSSProperties = {
+  fontSize: 10,
+  color: '#888',
+  marginTop: 3,
+};
+
+const pickLocation: React.CSSProperties = {
+  minWidth: 0,
+};
+
+const locationMain: React.CSSProperties = {
+  fontSize: 12,
+};
+
+const locationMissing: React.CSSProperties = {
+  display: 'inline-flex',
+  padding: '5px 7px',
+  borderRadius: 7,
+  background: '#fff1e5',
+  color: '#a34a00',
+  fontSize: 10,
+};
+
+const stockInfo: React.CSSProperties = {
+  fontSize: 11,
+};
+
+const expandButton: React.CSSProperties = {
+  border: 0,
+  background: 'transparent',
+  color: '#555',
+  padding: '10px 0',
+  cursor: 'pointer',
+  fontSize: 12,
+};
+
+const orderActions: React.CSSProperties = {
+  display: 'flex',
+  gap: 8,
+  justifyContent: 'flex-end',
+  padding: '12px 16px',
+  background: '#fafafa',
+};
+
+const primaryAction: React.CSSProperties = {
+  border: 0,
+  background: '#111',
+  color: '#fff',
+  borderRadius: 9,
+  padding: '10px 14px',
+  fontWeight: 400,
+  cursor: 'pointer',
+};
+
+const cancelButton: React.CSSProperties = {
+  border: '1px solid #efb7b3',
+  background: '#fff7f6',
+  color: '#b42318',
+  borderRadius: 9,
+  padding: '10px 14px',
+  fontWeight: 400,
+  cursor: 'pointer',
+};
+
+const paginationBar: React.CSSProperties = {
+  marginTop: 14,
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: 12,
+  flexWrap: 'wrap',
+};
+
+const paginationInfo: React.CSSProperties = {
+  fontSize: 12,
+  color: '#777',
+};
+
+const paginationRight: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+};
+
+const rowsLabel: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  fontSize: 11,
+  color: '#777',
+};
+
+const pageSizeSelect: React.CSSProperties = {
+  border: '1px solid #ddd',
+  borderRadius: 8,
+  padding: '6px 7px',
+  background: '#fff',
+};
+
+const pageButton: React.CSSProperties = {
+  width: 32,
+  height: 32,
+  border: '1px solid #ddd',
+  borderRadius: 8,
+  background: '#fff',
+  fontSize: 18,
+  cursor: 'pointer',
+};
+
+const pageNumber: React.CSSProperties = {
+  minWidth: 95,
+  textAlign: 'center',
+  fontSize: 11,
+};

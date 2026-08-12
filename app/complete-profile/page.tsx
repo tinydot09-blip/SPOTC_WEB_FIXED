@@ -21,7 +21,10 @@ import {
   setDoc,
 } from 'firebase/firestore';
 
-import { useRouter } from 'next/navigation';
+import {
+  useRouter,
+  useSearchParams,
+} from 'next/navigation';
 
 import {
   type FormEvent,
@@ -75,6 +78,18 @@ function isValidPhone(
 
 export default function CompleteProfilePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const requestedNext =
+    searchParams.get('next');
+
+  const nextPath =
+    requestedNext &&
+    requestedNext.startsWith('/') &&
+    !requestedNext.startsWith('//') &&
+    !requestedNext.startsWith('/complete-profile')
+      ? requestedNext
+      : '/offers';
 
   const [user, setUser] =
     useState<User | null>(null);
@@ -178,7 +193,7 @@ export default function CompleteProfilePage() {
                 PROFILE_SKIP_KEY,
               );
 
-              router.replace('/offers');
+              router.replace(nextPath);
               return;
             }
 
@@ -251,7 +266,7 @@ export default function CompleteProfilePage() {
       active = false;
       unsubscribe();
     };
-  }, [router]);
+  }, [router, nextPath]);
 
   const handlePhoneChange = (
     value: string,
@@ -282,7 +297,7 @@ export default function CompleteProfilePage() {
 
   const handleSkipForNow = () => {
     if (!user) {
-      router.replace('/offers');
+      router.replace(nextPath);
       return;
     }
 
@@ -291,7 +306,7 @@ export default function CompleteProfilePage() {
       user.uid,
     );
 
-    router.replace('/offers');
+    router.replace(nextPath);
     router.refresh();
   };
 
@@ -476,7 +491,7 @@ export default function CompleteProfilePage() {
         PROFILE_SKIP_KEY,
       );
 
-      router.replace('/offers');
+      router.replace(nextPath);
       router.refresh();
     } catch (
       saveError

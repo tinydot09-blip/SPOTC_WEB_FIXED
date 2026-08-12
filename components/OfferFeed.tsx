@@ -178,6 +178,70 @@ function embeddedMainProduct(item: BusinessListing): OfferProduct | null {
   return null;
 }
 
+
+function embeddedOfferProduct(
+  item: BusinessListing,
+): OfferProduct | null {
+  const raw = item as BusinessListing & Record<string, unknown>;
+  const offerProducts = Array.isArray(raw.offer_products)
+    ? (raw.offer_products as Array<Record<string, unknown>>)
+    : [];
+
+  if (offerProducts.length === 0) return null;
+
+  for (const candidate of offerProducts) {
+    const productId =
+      text(candidate.id || candidate.product_id || candidate.productId).trim() ||
+      referenceId(candidate.product_ref || candidate.ref);
+
+    const title = text(
+      candidate.title ||
+        candidate.product_name ||
+        candidate.name ||
+        raw.primary_product_title,
+    ).trim();
+
+    const price = num(
+      candidate.offer_price ??
+        candidate.price ??
+        candidate.selling_price ??
+        candidate.sale_price,
+    );
+
+    const oldPrice = num(
+      candidate.old_price ??
+        candidate.mrp ??
+        candidate.original_price ??
+        candidate.list_price,
+    );
+
+    const explicitDiscount = num(
+      candidate.discount_percent ?? candidate.discount,
+    );
+
+    const calculatedDiscount =
+      oldPrice > price && price > 0
+        ? Math.round(((oldPrice - price) / oldPrice) * 100)
+        : 0;
+
+    if (!title && price <= 0 && !productId) continue;
+
+    return {
+      title: title || 'Product',
+      price,
+      oldPrice,
+      discount: explicitDiscount
+        ? `${explicitDiscount}% OFF`
+        : calculatedDiscount
+          ? `${calculatedDiscount}% OFF`
+          : '',
+      productId,
+    };
+  }
+
+  return null;
+}
+
 function linkedMainProduct(
   item: BusinessListing,
   allProducts: BusinessProduct[],
@@ -340,6 +404,7 @@ function OfferCard({
   const product = useMemo(() => {
     return (
       linkedMainProduct(item, allProducts) ??
+      embeddedOfferProduct(item) ??
       embeddedMainProduct(item) ??
       listingFallbackProduct(item)
     );
@@ -1086,6 +1151,7 @@ export function OfferFeed() {
       if (query) {
         const mainProduct =
           linkedMainProduct(item, allProducts) ??
+          embeddedOfferProduct(item) ??
           embeddedMainProduct(item) ??
           listingFallbackProduct(item);
 

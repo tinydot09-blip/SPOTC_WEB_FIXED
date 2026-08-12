@@ -1,0 +1,285 @@
+.shell {
+  min-height: 100vh;
+  background: #f6f7f9;
+  color: #171717;
+}
+
+/* =========================
+   LEFT ADMIN SIDEBAR
+   ========================= */
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+
+  width: 250px;
+  height: 100vh;
+
+  background: #0d0f12;
+  color: white;
+
+  padding: 24px 18px;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  z-index: 100;
+}
+
+.brand {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+}
+
+.brandSub {
+  font-size: 12px;
+  color: #a7adb7;
+  margin-top: 4px;
+  margin-bottom: 26px;
+}
+
+.nav {
+  display: grid;
+  gap: 8px;
+}
+
+.nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  padding: 12px 14px;
+
+  border-radius: 12px;
+
+  color: #d7dbe2;
+  text-decoration: none;
+
+  font-weight: 700;
+}
+
+.nav a:hover {
+  background: #191d23;
+  color: white;
+}
+
+.active {
+  background: #f2b774 !important;
+  color: #111 !important;
+}
+
+/* =========================
+   RIGHT ADMIN CONTENT
+   ========================= */
+
+.main {
+  margin-left: 250px;
+
+  width: calc(100% - 250px);
+  min-width: 0;
+  min-height: 100vh;
+}
+
+/* =========================
+   ADMIN TOP BAR
+   ========================= */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+
+  height: 72px;
+
+  background: white;
+
+  border-bottom: 1px solid #e8e8e8;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 28px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.user {
+  font-size: 13px;
+  color: #666;
+}
+
+/* =========================
+   PAGE CONTENT
+   ========================= */
+
+.content {
+  width: 100%;
+  max-width: 1500px;
+
+  margin: 0 auto;
+
+  padding: 28px;
+}
+
+/* =========================
+   AUTH / LOADING
+   ========================= */
+
+.loading {
+  min-height: 100vh;
+
+  display: grid;
+  place-items: center;
+
+  background: #0d0f12;
+  color: white;
+
+  font-weight: 800;
+}
+
+.denied {
+  min-height: 100vh;
+
+  display: grid;
+  place-items: center;
+
+  background: #0d0f12;
+
+  padding: 24px;
+}
+
+.deniedCard {
+  width: 100%;
+  max-width: 520px;
+
+  background: white;
+
+  padding: 28px;
+
+  border-radius: 22px;
+}
+
+.deniedCard h1 {
+  margin-top: 0;
+}
+
+.deniedCard code {
+  background: #f2f2f2;
+
+  padding: 2px 6px;
+
+  border-radius: 6px;
+}
+
+.signIn {
+  border: 0;
+
+  background: #f2b774;
+
+  font-weight: 900;
+
+  padding: 12px 18px;
+
+  border-radius: 12px;
+
+  cursor: pointer;
+}
+
+.mobileHead {
+  display: none;
+}
+
+/* =========================
+   TABLET / MOBILE
+   ========================= */
+
+@media (max-width: 850px) {
+  .shell {
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    position: relative;
+
+    top: auto;
+    left: auto;
+    bottom: auto;
+
+    width: 100%;
+    height: auto;
+
+    padding: 14px;
+
+    overflow: visible;
+  }
+
+  .brandSub {
+    margin-bottom: 12px;
+  }
+
+  .nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .nav a {
+    justify-content: center;
+
+    padding: 10px 5px;
+
+    font-size: 12px;
+
+    text-align: center;
+  }
+
+  .main {
+    margin-left: 0;
+
+    width: 100%;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+
+    height: 64px;
+
+    padding: 0 16px;
+  }
+
+  .content {
+    padding: 16px;
+  }
+}
+
+/* =========================
+   SMALL MOBILE
+   ========================= */
+
+@media (max-width: 520px) {
+  .nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brand {
+    font-size: 22px;
+  }
+
+  .title {
+    font-size: 16px;
+  }
+
+  .user {
+    max-width: 150px;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

@@ -104,6 +104,7 @@ export function AppShell({
     useRef<HTMLDivElement>(null);
 
   const standalonePage =
+  pathname.startsWith('/admin') ||
   pathname.startsWith('/dashboard') ||
   pathname.startsWith('/compare-online') ||
   pathname.startsWith('/order-success') ||

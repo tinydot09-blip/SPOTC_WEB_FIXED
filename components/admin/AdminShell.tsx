@@ -1,0 +1,214 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { onAuthStateChanged, type User } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
+import { requireGoogleLogin } from '@/lib/auth';
+import styles from './AdminShell.module.css';
+
+type AccessState = 'loading' | 'signed-out' | 'allowed' | 'denied';
+
+const navItems = [
+  ['/admin', 'Dashboard'],
+  ['/admin/products', 'Products'],
+  ['/admin/offers', 'Offers'],
+  ['/admin/orders', 'Orders'],
+  ['/admin/users', 'Users'],
+  ['/admin/reports', 'Reports'],
+] as const;
+
+function emailAllowed(user: User): boolean {
+  const email = user.email?.trim().toLowerCase() || '';
+
+  // Main SPOTC admin account
+  if (email === 'tinydot09@gmail.com') {
+    return true;
+  }
+
+  const configured = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
+  return configured.includes(email);
+}
+
+async function hasAdminAccess(user: User): Promise<boolean> {
+  if (emailAllowed(user)) return true;
+
+  if (!db) return false;
+
+  try {
+    const snap = await getDoc(doc(db, 'Users', user.uid));
+
+    if (!snap.exists()) {
+      return false;
+    }
+
+    const data = snap.data();
+
+    return (
+      data.is_admin === true ||
+      data.isAdmin === true ||
+      data.role === 'admin'
+    );
+  } catch (error) {
+    console.error('Admin access check failed', error);
+    return false;
+  }
+}
+
+export default function AdminShell({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+
+  const [access, setAccess] = useState<AccessState>('loading');
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    if (!auth) {
+      setAccess('denied');
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
+      setUser(nextUser);
+
+      if (!nextUser || nextUser.isAnonymous) {
+        setAccess('signed-out');
+        return;
+      }
+
+      const allowed = await hasAdminAccess(nextUser);
+
+      setAccess(allowed ? 'allowed' : 'denied');
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const sectionTitle = useMemo(() => {
+    const exact = navItems.find(([href]) => href === pathname);
+
+    if (exact) {
+      return exact[1];
+    }
+
+    const parent = navItems.find(
+      ([href]) => href !== '/admin' && pathname.startsWith(href),
+    );
+
+    return parent?.[1] || 'SPOTC Admin';
+  }, [pathname]);
+
+  if (access === 'loading') {
+    return (
+      <div className={styles.loading}>
+        Checking admin access…
+      </div>
+    );
+  }
+
+  if (access === 'signed-out') {
+    return (
+      <div className={styles.denied}>
+        <div className={styles.deniedCard}>
+          <h1>SPOTC Admin</h1>
+
+          <p>
+            Sign in with your authorised Google account to continue.
+          </p>
+
+          <button
+            className={styles.signIn}
+            onClick={() => requireGoogleLogin()}
+          >
+            Sign in with Google
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (access !== 'allowed') {
+    return (
+      <div className={styles.denied}>
+        <div className={styles.deniedCard}>
+          <h1>Admin access required</h1>
+
+          <p>
+            This Google account is signed in, but it is not marked as a
+            SPOTC admin.
+          </p>
+
+          <p>
+            Set <code>role: "admin"</code> or{' '}
+            <code>is_admin: true</code> on your{' '}
+            <code>Users/{user?.uid}</code> document, or add the email to{' '}
+            <code>NEXT_PUBLIC_ADMIN_EMAILS</code>.
+          </p>
+
+          <p>
+            <strong>Signed in:</strong>{' '}
+            {user?.email || user?.uid}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.shell}>
+      <aside className={styles.sidebar}>
+        <div className={styles.brand}>
+          SPOTC
+        </div>
+
+        <div className={styles.brandSub}>
+          ADMIN CONTROL CENTER
+        </div>
+
+        <nav className={styles.nav}>
+          {navItems.map(([href, label]) => {
+            const active =
+              href === '/admin'
+                ? pathname === href
+                : pathname.startsWith(href);
+
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={active ? styles.active : ''}
+              >
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
+
+      <main className={styles.main}>
+        <header className={styles.topbar}>
+          <div className={styles.title}>
+            {sectionTitle}
+          </div>
+
+          <div className={styles.user}>
+            {user?.email}
+          </div>
+        </header>
+
+        <div className={styles.content}>
+          {children}
+        </div>
+      </main>
+    </div>
+  );
+}

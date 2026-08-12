@@ -2,7 +2,6 @@
 
 import {
   onAuthStateChanged,
-  type Auth,
   type User,
 } from 'firebase/auth';
 
@@ -13,7 +12,6 @@ import {
 } from 'next/navigation';
 
 import {
-  Suspense,
   type ReactNode,
   useEffect,
   useRef,
@@ -29,11 +27,18 @@ import {
   firebaseReady,
 } from '@/lib/firebase';
 
-const COMPLETE_PROFILE_PATH = '/complete-profile';
-const PROFILE_SKIP_KEY = 'spotc-profile-skipped';
-const AUTH_RETURN_PATH_KEY = 'spotc-auth-return-path';
+const COMPLETE_PROFILE_PATH =
+  '/complete-profile';
 
-function safeReturnPath(value: string | null): string {
+const PROFILE_SKIP_KEY =
+  'spotc-profile-skipped';
+
+const AUTH_RETURN_PATH_KEY =
+  'spotc-auth-return-path';
+
+function safeReturnPath(
+  value: string | null,
+): string {
   if (
     !value ||
     !value.startsWith('/') ||
@@ -53,20 +58,29 @@ function readStoredReturnPath(): string {
 
   try {
     return safeReturnPath(
-      sessionStorage.getItem(AUTH_RETURN_PATH_KEY) ||
-        localStorage.getItem(AUTH_RETURN_PATH_KEY),
+      sessionStorage.getItem(
+        AUTH_RETURN_PATH_KEY,
+      ) ||
+        localStorage.getItem(
+          AUTH_RETURN_PATH_KEY,
+        ),
     );
   } catch {
     return '';
   }
 }
 
-function storeReturnPath(path: string) {
-  if (typeof window === 'undefined') {
+function storeReturnPath(
+  path: string,
+) {
+  if (
+    typeof window === 'undefined'
+  ) {
     return;
   }
 
-  const safePath = safeReturnPath(path);
+  const safePath =
+    safeReturnPath(path);
 
   if (!safePath) {
     return;
@@ -83,12 +97,14 @@ function storeReturnPath(path: string) {
       safePath,
     );
   } catch {
-    // Storage may be unavailable in private browsing.
+    // Storage can be unavailable in private browsing.
   }
 }
 
 function clearStoredReturnPath() {
-  if (typeof window === 'undefined') {
+  if (
+    typeof window === 'undefined'
+  ) {
     return;
   }
 
@@ -105,184 +121,232 @@ function clearStoredReturnPath() {
   }
 }
 
-function ProfileCompletionGateContent({
+export default function ProfileCompletionGate({
   children,
 }: {
   children: ReactNode;
 }) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const router = useRouter();
+  const pathname =
+    usePathname();
 
-  const checkingUserRef = useRef<string | null>(null);
+  const searchParams =
+    useSearchParams();
+
+  const router =
+    useRouter();
+
+  const checkingUserRef =
+    useRef<string | null>(
+      null,
+    );
 
   useEffect(() => {
-    if (!firebaseReady || !auth) {
+    if (
+      !firebaseReady ||
+      !auth
+    ) {
       return;
     }
 
-    const activeAuth: Auth = auth;
-    let effectActive = true;
+    let active = true;
 
-    const currentQuery = searchParams.toString();
+    const currentQuery =
+      searchParams.toString();
 
-    const currentPath = currentQuery
-      ? `${pathname}?${currentQuery}`
-      : pathname;
+    const currentPath =
+      currentQuery
+        ? `${pathname}?${currentQuery}`
+        : pathname;
 
-    const nextFromQuery = safeReturnPath(
-      searchParams.get('next'),
-    );
+    const nextFromQuery =
+      safeReturnPath(
+        searchParams.get('next'),
+      );
 
     if (nextFromQuery) {
-      storeReturnPath(nextFromQuery);
+      storeReturnPath(
+        nextFromQuery,
+      );
     }
 
-    const checkProfile = async (
-      user: User | null,
-    ) => {
-      if (
-        !effectActive ||
-        !user ||
-        user.isAnonymous
-      ) {
-        checkingUserRef.current = null;
-        return;
-      }
+    const checkProfile =
+      async (
+        user: User | null,
+      ) => {
+        if (
+          !active ||
+          !user ||
+          user.isAnonymous
+        ) {
+          checkingUserRef.current =
+            null;
 
-      let skippedUid = '';
-
-      try {
-        skippedUid =
-          sessionStorage.getItem(
-            PROFILE_SKIP_KEY,
-          ) || '';
-      } catch {
-        skippedUid = '';
-      }
-
-      if (skippedUid === user.uid) {
-        return;
-      }
-
-      if (
-        checkingUserRef.current === user.uid
-      ) {
-        return;
-      }
-
-      checkingUserRef.current = user.uid;
-
-      try {
-        const profileComplete =
-          await isUserProfileComplete(user);
-
-        if (!effectActive) {
           return;
         }
 
-        const storedReturnPath =
-          readStoredReturnPath();
+        const skippedUid =
+          sessionStorage.getItem(
+            PROFILE_SKIP_KEY,
+          );
 
-        if (profileComplete) {
-          try {
-            sessionStorage.removeItem(
-              PROFILE_SKIP_KEY,
-            );
-          } catch {
-            // Nothing else is required.
-          }
-
-          if (
-            storedReturnPath &&
-            currentPath !== storedReturnPath
-          ) {
-            clearStoredReturnPath();
-            router.replace(storedReturnPath);
-            return;
-          }
-
-          if (
-            pathname.startsWith(
-              COMPLETE_PROFILE_PATH,
-            )
-          ) {
-            if (storedReturnPath) {
-              clearStoredReturnPath();
-              router.replace(storedReturnPath);
-            } else {
-              router.replace('/');
-            }
-          }
-
+        if (
+          skippedUid ===
+          user.uid
+        ) {
           return;
         }
 
         if (
-          !pathname.startsWith(
-            COMPLETE_PROFILE_PATH,
-          )
+          checkingUserRef.current ===
+          user.uid
         ) {
-          storeReturnPath(currentPath);
+          return;
+        }
 
-          const returnPath =
+        checkingUserRef.current =
+          user.uid;
+
+        try {
+          const complete =
+            await isUserProfileComplete(
+              user,
+            );
+
+          if (!active) {
+            return;
+          }
+
+          const storedReturnPath =
             readStoredReturnPath();
 
-          router.replace(
-            returnPath
-              ? `${COMPLETE_PROFILE_PATH}?next=${encodeURIComponent(
-                  returnPath,
-                )}`
-              : COMPLETE_PROFILE_PATH,
-          );
-        }
-      } catch (error) {
-        console.error(
-          'Unable to check profile completion:',
-          error,
-        );
-      } finally {
-        checkingUserRef.current = null;
-      }
-    };
+          if (complete) {
+            sessionStorage.removeItem(
+              PROFILE_SKIP_KEY,
+            );
 
-    const completeRedirectLogin =
-      async () => {
-        try {
-          const redirectUser =
-            await completeGoogleRedirectLogin();
+            /*
+             * IMPORTANT:
+             * Only use spotc-auth-return-path when the
+             * user is actually returning from the
+             * Complete Profile page.
+             *
+             * Previously this gate redirected from ANY
+             * page (for example /address) to an old
+             * stored path such as /offers.
+             */
+            if (
+              pathname.startsWith(
+                COMPLETE_PROFILE_PATH,
+              )
+            ) {
+              if (storedReturnPath) {
+                clearStoredReturnPath();
 
-          await checkProfile(
-            redirectUser ||
-              activeAuth.currentUser,
-          );
-        } catch (redirectError) {
+                router.replace(
+                  storedReturnPath,
+                );
+
+                return;
+              }
+
+              clearStoredReturnPath();
+
+              router.replace(
+                '/offers',
+              );
+
+              return;
+            }
+
+            /*
+             * User is already complete and is navigating
+             * normally. Never hijack the page because of
+             * an old stored auth/profile return path.
+             */
+            if (storedReturnPath) {
+              clearStoredReturnPath();
+            }
+
+            return;
+          }
+
+          /*
+           * Profile is incomplete.
+           * Remember the page the user was trying to use,
+           * then send them to Complete Profile.
+           */
+          if (
+            !pathname.startsWith(
+              COMPLETE_PROFILE_PATH,
+            )
+          ) {
+            storeReturnPath(
+              currentPath,
+            );
+
+            const returnPath =
+              readStoredReturnPath();
+
+            router.replace(
+              returnPath
+                ? `${COMPLETE_PROFILE_PATH}?next=${encodeURIComponent(
+                    returnPath,
+                  )}`
+                : COMPLETE_PROFILE_PATH,
+            );
+          }
+        } catch (
+          error
+        ) {
           console.error(
-            'Unable to complete Google redirect login:',
-            redirectError,
+            'Unable to check profile completion:',
+            error,
           );
-
-          await checkProfile(
-            activeAuth.currentUser,
-          );
+        } finally {
+          checkingUserRef.current =
+            null;
         }
       };
 
-    void completeRedirectLogin();
+    void (async () => {
+      try {
+        const redirectUser =
+          await completeGoogleRedirectLogin();
+
+        await checkProfile(
+          redirectUser ||
+            auth.currentUser,
+        );
+      } catch (
+        redirectError
+      ) {
+        console.error(
+          'Unable to complete Google redirect login:',
+          redirectError,
+        );
+
+        await checkProfile(
+          auth.currentUser,
+        );
+      }
+    })();
 
     const unsubscribe =
       onAuthStateChanged(
-        activeAuth,
+        auth,
         (user) => {
-          void checkProfile(user);
+          void checkProfile(
+            user,
+          );
         },
       );
 
-    const refreshProfile = () => {
-      void checkProfile(
-        activeAuth.currentUser,
-      );
-    };
+    const refreshProfile =
+      () => {
+        void checkProfile(
+          auth.currentUser,
+        );
+      };
 
     window.addEventListener(
       'spotc-profile-updated',
@@ -290,7 +354,7 @@ function ProfileCompletionGateContent({
     );
 
     return () => {
-      effectActive = false;
+      active = false;
       unsubscribe();
 
       window.removeEventListener(
@@ -305,18 +369,4 @@ function ProfileCompletionGateContent({
   ]);
 
   return <>{children}</>;
-}
-
-export default function ProfileCompletionGate({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  return (
-    <Suspense fallback={<>{children}</>}>
-      <ProfileCompletionGateContent>
-        {children}
-      </ProfileCompletionGateContent>
-    </Suspense>
-  );
 }

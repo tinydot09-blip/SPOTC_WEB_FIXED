@@ -7,6 +7,7 @@ export default function FooterWrapper() {
   const pathname = usePathname();
 
   const hideFooter =
+    pathname.startsWith('/admin') ||
     pathname.startsWith('/offers') ||
     pathname.startsWith('/spots') ||
     pathname.startsWith('/circle/');

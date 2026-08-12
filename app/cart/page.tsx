@@ -12,7 +12,6 @@ import {
   Minus,
   Plus,
   ShoppingBag,
-  Store,
   Trash2,
   Truck,
   X,
@@ -24,39 +23,103 @@ import {
   type CartItem,
 } from '@/lib/cart';
 
-type CartGroup = {
-  key: string;
-  businessId: string;
-  businessName: string;
-  items: Array<{
-    item: CartItem;
-    index: number;
-  }>;
-  subtotal: number;
-  quantity: number;
-};
-
 const money = (value: number): string =>
   `₹${Math.round(value).toLocaleString(
     'en-IN',
   )}`;
 
-const groupKeyOf = (
-  item: CartItem,
-): string =>
-  item.businessId?.trim() ||
-  item.businessName?.trim().toLowerCase() ||
-  'spotc-shop';
+
+type SavedFreeGift = {
+  id: string;
+  title: string;
+  image: string;
+  original_price: number;
+  price: number;
+  is_free_gift: boolean;
+};
+
+type SavedGiftBundle = {
+  product_id: string;
+  quantity: number;
+  entitlement: number;
+  gifts: SavedFreeGift[];
+};
+
+const readSavedGifts = (
+  productId: string,
+): SavedGiftBundle | null => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.localStorage.getItem(
+      `spotc-free-gifts:${productId}`,
+    );
+
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Partial<SavedGiftBundle>;
+
+    if (!parsed || !Array.isArray(parsed.gifts)) {
+      return null;
+    }
+
+    return {
+      product_id: String(parsed.product_id || productId),
+      quantity: Number(parsed.quantity) || 1,
+      entitlement: Number(parsed.entitlement) || parsed.gifts.length,
+      gifts: parsed.gifts
+        .filter(
+          (gift): gift is SavedFreeGift =>
+            Boolean(
+              gift &&
+                typeof gift === 'object' &&
+                'id' in gift,
+            ),
+        )
+        .map((gift) => ({
+          id: String(gift.id),
+          title: String(gift.title || 'FREE Gift'),
+          image: String(gift.image || ''),
+          original_price:
+            Number(gift.original_price) || 0,
+          price: 0,
+          is_free_gift: true,
+        })),
+    };
+  } catch {
+    return null;
+  }
+};
 
 export default function CartPage() {
   const [items, setItems] =
     useState<CartItem[]>([]);
 
+  const [giftBundles, setGiftBundles] =
+    useState<Record<string, SavedGiftBundle>>({});
+
   const [rewardsSheetOpen, setRewardsSheetOpen] =
     useState(false);
 
   useEffect(() => {
-    setItems(readCart());
+    const cartItems = readCart();
+
+    setItems(cartItems);
+
+    const nextGiftBundles: Record<
+      string,
+      SavedGiftBundle
+    > = {};
+
+    cartItems.forEach((item) => {
+      const bundle = readSavedGifts(item.id);
+
+      if (bundle && bundle.gifts.length > 0) {
+        nextGiftBundles[item.id] = bundle;
+      }
+    });
+
+    setGiftBundles(nextGiftBundles);
   }, []);
 
   const updateCart = (
@@ -65,45 +128,6 @@ export default function CartPage() {
     setItems(nextItems);
     writeCart(nextItems);
   };
-
-  const groups = useMemo<CartGroup[]>(() => {
-    const map = new Map<
-      string,
-      CartGroup
-    >();
-
-    items.forEach((item, index) => {
-      const key = groupKeyOf(item);
-
-      const current =
-        map.get(key) ??
-        ({
-          key,
-          businessId:
-            item.businessId || '',
-          businessName:
-            item.businessName ||
-            'SPOTC Shop',
-          items: [],
-          subtotal: 0,
-          quantity: 0,
-        } satisfies CartGroup);
-
-      current.items.push({
-        item,
-        index,
-      });
-
-      current.subtotal +=
-        item.price * item.qty;
-
-      current.quantity += item.qty;
-
-      map.set(key, current);
-    });
-
-    return [...map.values()];
-  }, [items]);
 
   const subtotal = useMemo(
     () =>
@@ -116,11 +140,8 @@ export default function CartPage() {
     [items],
   );
 
-  const shopCount = groups.length;
   const delivery =
-    items.length > 0
-      ? shopCount * 20
-      : 0;
+    items.length > 0 ? 20 : 0;
 
   const total =
     subtotal + delivery;
@@ -131,6 +152,14 @@ export default function CartPage() {
         sum + item.qty,
       0,
     );
+
+  const totalFreeGifts = Object.values(
+    giftBundles,
+  ).reduce(
+    (sum, bundle) =>
+      sum + bundle.gifts.length,
+    0,
+  );
 
   const totalRewardPoints =
     Math.max(
@@ -153,7 +182,7 @@ export default function CartPage() {
       description:
         'Free local delivery on eligible orders.',
       condition:
-        'Subject to business delivery area.',
+        'Subject to SPOTC delivery availability.',
     },
     {
       code: 'NEXT5',
@@ -201,12 +230,32 @@ export default function CartPage() {
   const removeItem = (
     itemIndex: number,
   ) => {
-    updateCart(
-      items.filter(
-        (_, index) =>
-          index !== itemIndex,
-      ),
+    const itemToRemove = items[itemIndex];
+
+    const nextItems = items.filter(
+      (_, index) =>
+        index !== itemIndex,
     );
+
+    updateCart(nextItems);
+
+    if (
+      itemToRemove &&
+      !nextItems.some(
+        (item) =>
+          item.id === itemToRemove.id,
+      )
+    ) {
+      window.localStorage.removeItem(
+        `spotc-free-gifts:${itemToRemove.id}`,
+      );
+
+      setGiftBundles((current) => {
+        const next = { ...current };
+        delete next[itemToRemove.id];
+        return next;
+      });
+    }
   };
 
   if (!items.length) {
@@ -220,8 +269,7 @@ export default function CartPage() {
           <h1>Your cart is empty</h1>
 
           <p>
-            Add products from Shop or a
-            nearby business.
+            Add products from the SPOTC Shop.
           </p>
 
           <Link href="/shop">
@@ -244,13 +292,8 @@ export default function CartPage() {
           </div>
 
           <span>
-            {shopCount} shop
-            {shopCount === 1 ? '' : 's'}
-            {' · '}
             {totalQuantity} product
-            {totalQuantity === 1
-              ? ''
-              : 's'}
+            {totalQuantity === 1 ? '' : 's'}
           </span>
         </header>
 
@@ -258,57 +301,51 @@ export default function CartPage() {
           <section className="spotc-cart-main">
             <div className="spotc-cart-summary">
               <span className="spotc-summary-icon">
-                <Store size={21} />
+                <ShoppingBag size={21} />
               </span>
 
               <div>
                 <strong>
-                  {shopCount} shop
-                  {shopCount === 1
-                    ? ''
-                    : 's'}
-                  {' · '}
                   {totalQuantity} product
-                  {totalQuantity === 1
-                    ? ''
-                    : 's'}
+                  {totalQuantity === 1 ? '' : 's'} in your cart
                 </strong>
 
                 <small>
-                  Delivery calculated
-                  separately for each shop
+                  All products are sold directly by SPOTC
+                  {totalFreeGifts > 0
+                    ? ` · ${totalFreeGifts} FREE gift${totalFreeGifts === 1 ? '' : 's'} included`
+                    : ''}
                 </small>
               </div>
             </div>
 
-            {groups.map((group) => (
-              <article
-                className="spotc-shop-card"
-                key={group.key}
-              >
-                <header className="spotc-shop-head">
-                  <span>
-                    <Store size={20} />
-                  </span>
+            <article className="spotc-products-card">
+              <div className="spotc-products-card-head">
+                <div>
+                  <small>SPOTC PRODUCTS</small>
+                  <h2>Your Items</h2>
+                </div>
 
-                  <div>
-                    <small>SHOP</small>
-                    <h2>
-                      {group.businessName}
-                    </h2>
-                  </div>
-                </header>
+                <span>
+                  {totalQuantity} item
+                  {totalQuantity === 1 ? '' : 's'}
+                  {totalFreeGifts > 0
+                    ? ` + ${totalFreeGifts} FREE`
+                    : ''}
+                </span>
+              </div>
 
-                <div className="spotc-shop-products">
-                  {group.items.map(
-                    ({
-                      item,
-                      index,
-                    }) => (
-                      <div
-                        className="spotc-cart-product"
-                        key={`${item.id}-${item.size}-${item.color}-${index}`}
-                      >
+              <div className="spotc-products-list">
+                {items.map((item, index) => {
+                  const freeGifts =
+                    giftBundles[item.id]?.gifts || [];
+
+                  return (
+                    <div
+                      className="spotc-product-with-gifts"
+                      key={`${item.id}-${item.size}-${item.color}-${index}`}
+                    >
+                      <div className="spotc-cart-product">
                         <div className="spotc-product-image">
                           {item.image ? (
                             <img
@@ -316,19 +353,14 @@ export default function CartPage() {
                               alt={item.title}
                             />
                           ) : (
-                            <ShoppingBag
-                              size={27}
-                            />
+                            <ShoppingBag size={27} />
                           )}
                         </div>
 
                         <div className="spotc-product-copy">
-                          <h3>
-                            {item.title}
-                          </h3>
+                          <h3>{item.title}</h3>
 
-                          {(item.size ||
-                            item.color) && (
+                          {(item.size || item.color) && (
                             <p>
                               {[
                                 item.size &&
@@ -342,9 +374,7 @@ export default function CartPage() {
                           )}
 
                           <strong>
-                            {money(
-                              item.price,
-                            )}
+                            {money(item.price)}
                           </strong>
                         </div>
 
@@ -354,32 +384,22 @@ export default function CartPage() {
                               type="button"
                               aria-label="Decrease quantity"
                               onClick={() =>
-                                decreaseQuantity(
-                                  index,
-                                )
+                                decreaseQuantity(index)
                               }
                             >
-                              <Minus
-                                size={16}
-                              />
+                              <Minus size={16} />
                             </button>
 
-                            <span>
-                              {item.qty}
-                            </span>
+                            <span>{item.qty}</span>
 
                             <button
                               type="button"
                               aria-label="Increase quantity"
                               onClick={() =>
-                                increaseQuantity(
-                                  index,
-                                )
+                                increaseQuantity(index)
                               }
                             >
-                              <Plus
-                                size={16}
-                              />
+                              <Plus size={16} />
                             </button>
                           </div>
 
@@ -388,50 +408,85 @@ export default function CartPage() {
                             className="spotc-remove-button"
                             aria-label="Remove product"
                             onClick={() =>
-                              removeItem(
-                                index,
-                              )
+                              removeItem(index)
                             }
                           >
-                            <Trash2
-                              size={17}
-                            />
+                            <Trash2 size={17} />
                             <span>Remove</span>
                           </button>
                         </div>
                       </div>
-                    ),
-                  )}
-                </div>
 
-                <div className="spotc-shop-delivery">
-                  <Truck size={19} />
+                      {freeGifts.length > 0 && (
+                        <div className="spotc-free-gifts">
+                          <div className="spotc-free-gifts-title">
+                            <span>🎁</span>
+                            <strong>
+                              FREE Gift
+                              {freeGifts.length === 1 ? '' : 's'} Included
+                            </strong>
+                          </div>
 
-                  <div>
-                    <strong>
-                      Delivery ₹20
-                    </strong>
+                          <div className="spotc-free-gifts-list">
+                            {freeGifts.map((gift) => (
+                              <div
+                                className="spotc-free-gift"
+                                key={`${item.id}-${gift.id}`}
+                              >
+                                <div className="spotc-free-gift-image">
+                                  {gift.image ? (
+                                    <img
+                                      src={gift.image}
+                                      alt={gift.title}
+                                    />
+                                  ) : (
+                                    <ShoppingBag size={22} />
+                                  )}
+                                </div>
 
-                    <small>
-                      Today in 15–45 mins
-                      where available
-                    </small>
-                  </div>
-                </div>
+                                <div className="spotc-free-gift-copy">
+                                  <h4>{gift.title}</h4>
 
-                <footer className="spotc-shop-footer">
-                  <span>
-                    Shop subtotal
-                  </span>
+                                  <div className="spotc-free-gift-price">
+                                    <strong>FREE</strong>
 
+                                    {gift.original_price > 0 && (
+                                      <span>
+                                        {money(gift.original_price)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                           ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="spotc-order-delivery">
+                <Truck size={19} />
+
+                <div>
                   <strong>
-                    {money(
-                      group.subtotal,
-                    )}
+                    Delivery {money(delivery)}
                   </strong>
-                </footer>
-              </article>
-            ))}
+
+                  <small>
+                    One delivery charge for this SPOTC order
+                  </small>
+                </div>
+              </div>
+
+              <footer className="spotc-order-footer">
+                <span>Products subtotal</span>
+
+                <strong>{money(subtotal)}</strong>
+              </footer>
+            </article>
           </section>
 
           <aside className="spotc-bill-card">
@@ -446,14 +501,7 @@ export default function CartPage() {
               </p>
 
               <p>
-                <span>
-                  Delivery ({shopCount}{' '}
-                  shop
-                  {shopCount === 1
-                    ? ''
-                    : 's'}
-                  )
-                </span>
+                <span>Delivery</span>
 
                 <strong>
                   {money(delivery)}
@@ -735,8 +783,7 @@ const styles = `
       rgba(56, 39, 24, 0.05);
   }
 
-  .spotc-summary-icon,
-  .spotc-shop-head > span {
+  .spotc-summary-icon {
     width: 42px;
     height: 42px;
     flex: 0 0 42px;
@@ -764,39 +811,183 @@ const styles = `
     font-weight: 550;
   }
 
-  .spotc-shop-card {
+  .spotc-products-card {
     padding: 22px;
     overflow: hidden;
     border: 1px solid #e4dbd2;
     border-radius: 22px;
     background: #ffffff;
-    box-shadow: 0 12px 34px
-      rgba(56, 39, 24, 0.06);
+    box-shadow: 0 12px 34px rgba(56, 39, 24, 0.06);
   }
 
-  .spotc-shop-head {
+  .spotc-products-card-head {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
   }
 
-  .spotc-shop-head small {
-    color: #81766c;
-    font-size: 9px;
-    font-weight: 650;
+  .spotc-products-card-head small {
+    color: #b56611;
+    font-size: 10px;
     letter-spacing: 0.12em;
   }
 
-  .spotc-shop-head h2 {
-    margin: 3px 0 0;
-    font-size: 21px;
+  .spotc-products-card-head h2 {
+    margin: 4px 0 0;
+    font-size: 22px;
     font-weight: 650;
   }
 
-  .spotc-shop-products {
+  .spotc-products-card-head > span {
+    color: #776d64;
+    font-size: 13px;
+  }
+
+  .spotc-products-list {
     margin-top: 17px;
     display: grid;
     gap: 14px;
+  }
+
+  .spotc-product-with-gifts {
+    display: grid;
+    gap: 9px;
+  }
+
+  .spotc-free-gifts {
+    margin-left: 24px;
+    padding: 13px 14px;
+    border: 1px solid #cfe8d6;
+    border-radius: 16px;
+    background: #f1faf4;
+  }
+
+  .spotc-free-gifts-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 10px;
+    color: #137333;
+  }
+
+  .spotc-free-gifts-title strong {
+    font-size: 12px;
+    font-weight: 750;
+  }
+
+  .spotc-free-gifts-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .spotc-free-gift {
+    min-width: 0;
+    padding: 9px;
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 11px;
+    align-items: center;
+    border: 1px solid #dcecdf;
+    border-radius: 12px;
+    background: #ffffff;
+  }
+
+  .spotc-free-gift-image {
+    width: 58px;
+    height: 58px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    color: #7f9685;
+    background: #f6faf7;
+  }
+
+  .spotc-free-gift-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .spotc-free-gift-copy {
+    min-width: 0;
+  }
+
+  .spotc-free-gift-copy h4 {
+    margin: 0;
+    color: #24201c;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .spotc-free-gift-price {
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .spotc-free-gift-price strong {
+    color: #137333;
+    font-size: 14px;
+    font-weight: 800;
+  }
+
+  .spotc-free-gift-price span {
+    color: #8b948d;
+    font-size: 11px;
+    text-decoration: line-through;
+  }
+
+  .spotc-order-delivery {
+    margin-top: 16px;
+    padding: 14px 15px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    border: 1px solid #d8eddf;
+    border-radius: 15px;
+    color: #177a42;
+    background: #eff9f2;
+  }
+
+  .spotc-order-delivery strong,
+  .spotc-order-delivery small {
+    display: block;
+  }
+
+  .spotc-order-delivery strong {
+    font-size: 13px;
+    font-weight: 650;
+  }
+
+  .spotc-order-delivery small {
+    margin-top: 3px;
+    color: #4e7d60;
+    font-size: 11px;
+  }
+
+  .spotc-order-footer {
+    margin-top: 17px;
+    padding-top: 17px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    border-top: 1px solid #ece5dd;
+  }
+
+  .spotc-order-footer span {
+    color: #72685f;
+    font-size: 14px;
+  }
+
+  .spotc-order-footer strong {
+    color: #bd6410;
+    font-size: 20px;
+    font-weight: 650;
   }
 
   .spotc-cart-product {
@@ -906,55 +1097,6 @@ const styles = `
 
   .spotc-remove-button:hover {
     color: #c73d32;
-  }
-
-  .spotc-shop-delivery {
-    margin-top: 16px;
-    padding: 14px 15px;
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    border: 1px solid #d8eddf;
-    border-radius: 15px;
-    color: #177a42;
-    background: #eff9f2;
-  }
-
-  .spotc-shop-delivery strong,
-  .spotc-shop-delivery small {
-    display: block;
-  }
-
-  .spotc-shop-delivery strong {
-    font-size: 13px;
-    font-weight: 650;
-  }
-
-  .spotc-shop-delivery small {
-    margin-top: 3px;
-    color: #4e7d60;
-    font-size: 11px;
-  }
-
-  .spotc-shop-footer {
-    margin-top: 17px;
-    padding-top: 17px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 18px;
-    border-top: 1px solid #ece5dd;
-  }
-
-  .spotc-shop-footer span {
-    color: #72685f;
-    font-size: 14px;
-  }
-
-  .spotc-shop-footer strong {
-    color: #bd6410;
-    font-size: 20px;
-    font-weight: 650;
   }
 
   .spotc-bill-card {
@@ -1519,127 +1661,78 @@ const styles = `
       line-height: 1.45;
     }
 
-    .spotc-shop-card {
+    .spotc-products-card {
       padding: 17px;
     }
 
-    .spotc-shop-head {
-      gap: 14px;
+    .spotc-products-card-head h2 {
+      font-size: 24px;
     }
 
-    .spotc-shop-head > span {
-      width: 48px;
-      height: 48px;
-      flex-basis: 48px;
+    .spotc-products-card-head > span {
+      font-size: 13px;
     }
 
-    .spotc-shop-head small {
-      font-size: 12px;
-      font-weight: 750;
+    .spotc-free-gifts {
+      margin-left: 0;
+      padding: 12px;
     }
 
-    .spotc-shop-head h2 {
-      margin-top: 4px;
-      font-size: 26px;
-      font-weight: 750;
+    .spotc-free-gifts-title strong {
+      font-size: 13px;
     }
 
-    .spotc-cart-product {
-      grid-template-columns:
-        104px minmax(0, 1fr);
-      gap: 15px;
-      padding: 14px;
+    .spotc-free-gift {
+      grid-template-columns: 62px minmax(0, 1fr);
+      padding: 10px;
     }
 
-    .spotc-product-image {
-      width: 104px;
-      height: 104px;
+    .spotc-free-gift-image {
+      width: 62px;
+      height: 62px;
     }
 
-    .spotc-product-copy h3 {
-      font-size: 18px;
-      line-height: 1.38;
-      font-weight: 700;
-    }
-
-    .spotc-product-copy p {
-      margin-top: 9px;
+    .spotc-free-gift-copy h4 {
       font-size: 14px;
-      line-height: 1.4;
     }
 
-    .spotc-product-copy strong {
-      margin-top: 10px;
-      font-size: 21px;
-      font-weight: 750;
+    .spotc-free-gift-price strong {
+      font-size: 15px;
     }
 
-    .spotc-cart-controls {
-      grid-column: 1 / -1;
-      flex-direction: row;
-      justify-content: space-between;
-      gap: 14px;
-    }
-
-    .spotc-qty-control {
-      height: 50px;
-      border-radius: 15px;
-    }
-
-    .spotc-qty-control button {
-      width: 50px;
-      height: 50px;
-    }
-
-    .spotc-qty-control span {
-      min-width: 50px;
-      font-size: 18px;
-      font-weight: 750;
-    }
-
-    .spotc-remove-button {
-      font-size: 16px;
-      font-weight: 600;
-    }
-
-    .spotc-remove-button span {
-      display: inline;
-    }
-
-    .spotc-shop-delivery {
+    .spotc-order-delivery {
       padding: 17px;
       gap: 13px;
     }
 
-    .spotc-shop-delivery svg {
+    .spotc-order-delivery svg {
       width: 23px;
       height: 23px;
       flex: 0 0 23px;
     }
 
-    .spotc-shop-delivery strong {
+    .spotc-order-delivery strong {
       font-size: 17px;
       font-weight: 750;
     }
 
-    .spotc-shop-delivery small {
+    .spotc-order-delivery small {
       margin-top: 4px;
       font-size: 14px;
       line-height: 1.45;
     }
 
-    .spotc-shop-footer span {
+    .spotc-order-footer span {
       font-size: 17px;
       font-weight: 550;
     }
 
-    .spotc-shop-footer strong {
+    .spotc-order-footer strong {
       font-size: 25px;
       font-weight: 800;
     }
-  }
 
-  @media (max-width: 420px) {
+    @media (max-width: 420px) {
     .spotc-cart-head {
       display: block;
     }
