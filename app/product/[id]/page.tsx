@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   collection,
   deleteDoc,
@@ -2304,12 +2305,15 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
         )}
       </section>
 
-      {giftPreviewOpen && freeGiftCount > 0 && (
-        <div
-          className="pd-modal-backdrop pd-gift-selector-backdrop"
-          role="presentation"
-          onMouseDown={() => setGiftPreviewOpen(false)}
-        >
+      {giftPreviewOpen &&
+        freeGiftCount > 0 &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="pd-modal-backdrop pd-gift-selector-backdrop"
+            role="presentation"
+            onMouseDown={() => setGiftPreviewOpen(false)}
+          >
           <section
             className="pd-modal pd-gift-selector"
             role="dialog"
@@ -2470,8 +2474,9 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
               </button>
             </footer>
           </section>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
       {compareState !== 'closed' && (
         <div className="pd-modal-backdrop" role="presentation" onMouseDown={() => setCompareState('closed')}>
@@ -4202,9 +4207,12 @@ width:200px;
         .pd-gift-selector-backdrop {
           position: fixed !important;
           inset: 0 !important;
-          z-index: 2147483000 !important;
+          z-index: 2147483646 !important;
           padding: 24px !important;
           isolation: isolate !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
         }
 
         .pd-gift-selector {
@@ -4653,13 +4661,19 @@ width:200px;
           .pd-gift-selector {
             width: 100% !important;
             max-width: 100% !important;
-            height: calc(100dvh - 8px) !important;
-            max-height: calc(100dvh - 8px) !important;
+            height: 100dvh !important;
+            max-height: 100dvh !important;
             margin: 0 !important;
-            border-right: 0 !important;
-            border-bottom: 0 !important;
-            border-left: 0 !important;
-            border-radius: 24px 24px 0 0 !important;
+            display: grid !important;
+            grid-template-rows:
+              auto
+              auto
+              auto
+              minmax(0, 1fr)
+              auto !important;
+            overflow: hidden !important;
+            border: 0 !important;
+            border-radius: 0 !important;
           }
 
           .pd-gift-selector-header {
@@ -4710,7 +4724,7 @@ width:200px;
             width: 100% !important;
             min-height: 0 !important;
             height: 100% !important;
-            padding: 11px 12px 18px !important;
+            padding: 11px 12px 28px !important;
             grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
             grid-auto-flow: row !important;
             grid-auto-rows: max-content !important;
@@ -4764,17 +4778,23 @@ width:200px;
           }
 
           .pd-gift-selector-footer {
-            position: relative !important;
-            z-index: 5 !important;
-            min-height: 72px !important;
+            position: sticky !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            z-index: 20 !important;
+            width: 100% !important;
+            min-height: 78px !important;
             padding:
               10px
               12px
-              calc(10px + env(safe-area-inset-bottom)) !important;
+              max(12px, env(safe-area-inset-bottom)) !important;
             grid-template-columns: minmax(0, 1fr) auto !important;
             gap: 8px !important;
             flex-shrink: 0 !important;
+            border-top: 1px solid #e4ddd3 !important;
             background: #ffffff !important;
+            box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08) !important;
             box-sizing: border-box !important;
           }
 
@@ -4792,6 +4812,7 @@ width:200px;
             padding: 0 12px !important;
             font-size: 11px !important;
             border-radius: 12px !important;
+            flex: 0 0 auto !important;
           }
         }
 
