@@ -559,6 +559,11 @@ export default function AdminOffersPage() {
       return;
     }
 
+    // Narrow Firebase Firestore once for the entire async function.
+    // This prevents TypeScript from treating db as Firestore | null
+    // inside Promise.map callbacks.
+    const firestore = db;
+
     const user = auth?.currentUser;
 
     if (!user) {
@@ -638,7 +643,7 @@ export default function AdminOffersPage() {
         );
 
       const offerRef = await addDoc(
-        collection(db, 'BusinessListings'),
+        collection(firestore, 'BusinessListings'),
         {
           // Exact live OfferFeed / legacy BusinessListings offer schema.
           record_type: 'business_offer',
@@ -741,12 +746,19 @@ export default function AdminOffersPage() {
       // Keep linked_offer_id too for future/admin compatibility.
       await Promise.all(
         form.selectedProductIds.map((productId) =>
-          updateDoc(doc(db, 'BusinessProducts', productId), {
-            linked_video_ref: offerRef,
-            linked_offer_id: offerRef.id,
-            linked_offer_ref: offerRef,
-            updated_at: serverTimestamp(),
-          }),
+          updateDoc(
+            doc(
+              firestore,
+              'BusinessProducts',
+              productId,
+            ),
+            {
+              linked_video_ref: offerRef,
+              linked_offer_id: offerRef.id,
+              linked_offer_ref: offerRef,
+              updated_at: serverTimestamp(),
+            },
+          ),
         ),
       );
 
