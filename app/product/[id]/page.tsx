@@ -58,7 +58,6 @@ import {
   discountOf,
   imageOf,
   oldPriceOf,
-  priceOf,
   text,
   titleOf,
 } from '@/lib/utils';
@@ -100,6 +99,85 @@ const productMediaList = (product: ProductRecord): ProductMediaItem[] => {
       ...(posterUrl.startsWith('http') ? { poster: posterUrl } : {}),
     });
   };
+
+  /*
+   * Current SPOTC admin structure:
+   * media: [
+   *   { type:'image', role:'ai', slot:'ai_main', url:'...', order:1 },
+   *   { type:'image', role:'front', slot:'real_front', url:'...', order:2 },
+   *   { type:'image', role:'back', slot:'real_back', url:'...', order:3 },
+   *   { type:'image', role:'additional', slot:'detail', url:'...', order:4 },
+   *   { type:'video', role:'video', slot:'product_video', url:'...', order:5 }
+   * ]
+   */
+  if (Array.isArray(product.media)) {
+    product.media.forEach((rawItem, index) => {
+      if (!rawItem || typeof rawItem !== 'object') return;
+
+      const item = rawItem as Record<string, unknown>;
+      const rawType = text(item.type).trim().toLowerCase();
+      const rawRole = text(item.role).trim().toLowerCase();
+      const rawSlot = text(item.slot).trim().toLowerCase();
+
+      const mediaType: 'image' | 'video' =
+        rawType === 'video' ||
+        rawRole === 'video' ||
+        rawSlot === 'product_video'
+          ? 'video'
+          : 'image';
+
+      const role: ProductMediaItem['role'] =
+        rawRole === 'ai' || rawSlot === 'ai_main'
+          ? 'ai'
+          : rawRole === 'front' || rawSlot === 'real_front'
+            ? 'front'
+            : rawRole === 'back' || rawSlot === 'real_back'
+              ? 'back'
+              : rawRole === 'video' || rawSlot === 'product_video'
+                ? 'video'
+                : rawRole === 'additional' ||
+                    rawRole === 'detail' ||
+                    rawSlot === 'detail'
+                  ? 'additional'
+                  : 'image';
+
+      const label =
+        role === 'ai'
+          ? 'Main'
+          : role === 'front'
+            ? 'Front'
+            : role === 'back'
+              ? 'Back'
+              : role === 'video'
+                ? 'Video'
+                : role === 'additional'
+                  ? 'Detail'
+                  : `Image ${index + 1}`;
+
+      const productPoster =
+        product.product_thumbnail ??
+        product.image_url ??
+        product.image ??
+        product.studio_image_url ??
+        (Array.isArray(product.images) ? product.images[0] : '');
+
+      addMedia(
+        mediaType,
+        role,
+        item.url ?? item.image_url ?? item.video_url,
+        label,
+        numberValue(item.order) ?? index + 1,
+        role === 'video'
+          ? item.poster ??
+              item.thumbnail_url ??
+              item.poster_url ??
+              productPoster
+          : item.poster ??
+              item.thumbnail_url ??
+              item.poster_url,
+      );
+    });
+  }
 
   /*
    * Preferred new Firestore structure:
@@ -153,7 +231,18 @@ const productMediaList = (product: ProductRecord): ProductMediaItem[] => {
         item.url ?? item.image_url ?? item.video_url,
         label,
         numberValue(item.order) ?? index + 1,
-        item.poster ?? item.thumbnail_url ?? item.poster_url,
+        role === 'video'
+          ? item.poster ??
+              item.thumbnail_url ??
+              item.poster_url ??
+              product.product_thumbnail ??
+              product.image_url ??
+              product.image ??
+              product.studio_image_url ??
+              (Array.isArray(product.images) ? product.images[0] : '')
+          : item.poster ??
+              item.thumbnail_url ??
+              item.poster_url,
       );
     });
   }
@@ -172,7 +261,9 @@ const productMediaList = (product: ProductRecord): ProductMediaItem[] => {
   addMedia(
     'image',
     'front',
-    product.real_front_image_url ??
+    product.real_front_url ??
+      product.real_front_image_url ??
+      product.raw_image_url ??
       product.front_image_url ??
       product.product_front_image,
     'Front',
@@ -181,7 +272,8 @@ const productMediaList = (product: ProductRecord): ProductMediaItem[] => {
   addMedia(
     'image',
     'back',
-    product.real_back_image_url ??
+    product.real_back_url ??
+      product.real_back_image_url ??
       product.back_image_url ??
       product.product_back_image,
     'Back',
@@ -197,8 +289,12 @@ const productMediaList = (product: ProductRecord): ProductMediaItem[] => {
     'Video',
     4,
     product.video_thumbnail_url ??
+      product.product_thumbnail ??
+      product.image_url ??
+      product.image ??
+      product.studio_image_url ??
       product.thumbnail_url ??
-      product.product_thumbnail,
+      (Array.isArray(product.images) ? product.images[0] : ''),
   );
   addMedia(
     'image',
@@ -253,6 +349,20 @@ const numberValue = (value: unknown): number | null => {
 
   const parsed = Number(String(value).replace(/[₹,%]/g, '').trim());
   return Number.isFinite(parsed) ? parsed : null;
+};
+
+const customerPriceOf = (product: BusinessProduct): number => {
+  const record = product as BusinessProduct & Record<string, unknown>;
+
+  const offerPrice = numberValue(record.offer_price) ?? 0;
+  const sellingPrice = numberValue(record.selling_price) ?? 0;
+  const price = numberValue(record.price) ?? 0;
+  const mrp = numberValue(record.mrp ?? record.old_price) ?? 0;
+
+  if (offerPrice > 0) return offerPrice;
+  if (sellingPrice > 0) return sellingPrice;
+  if (price > 0) return price;
+  return mrp;
 };
 const booleanValue = (value: unknown): boolean | null => {
   if (typeof value === 'boolean') return value;
@@ -324,6 +434,9 @@ const imageList = (product: ProductRecord): string[] => {
      */
     add(product.product_image);
     add(product.image_url);
+    add(product.real_front_url);
+    add(product.real_back_url);
+    add(product.detail_image_url);
     add(product.image1);
     add(product.image2);
     add(product.image3);
@@ -340,6 +453,9 @@ const imageList = (product: ProductRecord): string[] => {
   add(product.image);
   add(product.product_image);
   add(product.image_url);
+  add(product.real_front_url);
+  add(product.real_back_url);
+  add(product.detail_image_url);
 
   if (customerImages.length === 0 && Array.isArray(product.images)) {
     add(product.images[0]);
@@ -686,7 +802,7 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
               if (item.id === loadedProduct.id) return false;
 
               const giftRecord = item as ProductRecord;
-              const giftPrice = priceOf(item);
+              const giftPrice = customerPriceOf(item);
               const giftStock = numberValue(
                 giftRecord.stock_qty ?? giftRecord.stock_quantity,
               );
@@ -809,7 +925,7 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     productMedia[0] ||
     null;
 
-  const price = priceOf(product);
+  const price = customerPriceOf(product);
 
   // FREE gift rule:
   // ₹80–₹199 = 1 gift per item
@@ -1080,7 +1196,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
       id: String(gift.id),
       title: titleOf(gift),
       image: imageOf(gift),
-      original_price: priceOf(gift),
+      original_price: customerPriceOf(gift),
       price: 0,
       is_free_gift: true,
     }));
@@ -2170,7 +2286,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
               const relatedStock = numberValue(
                 relatedRecord.stock_qty ?? relatedRecord.stock_quantity,
               );
-              const relatedPrice = priceOf(item);
+              const relatedPrice = customerPriceOf(item);
               const relatedOldPrice = oldPriceOf(item);
 const relatedFreeGiftCount =
                 relatedPrice < 80
@@ -2319,7 +2435,7 @@ const relatedFreeGiftCount =
               {visibleGiftProducts.length ? (
                 visibleGiftProducts.map((gift) => {
                   const giftId = String(gift.id);
-                  const giftPrice = priceOf(gift);
+                  const giftPrice = customerPriceOf(gift);
                   const selected =
                     selectedGiftIds.includes(giftId);
                   const limitReached =
