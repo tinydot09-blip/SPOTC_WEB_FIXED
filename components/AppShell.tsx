@@ -333,24 +333,44 @@ if (!signedInUser) {
   };
 
   const handleLogout = async () => {
-    setMenuOpen(false);
+  setMenuOpen(false);
 
-    try {
-      if (auth) {
-        await signOut(auth);
-      }
-    } catch (error) {
-      console.error(
-        'SPOTC logout failed:',
-        error,
-      );
+  try {
+    if (auth) {
+      await signOut(auth);
     }
+  } catch (error) {
+    console.error(
+      'SPOTC logout failed:',
+      error,
+    );
+  }
 
-    setFirebaseUser(null);
-    setSpotcProfile(null);
-    router.replace('/offers');
-    router.refresh();
-  };
+  try {
+    window.localStorage.removeItem('spotc_cart');
+
+    window.dispatchEvent(
+      new CustomEvent('spotc-cart-change', {
+        detail: {
+          items: [],
+          count: 0,
+        },
+      }),
+    );
+  } catch (error) {
+    console.error(
+      'Unable to clear SPOTC cart on logout:',
+      error,
+    );
+  }
+
+  setCartCount(0);
+  setFirebaseUser(null);
+  setSpotcProfile(null);
+
+  router.replace('/offers');
+  router.refresh();
+};
 
   if (standalonePage) {
     return (
