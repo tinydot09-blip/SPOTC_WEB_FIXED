@@ -15,6 +15,7 @@ import {
   type DocumentData,
 } from 'firebase/firestore';
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
 
 type ProductRow = { id: string; data: DocumentData };
@@ -300,8 +301,11 @@ function editFormFromProduct(data: DocumentData): EditForm {
 }
 
 export default function AdminProductsPage() {
+  const router = useRouter();
+
   const [rows, setRows] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState('');
   const [message, setMessage] = useState('');
 
@@ -363,6 +367,19 @@ export default function AdminProductsPage() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function refreshProducts() {
+    if (refreshing) return;
+
+    setRefreshing(true);
+    setMessage('');
+
+    try {
+      await loadProducts(false);
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -1038,7 +1055,17 @@ export default function AdminProductsPage() {
 
     try {
       await deleteDoc(doc(db, 'BusinessProducts', row.id));
-      setRows((prev) => prev.filter((item) => item.id !== row.id));
+
+      setRows((prev) =>
+        prev.filter((item) => item.id !== row.id),
+      );
+
+      if (editing?.id === row.id) {
+        clearEditMediaChanges();
+        setEditing(null);
+        setEditForm(null);
+      }
+
       setMessage('Product deleted permanently.');
     } catch (error) {
       console.error('Delete product failed:', error);
@@ -1071,10 +1098,26 @@ export default function AdminProductsPage() {
         </div>
 
         <div style={headerActions}>
-          <button type="button" onClick={() => void loadProducts(false)} style={secondaryButton}>
-            ↻ Refresh
+          <button
+            type="button"
+            onClick={() => void refreshProducts()}
+            disabled={refreshing}
+            style={{
+              ...secondaryButton,
+              opacity: refreshing ? 0.55 : 1,
+              cursor: refreshing ? 'wait' : 'pointer',
+            }}
+          >
+            {refreshing ? '↻ Refreshing…' : '↻ Refresh'}
           </button>
-          <a href="/admin/products/new" style={addButton}>+ Add Product</a>
+
+          <button
+            type="button"
+            onClick={() => router.push('/admin/products/new')}
+            style={addButton}
+          >
+            + Add Product
+          </button>
         </div>
       </div>
 
@@ -1541,8 +1584,48 @@ export default function AdminProductsPage() {
             </div>
 
             <div style={modalFooter}>
-              <button type="button" onClick={closeEdit} disabled={savingEdit} style={secondaryButton}>Cancel</button>
-              <button type="button" onClick={() => void saveEdit()} disabled={savingEdit} style={{ ...modalSaveButton, opacity: savingEdit ? 0.55 : 1 }}>{savingEdit ? 'Saving…' : 'Save Changes'}</button>
+              <button
+                type="button"
+                onClick={() => void deleteProduct(editing)}
+                disabled={savingEdit || busyId === editing.id}
+                style={{
+                  ...modalDeleteButton,
+                  opacity:
+                    savingEdit || busyId === editing.id
+                      ? 0.5
+                      : 1,
+                }}
+              >
+                {busyId === editing.id
+                  ? 'Deleting…'
+                  : 'Delete Product'}
+              </button>
+
+              <div style={modalFooterRight}>
+                <button
+                  type="button"
+                  onClick={closeEdit}
+                  disabled={savingEdit || busyId === editing.id}
+                  style={secondaryButton}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void saveEdit()}
+                  disabled={savingEdit || busyId === editing.id}
+                  style={{
+                    ...modalSaveButton,
+                    opacity:
+                      savingEdit || busyId === editing.id
+                        ? 0.55
+                        : 1,
+                  }}
+                >
+                  {savingEdit ? 'Saving…' : 'Save Changes'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1588,7 +1671,7 @@ function EditField({ label, value, onChange, type = 'text' }: { label: string; v
 
 const pageHeader: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' };
 const headerActions: React.CSSProperties = { display: 'flex', gap: 9, flexWrap: 'wrap' };
-const addButton: React.CSSProperties = { background: '#111', color: 'white', textDecoration: 'none', fontWeight: 400, padding: '12px 18px', borderRadius: 12 };
+const addButton: React.CSSProperties = { border: 0, background: '#111', color: 'white', textDecoration: 'none', fontWeight: 400, padding: '12px 18px', borderRadius: 12, cursor: 'pointer', fontSize: 14 };
 const secondaryButton: React.CSSProperties = { border: '1px solid #dcdcdc', background: '#fff', color: '#222', fontWeight: 400, padding: '10px 14px', borderRadius: 10, cursor: 'pointer' };
 const summaryGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, margin: '22px 0' };
 const summaryCard: React.CSSProperties = { background: 'white', padding: 16, border: '1px solid #e8e8e8', borderRadius: 14 };
@@ -1649,7 +1732,9 @@ const modalCard: React.CSSProperties = { width: 'min(980px, 100%)', maxHeight: '
 const modalHeader: React.CSSProperties = { background: '#fff', borderBottom: '1px solid #e7e7e7', padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 };
 const modalClose: React.CSSProperties = { border: 0, background: '#f2f2f2', width: 36, height: 36, borderRadius: 10, fontSize: 22, cursor: 'pointer' };
 const modalBody: React.CSSProperties = { overflowY: 'auto', padding: 18 };
-const modalFooter: React.CSSProperties = { background: '#fff', borderTop: '1px solid #e7e7e7', padding: 14, display: 'flex', justifyContent: 'flex-end', gap: 10 };
+const modalFooter: React.CSSProperties = { background: '#fff', borderTop: '1px solid #e7e7e7', padding: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' };
+const modalFooterRight: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' };
+const modalDeleteButton: React.CSSProperties = { border: '1px solid #efb7b3', background: '#fff1f0', color: '#b42318', padding: '11px 16px', borderRadius: 10, fontWeight: 500, cursor: 'pointer' };
 const modalSaveButton: React.CSSProperties = { border: 0, background: '#111', color: '#fff', padding: '11px 18px', borderRadius: 10, fontWeight: 400, cursor: 'pointer' };
 const editMediaHelp: React.CSSProperties = { marginBottom: 14, color: '#666', fontSize: 12, lineHeight: 1.45 };
 const editMediaGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 };
