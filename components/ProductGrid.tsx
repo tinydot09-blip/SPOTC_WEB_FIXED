@@ -67,8 +67,17 @@ const businessNameOf = (product: BusinessProduct): string =>
       'SPOTC Shop',
   );
 
-const priceOf = (product: BusinessProduct): number =>
-  numberValue(product.offer_price ?? product.price);
+const priceOf = (product: BusinessProduct): number => {
+  const offerPrice = numberValue(product.offer_price);
+  const sellingPrice = numberValue(product.selling_price);
+  const price = numberValue(product.price);
+  const mrp = numberValue(product.mrp ?? product.old_price);
+
+  if (offerPrice > 0) return offerPrice;
+  if (sellingPrice > 0) return sellingPrice;
+  if (price > 0) return price;
+  return mrp;
+};
 
 const oldPriceOf = (product: BusinessProduct): number =>
   numberValue(
