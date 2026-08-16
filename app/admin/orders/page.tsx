@@ -8,6 +8,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  writeBatch,
   type DocumentData,
   type DocumentReference,
 } from 'firebase/firestore';
@@ -398,6 +399,7 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
   const [message, setMessage] = useState('');
+  const [deletingAll, setDeletingAll] = useState(false);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] =
@@ -1184,6 +1186,62 @@ export default function AdminOrdersPage() {
     }
   }
 
+  async function deleteAllOrders() {
+    if (!db || deletingAll || orders.length === 0) return;
+
+    const confirmed = window.confirm(
+      `DELETE ALL ${orders.length} ORDERS?\n\nThis permanently deletes every document in the Orders collection. This cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    const finalConfirmed = window.confirm(
+      'Final confirmation: permanently delete ALL orders now?'
+    );
+
+    if (!finalConfirmed) return;
+
+    const firestore = db;
+
+    setDeletingAll(true);
+    setMessage('');
+
+    try {
+      const snapshot = await getDocs(collection(firestore, 'Orders'));
+
+      // Firestore write batches support a maximum of 500 writes.
+      for (let start = 0; start < snapshot.docs.length; start += 450) {
+        const batch = writeBatch(firestore);
+        const chunk = snapshot.docs.slice(start, start + 450);
+
+        chunk.forEach((orderDoc) => {
+          batch.delete(orderDoc.ref);
+        });
+
+        await batch.commit();
+      }
+
+      setOrders([]);
+      setPage(1);
+      setExpandedOrderId('');
+      setMessage(
+        `Deleted ${snapshot.size} order${snapshot.size === 1 ? '' : 's'} successfully.`
+      );
+
+      await loadData(false);
+    } catch (error) {
+      console.error('Delete all orders failed:', error);
+
+      setMessage(
+        error instanceof Error
+          ? `Delete all orders failed: ${error.message}`
+          : 'Failed to delete all orders.'
+      );
+    } finally {
+      setDeletingAll(false);
+    }
+  }
+
   function clearFilters() {
     setSearch('');
     setStatusFilter('all');
@@ -1205,15 +1263,40 @@ export default function AdminOrdersPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() =>
-            void loadData(false)
-          }
-          style={refreshButton}
-        >
-          ↻ Refresh
-        </button>
+        <div style={headerActions}>
+          <button
+            type="button"
+            onClick={() =>
+              void loadData(false)
+            }
+            style={refreshButton}
+          >
+            ↻ Refresh
+          </button>
+
+          <button
+            type="button"
+            disabled={deletingAll || orders.length === 0}
+            onClick={() =>
+              void deleteAllOrders()
+            }
+            style={{
+              ...deleteAllButton,
+              opacity:
+                deletingAll || orders.length === 0
+                  ? 0.45
+                  : 1,
+              cursor:
+                deletingAll || orders.length === 0
+                  ? 'not-allowed'
+                  : 'pointer',
+            }}
+          >
+            {deletingAll
+              ? 'Deleting…'
+              : `Delete All Orders (${orders.length})`}
+          </button>
+        </div>
       </div>
 
       <div style={summaryGrid}>
@@ -1916,6 +1999,22 @@ const pageTitle: React.CSSProperties = {
 const pageSubtitle: React.CSSProperties = {
   margin: 0,
   color: '#666',
+};
+
+const headerActions: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  flexWrap: 'wrap',
+};
+
+const deleteAllButton: React.CSSProperties = {
+  border: '1px solid #efb7b3',
+  background: '#fff1f0',
+  color: '#b42318',
+  borderRadius: 10,
+  padding: '10px 14px',
+  fontWeight: 500,
 };
 
 const refreshButton: React.CSSProperties = {

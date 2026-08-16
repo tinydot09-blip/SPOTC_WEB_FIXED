@@ -4,39 +4,56 @@ export default function Footer() {
   return (
     <footer className="spotc-footer">
       <div className="spotc-footer-grid">
+        {/* BRAND */}
         <div className="spotc-footer-brand">
-          <h3>SPOTC</h3>
+          <h3>SpotC.in</h3>
 
           <p>Namma Area. Namma Kadai.</p>
 
-          <p>Discover nearby shops, products and hidden spots.</p>
+          <p>
+            Shop local products, discover offers and get fast
+            nearby delivery.
+          </p>
         </div>
 
-        <div className="spotc-footer-column spotc-footer-explore">
-          <h4>Explore</h4>
+        {/* SHOP */}
+        <div className="spotc-footer-column">
+          <h4>Shop</h4>
 
           <Link href="/offers">Offers</Link>
-          <Link href="/shop">Shop</Link>
-          <Link href="/spots">Spots</Link>
+          <Link href="/shop">Shop Products</Link>
         </div>
 
-        <div className="spotc-footer-column spotc-footer-business">
-          <h4>Business</h4>
+        {/* ACCOUNT */}
+        <div className="spotc-footer-column">
+          <h4>Account</h4>
 
-          <Link href="/business-partner">Register Business</Link>
-          <Link href="/creator">Become Creator</Link>
-          <Link href="/dashboard?tab=circles">Shopping Circle</Link>
+          <Link href="/dashboard?tab=orders">
+            My Orders
+          </Link>
+
+          <Link href="/dashboard?tab=saved">
+            Saved
+          </Link>
+
+          <Link href="/dashboard?tab=circles">
+            Shopping Circles
+          </Link>
         </div>
 
-        <div className="spotc-footer-column spotc-footer-contact">
-          <h4>Contact Us</h4>
+        {/* HELP */}
+        <div className="spotc-footer-column">
+          <h4>Help</h4>
 
           <Link href="/contact">Contact</Link>
-          <Link href="/contact?type=support">Help &amp; Support</Link>
-          <Link href="/contact?type=business">Business Enquiry</Link>
+
+          <Link href="/contact?type=support">
+            Help &amp; Support
+          </Link>
         </div>
 
-        <div className="spotc-footer-column spotc-footer-company">
+        {/* COMPANY */}
+        <div className="spotc-footer-column">
           <h4>Company</h4>
 
           <Link href="/about">About</Link>
@@ -46,14 +63,14 @@ export default function Footer() {
       </div>
 
       <div className="spotc-footer-bottom">
-        © 2026 SPOTC Technologies Pvt Ltd
+        © 2026 SpotC.in Technologies
       </div>
 
       <style jsx global>{`
         .spotc-footer {
           width: 100%;
           margin-top: 50px !important;
-          padding: 60px 24px 24px;
+          padding: 52px 24px 22px;
           color: #ffffff;
           background: #111111;
         }
@@ -61,10 +78,13 @@ export default function Footer() {
         .spotc-footer-grid {
           width: min(1280px, 100%);
           margin: 0 auto;
+
           display: grid;
+
           grid-template-columns:
-            minmax(250px, 1.6fr)
-            repeat(4, minmax(140px, 1fr));
+            minmax(260px, 1.7fr)
+            repeat(4, minmax(120px, 1fr));
+
           gap: 42px;
           align-items: start;
         }
@@ -76,28 +96,36 @@ export default function Footer() {
         }
 
         .spotc-footer h3 {
-          margin-bottom: 18px;
+          margin-bottom: 14px;
+
           color: #ffffff;
-          font-size: 34px;
+
+          font-size: 32px;
           font-weight: 900;
           line-height: 1;
+
           letter-spacing: -0.02em;
         }
 
         .spotc-footer h4 {
-          margin-bottom: 16px;
+          margin-bottom: 14px;
+
           color: #ffffff;
-          font-size: 17px;
-          font-weight: 900;
+
+          font-size: 16px;
+          font-weight: 700;
           line-height: 1.25;
         }
 
         .spotc-footer-brand p {
           max-width: 330px;
-          margin-bottom: 14px;
+
+          margin-bottom: 10px;
+
           color: #bdbdbd;
-          font-size: 16px;
-          line-height: 1.7;
+
+          font-size: 15px;
+          line-height: 1.55;
         }
 
         .spotc-footer-column {
@@ -106,12 +134,19 @@ export default function Footer() {
 
         .spotc-footer-column a {
           display: block;
+
           width: fit-content;
-          margin: 0 0 16px;
+
+          margin: 0 0 12px;
+
           color: #d9d9d9;
-          font-size: 16px;
-          line-height: 1.45;
+
+          font-size: 15px;
+          line-height: 1.4;
+
           text-decoration: none;
+
+          transition: color 0.15s ease;
         }
 
         .spotc-footer-column a:hover {
@@ -120,19 +155,29 @@ export default function Footer() {
 
         .spotc-footer-bottom {
           width: min(1280px, 100%);
-          margin: 30px auto 0;
-          padding-top: 22px;
-          border-top: 1px solid rgba(255, 255, 255, 0.12);
+
+          margin: 28px auto 0;
+          padding-top: 20px;
+
+          border-top:
+            1px solid rgba(255, 255, 255, 0.12);
+
           color: #9c9c9c;
+
           font-size: 13px;
           line-height: 1.5;
+
           text-align: center;
         }
 
+        /* TABLET */
+
         @media (max-width: 980px) {
           .spotc-footer-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 34px 40px;
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+
+            gap: 30px 40px;
           }
 
           .spotc-footer-brand {
@@ -140,76 +185,64 @@ export default function Footer() {
           }
         }
 
+        /* MOBILE */
+
         @media (max-width: 700px) {
           .spotc-footer {
-            margin-top: 40px !important;
+            margin-top: 36px !important;
+
             padding:
-              42px
+              38px
               20px
-              calc(100px + env(safe-area-inset-bottom));
+              calc(90px + env(safe-area-inset-bottom));
           }
 
           .spotc-footer-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 22px 20px;
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+
+            gap: 24px 20px;
           }
 
           .spotc-footer-brand {
             grid-column: 1 / -1;
           }
 
-          .spotc-footer-explore {
-            grid-column: 1;
-            grid-row: 2;
-          }
-
-          .spotc-footer-business {
-            grid-column: 2;
-            grid-row: 2;
-          }
-
-          .spotc-footer-contact {
-            grid-column: 1;
-            grid-row: 3;
-          }
-
-          .spotc-footer-company {
-            grid-column: 2;
-            grid-row: 3;
-          }
-
           .spotc-footer h3 {
-            margin-bottom: 10px;
-            font-size: 30px;
-            line-height: 1;
+            margin-bottom: 9px;
+            font-size: 28px;
           }
 
           .spotc-footer h4 {
-            margin-bottom: 8px;
-            font-size: 17px;
-            line-height: 1.1;
+            margin-bottom: 9px;
+            font-size: 15px;
           }
 
           .spotc-footer-brand p {
             max-width: 100%;
-            margin-bottom: 6px;
-            font-size: 14px;
-            line-height: 1.35;
+
+            margin-bottom: 5px;
+
+            font-size: 13px;
+            line-height: 1.4;
           }
 
           .spotc-footer-column a {
-            margin-bottom: 6px;
-            font-size: 14px;
-            line-height: 1.25;
+            margin-bottom: 7px;
+
+            font-size: 13px;
+            line-height: 1.3;
           }
 
           .spotc-footer-bottom {
-            margin-top: 14px;
+            margin-top: 18px;
             padding-top: 14px;
+
             font-size: 11px;
-            line-height: 1.2;
           }
         }
+
+        /* SMALL MOBILE */
 
         @media (max-width: 420px) {
           .spotc-footer {
@@ -218,37 +251,27 @@ export default function Footer() {
           }
 
           .spotc-footer-grid {
-            gap: 18px 16px;
+            gap: 20px 16px;
           }
 
           .spotc-footer h3 {
-            margin-bottom: 8px;
             font-size: 26px;
           }
 
           .spotc-footer h4 {
-            margin-bottom: 6px;
-            font-size: 15px;
-            line-height: 1.1;
+            font-size: 14px;
           }
 
-          .spotc-footer-brand p {
-            margin-bottom: 5px;
-            font-size: 13px;
-            line-height: 1.3;
-          }
-
+          .spotc-footer-brand p,
           .spotc-footer-column a {
-            margin-bottom: 5px;
-            font-size: 13px;
-            line-height: 1.2;
+            font-size: 12px;
           }
 
           .spotc-footer-bottom {
-            margin-top: 12px;
+            margin-top: 14px;
             padding-top: 12px;
+
             font-size: 10px;
-            line-height: 1.2;
           }
         }
       `}</style>

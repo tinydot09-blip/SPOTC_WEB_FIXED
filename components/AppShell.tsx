@@ -382,11 +382,7 @@ if (!signedInUser) {
             href="/offers"
             className="spotc-header-brand"
           >
-            <strong>SPOTC</strong>
-
-            <small>
-              Namma Area, Namma Kadai
-            </small>
+            <strong>SpotC.in</strong>
           </Link>
 
           <nav className="spotc-desktop-navigation">
@@ -806,25 +802,18 @@ if (!signedInUser) {
 
         .spotc-header-brand {
           display: flex;
-          flex-direction: column;
-          align-items: flex-start;
+          align-items: center;
           color: #181715;
           text-decoration: none;
           line-height: 1;
         }
 
         .spotc-header-brand strong {
-          font-size: 17px;
+          font-size: 24px;
           font-weight: 900;
-          letter-spacing: 2px;
-        }
-
-        .spotc-header-brand small {
-          margin-top: 5px;
-          color: #706c65;
-          font-size: 8px;
-          font-weight: 700;
-          letter-spacing: 0.4px;
+          letter-spacing: 0px;
+          line-height: 1;
+          white-space: nowrap;
         }
 
         .spotc-desktop-navigation{
@@ -1339,10 +1328,6 @@ if (!signedInUser) {
             gap: 6px;
           }
 
-          .spotc-header-brand small {
-            display: none;
-          }
-
           .spotc-header-search {
             min-width: 0;
             height: 36px;
@@ -1688,7 +1673,7 @@ body {
           }
 
           .spotc-header-brand strong {
-            font-size: 15px;
+            font-size: 19px;
           }
 
           .spotc-header-search {
