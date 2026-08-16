@@ -286,9 +286,7 @@ function linkedMainProduct(
 
   const raw = product as BusinessProduct & Record<string, unknown>;
 
-  const price = num(
-    raw.offer_price ?? raw.sale_price ?? raw.product_price ?? raw.price,
-  );
+  const price = productSellingPrice(product);
 
   const oldPrice = num(
     raw.old_price ??
@@ -369,6 +367,162 @@ function listingFallbackProduct(item: BusinessListing): OfferProduct | null {
         : "",
     productId,
   };
+}
+
+
+function productVideoUrl(product: BusinessProduct): string {
+  const raw = product as BusinessProduct & Record<string, unknown>;
+
+  const direct = text(
+    raw.product_video_url ||
+      raw.video_url ||
+      raw.playback_720_url ||
+      raw.playback_480_url ||
+      raw.playback_url ||
+      raw.business_video_url,
+  ).trim();
+
+  if (direct) return direct;
+
+  if (Array.isArray(raw.media)) {
+    const media = raw.media as Array<Record<string, unknown>>;
+    const videoItem = media.find((item) => {
+      const type = text(item.type).trim().toLowerCase();
+      const role = text(item.role).trim().toLowerCase();
+      const slot = text(item.slot).trim().toLowerCase();
+
+      return (
+        type === "video" ||
+        role === "video" ||
+        slot === "product_video"
+      );
+    });
+
+    const mediaUrl = text(
+      videoItem?.url ||
+        videoItem?.video_url ||
+        videoItem?.playback_url,
+    ).trim();
+
+    if (mediaUrl) return mediaUrl;
+  }
+
+  if (Array.isArray(raw.product_media)) {
+    const media = raw.product_media as Array<Record<string, unknown>>;
+    const videoItem = media.find((item) => {
+      const type = text(item.type).trim().toLowerCase();
+      const role = text(item.role).trim().toLowerCase();
+      const slot = text(item.slot).trim().toLowerCase();
+
+      return (
+        type === "video" ||
+        role === "video" ||
+        slot === "product_video"
+      );
+    });
+
+    return text(
+      videoItem?.url ||
+        videoItem?.video_url ||
+        videoItem?.playback_url,
+    ).trim();
+  }
+
+  return "";
+}
+
+function productSellingPrice(product: BusinessProduct): number {
+  const raw = product as BusinessProduct & Record<string, unknown>;
+
+  const offerPrice = num(raw.offer_price);
+  const sellingPrice = num(raw.selling_price);
+  const salePrice = num(raw.sale_price);
+  const price = num(raw.price);
+  const mrp = num(raw.mrp ?? raw.old_price);
+
+  if (offerPrice > 0) return offerPrice;
+  if (sellingPrice > 0) return sellingPrice;
+  if (salePrice > 0) return salePrice;
+  if (price > 0) return price;
+  return mrp;
+}
+
+function productOldPrice(product: BusinessProduct): number {
+  const raw = product as BusinessProduct & Record<string, unknown>;
+  return num(
+    raw.mrp ??
+      raw.old_price ??
+      raw.original_price ??
+      raw.regular_price ??
+      raw.list_price,
+  );
+}
+
+function productOfferListing(
+  product: BusinessProduct,
+): BusinessListing | null {
+  const raw = product as BusinessProduct & Record<string, unknown>;
+  const videoUrl = productVideoUrl(product);
+
+  if (!videoUrl) return null;
+  if (product.isHidden === true) return null;
+  if (product.isActive === false) return null;
+  if (product.is_in_stock === false) return null;
+
+  const hasStock =
+    product.stock_qty != null || product.stock_quantity != null;
+
+  if (
+    hasStock &&
+    num(product.stock_qty ?? product.stock_quantity) <= 0
+  ) {
+    return null;
+  }
+
+  const productId = text(raw.id || product.id).trim();
+  if (!productId) return null;
+
+  const price = productSellingPrice(product);
+  const oldPrice = productOldPrice(product);
+  const explicitDiscount = num(
+    raw.discount_percent ?? raw.discount ?? raw.suggested_discount,
+  );
+  const calculatedDiscount =
+    oldPrice > price && price > 0
+      ? Math.round(((oldPrice - price) / oldPrice) * 100)
+      : 0;
+
+  const title =
+    text(raw.title || raw.product_name || raw.product_title).trim() ||
+    "Product";
+
+  /*
+   * Convert a BusinessProduct with an uploaded product video into the same
+   * shape already consumed by OfferCard. No duplicate Firestore offer record
+   * is required.
+   */
+  return {
+    ...(raw as unknown as BusinessListing),
+    id: `product-video-${productId}`,
+    business_video_url: videoUrl,
+    playback_url: videoUrl,
+    offer_title: title,
+    product_title: title,
+    product_name: title,
+    product_id: productId,
+    linked_product_id: productId,
+    offer_price: price,
+    price,
+    old_price: oldPrice,
+    mrp: oldPrice,
+    discount_percent: explicitDiscount || calculatedDiscount,
+    isActive: true,
+    approved: true,
+    isApproved: true,
+    approval_status: "approved",
+    processing_status: "ready",
+    created_at: raw.updated_at || raw.created_at || null,
+  } as BusinessListing;
 }
 
 function OfferCard({
@@ -1104,12 +1258,60 @@ export function OfferFeed() {
     };
   }, []);
 
+  const combinedItems = useMemo(() => {
+    const regularOffers = items || [];
+
+    const productVideoOffers = allProducts
+      .map(productOfferListing)
+      .filter(
+        (item): item is BusinessListing => item !== null,
+      );
+
+    /*
+     * If the exact same video already exists as a normal BusinessListing
+     * offer, keep the normal offer and do not add a duplicate product card.
+     */
+    const existingVideos = new Set(
+      regularOffers
+        .map((item) =>
+          text(
+            item.playback_720_url ||
+              item.playback_480_url ||
+              item.playback_url ||
+              item.business_video_url,
+          ).trim(),
+        )
+        .filter(Boolean)
+        .map((url) =>
+          decodeURIComponent(url.split("?")[0])
+            .trim()
+            .toLowerCase(),
+        ),
+    );
+
+    const uniqueProductVideos = productVideoOffers.filter((item) => {
+      const url = text(
+        item.playback_url || item.business_video_url,
+      ).trim();
+
+      if (!url) return false;
+
+      const normalized = decodeURIComponent(url.split("?")[0])
+        .trim()
+        .toLowerCase();
+
+      return !existingVideos.has(normalized);
+    });
+
+    return [...regularOffers, ...uniqueProductVideos];
+  }, [allProducts, items]);
+
   const filtered = useMemo(() => {
     const query = search.toLowerCase().trim();
     const seenVideos = new Set<string>();
     const now = new Date();
 
-    return (items || []).filter((item) => {
+    return combinedItems.filter((item) => {
       const videoUrl = text(
         item.playback_720_url ||
           item.playback_480_url ||
@@ -1171,7 +1373,7 @@ export function OfferFeed() {
       seenVideos.add(normalizedVideo);
       return true;
     });
-  }, [allProducts, items, search]);
+  }, [allProducts, combinedItems, search]);
 
   useEffect(() => {
     const container = feedRef.current;
