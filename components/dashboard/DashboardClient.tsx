@@ -2,39 +2,32 @@
 
 import Link from 'next/link';
 import {
-  Bell, CheckCircle2, Copy, Crown, Gift, Home, LogIn, LogOut,
-  Menu, Share2, ShieldCheck, Sparkles, UserRound, X,
+  Bell,
+  CheckCircle2,
+  Home,
+  LogIn,
+  Menu,
+  Share2,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
+  X,
 } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useEffect, useMemo, useState } from 'react';
 
 import { requireGoogleLogin, logoutUser } from '@/lib/auth';
 import { auth, firebaseReady } from '@/lib/firebase';
-import DashboardOverview from './DashboardOverview';
 import DashboardOrders from './DashboardOrders';
-import DashboardPartner from './DashboardPartner';
-import DashboardMysteryBoxes from './DashboardMysteryBoxes';
-import DashboardUnlock from './DashboardUnlock';
-import DashboardRewards from './DashboardRewards';
 import DashboardSaved from './DashboardSaved';
 import DashboardShoppingCircles from './DashboardShoppingCircles';
 import DashboardSidebar, { type DashboardTab } from './DashboardSidebar';
 
-const LEVELS = [
-  ['Level 0', '0 pts', 'Explorer', 'Dashboard and bill scanning unlocked'],
-  ['Level 1', '100 pts', 'Local Starter', '1 Mystery Box entry'],
-  ['Level 2', '200 pts', 'Smart Shopper', '2 Mystery Box entries'],
-  ['Level 3', '300 pts', 'Reward Hunter', '3 Mystery Box entries'],
-  ['Level 4', '500 pts', 'SPOTC Insider', '5 Mystery Box entries'],
-  ['Level 5', '1,000 pts', 'SPOTC Champion', '10 Mystery Box entries'],
-] as const;
-
-const BOX_PACKS = [
-  { boxes: 3, points: '1,000', title: 'Starter Mystery Pack', text: 'Three chances to reveal local coupons, products or partner rewards.' },
-  { boxes: 5, points: '2,000', title: 'Premium Mystery Pack', text: 'Five chances with better-value local and sponsored rewards.' },
-  { boxes: 10, points: '3,000', title: 'Mega Mystery Pack', text: 'Ten chances, including eligibility for high-value partner rewards.' },
-] as const;
-
+const VALID_TABS: DashboardTab[] = [
+  'orders',
+  'saved',
+  'circles',
+];
 
 function DashboardAuthStyles() {
   return (
@@ -86,16 +79,22 @@ function DashboardAuthStyles() {
 }
 
 export default function DashboardClient() {
-  const [user, setUser] = useState<User | null>(auth?.currentUser ?? null);
+  const [user, setUser] = useState<User | null>(
+    auth?.currentUser ?? null,
+  );
   const [guestMode, setGuestMode] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
-  const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
-  const [mobileMenu, setMobileMenu] = useState(false);
-  const [loginBusy, setLoginBusy] = useState(false);
-  const [inviteCopied, setInviteCopied] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [levelsOpen, setLevelsOpen] = useState(false);
-  const [mysteryOpen, setMysteryOpen] = useState(false);
+
+  // Overview is removed. Orders is now the default dashboard page.
+  const [activeTab, setActiveTab] =
+    useState<DashboardTab>('orders');
+
+  const [mobileMenu, setMobileMenu] =
+    useState(false);
+  const [loginBusy, setLoginBusy] =
+    useState(false);
+  const [notificationsOpen, setNotificationsOpen] =
+    useState(false);
 
   useEffect(() => {
     if (!firebaseReady || !auth) {
@@ -103,21 +102,64 @@ export default function DashboardClient() {
       return;
     }
 
-    return onAuthStateChanged(auth, (nextUser) => {
-      setUser(nextUser && !nextUser.isAnonymous ? nextUser : null);
-      setAuthChecked(true);
-    });
+    return onAuthStateChanged(
+      auth,
+      (nextUser) => {
+        setUser(
+          nextUser &&
+          !nextUser.isAnonymous
+            ? nextUser
+            : null,
+        );
+        setAuthChecked(true);
+      },
+    );
   }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tab = params.get('tab') as DashboardTab | null;
+    const params =
+      new URLSearchParams(
+        window.location.search,
+      );
 
-    // The dashboard is viewable by everyone.
-    // A signed-in user receives real account data; everyone else sees guest previews.
-    setGuestMode(params.get('guest') !== '0');
+    const tab =
+      params.get('tab') as
+        | DashboardTab
+        | null;
 
-    if (tab) setActiveTab(tab);
+    setGuestMode(
+      params.get('guest') !== '0',
+    );
+
+    // Old links such as ?tab=overview / rewards / mystery / unlock
+    // are redirected to the new default: Orders.
+    if (
+      tab &&
+      VALID_TABS.includes(tab)
+    ) {
+      setActiveTab(tab);
+      return;
+    }
+
+    setActiveTab('orders');
+
+    if (tab) {
+      const url =
+        new URL(
+          window.location.href,
+        );
+
+      url.searchParams.set(
+        'tab',
+        'orders',
+      );
+
+      window.history.replaceState(
+        {},
+        '',
+        url.toString(),
+      );
+    }
   }, []);
 
   const guestUser = useMemo(
@@ -132,26 +174,44 @@ export default function DashboardClient() {
     [],
   );
 
-  const effectiveUser = user ?? guestUser;
+  const effectiveUser =
+    user ?? guestUser;
 
   const displayName = useMemo(() => {
-    const name = effectiveUser.displayName?.trim();
+    const name =
+      effectiveUser.displayName?.trim();
+
     if (name) return name;
-    const email = effectiveUser.email?.trim();
-    return email ? email.split('@')[0] : 'Explorer';
+
+    const email =
+      effectiveUser.email?.trim();
+
+    return email
+      ? email.split('@')[0]
+      : 'Explorer';
   }, [effectiveUser]);
 
   const firstName = useMemo(
-    () => displayName.split(/\s+/).filter(Boolean)[0] || 'Explorer',
+    () =>
+      displayName
+        .split(/\s+/)
+        .filter(Boolean)[0] ||
+      'Explorer',
     [displayName],
   );
 
   const login = async () => {
     if (loginBusy) return;
+
     setLoginBusy(true);
+
     try {
-      const loggedIn = await requireGoogleLogin();
-      if (loggedIn) setUser(loggedIn);
+      const loggedIn =
+        await requireGoogleLogin();
+
+      if (loggedIn) {
+        setUser(loggedIn);
+      }
     } finally {
       setLoginBusy(false);
     }
@@ -160,47 +220,48 @@ export default function DashboardClient() {
   const logout = async () => {
     await logoutUser();
     setUser(null);
-    setActiveTab('overview');
+    setActiveTab('orders');
   };
 
-  const changeTab = (tab: DashboardTab) => {
+  const changeTab = (
+    tab: DashboardTab,
+  ) => {
     setActiveTab(tab);
     setMobileMenu(false);
     setNotificationsOpen(false);
-    const url = new URL(window.location.href);
-    url.searchParams.set('tab', tab);
-    window.history.replaceState({}, '', url.toString());
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
 
-  const inviteFriends = async () => {
-    const inviteUrl = `${window.location.origin}/?ref=${encodeURIComponent(
-      user?.uid ?? 'spotc-guest',
-    )}`;
-    const message = 'Join me on SPOTC and discover local offers, rewards and Mystery Boxes.';
+    const url =
+      new URL(
+        window.location.href,
+      );
 
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: 'Join SPOTC', text: message, url: inviteUrl });
-        return;
-      }
-      await navigator.clipboard.writeText(`${message} ${inviteUrl}`);
-      setInviteCopied(true);
-      window.setTimeout(() => setInviteCopied(false), 2200);
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
-      console.error('Invite sharing failed:', error);
-      window.alert('Unable to share right now. Please try again.');
-    }
+    url.searchParams.set(
+      'tab',
+      tab,
+    );
+
+    window.history.replaceState(
+      {},
+      '',
+      url.toString(),
+    );
+
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
   };
 
   if (!authChecked) {
     return (
       <>
         <DashboardAuthStyles />
+
         <main className="dash-auth-loading">
           <span />
-          <p>Preparing your SPOTC dashboard…</p>
+          <p>
+            Preparing your SPOTC dashboard…
+          </p>
         </main>
       </>
     );
@@ -210,12 +271,27 @@ export default function DashboardClient() {
     return (
       <>
         <DashboardAuthStyles />
+
         <main className="dash-login-page">
           <section className="dash-login-card">
-            <span className="dash-login-logo">S</span>
-            <h1>Firebase authentication is not configured</h1>
-            <p>Check the NEXT_PUBLIC_FIREBASE environment variables.</p>
-            <Link href="/">Return Home</Link>
+            <span className="dash-login-logo">
+              S
+            </span>
+
+            <h1>
+              Firebase authentication
+              is not configured
+            </h1>
+
+            <p>
+              Check the
+              NEXT_PUBLIC_FIREBASE
+              environment variables.
+            </p>
+
+            <Link href="/">
+              Return Home
+            </Link>
           </section>
         </main>
       </>
@@ -226,27 +302,63 @@ export default function DashboardClient() {
     return (
       <>
         <DashboardAuthStyles />
+
         <main className="dash-login-page">
           <section className="dash-login-card">
             <div className="dash-login-badge">
-              <Sparkles /> SPOTC MEMBER EXPERIENCE
+              <Sparkles />
+              SPOTC MEMBER
             </div>
-            <span className="dash-login-logo">S</span>
-            <h1>Your local shopping journey, beautifully organized.</h1>
+
+            <span className="dash-login-logo">
+              S
+            </span>
+
+            <h1>
+              Your SPOTC activity,
+              all in one place.
+            </h1>
+
             <p>
-              Sign in to view rewards, scan bills, track Mystery Boxes,
-              manage orders and revisit saved products.
+              Sign in to view your
+              orders, saved products,
+              partner activity and
+              Shopping Circles.
             </p>
+
             <div className="dash-login-benefits">
-              <span><ShieldCheck />Secure Google login</span>
-              <span><Crown />Premium rewards journey</span>
-              <span><Sparkles />Personalized local benefits</span>
+              <span>
+                <ShieldCheck />
+                Secure Google login
+              </span>
+
+              <span>
+                <CheckCircle2 />
+                Track your orders
+              </span>
+
+              <span>
+                <Share2 />
+                Shopping Circles
+              </span>
             </div>
-            <button type="button" onClick={login} disabled={loginBusy}>
+
+            <button
+              type="button"
+              onClick={login}
+              disabled={loginBusy}
+            >
               <LogIn />
-              {loginBusy ? 'Opening Google…' : 'Continue with Google'}
+
+              {loginBusy
+                ? 'Opening Google…'
+                : 'Continue with Google'}
             </button>
-            <Link href="/dashboard?guest=1">Continue browsing without login</Link>
+
+            <Link href="/dashboard?guest=1">
+              Continue browsing
+              without login
+            </Link>
           </section>
         </main>
       </>
@@ -255,54 +367,61 @@ export default function DashboardClient() {
 
   const content = (() => {
     switch (activeTab) {
-      case 'overview':
-        return (
-          <DashboardOverview
-            user={effectiveUser}
-            onOpenLevels={() => setLevelsOpen(true)}
-            onOpenMysteryBoxes={() => setMysteryOpen(true)}
-          />
-        );
       case 'orders':
         return <DashboardOrders />;
 
-      case 'rewards':
-        return <DashboardRewards />;
-
-      case 'mystery':
-        return <DashboardMysteryBoxes />;
-
-      case 'partner':
-        return <DashboardPartner />;
-
-      case 'unlock':
-        return <DashboardUnlock />;
-
       case 'saved':
         return <DashboardSaved />;
-      case 'circles': return <DashboardShoppingCircles />;
-      default:
+
+      case 'circles':
         return (
-          <DashboardOverview
-            user={effectiveUser}
-            onOpenLevels={() => setLevelsOpen(true)}
-            onOpenMysteryBoxes={() => setMysteryOpen(true)}
-          />
+          <DashboardShoppingCircles />
         );
+
+      default:
+        return <DashboardOrders />;
     }
   })();
 
   return (
     <main className="dash-page">
       <aside className="dash-sidebar-desktop">
-        <DashboardSidebar activeTab={activeTab} onChange={changeTab} onLogout={logout} />
+        <DashboardSidebar
+          activeTab={activeTab}
+          onChange={changeTab}
+          onLogout={logout}
+        />
       </aside>
 
       {mobileMenu && (
-        <div className="dash-mobile-overlay" onMouseDown={() => setMobileMenu(false)}>
-          <div className="dash-mobile-panel" onMouseDown={(event) => event.stopPropagation()}>
-            <button type="button" className="dash-mobile-close" onClick={() => setMobileMenu(false)}><X /></button>
-            <DashboardSidebar activeTab={activeTab} onChange={changeTab} onLogout={logout} />
+        <div
+          className="dash-mobile-overlay"
+          onMouseDown={() =>
+            setMobileMenu(false)
+          }
+        >
+          <div
+            className="dash-mobile-panel"
+            onMouseDown={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <button
+              type="button"
+              className="dash-mobile-close"
+              onClick={() =>
+                setMobileMenu(false)
+              }
+              aria-label="Close dashboard menu"
+            >
+              <X />
+            </button>
+
+            <DashboardSidebar
+              activeTab={activeTab}
+              onChange={changeTab}
+              onLogout={logout}
+            />
           </div>
         </div>
       )}
@@ -312,7 +431,9 @@ export default function DashboardClient() {
           <button
             type="button"
             className="dash-header-menu-button"
-            onClick={() => setMobileMenu(true)}
+            onClick={() =>
+              setMobileMenu(true)
+            }
             aria-label="Open dashboard menu"
           >
             <Menu />
@@ -321,17 +442,32 @@ export default function DashboardClient() {
           <div className="dash-header-profile">
             <div className="dash-header-avatar">
               {effectiveUser.photoURL ? (
-                <img src={effectiveUser.photoURL} alt="" />
+                <img
+                  src={
+                    effectiveUser.photoURL
+                  }
+                  alt=""
+                />
               ) : (
-                <span><UserRound /></span>
+                <span>
+                  <UserRound />
+                </span>
               )}
+
               <i />
             </div>
 
             <div className="dash-header-greeting">
-              <span>Good to have you back,</span>
+              <span>
+                Good to have you back,
+              </span>
+
               <h1>{firstName}!</h1>
-              <p>Let&apos;s earn, save and win together</p>
+
+              <p>
+                Your SPOTC orders and
+                shopping activity
+              </p>
             </div>
           </div>
 
@@ -340,7 +476,12 @@ export default function DashboardClient() {
               <button
                 type="button"
                 className="dash-header-notification-button"
-                onClick={() => setNotificationsOpen((value) => !value)}
+                onClick={() =>
+                  setNotificationsOpen(
+                    (value) =>
+                      !value,
+                  )
+                }
                 aria-label="Open notifications"
               >
                 <Bell />
@@ -351,46 +492,71 @@ export default function DashboardClient() {
                 <div className="dash-notification-panel">
                   <div className="dash-popover-head">
                     <div>
-                      <strong>Notifications</strong>
-                      <span>Important SPOTC updates appear here.</span>
+                      <strong>
+                        Notifications
+                      </strong>
+
+                      <span>
+                        Important SPOTC
+                        updates appear
+                        here.
+                      </span>
                     </div>
+
                     <button
                       type="button"
-                      onClick={() => setNotificationsOpen(false)}
+                      onClick={() =>
+                        setNotificationsOpen(
+                          false,
+                        )
+                      }
                     >
                       <X />
                     </button>
                   </div>
 
-                  <button type="button" onClick={() => changeTab('rewards')}>
-                    <Gift />
-                    <span>
-                      <strong>Reward updates</strong>
-                      <small>Unlocked rewards and expiry alerts</small>
-                    </span>
-                  </button>
-
-                  <button type="button" onClick={() => changeTab('orders')}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      changeTab(
+                        'orders',
+                      )
+                    }
+                  >
                     <CheckCircle2 />
+
                     <span>
-                      <strong>Order updates</strong>
-                      <small>Confirmed, ready and delivered alerts</small>
+                      <strong>
+                        Order updates
+                      </strong>
+
+                      <small>
+                        Confirmed, ready
+                        and delivered
+                        alerts
+                      </small>
                     </span>
                   </button>
 
-                  <button type="button" onClick={() => setMysteryOpen(true)}>
-                    <Sparkles />
-                    <span>
-                      <strong>Mystery Box alerts</strong>
-                      <small>Milestones, winners and new boxes</small>
-                    </span>
-                  </button>
-
-                  <button type="button" onClick={() => changeTab('circles')}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      changeTab(
+                        'circles',
+                      )
+                    }
+                  >
                     <Share2 />
+
                     <span>
-                      <strong>Shopping Circle</strong>
-                      <small>Votes, replies and friend activity</small>
+                      <strong>
+                        Shopping Circle
+                      </strong>
+
+                      <small>
+                        Votes, replies and
+                        friend activity
+                      </small>
                     </span>
                   </button>
                 </div>
@@ -407,108 +573,10 @@ export default function DashboardClient() {
           </div>
         </header>
 
-        <div className="dash-content">{content}</div>
-
-        {activeTab === 'overview' && (
-          <section className="dash-bottom-cta-row">
-            <article className="dash-box-cta">
-              <div className="dash-cta-copy">
-                <span className="dash-cta-kicker"><Gift />MYSTERY BOXES</span>
-                <h2>Unlock bigger rewards as your points grow.</h2>
-                <p>Open the milestone guide to see exactly how 3, 5 and 10-box packs work.</p>
-                <div className="dash-box-milestones">
-                  {BOX_PACKS.map((item) => (
-                    <button type="button" key={item.boxes} onClick={() => setMysteryOpen(true)}>
-                      <span>{item.boxes} Boxes</span><strong>{item.points} PTS</strong>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <button type="button" className="dash-cta-primary purple" onClick={() => setMysteryOpen(true)}>
-                Explore Mystery Boxes <Gift />
-              </button>
-            </article>
-
-            <article className="dash-invite-card-v2">
-              <div className="dash-invite-people-v2" aria-hidden="true">
-                👥
-              </div>
-
-              <div className="dash-invite-content-v2">
-                <span className="dash-invite-kicker-v2">
-                  <Share2 />
-                  INVITE &amp; EARN
-                </span>
-
-                <h2>Bring friends into your SPOTC circle.</h2>
-
-                <p>
-                  Share SPOTC and earn bonus rewards when
-                  referral rewards are enabled.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                className="dash-invite-button-v2"
-                onClick={inviteFriends}
-              >
-                {inviteCopied ? (
-                  <>
-                    Link Copied
-                    <CheckCircle2 />
-                  </>
-                ) : (
-                  <>
-                    Invite Friends
-                    {'share' in navigator ? <Share2 /> : <Copy />}
-                  </>
-                )}
-              </button>
-            </article>
-          </section>
-        )}
+        <div className="dash-content">
+          {content}
+        </div>
       </section>
-
-      {levelsOpen && (
-        <div className="dash-modal-backdrop" onMouseDown={() => setLevelsOpen(false)}>
-          <section className="dash-modal" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="dash-modal-head">
-              <div><span className="dash-modal-kicker"><Crown />REWARD JOURNEY</span><h2>All SPOTC levels</h2><p>Points come from approved bills, business coins and eligible bonuses.</p></div>
-              <button type="button" onClick={() => setLevelsOpen(false)}><X /></button>
-            </div>
-            <div className="dash-level-modal-grid">
-              {LEVELS.map(([level, points, title, reward]) => (
-                <article key={level}><span>{level}</span><strong>{title}</strong><b>{points}</b><p>{reward}</p></article>
-              ))}
-            </div>
-            <button type="button" className="dash-modal-primary" onClick={() => { setLevelsOpen(false); setMysteryOpen(true); }}>
-              View Mystery Box Milestones <Gift />
-            </button>
-          </section>
-        </div>
-      )}
-
-      {mysteryOpen && (
-        <div className="dash-modal-backdrop" onMouseDown={() => setMysteryOpen(false)}>
-          <section className="dash-modal" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="dash-modal-head">
-              <div><span className="dash-modal-kicker purple"><Gift />MYSTERY BOXES</span><h2>How Mystery Boxes work</h2><p>Each unlocked box gives one chance to reveal an active local coupon, product reward or sponsored prize.</p></div>
-              <button type="button" onClick={() => setMysteryOpen(false)}><X /></button>
-            </div>
-            <div className="dash-box-modal-grid">
-              {BOX_PACKS.map((item) => (
-                <article key={item.boxes}>
-                  <div><Gift /><strong>{item.boxes}</strong><span>BOXES</span></div>
-                  <h3>{item.title}</h3><b>{item.points} points required</b><p>{item.text}</p>
-                  <button type="button" onClick={() => { setMysteryOpen(false); changeTab('rewards'); }}>View Rewards</button>
-                </article>
-              ))}
-            </div>
-            <div className="dash-info-note"><ShieldCheck /><span><strong>Recommended rule</strong>Show sponsor, expiry, reward limits and odds before a box is opened.</span></div>
-          </section>
-        </div>
-      )}
 
       <style jsx global>{`
         :root{--dash-ink:#1e2329;--dash-muted:#6f7781;--dash-orange:#d97800;--dash-border:#e5e8ec;--dash-bg:#f5f7fa;--dash-green:#169b50}

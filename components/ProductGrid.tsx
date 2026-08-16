@@ -874,16 +874,8 @@ export function ProductGrid({
                   )}
                 </div>
 
-                <div className="reward-row">
-                  Earn{' '}
-                  {Math.max(
-                    1,
-                    Math.round(price / 50),
-                  )}{' '}
-                  SPOTC points
-                </div>
 
-                <div className="product-actions">
+<div className="product-actions">
                   <Link
                     className="product-compare-online"
                     href={`/compare-online?id=${encodeURIComponent(
@@ -1012,7 +1004,7 @@ export function ProductGrid({
 
         /*
          * PRODUCT CARD CONTENT SPACING FIX
-         * Keeps title, delivery, gift, price, rewards and actions compact
+         * Keeps title, delivery, gift, price and actions compact
          * and removes the large empty gaps visible in the card.
          */
         .product-card.rich .product-copy {
@@ -1041,12 +1033,7 @@ export function ProductGrid({
           margin-bottom: 6px !important;
         }
 
-        .product-card.rich .reward-row {
-          margin-top: 0 !important;
-          margin-bottom: 10px !important;
-        }
-
-        .product-card.rich .product-actions {
+.product-card.rich .product-actions {
           margin-top: 0 !important;
         }
 
@@ -1103,12 +1090,7 @@ export function ProductGrid({
             margin-bottom: 5px !important;
           }
 
-          .product-card.rich .reward-row {
-            margin-top: 0 !important;
-            margin-bottom: 9px !important;
-          }
-
-          .product-card.rich .product-actions {
+.product-card.rich .product-actions {
             margin-top: 0 !important;
           }
         }
@@ -1327,8 +1309,7 @@ export function ProductGrid({
 
           .business-product-grid .price strong,
           .business-product-grid .price del,
-          .business-product-grid .price span,
-          .business-product-grid .reward-row {
+          .business-product-grid .price span {
             max-width: 100% !important;
             overflow-wrap: anywhere !important;
           }

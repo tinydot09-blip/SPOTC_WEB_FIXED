@@ -4,6 +4,7 @@ import './globals.css';
 
 import { AppShell } from '@/components/AppShell';
 import FooterWrapper from '@/components/FooterWrapper';
+import NavigationLoader from '@/components/NavigationLoader';
 import ProfileCompletionGate from '@/components/ProfileCompletionGate';
 
 export const metadata: Metadata = {
@@ -19,6 +20,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <NavigationLoader />
+
         <ProfileCompletionGate>
           <AppShell>{children}</AppShell>
           <FooterWrapper />

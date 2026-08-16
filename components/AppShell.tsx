@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import {
-  BriefcaseBusiness,
   CircleUserRound,
   LayoutDashboard,
   LogOut,
@@ -10,7 +9,6 @@ import {
   ShoppingBag,
   Tag,
   UsersRound,
-  Video,
   X,
 } from 'lucide-react';
 import {
@@ -653,42 +651,10 @@ if (!signedInUser) {
                       />
 
                       <span>
-                        Shopping Circle
+                        Shopping Circles
                       </span>
                     </Link>
 
-                    <div className="spotc-dropdown-divider" />
-
-                    <Link
-                      href="/business-partner"
-                      className="spotc-dropdown-item"
-                      onClick={() =>
-                        setMenuOpen(false)
-                      }
-                    >
-                      <BriefcaseBusiness
-                        size={18}
-                      />
-
-                      <span>
-                        Become a Business
-                        Partner
-                      </span>
-                    </Link>
-
-                    <Link
-                      href="/creator"
-                      className="spotc-dropdown-item"
-                      onClick={() =>
-                        setMenuOpen(false)
-                      }
-                    >
-                      <Video size={18} />
-
-                      <span>
-                        Become a Creator
-                      </span>
-                    </Link>
 
                     {firebaseUser && (
                       <>
@@ -1632,6 +1598,43 @@ if (!signedInUser) {
     0 0 10px
       rgba(245, 189, 77, 0.52);
 }
+      /* =========================================================
+   GLOBAL PAGE NAVIGATION STABILITY FIX
+   Prevent page content shifting right during route changes
+========================================================= */
+
+.spotc-app-shell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.spotc-site-content {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+
+  transform: none !important;
+  translate: none !important;
+
+  overflow-x: hidden;
+}
+
+.spotc-site-content > * {
+  max-width: 100%;
+}
+
+html,
+body {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
 
 .spotc-mobile-nav-link:active {
   opacity: 0.76;
@@ -1699,4 +1702,5 @@ if (!signedInUser) {
       `}</style>
     </div>
   );
+  
 }

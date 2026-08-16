@@ -7,14 +7,12 @@ import {
 } from 'react';
 import Link from 'next/link';
 import {
-  ChevronLeft,
-  CircleDollarSign,
+  Clock3,
   Minus,
   Plus,
   ShoppingBag,
   Trash2,
   Truck,
-  X,
 } from 'lucide-react';
 
 import {
@@ -27,6 +25,52 @@ const money = (value: number): string =>
   `₹${Math.round(value).toLocaleString(
     'en-IN',
   )}`;
+
+
+type DeliveryOptionId =
+  | 'instant'
+  | 'morning'
+  | 'afternoon'
+  | 'overnight';
+
+type DeliveryOption = {
+  id: DeliveryOptionId;
+  title: string;
+  orderWindow: string;
+  deliveryWindow: string;
+  fee: number;
+};
+
+const DELIVERY_OPTIONS: DeliveryOption[] = [
+  {
+    id: 'instant',
+    title: 'Instant Delivery',
+    orderWindow: 'Order now',
+    deliveryWindow: 'Delivery in about 15 mins',
+    fee: 20,
+  },
+  {
+    id: 'morning',
+    title: 'Morning Slot',
+    orderWindow: 'Order between 6 AM – 12 PM',
+    deliveryWindow: 'Delivery between 12 PM – 2 PM',
+    fee: 0,
+  },
+  {
+    id: 'afternoon',
+    title: 'Afternoon Slot',
+    orderWindow: 'Order between 12 PM – 6 PM',
+    deliveryWindow: 'Delivery between 6 PM – 7 PM',
+    fee: 0,
+  },
+  {
+    id: 'overnight',
+    title: 'Night Slot',
+    orderWindow: 'Order between 6 PM – 6 AM',
+    deliveryWindow: 'Delivery between 6 AM – 8 AM',
+    fee: 0,
+  },
+];
 
 
 type SavedFreeGift = {
@@ -97,9 +141,8 @@ export default function CartPage() {
 
   const [giftBundles, setGiftBundles] =
     useState<Record<string, SavedGiftBundle>>({});
-
-  const [rewardsSheetOpen, setRewardsSheetOpen] =
-    useState(false);
+  const [selectedDeliveryId, setSelectedDeliveryId] =
+    useState<DeliveryOptionId>('instant');
 
   useEffect(() => {
     const cartItems = readCart();
@@ -120,6 +163,19 @@ export default function CartPage() {
     });
 
     setGiftBundles(nextGiftBundles);
+
+    const savedDeliveryId = window.localStorage.getItem(
+      'spotc-delivery-option',
+    ) as DeliveryOptionId | null;
+
+    if (
+      savedDeliveryId &&
+      DELIVERY_OPTIONS.some(
+        (option) => option.id === savedDeliveryId,
+      )
+    ) {
+      setSelectedDeliveryId(savedDeliveryId);
+    }
   }, []);
 
   const updateCart = (
@@ -140,11 +196,29 @@ export default function CartPage() {
     [items],
   );
 
+  const selectedDelivery =
+    DELIVERY_OPTIONS.find(
+      (option) => option.id === selectedDeliveryId,
+    ) ?? DELIVERY_OPTIONS[0];
+
   const delivery =
-    items.length > 0 ? 20 : 0;
+    items.length > 0 ? selectedDelivery.fee : 0;
 
   const total =
     subtotal + delivery;
+
+  const selectDelivery = (
+    optionId: DeliveryOptionId,
+  ) => {
+    setSelectedDeliveryId(optionId);
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(
+        'spotc-delivery-option',
+        optionId,
+      );
+    }
+  };
 
   const totalQuantity =
     items.reduce(
@@ -160,39 +234,6 @@ export default function CartPage() {
       sum + bundle.gifts.length,
     0,
   );
-
-  const totalRewardPoints =
-    Math.max(
-      1,
-      Math.round(subtotal / 50),
-    );
-
-  const availableCoupons = [
-    {
-      code: 'SPOTC100',
-      title: '₹100 OFF',
-      description:
-        'Use on eligible orders above ₹999.',
-      condition:
-        'Applied separately at checkout.',
-    },
-    {
-      code: 'FREEDEL',
-      title: 'Free Delivery',
-      description:
-        'Free local delivery on eligible orders.',
-      condition:
-        'Subject to SPOTC delivery availability.',
-    },
-    {
-      code: 'NEXT5',
-      title: 'Extra 5% OFF',
-      description:
-        'Save 5% on your next eligible purchase.',
-      condition:
-        'Valid for one future order.',
-    },
-  ];
 
   const decreaseQuantity = (
     itemIndex: number,
@@ -467,19 +508,66 @@ export default function CartPage() {
                 })}
               </div>
 
-              <div className="spotc-order-delivery">
-                <Truck size={19} />
+              <section className="spotc-delivery-section">
+                <div className="spotc-delivery-section-head">
+                  <div>
+                    <small>DELIVERY OPTION</small>
+                    <h3>Choose delivery time</h3>
+                  </div>
 
-                <div>
-                  <strong>
-                    Delivery {money(delivery)}
-                  </strong>
-
-                  <small>
-                    One delivery charge for this SPOTC order
-                  </small>
+                  <strong>{money(delivery)}</strong>
                 </div>
-              </div>
+
+                <div className="spotc-delivery-options">
+                  {DELIVERY_OPTIONS.map((option) => {
+                    const selected =
+                      option.id === selectedDeliveryId;
+
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={`spotc-delivery-option ${
+                          selected ? 'active' : ''
+                        }`}
+                        onClick={() =>
+                          selectDelivery(option.id)
+                        }
+                      >
+                        <span className="spotc-delivery-option-icon">
+                          {option.id === 'instant' ? (
+                            <Truck size={20} />
+                          ) : (
+                            <Clock3 size={20} />
+                          )}
+                        </span>
+
+                        <span className="spotc-delivery-option-copy">
+                          <span className="spotc-delivery-option-title-row">
+                            <strong>{option.title}</strong>
+                            <b className={`spotc-delivery-fee ${
+                              option.fee === 0 ? 'free' : ''
+                            }`}>
+                              {option.fee === 0
+                                ? 'FREE'
+                                : money(option.fee)}
+                            </b>
+                          </span>
+                          <small>{option.orderWindow}</small>
+                          <em>{option.deliveryWindow}</em>
+                        </span>
+
+                        <span
+                          className="spotc-delivery-radio"
+                          aria-hidden="true"
+                        >
+                          {selected ? '✓' : ''}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
 
               <footer className="spotc-order-footer">
                 <span>Products subtotal</span>
@@ -521,45 +609,12 @@ export default function CartPage() {
               </strong>
             </div>
 
-            <button
-              type="button"
-              className="spotc-rewards-highlight"
-              onClick={() =>
-                setRewardsSheetOpen(true)
-              }
-              aria-label={`Earn ${totalRewardPoints} SPOTC points and view ${availableCoupons.length} available coupons`}
-            >
-              <span className="spotc-rewards-highlight-icon">
-                <CircleDollarSign
-                  aria-hidden="true"
-                />
-              </span>
-
-              <span className="spotc-rewards-highlight-copy">
-                <strong>
-                  Earn {totalRewardPoints}{' '}
-                  SPOTC points
-                </strong>
-
-                <small>
-                  {availableCoupons.length}{' '}
-                  coupons available · Tap to
-                  view
-                </small>
-              </span>
-
-              <ChevronLeft
-                className="spotc-rewards-highlight-arrow"
-                aria-hidden="true"
-              />
-            </button>
-
             <div className="spotc-delivery-note">
               <Truck size={19} />
 
               <span>
-                15–45 mins nearby
-                delivery where available
+                <strong>{selectedDelivery.title}</strong>
+                <small>{selectedDelivery.deliveryWindow}</small>
               </span>
             </div>
 
@@ -573,131 +628,6 @@ export default function CartPage() {
         </div>
       </div>
 
-
-      {rewardsSheetOpen && (
-        <div
-          className="spotc-rewards-backdrop"
-          role="presentation"
-          onMouseDown={() =>
-            setRewardsSheetOpen(false)
-          }
-        >
-          <section
-            className="spotc-rewards-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-label="SPOTC rewards and available coupons"
-            onMouseDown={(event) =>
-              event.stopPropagation()
-            }
-          >
-            <button
-              type="button"
-              className="spotc-rewards-close"
-              aria-label="Close rewards and coupons"
-              onClick={() =>
-                setRewardsSheetOpen(false)
-              }
-            >
-              <X />
-            </button>
-
-            <div className="spotc-rewards-handle" />
-
-            <div className="spotc-rewards-sheet-heading">
-              <span>
-                <CircleDollarSign />
-              </span>
-
-              <div>
-                <small>
-                  REWARDS &amp; COUPONS
-                </small>
-
-                <h2>
-                  Earn {totalRewardPoints}{' '}
-                  SPOTC points
-                </h2>
-
-                <p>
-                  Points are estimated from
-                  your current cart and do
-                  not reduce the displayed
-                  product discounts.
-                </p>
-              </div>
-            </div>
-
-            <div className="spotc-rewards-points-card">
-              <strong>
-                {totalRewardPoints}
-              </strong>
-
-              <span>SPOTC points</span>
-
-              <small>
-                Estimated for this cart
-              </small>
-            </div>
-
-            <div className="spotc-coupon-list">
-              <div className="spotc-coupon-list-title">
-                <h3>
-                  {availableCoupons.length}{' '}
-                  available coupons
-                </h3>
-
-                <span>Use separately</span>
-              </div>
-
-              {availableCoupons.map(
-                (coupon) => (
-                  <article
-                    className="spotc-coupon-card"
-                    key={coupon.code}
-                  >
-                    <div className="spotc-coupon-badge">
-                      {coupon.title}
-                    </div>
-
-                    <div className="spotc-coupon-copy">
-                      <strong>
-                        {coupon.description}
-                      </strong>
-
-                      <small>
-                        {coupon.condition}
-                      </small>
-
-                      <code>
-                        {coupon.code}
-                      </code>
-                    </div>
-                  </article>
-                ),
-              )}
-            </div>
-
-            <p className="spotc-coupon-note">
-              Coupons are not included in
-              the displayed product
-              discounts. Eligibility and
-              final coupon application are
-              confirmed at checkout.
-            </p>
-
-            <button
-              type="button"
-              className="spotc-rewards-done"
-              onClick={() =>
-                setRewardsSheetOpen(false)
-              }
-            >
-              Done
-            </button>
-          </section>
-        </div>
-      )}
 
       <style jsx>{styles}</style>
     </main>
@@ -941,32 +871,149 @@ const styles = `
     text-decoration: line-through;
   }
 
-  .spotc-order-delivery {
+  .spotc-delivery-section {
     margin-top: 16px;
-    padding: 14px 15px;
-    display: flex;
-    align-items: center;
-    gap: 11px;
+    padding: 16px;
     border: 1px solid #d8eddf;
-    border-radius: 15px;
-    color: #177a42;
-    background: #eff9f2;
+    border-radius: 17px;
+    background: #f5fbf7;
   }
 
-  .spotc-order-delivery strong,
-  .spotc-order-delivery small {
+  .spotc-delivery-section-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 13px;
+  }
+
+  .spotc-delivery-section-head small {
+    color: #1a7a44;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+  }
+
+  .spotc-delivery-section-head h3 {
+    margin: 4px 0 0;
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .spotc-delivery-section-head > strong {
+    color: #16783f;
+    font-size: 17px;
+    font-weight: 800;
+  }
+
+  .spotc-delivery-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .spotc-delivery-option {
+    width: 100%;
+    min-width: 0;
+    padding: 13px;
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 24px;
+    gap: 10px;
+    align-items: center;
+    border: 1px solid #dfe8e2;
+    border-radius: 14px;
+    color: #29241f;
+    background: #ffffff;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .spotc-delivery-option.active {
+    border-color: #1a9a53;
+    background: #edf9f1;
+  }
+
+  .spotc-delivery-option-icon {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    color: #177a42;
+    background: #e9f6ed;
+  }
+
+  .spotc-delivery-option-copy {
+    min-width: 0;
+  }
+
+  .spotc-delivery-option-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .spotc-delivery-fee {
+    flex: 0 0 auto;
+    padding: 3px 7px;
+    border-radius: 7px;
+    color: #8a4b00;
+    background: #fff0d5;
+    font-size: 11px;
+    font-weight: 850;
+    line-height: 1.2;
+  }
+
+  .spotc-delivery-fee.free {
+    color: #08783d;
+    background: #e5f7ec;
+  }
+
+  .spotc-delivery-option-copy strong,
+  .spotc-delivery-option-copy small,
+  .spotc-delivery-option-copy em {
     display: block;
   }
 
-  .spotc-order-delivery strong {
+  .spotc-delivery-option-copy strong {
     font-size: 13px;
-    font-weight: 650;
+    font-weight: 750;
   }
 
-  .spotc-order-delivery small {
+  .spotc-delivery-option-copy small {
     margin-top: 3px;
-    color: #4e7d60;
+    color: #6c746f;
     font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .spotc-delivery-option-copy em {
+    margin-top: 4px;
+    color: #177a42;
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  .spotc-delivery-radio {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    justify-self: end;
+    border: 1px solid #bfd4c6;
+    border-radius: 50%;
+    color: #ffffff;
+    background: #ffffff;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .spotc-delivery-option.active .spotc-delivery-radio {
+    border-color: #1a9a53;
+    background: #1a9a53;
   }
 
   .spotc-order-footer {
@@ -1165,315 +1212,28 @@ const styles = `
     border-radius: 15px;
     color: #4e473f;
     background: #f4eee3;
-    font-size: 16px;
-    font-weight: 550;
     line-height: 1.45;
   }
 
-  .spotc-rewards-highlight {
-    width: 100%;
-    margin-top: 17px;
-    padding: 16px 18px;
-    display: grid;
-    grid-template-columns:
-      52px minmax(0, 1fr) 22px;
-    gap: 14px;
-    align-items: center;
-    border: 1px solid #e3bd63;
-    border-radius: 18px;
-    color: #20180d;
-    background:
-      linear-gradient(
-        135deg,
-        #fff8dc,
-        #ffedaf
-      );
-    text-align: left;
-    cursor: pointer;
-    box-shadow: 0 10px 24px
-      rgba(151, 100, 15, 0.09);
-  }
-
-  .spotc-rewards-highlight-icon {
-    width: 52px;
-    height: 52px;
-    display: grid;
-    place-items: center;
-    border-radius: 15px;
-    color: #f1ac31;
-    background: #17120d;
-  }
-
-  .spotc-rewards-highlight-icon svg {
-    width: 30px;
-    height: 30px;
-  }
-
-  .spotc-rewards-highlight-copy {
+  .spotc-delivery-note > span {
     min-width: 0;
   }
 
-  .spotc-rewards-highlight-copy strong,
-  .spotc-rewards-highlight-copy small {
+  .spotc-delivery-note strong,
+  .spotc-delivery-note small {
     display: block;
   }
 
-  .spotc-rewards-highlight-copy strong {
-    font-size: 18px;
-    font-weight: 800;
-    line-height: 1.3;
-  }
-
-  .spotc-rewards-highlight-copy small {
-    margin-top: 5px;
-    color: #71572f;
+  .spotc-delivery-note strong {
     font-size: 14px;
-    font-weight: 650;
-    line-height: 1.4;
+    font-weight: 750;
   }
 
-  .spotc-rewards-highlight-arrow {
-    width: 22px;
-    transform: rotate(180deg);
-    color: #765517;
-  }
-
-  .spotc-rewards-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 1200;
-    padding: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.68);
-    backdrop-filter: blur(6px);
-  }
-
-  .spotc-rewards-sheet {
-    position: relative;
-    width: min(680px, 100%);
-    max-height: 90vh;
-    overflow-y: auto;
-    padding: 26px;
-    border: 1px solid #ead39a;
-    border-radius: 28px;
-    color: #1c1710;
-    background: #fffaf0;
-    box-shadow: 0 30px 90px
-      rgba(0, 0, 0, 0.42);
-  }
-
-  .spotc-rewards-close {
-    position: absolute;
-    top: 17px;
-    right: 17px;
-    width: 44px;
-    height: 44px;
-    display: grid;
-    place-items: center;
-    border: 0;
-    border-radius: 50%;
-    color: #ffffff;
-    background: #17120d;
-    cursor: pointer;
-  }
-
-  .spotc-rewards-close svg {
-    width: 23px;
-    height: 23px;
-  }
-
-  .spotc-rewards-handle {
-    width: 50px;
-    height: 5px;
-    margin: 0 auto 20px;
-    border-radius: 99px;
-    background: #5d5a55;
-  }
-
-  .spotc-rewards-sheet-heading {
-    padding-right: 50px;
-    display: grid;
-    grid-template-columns: 62px 1fr;
-    gap: 16px;
-    align-items: start;
-  }
-
-  .spotc-rewards-sheet-heading > span {
-    width: 62px;
-    height: 62px;
-    display: grid;
-    place-items: center;
-    border-radius: 18px;
-    color: #f0ad35;
-    background: #17120d;
-  }
-
-  .spotc-rewards-sheet-heading > span svg {
-    width: 36px;
-    height: 36px;
-  }
-
-  .spotc-rewards-sheet-heading small {
-    color: #8b641f;
-    font-size: 14px;
-    font-weight: 900;
-    letter-spacing: 0.12em;
-  }
-
-  .spotc-rewards-sheet-heading h2 {
-    margin: 5px 0 8px;
-    font-size: 30px;
-    line-height: 1.15;
-  }
-
-  .spotc-rewards-sheet-heading p {
-    margin: 0;
-    color: #766b5d;
-    font-size: 17px;
-    line-height: 1.55;
-  }
-
-  .spotc-rewards-points-card {
-    margin-top: 24px;
-    padding: 24px;
-    border-radius: 24px;
-    color: #ffffff;
-    background:
-      linear-gradient(
-        135deg,
-        #17120d,
-        #30230f
-      );
-  }
-
-  .spotc-rewards-points-card strong,
-  .spotc-rewards-points-card span,
-  .spotc-rewards-points-card small {
-    display: block;
-  }
-
-  .spotc-rewards-points-card strong {
-    color: #f7b53d;
-    font-size: 48px;
-    line-height: 1;
-  }
-
-  .spotc-rewards-points-card span {
-    margin-top: 10px;
-    font-size: 23px;
-    font-weight: 850;
-  }
-
-  .spotc-rewards-points-card small {
-    margin-top: 7px;
-    color: #cfc5b5;
-    font-size: 16px;
-  }
-
-  .spotc-coupon-list {
-    margin-top: 26px;
-  }
-
-  .spotc-coupon-list-title {
-    margin-bottom: 15px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 15px;
-  }
-
-  .spotc-coupon-list-title h3 {
-    margin: 0;
-    font-size: 23px;
-  }
-
-  .spotc-coupon-list-title span {
-    padding: 7px 11px;
-    border-radius: 999px;
-    color: #805a18;
-    background: #f6e9c8;
-    font-size: 13px;
-    font-weight: 800;
-  }
-
-  .spotc-coupon-card {
-    margin-top: 14px;
-    padding: 17px;
-    display: grid;
-    grid-template-columns: 145px 1fr;
-    gap: 18px;
-    align-items: center;
-    border: 1px dashed #cda849;
-    border-radius: 20px;
-    background: #ffffff;
-  }
-
-  .spotc-coupon-badge {
-    min-height: 104px;
-    padding: 14px;
-    display: grid;
-    place-items: center;
-    border-radius: 17px;
-    color: #805310;
-    background: #fff0bd;
-    font-size: 19px;
-    font-weight: 900;
-    text-align: center;
-  }
-
-  .spotc-coupon-copy strong,
-  .spotc-coupon-copy small,
-  .spotc-coupon-copy code {
-    display: block;
-  }
-
-  .spotc-coupon-copy strong {
-    font-size: 18px;
-    line-height: 1.4;
-  }
-
-  .spotc-coupon-copy small {
-    margin-top: 7px;
-    color: #7f7466;
-    font-size: 15px;
-    line-height: 1.45;
-  }
-
-  .spotc-coupon-copy code {
-    width: fit-content;
-    margin-top: 11px;
-    padding: 7px 11px;
-    border-radius: 9px;
-    color: #f3b33c;
-    background: #17120d;
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: 900;
-  }
-
-  .spotc-coupon-note {
-    margin: 22px 0 0;
-    padding: 17px;
-    border-radius: 16px;
-    color: #756b5e;
-    background: #f3ead8;
-    font-size: 15px;
-    line-height: 1.55;
-  }
-
-  .spotc-rewards-done {
-    width: 100%;
-    min-height: 54px;
-    margin-top: 16px;
-    border: 0;
-    border-radius: 15px;
-    color: #ffffff;
-    background: #17120d;
-    font-size: 17px;
-    font-weight: 850;
-    cursor: pointer;
+  .spotc-delivery-note small {
+    margin-top: 2px;
+    color: #756c63;
+    font-size: 12px;
+    font-weight: 550;
   }
 
   .spotc-checkout-button {
@@ -1556,79 +1316,8 @@ const styles = `
     }
 
 
-    .spotc-rewards-highlight {
-      grid-template-columns:
-        50px minmax(0, 1fr) 20px;
-      padding: 15px;
-      gap: 12px;
-    }
 
-    .spotc-rewards-highlight-icon {
-      width: 50px;
-      height: 50px;
-    }
 
-    .spotc-rewards-highlight-copy strong {
-      font-size: 18px;
-    }
-
-    .spotc-rewards-highlight-copy small {
-      font-size: 14px;
-    }
-
-    .spotc-rewards-backdrop {
-      padding: 0;
-      align-items: flex-end;
-    }
-
-    .spotc-rewards-sheet {
-      width: 100%;
-      max-height: 92vh;
-      padding: 24px 18px
-        calc(
-          118px +
-          env(safe-area-inset-bottom)
-        );
-      border-radius: 28px 28px 0 0;
-    }
-
-    .spotc-rewards-sheet-heading {
-      grid-template-columns: 58px 1fr;
-      padding-right: 45px;
-      gap: 14px;
-    }
-
-    .spotc-rewards-sheet-heading > span {
-      width: 58px;
-      height: 58px;
-    }
-
-    .spotc-rewards-sheet-heading h2 {
-      font-size: 27px;
-    }
-
-    .spotc-rewards-sheet-heading p {
-      font-size: 16px;
-    }
-
-    .spotc-coupon-card {
-      grid-template-columns: 128px 1fr;
-      gap: 14px;
-      padding: 14px;
-    }
-
-    .spotc-coupon-badge {
-      min-height: 100px;
-      font-size: 17px;
-    }
-
-    .spotc-coupon-copy strong {
-      font-size: 17px;
-    }
-
-    .spotc-coupon-copy small {
-      font-size: 14px;
-    }
 
     .spotc-cart-head {
       align-items: flex-start;
@@ -1663,6 +1352,14 @@ const styles = `
 
     .spotc-products-card {
       padding: 17px;
+    }
+
+    .spotc-delivery-options {
+      grid-template-columns: 1fr;
+    }
+
+    .spotc-delivery-section {
+      padding: 13px;
     }
 
     .spotc-products-card-head h2 {

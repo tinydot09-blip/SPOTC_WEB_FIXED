@@ -5,7 +5,6 @@ import {
   BadgeCheck,
   Bolt,
   CheckCircle2,
-  CircleDollarSign,
   Clock3,
   Copy,
   ChevronDown,
@@ -551,8 +550,6 @@ export default function ProductDetailPage() {
     id: string;
     shareCode: string;
   } | null>(null);
-  const [coinBackOpen, setCoinBackOpen] = useState(false);
-  const [rewardsSheetOpen, setRewardsSheetOpen] = useState(false);
   const [giftPreviewOpen, setGiftPreviewOpen] = useState(false);
   const [giftProducts, setGiftProducts] = useState<BusinessProduct[]>([]);
   const [giftSearch, setGiftSearch] = useState('');
@@ -879,35 +876,13 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
 
   const oldPrice = oldPriceOf(product);
   const discount = discountOf(product);
-  const rewardPoints = Math.max(1, Math.round(price / 50));
-  const availableCoupons = [
-    {
-      code: 'SPOTC100',
-      title: '₹100 OFF',
-      description: 'Use on eligible orders above ₹999.',
-      condition: 'Applied separately at checkout.',
-    },
-    {
-      code: 'FREEDEL',
-      title: 'Free Delivery',
-      description: 'Free local delivery on eligible orders.',
-      condition: 'Subject to business delivery area.',
-    },
-    {
-      code: 'NEXT5',
-      title: 'Extra 5% OFF',
-      description: 'Save 5% on your next eligible purchase.',
-      condition: 'Valid for one future order.',
-    },
-  ];
-
-  const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
+const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   const hasStockField = record.stock_qty !== undefined || record.stock_quantity !== undefined;
   const explicitInStock = booleanValue(record.is_in_stock);
   const inStock =
     explicitInStock !== false && (!hasStockField || rawStock === null || rawStock > 0);
   const stockQuantity = rawStock !== null && rawStock > 0 ? Math.floor(rawStock) : null;
-  const maximumQuantity = 99;
+  const maximumQuantity = stockQuantity !== null ? Math.min(99, stockQuantity) : 99;
 
   const verified =
     record.isVerified === true ||
@@ -1999,26 +1974,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
             {oldPrice > price && <del>₹{Math.round(oldPrice)}</del>}
             {oldPrice > price && <em>Save ₹{Math.round(oldPrice - price)}</em>}
           </div>
-
-          <button
-            type="button"
-            className="pd-rewards-highlight"
-            onClick={() => setRewardsSheetOpen(true)}
-            aria-label={`Earn ${rewardPoints} SPOTC points and view ${availableCoupons.length} available coupons`}
-          >
-            <span className="pd-rewards-highlight-icon">
-              <CircleDollarSign aria-hidden="true" />
-            </span>
-
-            <span className="pd-rewards-highlight-copy">
-              <strong>Earn {rewardPoints} SPOTC points</strong>
-              <small>{availableCoupons.length} coupons available · Tap to view</small>
-            </span>
-
-            <ChevronLeft className="pd-rewards-highlight-arrow" aria-hidden="true" />
-          </button>
-
-          {sizes.length > 0 && (
+{sizes.length > 0 && (
             <div className="pd-option">
               <label>Size</label>
               <div>
@@ -2079,46 +2035,48 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
             </>
           )}
 
-          <div className="pd-purchase-row">
-            <div className="pd-qty pd-qty-inline">
-              <div>
-                <button
-                  type="button"
-                  aria-label="Decrease quantity"
-                  disabled={qty <= 1}
-                  onClick={() => {
-                    setQty((current) => {
-                      const nextQty = Math.max(1, current - 1);
-                      const nextGiftLimit =
-                        freeGiftCountPerItem * nextQty;
+          <div className={`pd-purchase-row ${stockQuantity === 1 ? 'pd-purchase-row-no-qty' : ''}`}>
+            {stockQuantity !== 1 && (
+              <div className="pd-qty pd-qty-inline">
+                <div>
+                  <button
+                    type="button"
+                    aria-label="Decrease quantity"
+                    disabled={qty <= 1}
+                    onClick={() => {
+                      setQty((current) => {
+                        const nextQty = Math.max(1, current - 1);
+                        const nextGiftLimit =
+                          freeGiftCountPerItem * nextQty;
 
-                      setSelectedGiftIds((selected) =>
-                        selected.slice(0, nextGiftLimit),
-                      );
+                        setSelectedGiftIds((selected) =>
+                          selected.slice(0, nextGiftLimit),
+                        );
 
-                      return nextQty;
-                    });
-                  }}
-                >
-                  <Minus />
-                </button>
+                        return nextQty;
+                      });
+                    }}
+                  >
+                    <Minus />
+                  </button>
 
-                <strong>{qty}</strong>
+                  <strong>{qty}</strong>
 
-                <button
-                  type="button"
-                  aria-label="Increase quantity"
-                  disabled={!inStock || qty >= maximumQuantity}
-                  onClick={() =>
-                    setQty((current) =>
-                      Math.min(maximumQuantity, current + 1),
-                    )
-                  }
-                >
-                  <Plus />
-                </button>
+                  <button
+                    type="button"
+                    aria-label="Increase quantity"
+                    disabled={!inStock || qty >= maximumQuantity}
+                    onClick={() =>
+                      setQty((current) =>
+                        Math.min(maximumQuantity, current + 1),
+                      )
+                    }
+                  >
+                    <Plus />
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             <button
               type="button"
@@ -2173,20 +2131,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
           </span>
           <ChevronLeft className="pd-tool-arrow" />
         </button>
-
-        <button
-          type="button"
-          className="pd-tool-card pd-tool-coin"
-          onClick={() => setCoinBackOpen(true)}
-        >
-          <span className="pd-tool-icon"><CircleDollarSign /></span>
-          <span className="pd-tool-copy">
-            <strong>Earn CoinBack</strong>
-            <small>Tap to know how SPOTC rewards work</small>
-          </span>
-          <ChevronLeft className="pd-tool-arrow" />
-        </button>
-      </section>
+</section>
 
       <section className="pd-accordions" aria-label="Product information">
         {accordionItems.map((item) => {
@@ -2227,11 +2172,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
               );
               const relatedPrice = priceOf(item);
               const relatedOldPrice = oldPriceOf(item);
-              const relatedRewardPoints = Math.max(
-                1,
-                Math.round(relatedPrice / 50),
-              );
-              const relatedFreeGiftCount =
+const relatedFreeGiftCount =
                 relatedPrice < 80
                   ? 0
                   : relatedPrice < 200
@@ -2281,12 +2222,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
                       </em>
                     )}
                   </div>
-
-                  <div className="pd-related-points">
-                    Earn {relatedRewardPoints} SPOTC points
-                  </div>
-
-                  {relatedFreeGiftCount > 0 && (
+{relatedFreeGiftCount > 0 && (
                     <div className="pd-related-gift">
                       <Gift aria-hidden="true" />
                       <span>
@@ -2497,7 +2433,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
                 <strong>{businessName}</strong>
                 <small>{titleOf(product)}</small>
                 <em>₹{Math.round(price)}</em>
-                <b>15 min delivery · COD · Rewards</b>
+                <b>15 min delivery · COD</b>
               </span>
             </div>
 
@@ -2537,7 +2473,6 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
                   <p>✓ 15 min local delivery instead of waiting days</p>
                   <p>✓ Cash on Delivery</p>
                   <p>✓ Local exchange support</p>
-                  <p>✓ Reward points and nearby coupons</p>
                 </div>
               </div>
             )}
@@ -2565,90 +2500,6 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
           </section>
         </div>
       )}
-
-      {rewardsSheetOpen && (
-        <div
-          className="pd-modal-backdrop pd-rewards-sheet-backdrop"
-          role="presentation"
-          onMouseDown={() => setRewardsSheetOpen(false)}
-        >
-          <section
-            className="pd-modal pd-rewards-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-label="SPOTC rewards and available coupons"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <button
-              className="pd-modal-close"
-              type="button"
-              aria-label="Close rewards and coupons"
-              onClick={() => setRewardsSheetOpen(false)}
-            >
-              <X />
-            </button>
-
-            <div className="pd-modal-handle" />
-
-            <div className="pd-rewards-sheet-heading">
-              <span><CircleDollarSign /></span>
-              <div>
-                <small>REWARDS &amp; COUPONS</small>
-                <h2>Earn {rewardPoints} SPOTC points</h2>
-                <p>Points are credited for eligible SPOTC activity and do not reduce the product discount shown above.</p>
-              </div>
-            </div>
-
-            <div className="pd-rewards-points-card">
-              <strong>{rewardPoints}</strong>
-              <span>SPOTC points</span>
-              <small>Estimated for this product</small>
-            </div>
-
-            <div className="pd-coupon-list">
-              <div className="pd-coupon-list-title">
-                <h3>{availableCoupons.length} available coupons</h3>
-                <span>Use separately</span>
-              </div>
-
-              {availableCoupons.map((coupon) => (
-                <article className="pd-coupon-card" key={coupon.code}>
-                  <div className="pd-coupon-badge">{coupon.title}</div>
-                  <div className="pd-coupon-copy">
-                    <strong>{coupon.description}</strong>
-                    <small>{coupon.condition}</small>
-                    <code>{coupon.code}</code>
-                  </div>
-                </article>
-              ))}
-            </div>
-
-            <p className="pd-coupon-note">
-              Coupons are not included in the displayed product discount. Eligibility and final coupon application are confirmed at checkout.
-            </p>
-
-            <button
-              type="button"
-              className="pd-rewards-sheet-done"
-              onClick={() => setRewardsSheetOpen(false)}
-            >
-              Done
-            </button>
-          </section>
-        </div>
-      )}
-
-      {coinBackOpen && (
-        <div className="pd-modal-backdrop" role="presentation" onMouseDown={() => setCoinBackOpen(false)}>
-          <section className="pd-modal pd-coin-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
-            <button className="pd-modal-close" type="button" onClick={() => setCoinBackOpen(false)}><X /></button>
-            <CircleDollarSign className="pd-coin-large" />
-            <h2>CoinBack on SPOTC</h2>
-            <p>When users discover, enquire, visit or buy through SPOTC, participating businesses can reward them with coins or benefits. Available rewards depend on the business and offer.</p>
-          </section>
-        </div>
-      )}
-
 
       {tryOnOpen && (
   <div
@@ -3303,12 +3154,6 @@ onClick={openShoppingCircle}
           font-weight:900;
           font-style:normal;
         }
-        .pd-related-points{
-          margin-top:7px;
-          color:#a05b00;
-          font-size:11px;
-          font-weight:800;
-        }
         .pd-related-card{
           display:flex;
           flex-direction:column;
@@ -3324,10 +3169,6 @@ onClick={openShoppingCircle}
         .pd-related-price-row{
           min-height:24px;
           margin-top:2px;
-        }
-
-        .pd-related-points{
-          margin-top:5px;
         }
 
         .pd-related-gift{
@@ -3354,7 +3195,6 @@ onClick={openShoppingCircle}
           .pd-related-price-row strong{font-size:15px}
           .pd-related-price-row del,
           .pd-related-price-row em,
-          .pd-related-points{font-size:10px}
         }
         .pd-page{max-width:1240px;margin:0 auto;padding:24px 24px 0;color:#17120d}.pd-top{display:flex;justify-content:space-between;margin-bottom:22px}.pd-top button,.pd-top a{display:inline-flex;align-items:center;gap:7px;border:0;background:#fff;color:#17120d;text-decoration:none;padding:10px 14px;border-radius:999px;font-weight:800;box-shadow:0 6px 22px rgba(37,24,12,.08);cursor:pointer}.pd-top svg{width:18px}.pd-main{display:grid;grid-template-columns:minmax(0,1.06fr) minmax(380px,.94fr);gap:48px;align-items:start}.pd-image{position:relative;width:100%;aspect-ratio:4/5;border-radius:26px;background:#eee center/cover no-repeat;box-shadow:0 14px 45px rgba(37,24,12,.1)}.pd-discount-chip{position:absolute;left:16px;top:16px;padding:8px 11px;border-radius:10px;background:#f1b46d;color:#181008;font-size:12px;font-weight:900}
         .pd-delivery-chip{position:absolute;right:16px;top:16px;display:flex;align-items:center;gap:7px;padding:10px 14px;border-radius:999px;background:#25c963;color:#fff;font-size:16px;font-weight:900;box-shadow:0 8px 20px rgba(37,201,99,.34)}
@@ -3870,13 +3710,7 @@ width:200px;
             flex-basis: 17px !important;
           }
         }
-
-
-        .pd-rewards-highlight{width:100%;margin:-2px 0 18px;padding:14px 15px;display:grid;grid-template-columns:42px minmax(0,1fr) 22px;gap:12px;align-items:center;border:1px solid #e1b96c;border-radius:17px;background:linear-gradient(135deg,#fff7df 0%,#fff1c5 100%);color:#3d2a0d;text-align:left;box-shadow:0 8px 24px rgba(139,94,20,.12);cursor:pointer}.pd-rewards-highlight:hover{border-color:#c98b25;transform:translateY(-1px)}.pd-rewards-highlight-icon{width:42px;height:42px;display:grid;place-items:center;border-radius:13px;background:#17120d;color:#f7bc4d}.pd-rewards-highlight-icon svg{width:24px;height:24px}.pd-rewards-highlight-copy{min-width:0;display:block}.pd-rewards-highlight-copy strong,.pd-rewards-highlight-copy small{display:block}.pd-rewards-highlight-copy strong{font-size:16px;font-weight:950}.pd-rewards-highlight-copy small{margin-top:4px;color:#795d2d;font-size:12px;font-weight:800}.pd-rewards-highlight-arrow{width:20px;transform:rotate(180deg);color:#7d591c}.pd-rewards-sheet{width:min(560px,100%);background:#fffaf0;color:#17120d;border-color:#e8d7b3}.pd-rewards-sheet .pd-modal-close{background:#17120d;color:#fff;border-color:#17120d}.pd-rewards-sheet-heading{display:grid;grid-template-columns:48px 1fr;gap:13px;align-items:start;padding-right:36px}.pd-rewards-sheet-heading>span{width:48px;height:48px;display:grid;place-items:center;border-radius:15px;background:#17120d;color:#f5b943}.pd-rewards-sheet-heading svg{width:27px;height:27px}.pd-rewards-sheet-heading small{display:block;color:#9a6b1e;font-size:11px;font-weight:950;letter-spacing:.12em}.pd-rewards-sheet-heading h2{margin:4px 0 7px;font-size:25px}.pd-rewards-sheet-heading p{margin:0;color:#705f49;font-size:13px;line-height:1.5}.pd-rewards-points-card{margin-top:18px;padding:17px;border:1px solid #e6c982;border-radius:18px;background:linear-gradient(135deg,#1a1712,#2b2113);color:#fff}.pd-rewards-points-card strong{display:block;color:#f8bf4d;font-size:34px;line-height:1}.pd-rewards-points-card span{display:block;margin-top:5px;font-size:16px;font-weight:900}.pd-rewards-points-card small{display:block;margin-top:4px;color:rgba(255,255,255,.66)}.pd-coupon-list{display:grid;gap:10px;margin-top:18px}.pd-coupon-list-title{display:flex;align-items:center;justify-content:space-between;gap:12px}.pd-coupon-list-title h3{margin:0;font-size:17px}.pd-coupon-list-title span{padding:5px 8px;border-radius:999px;background:#f1e4c7;color:#75501a;font-size:10px;font-weight:900}.pd-coupon-card{display:grid;grid-template-columns:108px 1fr;gap:13px;align-items:center;padding:13px;border:1px dashed #d3a24b;border-radius:16px;background:#fff}.pd-coupon-badge{min-height:70px;display:grid;place-items:center;padding:9px;border-radius:12px;background:#fff2c9;color:#7d5110;font-size:15px;font-weight:950;text-align:center}.pd-coupon-copy{min-width:0}.pd-coupon-copy strong,.pd-coupon-copy small,.pd-coupon-copy code{display:block}.pd-coupon-copy strong{font-size:14px;line-height:1.35}.pd-coupon-copy small{margin-top:4px;color:#756552;font-size:11px;line-height:1.4}.pd-coupon-copy code{width:max-content;margin-top:8px;padding:5px 8px;border-radius:8px;background:#17120d;color:#f8bf4d;font-family:inherit;font-size:11px;font-weight:950}.pd-coupon-note{margin:14px 0 0;padding:11px 12px;border-radius:12px;background:#f3ead9;color:#6d5b43;font-size:11px;line-height:1.5}.pd-rewards-sheet-done{width:100%;height:48px;margin-top:14px;border:0;border-radius:13px;background:#17120d;color:#fff;font-weight:950;cursor:pointer}@media(max-width:620px){.pd-rewards-highlight{margin:0 0 16px;padding:13px;grid-template-columns:39px minmax(0,1fr) 19px}.pd-rewards-highlight-icon{width:39px;height:39px}.pd-rewards-highlight-copy strong{font-size:15px}.pd-rewards-highlight-copy small{font-size:11px}.pd-rewards-sheet-backdrop{align-items:flex-end}.pd-rewards-sheet{width:100%;max-height:88vh;border-radius:24px 24px 0 0;padding:20px 15px calc(20px + env(safe-area-inset-bottom))}.pd-rewards-sheet-heading{grid-template-columns:42px 1fr;gap:11px}.pd-rewards-sheet-heading>span{width:42px;height:42px}.pd-rewards-sheet-heading h2{font-size:22px}.pd-coupon-card{grid-template-columns:94px 1fr;padding:11px}.pd-coupon-badge{min-height:64px;font-size:13px}}
-
-
-
-        /* Desktop-only typography refinement */
+/* Desktop-only typography refinement */
         @media (min-width: 1024px) {
           .pd-info h1 {
             font-size: 42px !important;
@@ -3890,8 +3724,6 @@ width:200px;
           .pd-price strong,
           .pd-price del,
           .pd-price em,
-          .pd-rewards-highlight strong,
-          .pd-rewards-highlight small,
           .pd-option label,
           .pd-option button,
           .pd-qty strong,
@@ -5818,7 +5650,208 @@ width:200px;
   }
 }
 
-              `}</style>
+        
+        /* =========================================================
+           SPOTC PRODUCT DETAIL — FINAL LAYOUT FIX
+           1. Stock 1: hide quantity selector.
+           2. Two shopping-tool cards fill the full available width.
+           3. All CTA chevrons sit at the far right and point RIGHT.
+        ========================================================= */
+
+        /* PURCHASE ROW */
+        .pd-purchase-row.pd-purchase-row-no-qty{
+          grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;
+        }
+
+        .pd-purchase-row.pd-purchase-row-no-qty .pd-cart-secondary,
+        .pd-purchase-row.pd-purchase-row-no-qty .pd-buy-primary{
+          width:100% !important;
+          min-width:0 !important;
+        }
+
+        /* COMPARE + ASK FRIENDS — EXACTLY TWO CARDS ACROSS */
+        .pd-commerce-tools{
+          width:100% !important;
+          display:grid !important;
+          grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+          gap:14px !important;
+          overflow:visible !important;
+          box-sizing:border-box !important;
+        }
+
+        .pd-commerce-tools > .pd-tool-card{
+          width:100% !important;
+          max-width:none !important;
+          min-width:0 !important;
+          box-sizing:border-box !important;
+        }
+
+        /* TOOL CARD ARROWS — FAR RIGHT + POINT RIGHT */
+        .pd-tool-arrow{
+          width:19px !important;
+          height:19px !important;
+          justify-self:end !important;
+          align-self:center !important;
+          transform:rotate(180deg) !important;
+          transform-origin:center !important;
+          color:#4d4034 !important;
+          flex:0 0 auto !important;
+        }
+
+        /* FREE GIFT ARROW — FAR RIGHT + POINT RIGHT */
+        .pd-free-gift-cta-arrow{
+          width:18px !important;
+          height:18px !important;
+          justify-self:end !important;
+          align-self:center !important;
+          transform:rotate(180deg) !important;
+          transform-origin:center !important;
+          color:#87560d !important;
+          flex:0 0 auto !important;
+        }
+
+        .pd-free-gift-cta-arrow.open{
+          transform:rotate(180deg) !important;
+        }
+
+        /* TABLET */
+        @media(max-width:900px){
+          .pd-commerce-tools{
+            grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+            overflow:visible !important;
+            padding-bottom:0 !important;
+          }
+        }
+
+        /* MOBILE — EACH TOOL CARD USES FULL WIDTH */
+        @media(max-width:620px){
+          .pd-commerce-tools{
+            grid-template-columns:1fr !important;
+            gap:10px !important;
+            margin-top:18px !important;
+            margin-left:0 !important;
+            margin-right:0 !important;
+            padding:0 !important;
+            overflow:visible !important;
+          }
+
+          .pd-tool-card{
+            width:100% !important;
+            min-height:96px !important;
+            grid-template-columns:46px minmax(0,1fr) 20px !important;
+          }
+
+          .pd-purchase-row.pd-purchase-row-no-qty{
+            grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+            gap:8px !important;
+          }
+        }
+
+        @media(max-width:410px){
+          .pd-purchase-row.pd-purchase-row-no-qty{
+            grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+            gap:6px !important;
+          }
+        }
+
+
+        /* =========================================================
+           RELATED PRODUCTS — REMOVE EMPTY WHITE SPACE
+           Let each card keep its natural content height instead of
+           stretching to the tallest card in the grid row.
+        ========================================================= */
+        .pd-related-grid{
+          align-items:start !important;
+        }
+
+        .pd-related-card{
+          height:auto !important;
+          min-height:0 !important;
+          align-self:start !important;
+        }
+
+        .pd-related-card > .pd-related-image{
+          flex:none !important;
+        }
+
+        @media(max-width:900px){
+          .pd-related-grid{
+            align-items:start !important;
+          }
+        }
+
+
+        /* =========================================================
+           RELATED PRODUCTS — TRUE EMPTY-SPACE FIX
+           Older CSS reserved fixed grid rows for points/gifts even
+           when those elements are not rendered. Force natural flow.
+        ========================================================= */
+        .pd-related-grid{
+          align-items:start !important;
+          grid-auto-rows:auto !important;
+        }
+
+        .pd-related-grid > .pd-related-card{
+          display:flex !important;
+          flex-direction:column !important;
+          grid-template-rows:none !important;
+          height:auto !important;
+          min-height:0 !important;
+          max-height:none !important;
+          align-self:start !important;
+          justify-content:flex-start !important;
+          align-content:flex-start !important;
+          padding:10px !important;
+          row-gap:0 !important;
+        }
+
+        .pd-related-grid > .pd-related-card > .pd-related-image{
+          flex:0 0 auto !important;
+          margin-bottom:8px !important;
+        }
+
+        .pd-related-grid > .pd-related-card > h3{
+          height:auto !important;
+          min-height:0 !important;
+          max-height:none !important;
+          margin:0 0 7px !important;
+          flex:0 0 auto !important;
+        }
+
+        .pd-related-grid > .pd-related-card > .pd-related-delivery{
+          flex:0 0 auto !important;
+          height:auto !important;
+          min-height:0 !important;
+          margin:0 0 7px !important;
+        }
+
+        .pd-related-grid > .pd-related-card > .pd-related-price-row{
+          flex:0 0 auto !important;
+          height:auto !important;
+          min-height:0 !important;
+          margin:0 !important;
+        }
+
+        .pd-related-grid > .pd-related-card > .pd-related-gift{
+          flex:0 0 auto !important;
+          height:auto !important;
+          min-height:28px !important;
+          margin:8px 0 0 !important;
+        }
+
+        @media(max-width:620px){
+          .pd-related-grid > .pd-related-card{
+            padding:8px !important;
+          }
+
+          .pd-related-grid > .pd-related-card > h3{
+            height:auto !important;
+            min-height:0 !important;
+            max-height:none !important;
+          }
+        }
+
+      `}</style>
     </main>
   );
 

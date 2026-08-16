@@ -8,8 +8,6 @@ import {
   Loader2,
   MapPin,
   Package,
-  TicketPercent,
-  Trophy,
   Truck,
 } from 'lucide-react';
 import type { User } from 'firebase/auth';
@@ -28,9 +26,8 @@ import {
 } from '@/lib/addresses';
 import { requireGoogleLogin } from '@/lib/auth';
 import { db, firebaseReady } from '@/lib/firebase';
+import PageLoader from '@/components/PageLoader';
 import { groupCartByBusiness } from '@/lib/delivery';
-import { getWelcomeDiscount } from '@/lib/discount';
-import { calculateRewards } from '@/lib/rewards';
 import {
   createBusinessOrder,
   type CreatedOrder,
@@ -39,13 +36,123 @@ import {
 const money = (value: number) =>
   `₹${Math.round(value).toLocaleString('en-IN')}`;
 
+type DeliveryOptionId =
+  | 'instant'
+  | 'morning'
+  | 'afternoon'
+  | 'overnight';
+
+type DeliveryOption = {
+  id: DeliveryOptionId;
+  title: string;
+  deliveryWindow: string;
+  fee: number;
+};
+
+const DELIVERY_OPTIONS: DeliveryOption[] = [
+  {
+    id: 'instant',
+    title: 'Instant Delivery',
+    deliveryWindow: 'Delivery in about 15 mins',
+    fee: 20,
+  },
+  {
+    id: 'morning',
+    title: 'Morning Slot',
+    deliveryWindow: 'Delivery between 12 PM – 2 PM',
+    fee: 0,
+  },
+  {
+    id: 'afternoon',
+    title: 'Afternoon Slot',
+    deliveryWindow: 'Delivery between 6 PM – 7 PM',
+    fee: 0,
+  },
+  {
+    id: 'overnight',
+    title: 'Night Slot',
+    deliveryWindow: 'Delivery between 6 AM – 8 AM',
+    fee: 0,
+  },
+];
+
+type SavedFreeGift = {
+  id: string;
+  title: string;
+  image: string;
+  original_price: number;
+  price: number;
+  is_free_gift: boolean;
+};
+
+type SavedGiftBundle = {
+  product_id: string;
+  quantity: number;
+  entitlement: number;
+  gifts: SavedFreeGift[];
+};
+
+const readSavedGifts = (
+  productId: string,
+): SavedGiftBundle | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(
+      `spotc-free-gifts:${productId}`,
+    );
+
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<SavedGiftBundle>;
+
+    if (!parsed || !Array.isArray(parsed.gifts)) {
+      return null;
+    }
+
+    return {
+      product_id: String(parsed.product_id || productId),
+      quantity: Number(parsed.quantity) || 1,
+      entitlement:
+        Number(parsed.entitlement) || parsed.gifts.length,
+      gifts: parsed.gifts
+        .filter(
+          (gift): gift is SavedFreeGift =>
+            Boolean(
+              gift &&
+                typeof gift === 'object' &&
+                'id' in gift,
+            ),
+        )
+        .map((gift) => ({
+          id: String(gift.id),
+          title: String(gift.title || 'FREE Gift'),
+          image: String(gift.image || ''),
+          original_price:
+            Number(gift.original_price) || 0,
+          price: 0,
+          is_free_gift: true,
+        })),
+    };
+  } catch {
+    return null;
+  }
+};
+
 export default function CheckoutPage() {
   const router = useRouter();
 
   const [user, setUser] = useState<User | null>(null);
   const [items, setItems] = useState<CartItem[]>([]);
   const [address, setAddress] = useState<SavedAddress | null>(null);
-  const [discounts, setDiscounts] = useState<Record<string, number>>({});
+  const [giftBundles, setGiftBundles] =
+    useState<Record<string, SavedGiftBundle>>({});
+  const [selectedDeliveryId, setSelectedDeliveryId] =
+    useState<DeliveryOptionId>('instant');
   const [loading, setLoading] = useState(true);
   const [placing, setPlacing] = useState(false);
 
@@ -66,6 +173,36 @@ export default function CheckoutPage() {
       }
 
       setItems(cart);
+
+      const nextGiftBundles: Record<
+        string,
+        SavedGiftBundle
+      > = {};
+
+      cart.forEach((item) => {
+        const bundle = readSavedGifts(item.id);
+
+        if (bundle && bundle.gifts.length > 0) {
+          nextGiftBundles[item.id] = bundle;
+        }
+      });
+
+      setGiftBundles(nextGiftBundles);
+
+      const savedDeliveryId =
+        window.localStorage.getItem(
+          'spotc-delivery-option',
+        ) as DeliveryOptionId | null;
+
+      if (
+        savedDeliveryId &&
+        DELIVERY_OPTIONS.some(
+          (option) =>
+            option.id === savedDeliveryId,
+        )
+      ) {
+        setSelectedDeliveryId(savedDeliveryId);
+      }
 
       if (!firebaseReady || !db) {
         setLoading(false);
@@ -97,21 +234,7 @@ export default function CheckoutPage() {
 
       setAddress(selectedAddress);
 
-      const discountPairs = await Promise.all(
-        groupCartByBusiness(cart).map(async (group) => {
-          const discount = await getWelcomeDiscount({
-            db: firestore,
-            user: currentUser,
-            businessId: group.businessId,
-            subtotal: group.subtotal,
-          });
-
-          return [group.key, discount] as const;
-        }),
-      );
-
       if (active) {
-        setDiscounts(Object.fromEntries(discountPairs));
         setLoading(false);
       }
     };
@@ -128,18 +251,25 @@ export default function CheckoutPage() {
     0,
   );
 
-  const delivery = groups.reduce(
-    (sum, group) => sum + group.delivery,
-    0,
-  );
+  const selectedDelivery =
+    DELIVERY_OPTIONS.find(
+      (option) =>
+        option.id === selectedDeliveryId,
+    ) ?? DELIVERY_OPTIONS[0];
 
-  const totalDiscount = groups.reduce(
-    (sum, group) => sum + (discounts[group.key] || 0),
-    0,
-  );
+  const delivery =
+    items.length > 0
+      ? selectedDelivery.fee
+      : 0;
 
-  const total = subtotal + delivery - totalDiscount;
-  const rewards = calculateRewards(subtotal);
+  const total = subtotal + delivery;
+
+  const selectedFreeGifts = Object.values(
+    giftBundles,
+  ).flatMap((bundle) => bundle.gifts);
+
+  const totalFreeGifts =
+    selectedFreeGifts.length;
 
   const place = async () => {
     if (
@@ -161,14 +291,33 @@ export default function CheckoutPage() {
     try {
       const created: CreatedOrder[] = [];
 
-      for (const group of groups) {
+      for (const [groupIndex, group] of groups.entries()) {
         const order = await createBusinessOrder({
           db: firestore,
           user: currentUser,
-          group,
+          group: {
+            ...group,
+            // Own SPOTC products may not have a business id/ref.
+            // createBusinessOrder needs a non-empty business id to build
+            // the Firestore business reference.
+            businessId: group.businessId || 'SPOTC',
+            businessName: group.businessName || 'SPOTC Shop',
+            delivery:
+              groupIndex === 0
+                ? delivery
+                : 0,
+          },
           address: selectedAddress,
-          discount: discounts[group.key] || 0,
-          rewards: calculateRewards(group.subtotal),
+          discount: 0,
+          rewards: {
+            purchasePoints: 0,
+            nearbyBonusPoints: 0,
+            totalPoints: 0,
+            couponCount: 0,
+            couponValueEach: 0,
+            couponTotalValue: 0,
+            status: 'pending_delivery',
+          },
         });
 
         created.push(order);
@@ -191,20 +340,21 @@ export default function CheckoutPage() {
         )}`,
       );
     } catch (error) {
-      console.error(error);
-      alert('Unable to place your order. Please try again.');
+      console.error('SPOTC order placement failed:', error);
+
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Unable to place your order. Please try again.';
+
+      alert(`Unable to place your order.\n\n${message}`);
     } finally {
       setPlacing(false);
     }
   };
 
   if (loading) {
-    return (
-      <main className="checkout-state">
-        <Loader2 className="spin" />
-        <p>Preparing your checkout…</p>
-      </main>
-    );
+    return <PageLoader />;
   }
 
   if (!address || !user || !db) {
@@ -248,7 +398,7 @@ export default function CheckoutPage() {
 
         <div className="checkout-grid">
           <section className="checkout-main">
-            {groups.map((group) => (
+            {groups.map((group, groupIndex) => (
               <article className="checkout-shop" key={group.key}>
                 <header>
                   <div>
@@ -295,13 +445,12 @@ export default function CheckoutPage() {
 
                   <p>
                     <span>Delivery</span>
-                    <strong>{money(group.delivery)}</strong>
-                  </p>
-
-                  <p className="discount">
-                    <span>Welcome Discount</span>
                     <strong>
-                      -{money(discounts[group.key] || 0)}
+                      {money(
+                        groupIndex === 0
+                          ? delivery
+                          : 0,
+                      )}
                     </strong>
                   </p>
 
@@ -310,14 +459,67 @@ export default function CheckoutPage() {
                     <strong>
                       {money(
                         group.subtotal +
-                          group.delivery -
-                          (discounts[group.key] || 0),
+                          (groupIndex === 0
+                            ? delivery
+                            : 0),
                       )}
                     </strong>
                   </p>
                 </div>
               </article>
             ))}
+
+            {totalFreeGifts > 0 && (
+              <section className="free-gift-card">
+                <div className="free-gift-card-head">
+                  <Gift />
+
+                  <div>
+                    <strong>
+                      {totalFreeGifts} FREE Gift
+                      {totalFreeGifts === 1 ? '' : 's'} Included
+                    </strong>
+
+                    <small>
+                      Your selected gifts are included at no extra cost
+                    </small>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => router.push('/cart')}
+                  >
+                    Change
+                  </button>
+                </div>
+
+                <div className="free-gift-checkout-list">
+                  {selectedFreeGifts.map((gift) => (
+                    <article
+                      key={gift.id}
+                      className="free-gift-checkout-item"
+                    >
+                      <div className="free-gift-checkout-image">
+                        {gift.image ? (
+                          <img
+                            src={gift.image}
+                            alt={gift.title}
+                          />
+                        ) : (
+                          <Gift />
+                        )}
+                      </div>
+
+                      <div>
+                        <strong>{gift.title}</strong>
+                        <span>FREE</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+
 
             <section className="payment-card">
               <Banknote />
@@ -330,65 +532,6 @@ export default function CheckoutPage() {
               </div>
             </section>
 
-            <section className="rewards-card">
-              <header>
-                <Gift />
-                <h2>Rewards You’ll Earn</h2>
-              </header>
-
-              <article>
-                <Trophy />
-
-                <div>
-                  <strong>Reward Points</strong>
-                  <small>
-                    2 points for every ₹100 spent
-                  </small>
-                </div>
-
-                <b>{rewards.purchasePoints} Points</b>
-              </article>
-
-              <article>
-                <Gift />
-
-                <div>
-                  <strong>Bonus Rewards</strong>
-                  <small>
-                    5 bonus points from each of 3 nearby shops
-                  </small>
-                </div>
-
-                <b className="green">
-                  +{rewards.nearbyBonusPoints} Points
-                </b>
-              </article>
-
-              <article>
-                <TicketPercent />
-
-                <div>
-                  <strong>Exclusive Coupons</strong>
-                  <small>
-                    Coupons from 3 nearby shops
-                  </small>
-                </div>
-
-                <b className="orange">
-                  {rewards.couponCount} Coupons
-                </b>
-              </article>
-
-              <footer>
-                Total Rewards: {rewards.totalPoints} Points +{' '}
-                {rewards.couponCount} Coupons
-              </footer>
-
-              <p className="pending-note">
-                Rewards and coupons unlock after successful
-                delivery.
-              </p>
-            </section>
           </section>
 
           <aside className="final-bill">
@@ -400,7 +543,7 @@ export default function CheckoutPage() {
             </p>
 
             <p>
-              <span>Delivery ({groups.length} shops)</span>
+              <span>Delivery</span>
               <strong>{money(delivery)}</strong>
             </p>
 
@@ -409,12 +552,6 @@ export default function CheckoutPage() {
               <strong>₹0</strong>
             </p>
 
-            <p className="discount">
-              <span>Welcome Discount</span>
-              <strong>-{money(totalDiscount)}</strong>
-            </p>
-
-            <hr />
 
             <p className="final-total">
               <span>Total Payable</span>
@@ -423,7 +560,11 @@ export default function CheckoutPage() {
 
             <div className="delivery-banner">
               <Truck />
-              Delivery in 15–45 mins where available
+
+              <span>
+                <strong>{selectedDelivery.title}</strong>
+                <small>{selectedDelivery.deliveryWindow}</small>
+              </span>
             </div>
 
             <button
@@ -445,8 +586,8 @@ export default function CheckoutPage() {
 
       <style jsx>{`
         .checkout-page {
-          min-height: 100vh;
-          padding: 28px 20px 80px;
+          min-height: 0;
+          padding: 28px 20px 20px;
           background: #f7f5f1;
         }
 
@@ -473,7 +614,7 @@ export default function CheckoutPage() {
 
         .selected-address,
         .payment-card,
-        .rewards-card,
+        .free-gift-card,
         .checkout-shop,
         .final-bill {
           border: 1px solid #e4dcd3;
@@ -502,6 +643,7 @@ export default function CheckoutPage() {
           color: #d66d0d;
           background: transparent;
           font-weight: 600;
+          cursor: pointer;
         }
 
         .checkout-grid {
@@ -547,8 +689,7 @@ export default function CheckoutPage() {
         }
 
         .checkout-item small,
-        .payment-card small,
-        .rewards-card small {
+        .payment-card small {
           display: block;
           margin-top: 5px;
           color: #766d64;
@@ -567,10 +708,6 @@ export default function CheckoutPage() {
           justify-content: space-between;
         }
 
-        .discount {
-          color: #17944d;
-        }
-
         .shop-total,
         .final-total {
           padding-top: 12px;
@@ -585,46 +722,96 @@ export default function CheckoutPage() {
           gap: 13px;
         }
 
-        .rewards-card {
-          padding: 20px;
+        .free-gift-card {
+          padding: 18px;
         }
 
-        .rewards-card header,
-        .rewards-card article {
+        .free-gift-card-head {
           display: grid;
-          grid-template-columns: auto 1fr auto;
+          grid-template-columns: auto minmax(0, 1fr) auto;
           align-items: center;
           gap: 13px;
         }
 
-        .rewards-card article {
-          padding: 17px 0;
-          border-top: 1px solid #eee8e1;
+        .free-gift-card-head > svg {
+          color: #168648;
         }
 
-        .rewards-card b {
-          color: #bc6a19;
+        .free-gift-card-head strong,
+        .free-gift-card-head small {
+          display: block;
         }
 
-        .rewards-card .green {
-          color: #17944d;
+        .free-gift-card-head strong {
+          font-weight: 400;
         }
 
-        .rewards-card .orange {
-          color: #e08100;
+        .free-gift-card-head small {
+          margin-top: 4px;
+          color: #766d64;
         }
 
-        .rewards-card footer {
-          padding: 15px;
-          border-radius: 14px;
-          color: #146d3a;
-          background: #eaf8ef;
-          font-weight: 700;
+        .free-gift-card-head button {
+          height: 36px;
+          padding: 0 13px;
+          border: 1px solid #d9d1c9;
+          border-radius: 10px;
+          color: #168648;
+          background: #ffffff;
+          font-weight: 500;
+          cursor: pointer;
         }
 
-        .pending-note {
-          color: #69736c;
+        .free-gift-checkout-list {
+          margin-top: 14px;
+          display: grid;
+          grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+          gap: 10px;
+        }
+
+        .free-gift-checkout-item {
+          min-width: 0;
+          padding: 10px;
+          display: grid;
+          grid-template-columns: 54px minmax(0, 1fr);
+          align-items: center;
+          gap: 11px;
+          border: 1px solid #dcecdf;
+          border-radius: 13px;
+          background: #f7fcf8;
+        }
+
+        .free-gift-checkout-image {
+          width: 54px;
+          height: 54px;
+          overflow: hidden;
+          display: grid;
+          place-items: center;
+          border-radius: 10px;
+          color: #6f9178;
+          background: #ffffff;
+        }
+
+        .free-gift-checkout-image img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+
+        .free-gift-checkout-item strong {
+          display: block;
+          font-size: 13px;
+          line-height: 1.35;
+          font-weight: 400;
+        }
+
+        .free-gift-checkout-item span {
+          display: inline-block;
+          margin-top: 5px;
+          color: #168648;
           font-size: 12px;
+          font-weight: 500;
         }
 
         .final-bill {
@@ -637,10 +824,26 @@ export default function CheckoutPage() {
           margin: 16px 0;
           padding: 13px;
           display: flex;
-          gap: 8px;
+          align-items: center;
+          gap: 9px;
           border-radius: 13px;
           color: #147a41;
           background: #edf9f1;
+        }
+
+        .delivery-banner > span {
+          min-width: 0;
+        }
+
+        .delivery-banner strong,
+        .delivery-banner small {
+          display: block;
+        }
+
+        .delivery-banner small {
+          margin-top: 2px;
+          color: #4b7c5f;
+          font-size: 12px;
         }
 
         .final-bill button {
@@ -655,6 +858,12 @@ export default function CheckoutPage() {
           color: #fff;
           background: #22c55e;
           font-weight: 700;
+          cursor: pointer;
+        }
+
+        .final-bill button:disabled {
+          cursor: not-allowed;
+          opacity: 0.72;
         }
 
         .checkout-state {
@@ -672,6 +881,7 @@ export default function CheckoutPage() {
           border-radius: 12px;
           color: #fff;
           background: #22c55e;
+          cursor: pointer;
         }
 
         .spin {
@@ -684,6 +894,10 @@ export default function CheckoutPage() {
           }
         }
 
+        :global(body:has(.checkout-page) .spotc-footer) {
+          margin-top: 0 !important;
+        }
+
         @media (max-width: 900px) {
           .checkout-grid {
             grid-template-columns: 1fr;
@@ -691,6 +905,27 @@ export default function CheckoutPage() {
 
           .final-bill {
             position: static;
+          }
+        }
+
+        @media (max-width: 620px) {
+          .checkout-page {
+            padding:
+              18px 12px 10px;
+          }
+
+          .free-gift-checkout-list {
+            grid-template-columns: 1fr;
+          }
+
+          .free-gift-card-head {
+            grid-template-columns:
+              auto minmax(0, 1fr);
+          }
+
+          .free-gift-card-head button {
+            grid-column: 1 / -1;
+            width: 100%;
           }
         }
       `}</style>

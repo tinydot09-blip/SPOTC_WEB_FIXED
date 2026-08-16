@@ -14,6 +14,7 @@ import {
   type ReactNode,
   useEffect,
   useRef,
+  useState,
 } from 'react';
 
 import {
@@ -34,6 +35,31 @@ const PROFILE_SKIP_KEY =
 
 const AUTH_RETURN_PATH_KEY =
   'spotc-auth-return-path';
+
+/*
+ * completeGoogleRedirectLogin() should not be restarted on every route.
+ * Keep one shared promise for the lifetime of this browser bundle.
+ */
+let redirectLoginPromise:
+  | Promise<User | null>
+  | null = null;
+
+function getRedirectLoginOnce(): Promise<User | null> {
+  if (!redirectLoginPromise) {
+    redirectLoginPromise =
+      completeGoogleRedirectLogin()
+        .catch((error) => {
+          console.error(
+            'Unable to complete Google redirect login:',
+            error,
+          );
+
+          return null;
+        });
+  }
+
+  return redirectLoginPromise;
+}
 
 function safeReturnPath(
   value: string | null,
@@ -136,19 +162,33 @@ export default function ProfileCompletionGate({
       null,
     );
 
+  /*
+   * Cache the UID after we have confirmed the profile is complete.
+   * This prevents a Firestore/profile check on every route change,
+   * so Cart -> Address opens immediately.
+   */
+  const completeUidRef =
+    useRef<string | null>(
+      null,
+    );
+
+  /*
+   * Only hide children during the very first auth/profile resolution
+   * or when we genuinely need to redirect to Complete Profile.
+   */
+  const [gateReady, setGateReady] =
+    useState(false);
+
   useEffect(() => {
     if (
       !firebaseReady ||
       !auth
     ) {
+      setGateReady(true);
       return;
     }
 
-    // Keep a non-null Firebase Auth reference for this entire effect.
-    // TypeScript does not preserve narrowing of the imported nullable `auth`
-    // inside nested callbacks such as refreshProfile.
     const firebaseAuth = auth;
-
     let active = true;
 
     const browserSearch =
@@ -187,15 +227,26 @@ export default function ProfileCompletionGate({
     const checkProfile =
       async (
         user: User | null,
+        force = false,
       ) => {
+        if (!active) {
+          return;
+        }
+
+        /*
+         * Not signed in / anonymous:
+         * this gate should not create route flashes.
+         * Individual protected actions can request login.
+         */
         if (
-          !active ||
           !user ||
           user.isAnonymous
         ) {
           checkingUserRef.current =
             null;
-
+          completeUidRef.current =
+            null;
+          setGateReady(true);
           return;
         }
 
@@ -208,6 +259,42 @@ export default function ProfileCompletionGate({
           skippedUid ===
           user.uid
         ) {
+          setGateReady(true);
+          return;
+        }
+
+        /*
+         * Already verified during this session:
+         * do not hit Firestore again just because pathname changed.
+         */
+        if (
+          !force &&
+          completeUidRef.current ===
+            user.uid
+        ) {
+          const storedReturnPath =
+            readStoredReturnPath();
+
+          if (
+            pathname.startsWith(
+              COMPLETE_PROFILE_PATH,
+            )
+          ) {
+            clearStoredReturnPath();
+
+            router.replace(
+              storedReturnPath ||
+                '/offers',
+            );
+
+            return;
+          }
+
+          if (storedReturnPath) {
+            clearStoredReturnPath();
+          }
+
+          setGateReady(true);
           return;
         }
 
@@ -235,61 +322,48 @@ export default function ProfileCompletionGate({
             readStoredReturnPath();
 
           if (complete) {
+            completeUidRef.current =
+              user.uid;
+
             sessionStorage.removeItem(
               PROFILE_SKIP_KEY,
             );
 
             /*
-             * IMPORTANT:
-             * Only use spotc-auth-return-path when the
-             * user is actually returning from the
-             * Complete Profile page.
-             *
-             * Previously this gate redirected from ANY
-             * page (for example /address) to an old
-             * stored path such as /offers.
+             * Only consume the stored return path while actually
+             * leaving Complete Profile. Never redirect /address,
+             * /cart, /checkout, etc. because of an old stored path.
              */
             if (
               pathname.startsWith(
                 COMPLETE_PROFILE_PATH,
               )
             ) {
-              if (storedReturnPath) {
-                clearStoredReturnPath();
-
-                router.replace(
-                  storedReturnPath,
-                );
-
-                return;
-              }
-
               clearStoredReturnPath();
 
               router.replace(
-                '/offers',
+                storedReturnPath ||
+                  '/offers',
               );
 
               return;
             }
 
-            /*
-             * User is already complete and is navigating
-             * normally. Never hijack the page because of
-             * an old stored auth/profile return path.
-             */
             if (storedReturnPath) {
               clearStoredReturnPath();
             }
 
+            setGateReady(true);
             return;
           }
 
           /*
            * Profile is incomplete.
-           * Remember the page the user was trying to use,
-           * then send them to Complete Profile.
+           * Save only the page the user is currently trying to access.
            */
+          completeUidRef.current =
+            null;
+
           if (
             !pathname.startsWith(
               COMPLETE_PROFILE_PATH,
@@ -309,7 +383,11 @@ export default function ProfileCompletionGate({
                   )}`
                 : COMPLETE_PROFILE_PATH,
             );
+
+            return;
           }
+
+          setGateReady(true);
         } catch (
           error
         ) {
@@ -317,33 +395,34 @@ export default function ProfileCompletionGate({
             'Unable to check profile completion:',
             error,
           );
+
+          /*
+           * Do not trap the user behind a blank gate because of a
+           * temporary Firebase/network problem.
+           */
+          setGateReady(true);
         } finally {
           checkingUserRef.current =
             null;
         }
       };
 
+    /*
+     * Resolve Google redirect only once for the whole app bundle.
+     * After that, normal page navigation relies on Firebase auth state.
+     */
     void (async () => {
-      try {
-        const redirectUser =
-          await completeGoogleRedirectLogin();
+      const redirectUser =
+        await getRedirectLoginOnce();
 
-        await checkProfile(
-          redirectUser ||
-            firebaseAuth.currentUser,
-        );
-      } catch (
-        redirectError
-      ) {
-        console.error(
-          'Unable to complete Google redirect login:',
-          redirectError,
-        );
-
-        await checkProfile(
-          firebaseAuth.currentUser,
-        );
+      if (!active) {
+        return;
       }
+
+      await checkProfile(
+        redirectUser ||
+          firebaseAuth.currentUser,
+      );
     })();
 
     const unsubscribe =
@@ -358,8 +437,14 @@ export default function ProfileCompletionGate({
 
     const refreshProfile =
       () => {
+        completeUidRef.current =
+          null;
+
+        setGateReady(false);
+
         void checkProfile(
           firebaseAuth.currentUser,
+          true,
         );
       };
 
@@ -381,6 +466,25 @@ export default function ProfileCompletionGate({
     pathname,
     router,
   ]);
+
+  /*
+   * Prevent previous/intermediate route content from flashing while
+   * the first profile check is resolving.
+   */
+  if (!gateReady) {
+    return (
+      <div
+        aria-label="Loading"
+        aria-busy="true"
+        style={{
+          minHeight:
+            'calc(100vh - 72px)',
+          background:
+            '#f7f5f1',
+        }}
+      />
+    );
+  }
 
   return <>{children}</>;
 }

@@ -39,7 +39,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { auth, firebaseReady } from '@/lib/firebase';
 
-type SavedFilter = 'all' | 'products' | 'offers' | 'businesses' | 'spots';
+type SavedFilter = 'all' | 'products' | 'offers';
 
 type SavedItemType = 'product' | 'offer' | 'business' | 'spot';
 
@@ -236,21 +236,15 @@ function defaultLink(type: SavedItemType, targetId: string, data: DocumentData):
 
   if (provided) return provided;
 
-  if (type === 'product') return targetId ? `/product/${targetId}` : '/shop';
-  if (type === 'offer') return targetId ? `/offers/${targetId}` : '/offers';
-  if (type === 'business') {
-    const slug =
-      textOf(data.business_slug) ||
-      textOf(data.slug);
-
-    return slug
-      ? `/${slug}`
-      : targetId
-        ? `/shop/${targetId}`
-        : '/shop';
+  if (type === 'product') {
+    return targetId
+      ? `/product/${encodeURIComponent(targetId)}`
+      : '/shop';
   }
 
-  return targetId ? `/spots/${targetId}` : '/spots';
+  // Business/offer/spot pages are not used by the current Saved flow.
+  // Saved now opens products only.
+  return '/shop';
 }
 
 function mapSavedDoc(
@@ -559,11 +553,17 @@ export default function DashboardSaved() {
       );
 
       setItems(
-        enriched.sort((a, b) => {
-          const aTime = a.savedAt?.getTime() ?? 0;
-          const bTime = b.savedAt?.getTime() ?? 0;
-          return bTime - aTime;
-        }),
+        enriched
+          .filter(
+            (item) =>
+              item.type === 'product' ||
+              item.type === 'offer',
+          )
+          .sort((a, b) => {
+            const aTime = a.savedAt?.getTime() ?? 0;
+            const bTime = b.savedAt?.getTime() ?? 0;
+            return bTime - aTime;
+          }),
       );
     } catch (error) {
       console.error('Saved items load failed:', error);
@@ -617,9 +617,7 @@ export default function DashboardSaved() {
       const matchesFilter =
         filter === 'all' ||
         (filter === 'products' && item.type === 'product') ||
-        (filter === 'offers' && item.type === 'offer') ||
-        (filter === 'businesses' && item.type === 'business') ||
-        (filter === 'spots' && item.type === 'spot');
+        (filter === 'offers' && item.type === 'offer');
 
       const matchesSearch =
         !term ||
@@ -677,17 +675,27 @@ export default function DashboardSaved() {
   const openItem = (item: SavedItem) => {
     if (!requireSignIn('open a real saved item')) return;
 
-    if (!item.link) {
-      setMessage('This saved item does not have an active link.');
+    const productId =
+      item.type === 'product'
+        ? item.targetId
+        : textOf(
+            item.raw.product_id ??
+              item.raw.linked_product_id,
+          ) ||
+          refIdOf(
+            item.raw.product_ref ??
+              item.raw.linked_product_ref,
+          );
+
+    if (!productId) {
+      setMessage(
+        'This saved offer is not linked to a product.',
+      );
       return;
     }
 
-    if (item.link.startsWith('http')) {
-      window.open(item.link, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
-    window.location.href = item.link;
+    window.location.href =
+      `/product/${encodeURIComponent(productId)}`;
   };
 
   const shareItem = async (item: SavedItem) => {
@@ -721,133 +729,101 @@ export default function DashboardSaved() {
     }
   };
 
+
   if (!authChecked || loading) {
     return (
       <section className="saved-loading">
         <span />
-        <p>Loading your saved collection…</p>
+        <p>Loading your saved items…</p>
+
+        <style jsx>{`
+          .saved-loading {
+            min-height: 280px;
+            display: grid;
+            place-content: center;
+            justify-items: center;
+            gap: 12px;
+            color: #717a85;
+          }
+
+          .saved-loading > span {
+            width: 34px;
+            height: 34px;
+            border: 3px solid #e0e3e8;
+            border-top-color: #ca6808;
+            border-radius: 50%;
+            animation: savedSpin .8s linear infinite;
+          }
+
+          @keyframes savedSpin {
+            to {
+              transform: rotate(360deg);
+            }
+          }
+        `}</style>
       </section>
     );
   }
 
   return (
-    <div className="saved-page">
+    <div className="saved-page saved-page-simple">
       {!user && (
         <div className="dash-guest-preview-note">
           <Sparkles />
           <span>
-            Guest preview: explore the complete Saved page. Sign in only to
-            open, share or remove your real saved items.
+            Sign in to view and manage your real saved items.
           </span>
+
           <button
             type="button"
             onClick={() => {
-              window.location.href = '/login?next=/dashboard?tab=saved';
+              window.location.href =
+                '/login?next=/dashboard?tab=saved';
             }}
           >
             Sign In
           </button>
         </div>
       )}
-      <section className="saved-hero">
-        <div>
-          <span className="saved-eyebrow">
-            <Sparkles /> YOUR SPOTC COLLECTION
-          </span>
 
-          <h2>Everything you liked, organized and ready to revisit.</h2>
+      <header className="saved-simple-head">
+        <div>
+          <small>SAVED</small>
+
+          <h2>Saved</h2>
 
           <p>
-            Return to saved products, local offers, favourite businesses and
-            discovered Spots without searching again.
+            Products and offer videos you want to come back to.
           </p>
         </div>
 
-        <div className="saved-total-card">
-          <small>TOTAL SAVED</small>
-          <strong>{summary.total}</strong>
-          <span>
-            {summary.total
-              ? `${summary.products} products · ${summary.offers} offers`
-              : 'Start saving from Shop, Offers and Spots'}
-          </span>
-        </div>
-      </section>
+        <span>
+          {summary.total}{' '}
+          {summary.total === 1
+            ? 'item'
+            : 'items'}
+        </span>
+      </header>
 
-      <section className="saved-summary-grid">
-        <article>
-          <span className="saved-summary-icon purple">
-            <ShoppingBag />
-          </span>
-          <div>
-            <small>Saved Products</small>
-            <strong>{summary.products}</strong>
-            <p>Products to compare or buy later</p>
-          </div>
-        </article>
-
-        <article>
-          <span className="saved-summary-icon orange">
-            <Tag />
-          </span>
-          <div>
-            <small>Saved Offers</small>
-            <strong>{summary.offers}</strong>
-            <p>Deals you do not want to miss</p>
-          </div>
-        </article>
-
-        <article>
-          <span className="saved-summary-icon blue">
-            <Store />
-          </span>
-          <div>
-            <small>Businesses</small>
-            <strong>{summary.businesses}</strong>
-            <p>Favourite local shops</p>
-          </div>
-        </article>
-
-        <article>
-          <span className="saved-summary-icon green">
-            <CircleDollarSign />
-          </span>
-          <div>
-            <small>Saved Product Value</small>
-            <strong>₹{Math.round(summary.totalValue)}</strong>
-            <p>Current combined saved price</p>
-          </div>
-        </article>
-      </section>
-
-      <section className="saved-value-banner">
-        <div>
-          <span>SMART SAVING</span>
-          <h2>Review saved items before offers expire or stock runs out.</h2>
-          <p>
-            Expired offers and unavailable products remain visible with a clear
-            status so users understand why an item cannot be opened.
-          </p>
-        </div>
-
-        <PackageCheck />
-      </section>
-
-      <section className="saved-toolbar">
-        <div className="saved-tabs">
+      <section className="saved-simple-toolbar">
+        <div className="saved-simple-tabs">
           {[
-            ['all', 'All Saved'],
+            ['all', 'All'],
             ['products', 'Products'],
             ['offers', 'Offers'],
-            ['businesses', 'Businesses'],
-            ['spots', 'Spots'],
           ].map(([value, label]) => (
             <button
               type="button"
               key={value}
-              className={filter === value ? 'active' : ''}
+              className={
+                filter === value
+                  ? 'active'
+                  : ''
+              }
               onClick={() =>
-                setFilter(value as SavedFilter)
+                setFilter(
+                  value as SavedFilter,
+                )
               }
             >
               {label}
@@ -855,615 +831,665 @@ export default function DashboardSaved() {
           ))}
         </div>
 
-        <label>
-          <Search />
-          <input
-            value={search}
-            onChange={(event) =>
-              setSearch(event.target.value)
-            }
-            placeholder="Search saved item, shop or area"
-          />
-        </label>
+        {items.length > 5 && (
+          <label className="saved-simple-search">
+            <Search />
+
+            <input
+              value={search}
+              onChange={(event) =>
+                setSearch(
+                  event.target.value,
+                )
+              }
+              placeholder="Search saved"
+            />
+          </label>
+        )}
       </section>
 
       {message && (
         <div className="saved-message">
           <BadgeCheck />
+
           <span>{message}</span>
+
           <button
             type="button"
-            onClick={() => setMessage('')}
+            onClick={() =>
+              setMessage('')
+            }
+            aria-label="Close message"
           >
             <X />
           </button>
         </div>
       )}
 
-      <section className="saved-grid">
-        {visibleItems.map((item) => {
-          const expired =
-            item.expiresAt != null &&
-            item.expiresAt.getTime() < Date.now();
+      {visibleItems.length > 0 ? (
+        <section className="saved-simple-list">
+          {visibleItems.map((item) => {
+            const expired =
+              item.expiresAt != null &&
+              item.expiresAt.getTime() <
+                Date.now();
 
-          const unavailable =
-            !item.isActive ||
-            (item.type === 'product' && !item.inStock);
+            const unavailable =
+              !item.isActive ||
+              (
+                item.type === 'product' &&
+                !item.inStock
+              );
 
-          return (
-            <article
-              className={`saved-card ${
-                expired || unavailable ? 'inactive' : ''
-              }`}
-              key={`${item.sourceCollection}:${item.id}`}
-            >
-              <div className="saved-card-image">
-                {item.image ? (
-                  <img src={item.image} alt={item.title} />
-                ) : (
-                  <span className="saved-image-placeholder">
-                    <ImageIcon />
-                  </span>
-                )}
+            const disabled =
+              expired ||
+              unavailable;
 
-                <span className="saved-type">
-                  {typeLabel(item.type)}
-                </span>
-
-                <button
-                  type="button"
-                  className="saved-remove-top"
-                  disabled={removingId === item.id}
-                  onClick={() => void removeSaved(item)}
-                  aria-label={`Remove ${item.title}`}
-                >
-                  <Heart fill="currentColor" />
-                </button>
-
-                {(expired || unavailable) && (
-                  <span className="saved-unavailable">
-                    {expired
-                      ? 'Expired'
-                      : item.type === 'product'
-                        ? 'Out of stock'
-                        : 'Unavailable'}
-                  </span>
-                )}
-              </div>
-
-              <div className="saved-card-content">
-                <div className="saved-card-heading">
-                  <div>
-                    <small>
-                      {item.businessName ||
-                        item.subtitle ||
-                        typeLabel(item.type)}
-                    </small>
-                    <h2>{item.title}</h2>
-                  </div>
-
-                  {item.discountText && (
-                    <span>{item.discountText}</span>
-                  )}
-                </div>
-
-                {item.area && (
-                  <p className="saved-location">
-                    <MapPin /> {item.area}
-                  </p>
-                )}
-
-                {item.description && (
-                  <p className="saved-description">
-                    {item.description}
-                  </p>
-                )}
-
-                {item.price > 0 && (
-                  <div className="saved-price">
-                    <strong>
-                      ₹{item.price.toFixed(0)}
-                    </strong>
-
-                    {item.oldPrice > item.price && (
-                      <del>
-                        ₹{item.oldPrice.toFixed(0)}
-                      </del>
-                    )}
-                  </div>
-                )}
-
-                <div className="saved-meta">
-                  <span>
-                    <Clock3 />
-                    Saved {formatDate(item.savedAt)}
-                  </span>
-
-                  {item.expiresAt && (
-                    <span>
-                      <Tag />
-                      Ends {formatDate(item.expiresAt)}
-                    </span>
-                  )}
-                </div>
-
-                <div className="saved-actions">
-                  <button
-                    type="button"
-                    onClick={() => setSelected(item)}
-                  >
-                    View Details <ChevronRight />
-                  </button>
-
-                  <button
-                    type="button"
-                    className="primary"
-                    disabled={expired || unavailable}
-                    onClick={() => openItem(item)}
-                  >
-                    <ExternalLink />
-                    {item.type === 'product'
-                      ? 'Open Product'
-                      : item.type === 'business'
-                        ? 'View Shop'
-                        : item.type === 'spot'
-                          ? 'Open Spot'
-                          : 'View Offer'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => void shareItem(item)}
-                  >
-                    <Share2 /> Share
-                  </button>
-                </div>
-              </div>
-            </article>
-          );
-        })}
-      </section>
-
-      {!visibleItems.length &&
-        (items.length === 0 &&
-        filter === 'all' &&
-        !search.trim() ? (
-          <SavedSamplePreview />
-        ) : (
-          <section className="saved-empty">
-            <Heart />
-            <h2>No saved items in this section</h2>
-            <p>
-              Try another filter or save more products, offers, businesses and
-              Spots.
-            </p>
-          </section>
-        ))}
-
-      {selected && (
-        <div
-          className="saved-modal-backdrop"
-          onMouseDown={() => setSelected(null)}
-        >
-          <section
-            className="saved-modal"
-            onMouseDown={(event) =>
-              event.stopPropagation()
-            }
-          >
-            <button
-              type="button"
-              className="saved-modal-close"
-              onClick={() => setSelected(null)}
-            >
-              <X />
-            </button>
-
-            <div className="saved-modal-image">
-              {selected.image ? (
-                <img
-                  src={selected.image}
-                  alt={selected.title}
-                />
-              ) : (
-                <span>
-                  <ImageIcon />
-                </span>
-              )}
-
-              <i>{typeLabel(selected.type)}</i>
-            </div>
-
-            <span className="saved-modal-kicker">
-              <Heart fill="currentColor" /> SAVED TO YOUR COLLECTION
-            </span>
-
-            <h2>{selected.title}</h2>
-
-            {(selected.businessName || selected.area) && (
-              <p className="saved-modal-subtitle">
-                {[selected.businessName, selected.area]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
-            )}
-
-            {selected.description && (
-              <p className="saved-modal-description">
-                {selected.description}
-              </p>
-            )}
-
-            <div className="saved-detail-grid">
-              <article>
-                <ShoppingBag />
-                <span>
-                  <small>ITEM TYPE</small>
-                  <strong>
-                    {typeLabel(selected.type)}
-                  </strong>
-                </span>
-              </article>
-
-              <article>
-                <Clock3 />
-                <span>
-                  <small>SAVED ON</small>
-                  <strong>
-                    {formatDate(selected.savedAt)}
-                  </strong>
-                </span>
-              </article>
-
-              <article>
-                <Store />
-                <span>
-                  <small>BUSINESS</small>
-                  <strong>
-                    {selected.businessName || 'SPOTC'}
-                  </strong>
-                </span>
-              </article>
-
-              <article>
-                <CircleDollarSign />
-                <span>
-                  <small>CURRENT PRICE</small>
-                  <strong>
-                    {selected.price > 0
-                      ? `₹${selected.price.toFixed(0)}`
-                      : 'Not applicable'}
-                  </strong>
-                </span>
-              </article>
-            </div>
-
-            <div className="saved-value-note">
-              <BadgeCheck />
-              <span>
-                <strong>Saved-item protection</strong>
-                <small>
-                  Removing this item only deletes your saved reference. It does
-                  not delete the original product, offer, business or Spot.
-                </small>
-              </span>
-            </div>
-
-            <div className="saved-modal-actions">
-              <button
-                type="button"
-                onClick={() => openItem(selected)}
-              >
-                <ExternalLink /> Open Item
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void shareItem(selected)}
-              >
-                <Share2 /> Share
-              </button>
-
-              <button
-                type="button"
-                className="danger"
-                disabled={removingId === selected.id}
-                onClick={() =>
-                  void removeSaved(selected)
+            return (
+              <article
+                key={`${item.sourceCollection}:${item.id}`}
+                className={
+                  disabled
+                    ? 'saved-simple-card inactive'
+                    : 'saved-simple-card'
                 }
               >
-                <Trash2 />
-                {removingId === selected.id
-                  ? 'Removing…'
-                  : 'Remove Saved'}
-              </button>
-            </div>
-          </section>
-        </div>
+                <div className="saved-simple-image">
+                  {item.image ? (
+                    <img
+                      src={item.image}
+                      alt={item.title}
+                    />
+                  ) : (
+                    <ImageIcon />
+                  )}
+                </div>
+
+                <div className="saved-simple-copy">
+                  <div className="saved-simple-top">
+                    <span>
+                      {typeLabel(item.type)}
+                    </span>
+
+                    {disabled && (
+                      <em>
+                        {expired
+                          ? 'Expired'
+                          : item.type ===
+                              'product'
+                            ? 'Out of stock'
+                            : 'Unavailable'}
+                      </em>
+                    )}
+                  </div>
+
+                  <strong>
+                    {item.title}
+                  </strong>
+
+                  {(item.businessName ||
+                    item.area) && (
+                    <small>
+                      {[
+                        item.businessName,
+                        item.area,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </small>
+                  )}
+
+                  <div className="saved-simple-bottom">
+                    {item.price > 0 && (
+                      <b>
+                        ₹
+                        {item.price.toFixed(
+                          0,
+                        )}
+                      </b>
+                    )}
+
+                    <span>
+                      Saved{' '}
+                      {formatDate(
+                        item.savedAt,
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="saved-simple-actions">
+                  <button
+                    type="button"
+                    className="saved-simple-remove"
+                    disabled={
+                      removingId ===
+                      item.id
+                    }
+                    onClick={(event) => {
+                      event.stopPropagation();
+
+                      void removeSaved(
+                        item,
+                      );
+                    }}
+                    aria-label={`Remove ${item.title}`}
+                  >
+                    <Heart
+                      fill="currentColor"
+                    />
+                  </button>
+
+                  <button
+                    type="button"
+                    className="saved-simple-open"
+                    disabled={disabled}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openItem(item);
+                    }}
+                  >
+                    {item.type === 'offer'
+                      ? 'View Product'
+                      : 'Open'}
+                    <ChevronRight />
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      ) : (
+        <section className="saved-simple-empty">
+          <Heart />
+
+          <h3>
+            {items.length === 0
+              ? 'No saved items yet'
+              : 'No items in this section'}
+          </h3>
+
+          <p>
+            {items.length === 0
+              ? 'Save a product or offer video and it will appear here.'
+              : 'Try another filter or search.'}
+          </p>
+
+          {items.length === 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href =
+                  '/shop';
+              }}
+            >
+              Browse Products
+            </button>
+          )}
+        </section>
       )}
 
       <style jsx global>{`
-        .saved-page{width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;padding:0!important;display:grid;grid-template-columns:minmax(0,1fr);gap:20px;color:#20252b;text-align:left!important}
-        .saved-hero{position:relative;width:100%;min-height:178px;padding:24px 28px;display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,280px);align-items:center;gap:28px;overflow:hidden;border:1px solid #e4e7ec;border-radius:24px;background:radial-gradient(circle at 86% 16%,rgba(109,60,223,.16),transparent 31%),linear-gradient(135deg,#fff,#faf8ff);box-shadow:0 14px 36px rgba(42,48,61,.06);text-align:left!important}
-        .saved-hero:after{content:'♥';position:absolute;right:315px;top:18px;color:#d7c3ff;font-size:80px;opacity:.16}
-        .saved-eyebrow,.saved-modal-kicker{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border-radius:999px;color:#6532cd;background:#eee7ff;font-size:10px;font-weight:600;letter-spacing:.08em}
-        .saved-eyebrow svg,.saved-modal-kicker svg{width:16px}
-        .saved-hero h2{max-width:760px;margin:10px 0 7px;font-size:clamp(25px,2.35vw,36px);line-height:1.12;font-weight:600;letter-spacing:-.03em;text-align:left!important}
-        .saved-hero p{max-width:720px;margin:0;color:#6d7580;font-size:14px;line-height:1.6;text-align:left!important}
-        .saved-total-card{position:relative;z-index:1;width:100%;min-width:0;padding:18px 20px;border:1px solid #ddcffd;border-radius:18px;background:rgba(255,255,255,.92);box-shadow:0 13px 30px rgba(83,50,151,.09);text-align:left!important}
-        .saved-total-card small,.saved-total-card strong,.saved-total-card span{display:block}.saved-total-card small{color:#77658e;font-size:9px;letter-spacing:.09em}.saved-total-card strong{margin-top:6px;color:#5725bd;font-size:35px;font-weight:600}.saved-total-card span{margin-top:3px;color:#6d7580;font-size:12px}
-
-        .saved-summary-grid{width:100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
-        .saved-summary-grid article{min-width:0;min-height:104px;padding:16px;display:flex;align-items:center;justify-content:flex-start;gap:13px;border:1px solid #e4e7ec;border-radius:19px;background:#fff;box-shadow:0 10px 25px rgba(42,48,61,.055);text-align:left!important}
-        .saved-summary-icon{width:52px;height:52px;display:grid;place-items:center;flex:0 0 auto;border-radius:17px}.saved-summary-icon svg{width:24px}.saved-summary-icon.orange{color:#df7a00;background:#fff0db}.saved-summary-icon.purple{color:#6734da;background:#eee8ff}.saved-summary-icon.green{color:#159b50;background:#e8f8ef}.saved-summary-icon.blue{color:#1768e5;background:#eaf2ff}
-        .saved-summary-grid small,.saved-summary-grid strong,.saved-summary-grid p{display:block;text-align:left!important}.saved-summary-grid small{font-size:11px;font-weight:500}.saved-summary-grid strong{margin-top:4px;font-size:24px;font-weight:600}.saved-summary-grid p{margin:6px 0 0;color:#707985;font-size:11px}
-
-        .saved-value-banner{width:100%;padding:17px 20px;display:flex;align-items:center;justify-content:space-between;gap:20px;border:1px solid #eadbf9;border-radius:18px;background:linear-gradient(135deg,#fcf9ff,#fff);box-shadow:0 9px 24px rgba(79,47,140,.055)}
-        .saved-value-banner span{color:#7140ca;font-size:9px;letter-spacing:.08em}.saved-value-banner h2{margin:5px 0 3px;font-size:19px;font-weight:600}.saved-value-banner p{max-width:900px;margin:0;color:#707985;font-size:12px;line-height:1.5}.saved-value-banner>svg{width:38px;height:38px;color:#6734da;flex:0 0 auto}
-
-        .saved-toolbar{width:100%;padding:11px 12px;display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid #e4e7ec;border-radius:16px;background:#fff}
-        .saved-tabs{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}.saved-tabs::-webkit-scrollbar{display:none}.saved-tabs button{min-height:38px;padding:0 13px;flex:0 0 auto;border:1px solid transparent;border-radius:11px;color:#68717c;background:transparent;font-weight:500;cursor:pointer}.saved-tabs button.active{color:#5f31bd;border-color:#d9c7ff;background:#f3efff}
-        .saved-toolbar label{width:min(330px,100%);min-height:40px;padding:0 12px;display:flex;align-items:center;gap:8px;border:1px solid #e3e6eb;border-radius:12px;background:#fafbfc}.saved-toolbar label svg{width:18px;color:#818996}.saved-toolbar input{width:100%;border:0;outline:0;background:transparent}
-
-        .saved-message{padding:13px 15px;display:flex;align-items:center;gap:10px;border:1px solid #cfe8d8;border-radius:14px;color:#25663f;background:#f1faf4}.saved-message svg{width:20px}.saved-message span{flex:1}.saved-message button{width:30px;height:30px;border:0;border-radius:9px;background:transparent;cursor:pointer}
-
-        .saved-grid{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
-        .saved-card{min-width:0;overflow:hidden;border:1px solid #e3e7ec;border-radius:22px;background:#fff;box-shadow:0 12px 32px rgba(42,48,61,.065)}.saved-card.inactive{opacity:.78}
-        .saved-card-image{position:relative;height:190px;overflow:hidden;background:#eff1f4}.saved-card-image>img{width:100%;height:100%;object-fit:cover}.saved-image-placeholder{width:100%;height:100%;display:grid;place-items:center;color:#8d96a2;background:linear-gradient(135deg,#f2f4f7,#e8ebf0)}.saved-image-placeholder svg{width:42px;height:42px}
-        .saved-card-image:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(12,12,18,.03),rgba(12,12,18,.32))}
-        .saved-type,.saved-unavailable{position:absolute;z-index:2;top:13px;padding:7px 9px;border-radius:999px;font-size:9px;font-weight:600}.saved-type{left:13px;color:#fff;background:rgba(89,45,187,.84);backdrop-filter:blur(6px)}.saved-unavailable{right:52px;color:#a13d45;background:#fff0f1}
-        .saved-remove-top{position:absolute;z-index:3;right:13px;top:13px;width:34px;height:34px;display:grid;place-items:center;border:0;border-radius:50%;color:#e04757;background:#fff;box-shadow:0 6px 18px rgba(20,24,30,.18);cursor:pointer}.saved-remove-top svg{width:17px}.saved-remove-top:disabled{opacity:.55}
-
-        .saved-card-content{padding:17px;text-align:left!important}.saved-card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.saved-card-heading small,.saved-card-heading h2{display:block}.saved-card-heading small{color:#7655ae;font-size:9px}.saved-card-heading h2{margin:4px 0 0;font-size:18px;font-weight:600}.saved-card-heading>span{padding:6px 8px;flex:0 0 auto;border-radius:9px;color:#138645;background:#e8f8ee;font-size:9px;font-weight:600}
-        .saved-location{margin:8px 0 0;display:flex;align-items:center;gap:5px;color:#727b86;font-size:11px}.saved-location svg{width:14px}
-        .saved-description{display:-webkit-box;margin:11px 0 0;overflow:hidden;color:#626b76;font-size:11px;line-height:1.5;-webkit-box-orient:vertical;-webkit-line-clamp:2}
-        .saved-price{margin-top:13px;display:flex;align-items:center;gap:8px}.saved-price strong{font-size:20px;font-weight:600}.saved-price del{color:#969da7;font-size:12px}
-        .saved-meta{margin-top:13px;padding:10px 0;display:flex;flex-wrap:wrap;gap:10px;border-top:1px solid #edf0f3;border-bottom:1px solid #edf0f3}.saved-meta span{display:flex;align-items:center;gap:5px;color:#7a838e;font-size:9px}.saved-meta svg{width:13px}
-        .saved-actions{margin-top:13px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.saved-actions button{min-height:40px;padding:0 7px;display:flex;align-items:center;justify-content:center;gap:5px;border:1px solid #e1e4e9;border-radius:10px;color:#4d5661;background:#fff;font-size:10px;font-weight:500;cursor:pointer}.saved-actions button.primary{border-color:#6b39d8;color:#fff;background:#6b39d8}.saved-actions button:disabled{opacity:.45}.saved-actions svg{width:14px}
-
-        .saved-empty,.saved-loading{min-height:320px;padding:30px;display:grid;place-items:center;align-content:center;text-align:center;border:1px solid #e4e7ec;border-radius:24px;background:#fff}.saved-empty>svg{width:50px;height:50px;color:#6b39d8}.saved-empty h2{margin:12px 0 5px}.saved-empty p{max-width:520px;margin:0;color:#707985}.saved-loading{gap:13px;color:#717a85}.saved-loading>span{width:36px;height:36px;border:3px solid #e0e3e8;border-top-color:#6b39d8;border-radius:50%;animation:savedSpin .8s linear infinite}
-
-        .saved-sample{padding:20px;border:1px dashed #cfd6e2;border-radius:22px;background:radial-gradient(circle at 92% 8%,rgba(109,60,223,.08),transparent 24%),linear-gradient(180deg,#fcfdff,#f8fafc)}
-        .saved-sample-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:17px}.saved-sample-head h3{margin:0;font-size:19px;font-weight:600}.saved-sample-head p{max-width:720px;margin:6px 0 0;color:#707985;font-size:13px;line-height:1.5}.saved-sample-head span{padding:8px 11px;flex:0 0 auto;border-radius:999px;color:#5d35bc;background:#eee8ff;font-size:10px;font-weight:600;letter-spacing:.08em}
-        .saved-sample-card{max-width:500px;overflow:hidden;border:1px solid #e2e6ec;border-radius:22px;background:#fff;box-shadow:0 12px 28px rgba(42,48,61,.06)}.saved-sample-card .saved-actions button,.saved-sample-card .saved-remove-top{cursor:not-allowed;opacity:.72}
-        .saved-sample-note{margin:14px 18px 18px;padding:12px 13px;display:flex;align-items:center;gap:8px;border:1px solid #d7e9df;border-radius:13px;color:#3f6d50;background:#f3faf5;font-size:12px}.saved-sample-note svg{width:18px;flex:0 0 auto}
-
-        .saved-modal-backdrop{position:fixed;inset:0;z-index:250;display:grid;place-items:center;padding:20px;background:rgba(20,24,30,.70);backdrop-filter:blur(7px)}
-        .saved-modal{position:relative;width:min(680px,100%);max-height:92vh;overflow-y:auto;padding:27px;border:1px solid #e3e6eb;border-radius:26px;background:#fff;box-shadow:0 35px 100px rgba(0,0,0,.28);text-align:left!important}.saved-modal-close{position:absolute;z-index:4;right:16px;top:16px;width:38px;height:38px;display:grid;place-items:center;border:1px solid #e3e6eb;border-radius:12px;background:#fff;cursor:pointer}
-        .saved-modal-image{position:relative;height:250px;margin:-27px -27px 20px;overflow:hidden;border-radius:26px 26px 0 0;background:#eef1f4}.saved-modal-image img{width:100%;height:100%;object-fit:cover}.saved-modal-image>span{width:100%;height:100%;display:grid;place-items:center;color:#87909c}.saved-modal-image>span svg{width:54px;height:54px}.saved-modal-image:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent,rgba(10,10,15,.48))}.saved-modal-image i{position:absolute;z-index:2;left:17px;bottom:17px;padding:8px 10px;border-radius:999px;color:#fff;background:rgba(89,45,187,.85);font-size:10px;font-style:normal;font-weight:600}
-        .saved-modal>h2{margin:13px 0 6px;font-size:27px;font-weight:600}.saved-modal-subtitle{color:#6f7883;font-size:12px}.saved-modal-description{margin:15px 0 0;color:#626b76;font-size:13px;line-height:1.6}
-        .saved-detail-grid{margin-top:16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.saved-detail-grid article{padding:13px;display:flex;align-items:center;gap:10px;border:1px solid #e6e9ed;border-radius:14px;background:#fafbfc}.saved-detail-grid svg{width:20px;color:#6734da}.saved-detail-grid small,.saved-detail-grid strong{display:block}.saved-detail-grid small{color:#7c8490;font-size:8px}.saved-detail-grid strong{margin-top:3px;font-size:12px;font-weight:600}
-        .saved-value-note{margin-top:16px;padding:14px;display:flex;align-items:flex-start;gap:10px;border:1px solid #d7e9df;border-radius:14px;background:#f3faf5;color:#326545}.saved-value-note>svg{width:20px;flex:0 0 auto}.saved-value-note strong,.saved-value-note small{display:block}.saved-value-note strong{font-size:12px}.saved-value-note small{margin-top:4px;color:#537661;font-size:10px;line-height:1.5}
-        .saved-modal-actions{margin-top:16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.saved-modal-actions button{min-height:44px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid #e0e4e9;border-radius:12px;color:#4d5661;background:#fff;font-weight:500;cursor:pointer}.saved-modal-actions button.danger{border-color:#f0cdd1;color:#b33e48;background:#fff4f5}.saved-modal-actions button:disabled{opacity:.45}.saved-modal-actions svg{width:16px}
-
-        .dash-content>.saved-page,.dash-content .saved-page{width:100%!important;max-width:none!important;margin-left:0!important;margin-right:0!important}
-        .saved-page,.saved-page section,.saved-page article,.saved-page div,.saved-page h1,.saved-page h2,.saved-page h3,.saved-page p,.saved-page small,.saved-page strong,.saved-page span{box-sizing:border-box}
-        @keyframes savedSpin{to{transform:rotate(360deg)}}
-
-        @media(max-width:1250px){
-          .saved-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-          .saved-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-          .saved-hero{grid-template-columns:minmax(0,1fr) 240px}
+        .saved-page-simple {
+          width: 100% !important;
+          max-width: none !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          display: grid;
+          gap: 14px;
+          color: #201c18;
         }
 
-        @media(max-width:900px){
-          .saved-hero{display:block;min-height:0;padding:22px}.saved-total-card{margin-top:18px}.saved-hero:after{display:none}
-          .saved-toolbar{align-items:stretch;flex-direction:column}.saved-toolbar label{width:100%}
-          .saved-value-banner{align-items:flex-start}
+        .saved-simple-head {
+          padding: 4px 2px 8px;
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 16px;
         }
 
-        @media(max-width:680px){
-          .saved-summary-grid,.saved-grid{grid-template-columns:1fr}
-          .saved-actions,.saved-detail-grid,.saved-modal-actions{grid-template-columns:1fr}
-          .saved-sample-head{flex-direction:column}
-          .saved-value-banner>svg{display:none}
+        .saved-simple-head small {
+          color: #ca6808;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: .11em;
         }
 
-        .dash-guest-preview-note{
-          width:100%;
-          padding:12px 14px;
-          display:flex;
-          align-items:center;
-          gap:9px;
-          border:1px solid #cfe5f0;
-          border-radius:14px;
-          color:#245b6d;
-          background:#eef9fc;
-          font-size:12px;
-          line-height:1.4;
-        }
-        .dash-guest-preview-note svg{
-          width:18px;
-          height:18px;
-          flex:0 0 auto;
-          color:#087e98;
-        }
-        .dash-guest-preview-note span{
-          min-width:0;
-          flex:1;
-        }
-        .dash-guest-preview-note button{
-          min-height:36px;
-          padding:0 13px;
-          flex:0 0 auto;
-          border:0;
-          border-radius:10px;
-          color:#fff;
-          background:#087e98;
-          font-weight:600;
-          cursor:pointer;
+        .saved-simple-head h2 {
+          margin: 5px 0 3px;
+          font-size: 30px;
+          line-height: 1.1;
+          font-weight: 650;
         }
 
-        /* ===== FINAL MOBILE METRIC GRID: 2 CARDS PER ROW ===== */
-        @media(max-width:680px){
-          .saved-summary-grid{
-            display:grid!important;
-            grid-template-columns:repeat(2,minmax(0,1fr))!important;
-            gap:10px!important;
-          }
+        .saved-simple-head p {
+          margin: 0;
+          color: #756e67;
+          font-size: 13px;
+        }
 
-          .saved-summary-grid article{
-            width:100%!important;
-            min-width:0!important;
-            min-height:112px!important;
-            padding:13px 10px!important;
-            display:flex!important;
-            flex-direction:column!important;
-            align-items:flex-start!important;
-            justify-content:center!important;
-            gap:8px!important;
-            overflow:hidden!important;
-            border-radius:17px!important;
-          }
+        .saved-simple-head > span {
+          color: #817970;
+          font-size: 12px;
+          white-space: nowrap;
+        }
 
-          .saved-summary-icon{
-            width:40px!important;
-            height:40px!important;
-            border-radius:13px!important;
-          }
+        .saved-simple-toolbar {
+          padding: 9px 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          border: 1px solid #e5dfd8;
+          border-radius: 13px;
+          background: #fff;
+        }
 
-          .saved-summary-icon svg{
-            width:20px!important;
-            height:20px!important;
-          }
+        .saved-simple-tabs {
+          display: flex;
+          gap: 6px;
+          overflow-x: auto;
+          scrollbar-width: none;
+        }
 
-          .saved-summary-grid article>div{
-            width:100%!important;
-            min-width:0!important;
-          }
+        .saved-simple-tabs::-webkit-scrollbar {
+          display: none;
+        }
 
-          .saved-summary-grid small{
-            font-size:10px!important;
-            line-height:1.2!important;
-            white-space:normal!important;
-          }
+        .saved-simple-tabs button {
+          min-height: 34px;
+          padding: 0 11px;
+          flex: 0 0 auto;
+          border: 1px solid transparent;
+          border-radius: 9px;
+          color: #6b645d;
+          background: transparent;
+          font-size: 11px;
+          cursor: pointer;
+        }
 
-          .saved-summary-grid strong{
-            margin-top:3px!important;
-            font-size:21px!important;
-            line-height:1!important;
-          }
+        .saved-simple-tabs button.active {
+          color: #9a5600;
+          border-color: #edc995;
+          background: #fff3e4;
+          font-weight: 700;
+        }
 
-          .saved-summary-grid p{
-            margin-top:5px!important;
-            font-size:9px!important;
-            line-height:1.25!important;
-            white-space:normal!important;
-          }
+        .saved-simple-search {
+          width: min(240px, 100%);
+          min-height: 36px;
+          padding: 0 10px;
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          border: 1px solid #e4ddd6;
+          border-radius: 10px;
+          background: #faf9f7;
+        }
 
-          .dash-guest-preview-note{
-            align-items:flex-start;
-            flex-wrap:wrap;
-          }
+        .saved-simple-search svg {
+          width: 15px;
+          color: #8b8178;
+        }
 
-          .dash-guest-preview-note button{
-            width:100%;
+        .saved-simple-search input {
+          width: 100%;
+          border: 0;
+          outline: 0;
+          background: transparent;
+          font-size: 11px;
+        }
+
+        .saved-message {
+          padding: 11px 13px;
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          border: 1px solid #cfe8d8;
+          border-radius: 12px;
+          color: #25663f;
+          background: #f1faf4;
+          font-size: 12px;
+        }
+
+        .saved-message > svg {
+          width: 17px;
+        }
+
+        .saved-message span {
+          flex: 1;
+        }
+
+        .saved-message button {
+          width: 28px;
+          height: 28px;
+          display: grid;
+          place-items: center;
+          border: 0;
+          border-radius: 8px;
+          background: transparent;
+          cursor: pointer;
+        }
+
+        .saved-message button svg {
+          width: 15px;
+        }
+
+        .saved-simple-list {
+          display: grid;
+          gap: 9px;
+        }
+
+        .saved-simple-card {
+          min-width: 0;
+          padding: 10px 12px;
+          display: grid;
+          grid-template-columns:
+            72px minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 12px;
+          border: 1px solid #e5dfd8;
+          border-radius: 14px;
+          background: #fff;
+          cursor: default;
+        }
+
+        .saved-simple-card.inactive {
+          opacity: .65;
+        }
+
+        .saved-simple-image {
+          width: 72px;
+          height: 72px;
+          overflow: hidden;
+          display: grid;
+          place-items: center;
+          border-radius: 12px;
+          color: #969da6;
+          background: #f3f4f6;
+        }
+
+        .saved-simple-image img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+
+        .saved-simple-image > svg {
+          width: 26px;
+          height: 26px;
+        }
+
+        .saved-simple-copy {
+          min-width: 0;
+        }
+
+        .saved-simple-top {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+        }
+
+        .saved-simple-top > span {
+          color: #7655ae;
+          font-size: 9px;
+          text-transform: uppercase;
+        }
+
+        .saved-simple-top em {
+          padding: 3px 6px;
+          border-radius: 999px;
+          color: #a13d45;
+          background: #fff0f1;
+          font-size: 8px;
+          font-style: normal;
+        }
+
+        .saved-simple-copy > strong {
+          display: block;
+          margin-top: 4px;
+          overflow: hidden;
+          font-size: 14px;
+          font-weight: 600;
+          line-height: 1.35;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .saved-simple-copy > small {
+          display: block;
+          margin-top: 4px;
+          overflow: hidden;
+          color: #817970;
+          font-size: 10px;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .saved-simple-bottom {
+          margin-top: 7px;
+          display: flex;
+          align-items: center;
+          gap: 9px;
+        }
+
+        .saved-simple-bottom b {
+          font-size: 14px;
+        }
+
+        .saved-simple-bottom span {
+          color: #8a827a;
+          font-size: 9px;
+        }
+
+        .saved-simple-actions {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+        }
+
+        .saved-simple-actions button {
+          cursor: pointer;
+        }
+
+        .saved-simple-remove {
+          width: 36px;
+          height: 36px;
+          display: grid;
+          place-items: center;
+          border: 1px solid #efcfd3;
+          border-radius: 10px;
+          color: #e04757;
+          background: #fff;
+        }
+
+        .saved-simple-remove svg {
+          width: 15px;
+        }
+
+        .saved-simple-open {
+          min-height: 36px;
+          padding: 0 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          border: 1px solid #171814;
+          border-radius: 10px;
+          color: #fff;
+          background: #171814;
+          font-size: 10px;
+          font-weight: 700;
+        }
+
+        .saved-simple-open svg {
+          width: 13px;
+        }
+
+        .saved-simple-open:disabled,
+        .saved-simple-remove:disabled {
+          opacity: .45;
+          cursor: not-allowed;
+        }
+
+        .saved-simple-empty,
+        .saved-loading {
+          min-height: 260px;
+          padding: 28px 20px;
+          display: grid;
+          place-content: center;
+          justify-items: center;
+          gap: 8px;
+          border: 1px solid #e5dfd8;
+          border-radius: 16px;
+          background: #fff;
+          text-align: center;
+        }
+
+        .saved-simple-empty > svg {
+          width: 36px;
+          height: 36px;
+          color: #ca6808;
+        }
+
+        .saved-simple-empty h3 {
+          margin: 7px 0 0;
+        }
+
+        .saved-simple-empty p {
+          margin: 0;
+          color: #817970;
+          font-size: 12px;
+        }
+
+        .saved-simple-empty button {
+          margin-top: 8px;
+          min-height: 40px;
+          padding: 0 14px;
+          border: 0;
+          border-radius: 10px;
+          color: #fff;
+          background: #171814;
+          cursor: pointer;
+        }
+
+        .saved-loading {
+          border: 0;
+          background: transparent;
+          color: #717a85;
+        }
+
+        .saved-loading > span {
+          width: 34px;
+          height: 34px;
+          border: 3px solid #e0e3e8;
+          border-top-color: #ca6808;
+          border-radius: 50%;
+          animation: savedSpin .8s linear infinite;
+        }
+
+        @keyframes savedSpin {
+          to {
+            transform: rotate(360deg);
           }
         }
 
-        @media(max-width:380px){
-          .saved-summary-grid{
-            gap:8px!important;
+        .dash-guest-preview-note {
+          width: 100%;
+          padding: 11px 13px;
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          border: 1px solid #cfe5f0;
+          border-radius: 12px;
+          color: #245b6d;
+          background: #eef9fc;
+          font-size: 12px;
+        }
+
+        .dash-guest-preview-note svg {
+          width: 18px;
+          height: 18px;
+          flex: 0 0 auto;
+          color: #087e98;
+        }
+
+        .dash-guest-preview-note span {
+          min-width: 0;
+          flex: 1;
+        }
+
+        .dash-guest-preview-note button {
+          min-height: 34px;
+          padding: 0 12px;
+          border: 0;
+          border-radius: 9px;
+          color: #fff;
+          background: #087e98;
+          cursor: pointer;
+        }
+
+        @media (max-width: 650px) {
+          .saved-simple-head h2 {
+            font-size: 26px;
           }
 
-          .saved-summary-grid article{
-            padding:11px 9px!important;
+          .saved-simple-head > span {
+            display: none;
           }
 
-          .saved-summary-grid strong{
-            font-size:19px!important;
+          .saved-simple-toolbar {
+            align-items: stretch;
+            flex-direction: column;
+          }
+
+          .saved-simple-search {
+            width: 100%;
+          }
+
+          .saved-simple-card {
+            grid-template-columns:
+              58px minmax(0, 1fr) auto;
+            gap: 9px;
+            padding: 9px;
+          }
+
+          .saved-simple-image {
+            width: 58px;
+            height: 58px;
+          }
+
+          .saved-simple-copy > strong {
+            font-size: 13px;
+          }
+
+          .saved-simple-bottom span {
+            display: none;
+          }
+
+          .saved-simple-open {
+            min-width: 36px;
+            width: 36px;
+            padding: 0;
+            font-size: 0;
+          }
+
+          .saved-simple-remove {
+            width: 34px;
+            height: 34px;
           }
         }
 
+        @media (max-width: 430px) {
+          .saved-simple-top > span {
+            display: none;
+          }
+
+          .saved-simple-copy > small {
+            display: none;
+          }
+        }
       `}</style>
     </div>
-  );
-}
-
-function SavedSamplePreview() {
-  return (
-    <section className="saved-sample">
-      <div className="saved-sample-head">
-        <div>
-          <h3>See how saved items will appear</h3>
-          <p>
-            This sample is displayed only while your account has no real saved
-            items. It disappears automatically after your first save.
-          </p>
-        </div>
-
-        <span>SAMPLE PREVIEW</span>
-      </div>
-
-      <article className="saved-sample-card">
-        <div className="saved-card-image">
-          <img src={SAMPLE_IMAGE} alt="Sample saved product" />
-
-          <span className="saved-type">Product</span>
-
-          <button
-            type="button"
-            className="saved-remove-top"
-            disabled
-          >
-            <Heart fill="currentColor" />
-          </button>
-        </div>
-
-        <div className="saved-card-content">
-          <div className="saved-card-heading">
-            <div>
-              <small>DOTZ Fashion</small>
-              <h2>Premium Casual Shirt</h2>
-            </div>
-
-            <span>25% OFF</span>
-          </div>
-
-          <p className="saved-location">
-            <MapPin /> Mettupalayam
-          </p>
-
-          <p className="saved-description">
-            A saved product preview with current price, shop, share and remove
-            actions.
-          </p>
-
-          <div className="saved-price">
-            <strong>₹899</strong>
-            <del>₹1,199</del>
-          </div>
-
-          <div className="saved-meta">
-            <span>
-              <Clock3 /> Saved 21 Jul 2026
-            </span>
-          </div>
-
-          <div className="saved-actions">
-            <button type="button" disabled>
-              View Details <ChevronRight />
-            </button>
-
-            <button
-              type="button"
-              className="primary"
-              disabled
-            >
-              <ExternalLink /> Open Product
-            </button>
-
-            <button type="button" disabled>
-              <Share2 /> Share
-            </button>
-          </div>
-        </div>
-
-        <div className="saved-sample-note">
-          <BadgeCheck />
-          Sample data never writes to Firebase or changes real saved items.
-        </div>
-      </article>
-    </section>
   );
 }

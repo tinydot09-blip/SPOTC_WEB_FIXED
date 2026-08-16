@@ -1,29 +1,14 @@
 'use client';
 
 import {
-  BadgeCheck,
-  Banknote,
-  CalendarDays,
-  CheckCircle2,
   ChevronRight,
-  CircleDollarSign,
-  Clock3,
-  Copy,
-  Headphones,
+  Gift,
   MapPin,
   Package,
-  PackageCheck,
-  ReceiptText,
-  RefreshCcw,
   Search,
-  ShoppingBag,
-  Sparkles,
-  Store,
-  Truck,
-  WalletCards,
   X,
-  XCircle,
 } from 'lucide-react';
+
 import {
   collection,
   doc,
@@ -35,12 +20,22 @@ import {
   where,
   type DocumentData,
 } from 'firebase/firestore';
-import { onAuthStateChanged, type User } from 'firebase/auth';
-import { useEffect, useMemo, useState } from 'react';
 
-import { auth, firebaseReady } from '@/lib/firebase';
+import {
+  onAuthStateChanged,
+  type User,
+} from 'firebase/auth';
 
-type OrderFilter = 'all' | 'active' | 'delivered' | 'cancelled';
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
+import {
+  auth,
+  firebaseReady,
+} from '@/lib/firebase';
 
 type OrderItem = {
   id: string;
@@ -51,15 +46,12 @@ type OrderItem = {
   subtotal: number;
   size: string;
   color: string;
-  productId: string;
 };
 
 type OrderRecord = {
   id: string;
   orderNumber: string;
   businessName: string;
-  businessLogo: string;
-  businessId: string;
   items: OrderItem[];
   subtotal: number;
   deliveryCharge: number;
@@ -69,58 +61,243 @@ type OrderRecord = {
   paymentMethod: string;
   status: string;
   createdAt: Date | null;
-  updatedAt: Date | null;
   address: string;
   phone: string;
-  notes: string;
-  raw: DocumentData;
 };
 
-function textOf(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : String(value ?? '').trim();
-}
+type SavedFreeGift = {
+  id: string;
+  title: string;
+  image: string;
+  original_price: number;
+  price: number;
+  is_free_gift: boolean;
+};
 
-function numberOf(value: unknown): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
+type SavedGiftBundle = {
+  product_id: string;
+  quantity: number;
+  entitlement: number;
+  gifts: SavedFreeGift[];
+};
 
-function dateOf(value: unknown): Date | null {
-  if (value instanceof Timestamp) return value.toDate();
-  if (value instanceof Date) return value;
-
-  if (typeof value === 'object' && value !== null && 'seconds' in value) {
-    const seconds = Number((value as { seconds?: unknown }).seconds);
-    return Number.isFinite(seconds) ? new Date(seconds * 1000) : null;
+function readSavedGifts(
+  productId: string,
+): SavedGiftBundle | null {
+  if (
+    typeof window === 'undefined' ||
+    !productId
+  ) {
+    return null;
   }
 
-  if (typeof value === 'string' || typeof value === 'number') {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
+  try {
+    const raw =
+      window.localStorage.getItem(
+        `spotc-free-gifts:${productId}`,
+      );
 
-  return null;
+    if (!raw) {
+      return null;
+    }
+
+    const parsed =
+      JSON.parse(raw) as Partial<SavedGiftBundle>;
+
+    if (
+      !parsed ||
+      !Array.isArray(parsed.gifts)
+    ) {
+      return null;
+    }
+
+    return {
+      product_id:
+        String(
+          parsed.product_id ||
+            productId,
+        ),
+
+      quantity:
+        Number(parsed.quantity) || 1,
+
+      entitlement:
+        Number(parsed.entitlement) ||
+        parsed.gifts.length,
+
+      gifts: parsed.gifts
+        .filter(
+          (
+            gift,
+          ): gift is SavedFreeGift =>
+            Boolean(
+              gift &&
+                typeof gift ===
+                  'object' &&
+                'id' in gift,
+            ),
+        )
+        .map((gift) => ({
+          id: String(gift.id),
+          title:
+            String(
+              gift.title ||
+                'FREE Gift',
+            ),
+          image:
+            String(gift.image || ''),
+          original_price:
+            Number(
+              gift.original_price,
+            ) || 0,
+          price: 0,
+          is_free_gift: true,
+        })),
+    };
+  } catch {
+    return null;
+  }
 }
 
-function refIdOf(value: unknown): string {
-  if (typeof value === 'string') {
-    const parts = value.split('/').filter(Boolean);
-    return parts[parts.length - 1] ?? '';
+function giftsForOrder(
+  order: OrderRecord,
+): SavedFreeGift[] {
+  const unique =
+    new Map<
+      string,
+      SavedFreeGift
+    >();
+
+  for (const item of order.items) {
+    const bundle =
+      readSavedGifts(item.id);
+
+    for (const gift of
+      bundle?.gifts || []) {
+      unique.set(
+        gift.id,
+        gift,
+      );
+    }
+  }
+
+  return [
+    ...unique.values(),
+  ];
+}
+
+type OrderFilter =
+  | 'all'
+  | 'active'
+  | 'delivered'
+  | 'cancelled';
+
+type OrderSort =
+  | 'newest'
+  | 'oldest'
+  | 'amount-high'
+  | 'amount-low';
+
+function isActiveStatus(
+  status: string,
+): boolean {
+  return ![
+    'delivered',
+    'cancelled',
+  ].includes(status);
+}
+
+function statusMessage(
+  status: string,
+): string {
+  switch (status) {
+    case 'placed':
+      return 'Order placed';
+    case 'pending':
+      return 'Waiting for confirmation';
+    case 'processing':
+      return 'Being prepared';
+    case 'confirmed':
+      return 'Order confirmed';
+    case 'ready':
+      return 'Ready for delivery';
+    case 'out for delivery':
+      return 'Out for delivery';
+    case 'delivered':
+      return 'Delivered';
+    case 'cancelled':
+      return 'Cancelled';
+    default:
+      return statusLabel(status);
+  }
+}
+
+function textOf(
+  value: unknown,
+): string {
+  return typeof value === 'string'
+    ? value.trim()
+    : String(value ?? '').trim();
+}
+
+function numberOf(
+  value: unknown,
+): number {
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0;
+}
+
+function dateOf(
+  value: unknown,
+): Date | null {
+  if (value instanceof Timestamp) {
+    return value.toDate();
+  }
+
+  if (value instanceof Date) {
+    return value;
   }
 
   if (
     typeof value === 'object' &&
     value !== null &&
-    'id' in value &&
-    typeof (value as { id?: unknown }).id === 'string'
+    'seconds' in value
   ) {
-    return (value as { id: string }).id;
+    const seconds = Number(
+      (
+        value as {
+          seconds?: unknown;
+        }
+      ).seconds,
+    );
+
+    return Number.isFinite(seconds)
+      ? new Date(seconds * 1000)
+      : null;
   }
 
-  return '';
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number'
+  ) {
+    const date = new Date(value);
+
+    return Number.isNaN(
+      date.getTime(),
+    )
+      ? null
+      : date;
+  }
+
+  return null;
 }
 
-function imageOf(item: DocumentData): string {
+function imageOf(
+  item: DocumentData,
+): string {
   return (
     textOf(item.image) ||
     textOf(item.image_url) ||
@@ -130,77 +307,140 @@ function imageOf(item: DocumentData): string {
   );
 }
 
-function mapItems(value: unknown): OrderItem[] {
-  if (!Array.isArray(value)) return [];
+function mapItems(
+  value: unknown,
+): OrderItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
 
-  return value.map((item, index) => {
-    const record =
-      typeof item === 'object' && item !== null
-        ? (item as DocumentData)
-        : {};
+  return value.map(
+    (item, index) => {
+      const record =
+        typeof item === 'object' &&
+        item !== null
+          ? (item as DocumentData)
+          : {};
 
-    const price = numberOf(
-      record.price ??
-        record.selling_price ??
-        record.offer_price ??
-        record.unit_price,
-    );
+      const price = numberOf(
+        record.price ??
+          record.selling_price ??
+          record.offer_price ??
+          record.unit_price,
+      );
 
-    const quantity = Math.max(
-      1,
-      numberOf(record.quantity ?? record.qty ?? record.count) || 1,
-    );
+      const quantity = Math.max(
+        1,
+        numberOf(
+          record.quantity ??
+            record.qty ??
+            record.count,
+        ) || 1,
+      );
 
-    return {
-      id: textOf(record.id) || textOf(record.product_id) || `${index}`,
-      title:
-        textOf(record.title) ||
-        textOf(record.product_name) ||
-        textOf(record.name) ||
-        'Product',
-      image: imageOf(record),
-      price,
-      quantity,
-      subtotal:
-        numberOf(record.subtotal ?? record.line_total) ||
-        price * quantity,
-      size: textOf(record.size),
-      color: textOf(record.color),
-      productId:
-        refIdOf(record.product_ref) ||
-        textOf(record.product_id) ||
-        textOf(record.productId),
-    };
-  });
+      return {
+        id:
+          textOf(record.id) ||
+          textOf(record.product_id) ||
+          String(index),
+
+        title:
+          textOf(record.title) ||
+          textOf(
+            record.product_name,
+          ) ||
+          textOf(record.name) ||
+          'Product',
+
+        image: imageOf(record),
+
+        price,
+
+        quantity,
+
+        subtotal:
+          numberOf(
+            record.subtotal ??
+              record.line_total,
+          ) ||
+          price * quantity,
+
+        size:
+          textOf(record.size),
+
+        color:
+          textOf(record.color),
+      };
+    },
+  );
 }
 
-function normalizeStatus(value: unknown): string {
-  const status = textOf(value).toLowerCase().replace(/[_-]+/g, ' ');
+function normalizeStatus(
+  value: unknown,
+): string {
+  const status = textOf(value)
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ');
 
-  if (!status) return 'placed';
-  if (status.includes('cancel')) return 'cancelled';
-  if (status.includes('deliver')) return 'delivered';
-  if (status.includes('out for')) return 'out for delivery';
-  if (status === 'out') return 'out for delivery';
-  if (status.includes('ready')) return 'ready';
-  if (status.includes('confirm')) return 'confirmed';
-  if (status.includes('process')) return 'processing';
-  if (status.includes('pending')) return 'pending';
-  if (status.includes('place')) return 'placed';
+  if (!status) {
+    return 'placed';
+  }
+
+  if (status.includes('cancel')) {
+    return 'cancelled';
+  }
+
+  if (
+    status.includes(
+      'out for delivery',
+    )
+  ) {
+    return 'out for delivery';
+  }
+
+  if (status.includes('deliver')) {
+    return 'delivered';
+  }
+
+  if (status.includes('ready')) {
+    return 'ready';
+  }
+
+  if (status.includes('confirm')) {
+    return 'confirmed';
+  }
+
+  if (status.includes('process')) {
+    return 'processing';
+  }
+
+  if (status.includes('pending')) {
+    return 'pending';
+  }
+
+  if (status.includes('place')) {
+    return 'placed';
+  }
 
   return status;
 }
 
-function buildAddress(data: DocumentData): string {
+function buildAddress(
+  data: DocumentData,
+): string {
   const direct =
     textOf(data.delivery_address) ||
     textOf(data.address_text) ||
     textOf(data.full_address);
 
-  if (direct) return direct;
+  if (direct) {
+    return direct;
+  }
 
   const source =
-    typeof data.address === 'object' && data.address !== null
+    typeof data.address ===
+      'object' &&
+    data.address !== null
       ? (data.address as DocumentData)
       : data;
 
@@ -216,150 +456,249 @@ function buildAddress(data: DocumentData): string {
     .join(', ');
 }
 
-function mapOrder(id: string, data: DocumentData): OrderRecord {
-  const items = mapItems(data.items ?? data.order_items ?? data.products);
+function mapOrder(
+  id: string,
+  data: DocumentData,
+): OrderRecord {
+  const items = mapItems(
+    data.items ??
+      data.order_items ??
+      data.products,
+  );
 
   const subtotal =
     numberOf(data.subtotal) ||
-    items.reduce((sum, item) => sum + item.subtotal, 0);
+    items.reduce(
+      (sum, item) =>
+        sum + item.subtotal,
+      0,
+    );
 
-  const deliveryCharge = numberOf(
-    data.delivery_charge ?? data.delivery_fee,
-  );
+  const deliveryCharge =
+    numberOf(
+      data.delivery_charge ??
+        data.delivery_fee,
+    );
 
-  const platformFee = numberOf(
-    data.platform_fee ?? data.service_fee,
-  );
+  const platformFee =
+    numberOf(
+      data.platform_fee ??
+        data.service_fee,
+    );
 
-  const discount = numberOf(
-    data.discount ?? data.discount_amount,
-  );
+  const discount =
+    numberOf(
+      data.discount ??
+        data.discount_amount,
+    );
 
   const total =
-    numberOf(data.total ?? data.grand_total ?? data.order_total) ||
-    subtotal + deliveryCharge + platformFee - discount;
+    numberOf(
+      data.total ??
+        data.grand_total ??
+        data.order_total,
+    ) ||
+    subtotal +
+      deliveryCharge +
+      platformFee -
+      discount;
 
   return {
     id,
+
     orderNumber:
       textOf(data.order_number) ||
       textOf(data.order_no) ||
       textOf(data.order_id) ||
-      `SPOTC-${id.slice(0, 8).toUpperCase()}`,
+      `SPOTC-${id
+        .slice(0, 8)
+        .toUpperCase()}`,
+
     businessName:
-      textOf(data.business_name) ||
+      textOf(
+        data.business_name,
+      ) ||
       textOf(data.shop_name) ||
-      'SPOTC Business',
-    businessLogo:
-      textOf(data.business_logo) ||
-      textOf(data.logo_url),
-    businessId:
-      refIdOf(data.business_ref) ||
-      textOf(data.business_id),
+      'SPOTC Shop',
+
     items,
+
     subtotal,
     deliveryCharge,
     platformFee,
     discount,
     total,
+
     paymentMethod:
-      textOf(data.payment_method) ||
-      textOf(data.payment_mode) ||
-      'Cash on Delivery',
+      textOf(
+        data.payment_method,
+      ) ||
+      textOf(
+        data.payment_mode,
+      ) ||
+      'COD',
+
     status: normalizeStatus(
       data.order_status ??
         data.status ??
         data.delivery_status,
     ),
-    createdAt: dateOf(data.created_at ?? data.order_date),
-    updatedAt: dateOf(data.updated_at ?? data.status_updated_at),
-    address: buildAddress(data),
-    phone: textOf(data.phone ?? data.customer_phone),
-    notes: textOf(data.notes ?? data.customer_note),
-    raw: data,
+
+    createdAt: dateOf(
+      data.created_at ??
+        data.order_date,
+    ),
+
+    address:
+      buildAddress(data),
+
+    phone:
+      textOf(
+        data.customer_phone ??
+          data.phone,
+      ),
   };
 }
 
-function formatDate(date: Date | null): string {
-  if (!date) return 'Date unavailable';
-
-  return new Intl.DateTimeFormat('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+function money(
+  value: number,
+): string {
+  return `₹${Math.round(
+    value,
+  ).toLocaleString('en-IN')}`;
 }
 
-function money(value: number): string {
-  return `₹${Math.round(value).toLocaleString('en-IN')}`;
+function formatDate(
+  date: Date | null,
+): string {
+  if (!date) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat(
+    'en-IN',
+    {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    },
+  ).format(date);
 }
 
-function initialsOf(name: string): string {
-  const words = name.split(/\s+/).filter(Boolean);
+function formatDateTime(
+  date: Date | null,
+): string {
+  if (!date) {
+    return 'Date unavailable';
+  }
 
-  if (!words.length) return 'S';
-
-  return words
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase() ?? '')
-    .join('');
+  return new Intl.DateTimeFormat(
+    'en-IN',
+    {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    },
+  ).format(date);
 }
 
-const STATUS_STEPS = [
-  'placed',
-  'confirmed',
-  'ready',
-  'out for delivery',
-  'delivered',
-] as const;
-
-function statusIndex(status: string): number {
-  if (status === 'pending' || status === 'processing') return 0;
-  const index = STATUS_STEPS.indexOf(
-    status as (typeof STATUS_STEPS)[number],
-  );
-  return index >= 0 ? index : 0;
-}
-
-function statusLabel(status: string): string {
-  if (status === 'out for delivery') return 'Out for delivery';
-
+function statusLabel(
+  status: string,
+): string {
   return status
     .split(' ')
     .map((word) =>
-      word ? word[0].toUpperCase() + word.slice(1) : '',
+      word
+        ? word[0].toUpperCase() +
+          word.slice(1)
+        : '',
     )
     .join(' ');
 }
 
 export default function DashboardOrders() {
-  const [user, setUser] = useState<User | null>(auth?.currentUser ?? null);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [orders, setOrders] = useState<OrderRecord[]>([]);
-  const [filter, setFilter] = useState<OrderFilter>('all');
-  const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<OrderRecord | null>(null);
-  const [copiedOrder, setCopiedOrder] = useState('');
-  const [message, setMessage] = useState('');
+  const [user, setUser] =
+    useState<User | null>(
+      auth?.currentUser ?? null,
+    );
+
+  const [
+    authChecked,
+    setAuthChecked,
+  ] = useState(false);
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+  const [
+    orders,
+    setOrders,
+  ] = useState<OrderRecord[]>(
+    [],
+  );
+
+  const [
+    selected,
+    setSelected,
+  ] =
+    useState<OrderRecord | null>(
+      null,
+    );
+
+  const [
+    filter,
+    setFilter,
+  ] =
+    useState<OrderFilter>(
+      'all',
+    );
+
+  const [
+    sort,
+    setSort,
+  ] =
+    useState<OrderSort>(
+      'newest',
+    );
+
+  const [
+    search,
+    setSearch,
+  ] = useState('');
 
   useEffect(() => {
-    if (!firebaseReady || !auth) {
+    if (
+      !firebaseReady ||
+      !auth
+    ) {
       setAuthChecked(true);
       setLoading(false);
       return;
     }
 
-    return onAuthStateChanged(auth, (nextUser) => {
-      setUser(nextUser && !nextUser.isAnonymous ? nextUser : null);
-      setAuthChecked(true);
-    });
+    return onAuthStateChanged(
+      auth,
+      (nextUser) => {
+        setUser(
+          nextUser &&
+          !nextUser.isAnonymous
+            ? nextUser
+            : null,
+        );
+
+        setAuthChecked(true);
+      },
+    );
   }, []);
 
   useEffect(() => {
-    if (!authChecked) return;
+    if (!authChecked) {
+      return;
+    }
 
     if (!user) {
       setOrders([]);
@@ -367,74 +706,140 @@ export default function DashboardOrders() {
       return;
     }
 
-    let active = true;
+    // Keep a non-null user reference for the async loader below.
+    // TypeScript does not preserve the state narrowing inside nested async functions.
     const currentUser = user;
+
+    let active = true;
 
     async function loadOrders() {
       setLoading(true);
 
       try {
-        const db = getFirestore();
+        const db =
+          getFirestore();
 
-        const snapshots = await Promise.all([
-          getDocs(
-            query(
-              collection(db, 'Orders'),
-              where('user_uid', '==', currentUser.uid),
-              limit(100),
-            ),
-          ).catch(() => null),
-          getDocs(
-            query(
-              collection(db, 'Orders'),
-              where(
-                'user_ref',
-                '==',
-                doc(db, 'users', currentUser.uid),
+        const snapshots =
+          await Promise.all([
+            getDocs(
+              query(
+                collection(
+                  db,
+                  'Orders',
+                ),
+                where(
+                  'user_uid',
+                  '==',
+                  currentUser.uid,
+                ),
+                limit(100),
               ),
-              limit(100),
+            ).catch(
+              () => null,
             ),
-          ).catch(() => null),
-          getDocs(
-            query(
-              collection(db, 'Orders'),
-              where(
-                'user_ref',
-                '==',
-                doc(db, 'Users', currentUser.uid),
+
+            getDocs(
+              query(
+                collection(
+                  db,
+                  'Orders',
+                ),
+                where(
+                  'user_ref',
+                  '==',
+                  doc(
+                    db,
+                    'Users',
+                    currentUser.uid,
+                  ),
+                ),
+                limit(100),
               ),
-              limit(100),
+            ).catch(
+              () => null,
             ),
-          ).catch(() => null),
-        ]);
 
-        if (!active) return;
+            getDocs(
+              query(
+                collection(
+                  db,
+                  'Orders',
+                ),
+                where(
+                  'user_ref',
+                  '==',
+                  doc(
+                    db,
+                    'users',
+                    currentUser.uid,
+                  ),
+                ),
+                limit(100),
+              ),
+            ).catch(
+              () => null,
+            ),
+          ]);
 
-        const unique = new Map<string, OrderRecord>();
+        if (!active) {
+          return;
+        }
 
-        for (const snapshot of snapshots) {
-          for (const orderDoc of snapshot?.docs ?? []) {
-            if (!unique.has(orderDoc.id)) {
+        const unique =
+          new Map<
+            string,
+            OrderRecord
+          >();
+
+        for (
+          const snapshot
+          of snapshots
+        ) {
+          for (
+            const orderDoc
+            of snapshot?.docs ??
+            []
+          ) {
+            if (
+              !unique.has(
+                orderDoc.id,
+              )
+            ) {
               unique.set(
                 orderDoc.id,
-                mapOrder(orderDoc.id, orderDoc.data()),
+                mapOrder(
+                  orderDoc.id,
+                  orderDoc.data(),
+                ),
               );
             }
           }
         }
 
         setOrders(
-          [...unique.values()].sort(
+          [
+            ...unique.values(),
+          ].sort(
             (a, b) =>
-              (b.createdAt?.getTime() ?? 0) -
-              (a.createdAt?.getTime() ?? 0),
+              (
+                b.createdAt?.getTime() ??
+                0
+              ) -
+              (
+                a.createdAt?.getTime() ??
+                0
+              ),
           ),
         );
       } catch (error) {
-        console.error('Orders load failed:', error);
-        setMessage('Some order information could not be loaded.');
+        console.error(
+          'Orders load failed:',
+          error,
+        );
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     }
 
@@ -443,874 +848,1407 @@ export default function DashboardOrders() {
     return () => {
       active = false;
     };
-  }, [authChecked, user]);
+  }, [
+    authChecked,
+    user,
+  ]);
 
-  const summary = useMemo(() => {
-    const activeOrders = orders.filter(
-      (order) =>
-        !['delivered', 'cancelled'].includes(order.status),
-    );
+  const filteredOrders =
+    useMemo(() => {
+      const queryText =
+        search
+          .trim()
+          .toLowerCase();
 
-    const deliveredOrders = orders.filter(
-      (order) => order.status === 'delivered',
-    );
+      const result =
+        orders.filter(
+          (order) => {
+            if (
+              filter ===
+                'active' &&
+              !isActiveStatus(
+                order.status,
+              )
+            ) {
+              return false;
+            }
 
-    const cancelledOrders = orders.filter(
-      (order) => order.status === 'cancelled',
-    );
+            if (
+              filter ===
+                'delivered' &&
+              order.status !==
+                'delivered'
+            ) {
+              return false;
+            }
 
-    return {
-      total: orders.length,
-      active: activeOrders.length,
-      delivered: deliveredOrders.length,
-      cancelled: cancelledOrders.length,
-      spent: deliveredOrders.reduce(
-        (sum, order) => sum + order.total,
-        0,
-      ),
-      saved: orders.reduce(
-        (sum, order) => sum + order.discount,
-        0,
-      ),
-    };
-  }, [orders]);
+            if (
+              filter ===
+                'cancelled' &&
+              order.status !==
+                'cancelled'
+            ) {
+              return false;
+            }
 
-  const visibleOrders = useMemo(() => {
-    const term = search.trim().toLowerCase();
+            if (!queryText) {
+              return true;
+            }
 
-    return orders.filter((order) => {
-      const filterMatches =
-        filter === 'all' ||
-        (filter === 'active' &&
-          !['delivered', 'cancelled'].includes(order.status)) ||
-        (filter === 'delivered' &&
-          order.status === 'delivered') ||
-        (filter === 'cancelled' &&
-          order.status === 'cancelled');
+            const haystack = [
+              order.orderNumber,
+              order.businessName,
+              order.status,
+              ...order.items.map(
+                (item) =>
+                  item.title,
+              ),
+            ]
+              .join(' ')
+              .toLowerCase();
 
-      const searchMatches =
-        !term ||
-        order.orderNumber.toLowerCase().includes(term) ||
-        order.businessName.toLowerCase().includes(term) ||
-        order.status.toLowerCase().includes(term) ||
-        order.items.some((item) =>
-          item.title.toLowerCase().includes(term),
+            return haystack.includes(
+              queryText,
+            );
+          },
         );
 
-      return filterMatches && searchMatches;
-    });
-  }, [orders, filter, search]);
+      return result.sort(
+        (a, b) => {
+          if (
+            sort ===
+            'amount-high'
+          ) {
+            return (
+              b.total -
+              a.total
+            );
+          }
 
-  const requireSignIn = (action: string): boolean => {
-    if (user) return true;
+          if (
+            sort ===
+            'amount-low'
+          ) {
+            return (
+              a.total -
+              b.total
+            );
+          }
 
-    setMessage(`Sign in to ${action}. You can continue browsing this preview.`);
-    return false;
-  };
+          const aTime =
+            a.createdAt?.getTime() ??
+            0;
 
-  const copyOrderNumber = async (orderNumber: string) => {
-    if (!requireSignIn('copy a real order number')) return;
+          const bTime =
+            b.createdAt?.getTime() ??
+            0;
 
-    try {
-      await navigator.clipboard.writeText(orderNumber);
-      setCopiedOrder(orderNumber);
-      window.setTimeout(() => setCopiedOrder(''), 1800);
-    } catch {
-      setMessage('Unable to copy the order number.');
-    }
-  };
+          return sort === 'oldest'
+            ? aTime - bTime
+            : bTime - aTime;
+        },
+      );
+    }, [
+      orders,
+      filter,
+      sort,
+      search,
+    ]);
 
-  const openBusiness = (order: OrderRecord) => {
-    if (!requireSignIn('open a business from your real order')) return;
-
-    window.location.href = order.businessId
-      ? `/shop?business=${encodeURIComponent(order.businessId)}`
-      : '/shop';
-  };
-
-  const shopAgain = (order: OrderRecord) => {
-    if (!requireSignIn('shop again from a real order')) return;
-
-    if (order.items.length === 1 && order.items[0].productId) {
-      window.location.href =
-        `/product/${encodeURIComponent(order.items[0].productId)}`;
-      return;
-    }
-
-    openBusiness(order);
-  };
-
-  if (!authChecked || loading) {
+  if (
+    !authChecked ||
+    loading
+  ) {
     return (
-      <section className="orders-loading">
+      <section className="simple-orders-state">
         <span />
-        <p>Loading your orders…</p>
+        <p>Loading orders…</p>
+
+        <style jsx>{`
+          .simple-orders-state {
+            min-height: 280px;
+            display: grid;
+            place-content: center;
+            justify-items: center;
+            gap: 12px;
+            color: #756d65;
+          }
+
+          .simple-orders-state span {
+            width: 34px;
+            height: 34px;
+            border: 3px solid #e9e2da;
+            border-top-color: #d97800;
+            border-radius: 50%;
+            animation: spin .75s linear infinite;
+          }
+
+          @keyframes spin {
+            to {
+              transform: rotate(360deg);
+            }
+          }
+        `}</style>
+      </section>
+    );
+  }
+
+  if (!user) {
+    return (
+      <section className="simple-orders-empty">
+        <Package />
+        <h2>Sign in to view orders</h2>
+        <p>
+          Your orders will appear here.
+        </p>
+
+        <style jsx>{`
+          .simple-orders-empty {
+            min-height: 320px;
+            display: grid;
+            place-content: center;
+            justify-items: center;
+            text-align: center;
+            color: #6f675f;
+          }
+
+          .simple-orders-empty svg {
+            width: 38px;
+            height: 38px;
+            margin-bottom: 10px;
+          }
+
+          .simple-orders-empty h2 {
+            margin: 0;
+            color: #181512;
+          }
+
+          .simple-orders-empty p {
+            margin: 7px 0 0;
+          }
+        `}</style>
       </section>
     );
   }
 
   return (
-    <div className="orders-page">
-      {!user && (
-        <div className="dash-guest-preview-note">
-          <Sparkles />
-          <span>
-            Guest preview: explore the complete Orders page. Sign in only to
-            view, copy or manage your real orders.
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              window.location.href = '/login?next=/dashboard?tab=orders';
-            }}
-          >
-            Sign In
-          </button>
-        </div>
-      )}
-      <section className="orders-hero">
+    <div className="simple-orders-page">
+      <header className="simple-orders-head">
         <div>
-          <span className="orders-eyebrow">
-            <Sparkles /> MY SPOTC ORDERS
-          </span>
-          <h2>Everything you ordered, in one place.</h2>
+          <small>
+            MY ORDERS
+          </small>
+
+          <h2>Orders</h2>
+
           <p>
-            Track active orders, view delivery progress, check bill details
-            and quickly shop again from businesses you trust.
+            Tap any order to
+            view full details.
           </p>
         </div>
 
-        <div className="orders-value-card">
-          <small>TOTAL DELIVERED VALUE</small>
-          <strong>{money(summary.spent)}</strong>
-          <span>{summary.delivered} completed orders</span>
-        </div>
-      </section>
+        <span>
+          {orders.length}{' '}
+          {orders.length === 1
+            ? 'order'
+            : 'orders'}
+        </span>
+      </header>
 
-      <section className="orders-summary-grid">
-        <article>
-          <span className="orders-summary-icon purple"><Package /></span>
-          <div><small>Total Orders</small><strong>{summary.total}</strong><p>Complete history</p></div>
-        </article>
+      {orders.length > 0 && (
+        <section className="simple-orders-tools">
+          <div className="simple-orders-filters">
+            {(
+              [
+                ['all', 'All'],
+                ['active', 'Active'],
+                ['delivered', 'Delivered'],
+                ['cancelled', 'Cancelled'],
+              ] as Array<
+                [
+                  OrderFilter,
+                  string,
+                ]
+              >
+            ).map(
+              ([
+                id,
+                label,
+              ]) => (
+                <button
+                  type="button"
+                  key={id}
+                  className={
+                    filter === id
+                      ? 'active'
+                      : ''
+                  }
+                  onClick={() =>
+                    setFilter(id)
+                  }
+                >
+                  {label}
+                </button>
+              ),
+            )}
+          </div>
 
-        <article>
-          <span className="orders-summary-icon orange"><Truck /></span>
-          <div><small>Active Orders</small><strong>{summary.active}</strong><p>Being prepared or delivered</p></div>
-        </article>
+          <div className="simple-orders-controls">
+            <label className="simple-orders-search">
+              <Search />
+              <input
+                value={search}
+                onChange={(event) =>
+                  setSearch(
+                    event.target.value,
+                  )
+                }
+                placeholder="Search orders"
+              />
+            </label>
 
-        <article>
-          <span className="orders-summary-icon green"><PackageCheck /></span>
-          <div><small>Delivered</small><strong>{summary.delivered}</strong><p>Successfully completed</p></div>
-        </article>
-
-        <article>
-          <span className="orders-summary-icon blue"><CircleDollarSign /></span>
-          <div><small>You Saved</small><strong>{money(summary.saved)}</strong><p>Order discounts</p></div>
-        </article>
-      </section>
-
-      <section className="orders-toolbar">
-        <div className="orders-tabs">
-          {[
-            ['all', 'All Orders'],
-            ['active', 'Active'],
-            ['delivered', 'Delivered'],
-            ['cancelled', 'Cancelled'],
-          ].map(([value, label]) => (
-            <button
-              type="button"
-              key={value}
-              className={filter === value ? 'active' : ''}
-              onClick={() => setFilter(value as OrderFilter)}
+            <select
+              value={sort}
+              onChange={(event) =>
+                setSort(
+                  event.target
+                    .value as OrderSort,
+                )
+              }
+              aria-label="Sort orders"
             >
-              {label}
-            </button>
-          ))}
-        </div>
+              <option value="newest">
+                Newest first
+              </option>
 
-        <label className="orders-search">
-          <Search />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search order, business or product"
-          />
-        </label>
-      </section>
+              <option value="oldest">
+                Oldest first
+              </option>
 
-      {message && (
-        <div className="orders-message">
-          <BadgeCheck />
-          <span>{message}</span>
-          <button type="button" onClick={() => setMessage('')}><X /></button>
-        </div>
+              <option value="amount-high">
+                Amount: high to low
+              </option>
+
+              <option value="amount-low">
+                Amount: low to high
+              </option>
+            </select>
+          </div>
+        </section>
       )}
 
-      <section className="orders-list-section">
-        <div className="orders-section-head">
-          <div>
-            <h2>
-              {filter === 'all'
-                ? 'All orders'
-                : filter === 'active'
-                  ? 'Active orders'
-                  : filter === 'delivered'
-                    ? 'Delivered orders'
-                    : 'Cancelled orders'}
-            </h2>
-            <p>
-              Tap an order to see products, totals, address and delivery progress.
-            </p>
-          </div>
+      {orders.length === 0 ? (
+        <section className="simple-orders-empty-card">
+          <Package />
 
-          <span><ShoppingBag /> {visibleOrders.length} orders</span>
-        </div>
+          <h3>No orders yet</h3>
 
-        {visibleOrders.length ? (
-          <div className="orders-list">
-            {visibleOrders.map((order) => {
-              const firstItem = order.items[0];
-              const extraItems = Math.max(0, order.items.length - 1);
-              const cancelled = order.status === 'cancelled';
-              const delivered = order.status === 'delivered';
+          <p>
+            Your placed orders
+            will appear here.
+          </p>
+        </section>
+      ) : filteredOrders.length === 0 ? (
+        <section className="simple-orders-empty-card">
+          <Search />
+
+          <h3>No matching orders</h3>
+
+          <p>
+            Try another filter or search.
+          </p>
+        </section>
+      ) : (
+        <section className="simple-orders-list">
+          {filteredOrders.map(
+            (order) => {
+              const firstItem =
+                order.items[0];
+
+              const freeGifts =
+                giftsForOrder(
+                  order,
+                );
 
               return (
-                <article className="order-card" key={order.id}>
-                  <div className="order-card-head">
-                    <div className="order-business">
-                      {order.businessLogo ? (
-                        <img src={order.businessLogo} alt="" />
-                      ) : (
-                        <span>{initialsOf(order.businessName)}</span>
-                      )}
-
-                      <div>
-                        <small>{order.businessName}</small>
-                        <strong>{order.orderNumber}</strong>
-                      </div>
-                    </div>
-
-                    <span className={`order-status ${order.status.replace(/\s+/g, '-')}`}>
-                      {statusLabel(order.status)}
-                    </span>
+                <button
+                  type="button"
+                  key={order.id}
+                  className="simple-order-card"
+                  onClick={() =>
+                    setSelected(
+                      order,
+                    )
+                  }
+                >
+                  <div className="simple-order-image">
+                    {firstItem?.image ? (
+                      <img
+                        src={
+                          firstItem.image
+                        }
+                        alt={
+                          firstItem.title
+                        }
+                      />
+                    ) : (
+                      <Package />
+                    )}
                   </div>
 
-                  <div className="order-main">
-                    <div className="order-product-preview">
-                      {firstItem?.image ? (
-                        <img src={firstItem.image} alt="" />
-                      ) : (
-                        <span><Package /></span>
-                      )}
+                  <div className="simple-order-copy">
+                    <div className="simple-order-top">
+                      <span>
+                        {
+                          order.orderNumber
+                        }
+                      </span>
 
-                      <div>
-                        <strong>
-                          {firstItem?.title || 'Order items'}
-                        </strong>
-                        <p>
-                          {order.items.length
-                            ? `${firstItem.quantity} × ${money(firstItem.price)}${
-                                extraItems
-                                  ? ` · +${extraItems} more item${extraItems === 1 ? '' : 's'}`
-                                  : ''
-                              }`
-                            : 'Products are attached to this order'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="order-total">
-                      <small>ORDER TOTAL</small>
-                      <strong>{money(order.total)}</strong>
-                      <span>{order.paymentMethod}</span>
-                    </div>
-                  </div>
-
-                  {!cancelled && (
-                    <div className="order-progress">
-                      {STATUS_STEPS.map((step, index) => {
-                        const reached =
-                          index <= statusIndex(order.status);
-
-                        return (
-                          <div
-                            key={step}
-                            className={reached ? 'reached' : ''}
-                          >
-                            <span>
-                              {reached ? <CheckCircle2 /> : index + 1}
-                            </span>
-                            <small>{statusLabel(step)}</small>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {cancelled && (
-                    <div className="order-cancel-note">
-                      <XCircle />
-                      This order was cancelled. Open the details to review the order.
-                    </div>
-                  )}
-
-                  <div className="order-card-footer">
-                    <span>
-                      <CalendarDays />
-                      {formatDate(order.createdAt)}
-                    </span>
-
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => setSelected(order)}
+                      <em
+                        className={`status-${order.status.replace(
+                          /\s+/g,
+                          '-',
+                        )}`}
                       >
-                        View Details <ChevronRight />
-                      </button>
-
-                      {(delivered || cancelled) && (
-                        <button
-                          type="button"
-                          className="primary"
-                          onClick={() => shopAgain(order)}
-                        >
-                          <RefreshCcw /> Shop Again
-                        </button>
-                      )}
+                        {statusLabel(
+                          order.status,
+                        )}
+                      </em>
                     </div>
+
+                    <strong>
+                      {firstItem?.title ||
+                        order.businessName}
+                    </strong>
+
+                    <small className="simple-order-status-line">
+                      {statusMessage(
+                        order.status,
+                      )}
+                    </small>
+
+                    <small>
+                      {order.items.length}{' '}
+                      {order.items.length ===
+                      1
+                        ? 'item'
+                        : 'items'}
+                      {' · '}
+                      {formatDateTime(
+                        order.createdAt,
+                      )}
+                    </small>
+
+                    {freeGifts.length > 0 && (
+                      <small className="simple-order-gift-count">
+                        <Gift />
+                        {freeGifts.length}{' '}
+                        FREE Gift
+                        {freeGifts.length === 1
+                          ? ''
+                          : 's'}{' '}
+                        Included
+                      </small>
+                    )}
                   </div>
-                </article>
+
+                  <div className="simple-order-total">
+                    <strong>
+                      {money(
+                        order.total,
+                      )}
+                    </strong>
+
+                    <ChevronRight />
+                  </div>
+                </button>
               );
-            })}
-          </div>
-        ) : orders.length === 0 ? (
-          <SampleOrdersPreview />
-        ) : (
-          <OrdersEmpty
-            title="No orders in this section"
-            description="Orders matching this filter will appear here."
-          />
-        )}
-      </section>
+            },
+          )}
+        </section>
+      )}
 
       {selected && (
-        <div className="order-modal-backdrop" onMouseDown={() => setSelected(null)}>
-          <section className="order-modal" onMouseDown={(event) => event.stopPropagation()}>
-            <button type="button" className="order-modal-close" onClick={() => setSelected(null)}>
-              <X />
-            </button>
-
-            <div className="order-modal-head">
-              <span className="order-modal-icon"><Package /></span>
+        <div
+          className="simple-order-overlay"
+          onMouseDown={() =>
+            setSelected(null)
+          }
+        >
+          <section
+            className="simple-order-details"
+            onMouseDown={(
+              event,
+            ) =>
+              event.stopPropagation()
+            }
+          >
+            <header>
               <div>
-                <small>{selected.businessName}</small>
-                <h2>{selected.orderNumber}</h2>
-                <p>Placed {formatDate(selected.createdAt)}</p>
+                <small>
+                  ORDER DETAILS
+                </small>
+
+                <h2>
+                  {
+                    selected.orderNumber
+                  }
+                </h2>
               </div>
-              <span className={`order-status ${selected.status.replace(/\s+/g, '-')}`}>
-                {statusLabel(selected.status)}
+
+              <button
+                type="button"
+                onClick={() =>
+                  setSelected(null)
+                }
+                aria-label="Close"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="simple-details-status">
+              <span>
+                <small>Status</small>
+                <strong>
+                  {statusMessage(
+                    selected.status,
+                  )}
+                </strong>
+              </span>
+
+              <span className="simple-details-date">
+                <small>
+                  Ordered on
+                </small>
+
+                <strong>
+                  {formatDateTime(
+                    selected.createdAt,
+                  )}
+                </strong>
               </span>
             </div>
 
-            {selected.status !== 'cancelled' && (
-              <div className="order-modal-timeline">
-                {STATUS_STEPS.map((step, index) => {
-                  const reached = index <= statusIndex(selected.status);
+            <div className="simple-details-items">
+              {selected.items.map(
+                (item) => (
+                  <article
+                    key={item.id}
+                  >
+                    <div>
+                      {item.image ? (
+                        <img
+                          src={
+                            item.image
+                          }
+                          alt={
+                            item.title
+                          }
+                        />
+                      ) : (
+                        <Package />
+                      )}
+                    </div>
 
-                  return (
-                    <article key={step} className={reached ? 'reached' : ''}>
-                      <span>{reached ? <CheckCircle2 /> : index + 1}</span>
-                      <strong>{statusLabel(step)}</strong>
+                    <span>
+                      <strong>
+                        {
+                          item.title
+                        }
+                      </strong>
+
+                      <small>
+                        Qty{' '}
+                        {
+                          item.quantity
+                        }
+                        {item.size
+                          ? ` · Size ${item.size}`
+                          : ''}
+                        {item.color
+                          ? ` · ${item.color}`
+                          : ''}
+                      </small>
+                    </span>
+
+                    <b>
+                      {money(
+                        item.subtotal,
+                      )}
+                    </b>
+                  </article>
+                ),
+              )}
+            </div>
+
+            {giftsForOrder(
+              selected,
+            ).length > 0 && (
+              <section className="simple-details-gifts">
+                <header>
+                  <Gift />
+
+                  <div>
+                    <strong>
+                      {giftsForOrder(
+                        selected,
+                      ).length}{' '}
+                      FREE Gift
+                      {giftsForOrder(
+                        selected,
+                      ).length === 1
+                        ? ''
+                        : 's'}{' '}
+                      Included
+                    </strong>
+
+                    <small>
+                      Included at no extra cost
+                    </small>
+                  </div>
+                </header>
+
+                <div className="simple-details-gifts-list">
+                  {giftsForOrder(
+                    selected,
+                  ).map((gift) => (
+                    <article
+                      key={gift.id}
+                    >
+                      <div>
+                        {gift.image ? (
+                          <img
+                            src={
+                              gift.image
+                            }
+                            alt={
+                              gift.title
+                            }
+                          />
+                        ) : (
+                          <Gift />
+                        )}
+                      </div>
+
+                      <span>
+                        <strong>
+                          {
+                            gift.title
+                          }
+                        </strong>
+
+                        <small>
+                          FREE
+                        </small>
+                      </span>
                     </article>
-                  );
-                })}
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {selected.address && (
+              <div className="simple-details-address">
+                <MapPin />
+
+                <span>
+                  <small>
+                    Delivery Address
+                  </small>
+
+                  <strong>
+                    {
+                      selected.address
+                    }
+                  </strong>
+
+                  {selected.phone && (
+                    <p>
+                      {
+                        selected.phone
+                      }
+                    </p>
+                  )}
+                </span>
               </div>
             )}
 
-            <div className="order-modal-section">
-              <h3>Items in this order</h3>
+            <div className="simple-details-bill">
+              <p>
+                <span>
+                  Subtotal
+                </span>
 
-              <div className="order-items">
-                {selected.items.length ? (
-                  selected.items.map((item) => (
-                    <article key={item.id}>
-                      {item.image ? (
-                        <img src={item.image} alt="" />
-                      ) : (
-                        <span><Package /></span>
-                      )}
+                <strong>
+                  {money(
+                    selected.subtotal,
+                  )}
+                </strong>
+              </p>
 
-                      <div>
-                        <strong>{item.title}</strong>
-                        <p>
-                          {[
-                            item.size ? `Size ${item.size}` : '',
-                            item.color ? item.color : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' · ') || 'Standard variant'}
-                        </p>
-                        <small>
-                          {item.quantity} × {money(item.price)}
-                        </small>
-                      </div>
+              <p>
+                <span>
+                  Delivery
+                </span>
 
-                      <b>{money(item.subtotal)}</b>
-                    </article>
-                  ))
-                ) : (
-                  <p className="order-no-items">
-                    Product details are not available for this older order.
-                  </p>
-                )}
-              </div>
+                <strong>
+                  {selected.deliveryCharge >
+                  0
+                    ? money(
+                        selected.deliveryCharge,
+                      )
+                    : 'FREE'}
+                </strong>
+              </p>
+
+              {selected.platformFee >
+                0 && (
+                <p>
+                  <span>
+                    Platform fee
+                  </span>
+
+                  <strong>
+                    {money(
+                      selected.platformFee,
+                    )}
+                  </strong>
+                </p>
+              )}
+
+              {selected.discount >
+                0 && (
+                <p>
+                  <span>
+                    Discount
+                  </span>
+
+                  <strong>
+                    -
+                    {money(
+                      selected.discount,
+                    )}
+                  </strong>
+                </p>
+              )}
+
+              <p className="total">
+                <span>
+                  Total
+                </span>
+
+                <strong>
+                  {money(
+                    selected.total,
+                  )}
+                </strong>
+              </p>
             </div>
 
-            <div className="order-details-grid">
-              <article>
-                <MapPin />
-                <span>
-                  <small>DELIVERY ADDRESS</small>
-                  <strong>{selected.address || 'Address not available'}</strong>
-                </span>
-              </article>
-
-              <article>
-                <Banknote />
-                <span>
-                  <small>PAYMENT METHOD</small>
-                  <strong>{selected.paymentMethod}</strong>
-                </span>
-              </article>
-
-              <article>
-                <Store />
-                <span>
-                  <small>FULFILLED BY</small>
-                  <strong>{selected.businessName}</strong>
-                </span>
-              </article>
-
-              <article>
-                <Clock3 />
-                <span>
-                  <small>LAST UPDATED</small>
-                  <strong>{formatDate(selected.updatedAt || selected.createdAt)}</strong>
-                </span>
-              </article>
-            </div>
-
-            <div className="order-bill">
-              <div><span>Subtotal</span><strong>{money(selected.subtotal)}</strong></div>
-              <div><span>Delivery charge</span><strong>{money(selected.deliveryCharge)}</strong></div>
-              <div><span>Platform fee</span><strong>{money(selected.platformFee)}</strong></div>
-              <div className="discount"><span>Discount</span><strong>-{money(selected.discount)}</strong></div>
-              <div className="total"><span>Total paid</span><strong>{money(selected.total)}</strong></div>
-            </div>
-
-            <button
-              type="button"
-              className="order-number-copy"
-              onClick={() => void copyOrderNumber(selected.orderNumber)}
-            >
+            <div className="simple-details-payment">
               <span>
-                <small>ORDER NUMBER</small>
-                <strong>{selected.orderNumber}</strong>
+                Payment
               </span>
-              {copiedOrder === selected.orderNumber ? <CheckCircle2 /> : <Copy />}
-            </button>
 
-            <div className="order-modal-actions">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelected(null);
-                  window.location.href = '/contact';
-                }}
-              >
-                <Headphones /> Get Help
-              </button>
-
-              <button
-                type="button"
-                className="primary"
-                onClick={() => shopAgain(selected)}
-              >
-                <RefreshCcw /> Shop Again
-              </button>
+              <strong>
+                {
+                  selected.paymentMethod
+                }
+              </strong>
             </div>
           </section>
         </div>
       )}
 
-      <style jsx global>{`
-        .orders-page{width:100%;display:grid;gap:22px;color:#20252b}
-        .orders-hero{position:relative;padding:28px;display:flex;align-items:center;justify-content:space-between;gap:24px;overflow:hidden;border:1px solid #e4e7ec;border-radius:28px;background:radial-gradient(circle at 82% 18%,rgba(242,138,0,.13),transparent 28%),linear-gradient(135deg,#fff,#fffaf4);box-shadow:0 16px 42px rgba(42,48,61,.07)}
-        .orders-hero:after{content:'📦';position:absolute;right:290px;top:24px;font-size:72px;opacity:.16}
-        .orders-eyebrow{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border-radius:999px;color:#a95d00;background:#fff0db;font-size:10px;font-weight:600;letter-spacing:.08em}
-        .orders-hero h2{margin:12px 0 7px;font-size:clamp(26px,3vw,38px);line-height:1.12;font-weight:600;letter-spacing:-.03em}
-        .orders-hero p{max-width:700px;margin:0;color:#6d7580;font-size:14px;line-height:1.6}
-        .orders-value-card{position:relative;z-index:1;min-width:250px;padding:21px;border:1px solid #f1d1a7;border-radius:21px;background:rgba(255,255,255,.90);box-shadow:0 15px 34px rgba(140,79,0,.09)}
-        .orders-value-card small,.orders-value-card strong,.orders-value-card span{display:block}
-        .orders-value-card small{color:#8d765e;font-size:9px;letter-spacing:.09em}
-        .orders-value-card strong{margin-top:6px;color:#c46a00;font-size:34px;font-weight:600}
-        .orders-value-card span{margin-top:3px;color:#6d7580;font-size:12px}
-
-        .orders-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
-        .orders-summary-grid article{min-width:0;min-height:112px;padding:17px;display:flex;align-items:center;gap:13px;border:1px solid #e4e7ec;border-radius:21px;background:#fff;box-shadow:0 12px 30px rgba(42,48,61,.06)}
-        .orders-summary-icon{width:52px;height:52px;display:grid;place-items:center;flex:0 0 auto;border-radius:17px}
-        .orders-summary-icon svg{width:24px}
-        .orders-summary-icon.purple{color:#6734da;background:#eee8ff}
-        .orders-summary-icon.orange{color:#df7a00;background:#fff0db}
-        .orders-summary-icon.green{color:#159b50;background:#e8f8ef}
-        .orders-summary-icon.blue{color:#1768e5;background:#eaf2ff}
-        .orders-summary-grid small,.orders-summary-grid strong,.orders-summary-grid p{display:block}
-        .orders-summary-grid small{font-size:11px;font-weight:500}
-        .orders-summary-grid strong{margin-top:4px;font-size:26px;font-weight:600}
-        .orders-summary-grid p{margin:6px 0 0;color:#707985;font-size:11px}
-
-        .orders-toolbar{padding:12px;display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid #e4e7ec;border-radius:18px;background:#fff}
-        .orders-tabs{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
-        .orders-tabs::-webkit-scrollbar{display:none}
-        .orders-tabs button{min-height:38px;padding:0 13px;flex:0 0 auto;border:1px solid transparent;border-radius:11px;color:#68717c;background:transparent;font-weight:500;cursor:pointer}
-        .orders-tabs button.active{color:#995400;border-color:#f0c991;background:#fff2e1}
-        .orders-search{width:min(320px,100%);min-height:40px;padding:0 12px;display:flex;align-items:center;gap:8px;border:1px solid #e3e6eb;border-radius:12px;background:#fafbfc}
-        .orders-search svg{width:18px;color:#818996}
-        .orders-search input{width:100%;border:0;outline:0;background:transparent;color:#252a30}
-
-        .orders-message{padding:13px 15px;display:flex;align-items:center;gap:10px;border:1px solid #cfe8d8;border-radius:14px;color:#25663f;background:#f1faf4}
-        .orders-message svg{width:20px}.orders-message span{flex:1}.orders-message button{width:30px;height:30px;border:0;border-radius:9px;background:transparent;cursor:pointer}
-
-        .orders-list-section{padding:22px;border:1px solid #e4e7ec;border-radius:26px;background:#fff;box-shadow:0 15px 40px rgba(42,48,61,.06)}
-        .orders-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
-        .orders-section-head h2{margin:0;font-size:23px;font-weight:600}
-        .orders-section-head p{margin:5px 0 0;color:#707985;font-size:13px}
-        .orders-section-head>span{display:inline-flex;align-items:center;gap:6px;padding:8px 11px;border-radius:999px;color:#a45c00;background:#fff0db;font-size:11px}
-        .orders-section-head>span svg{width:15px}
-
-        .orders-list{display:grid;gap:15px}
-        .order-card{padding:18px;border:1px solid #e3e7ec;border-radius:22px;background:linear-gradient(180deg,#fff,#fbfcfe);box-shadow:0 11px 28px rgba(42,48,61,.06)}
-        .order-card-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
-        .order-business{display:flex;align-items:center;gap:11px;min-width:0}
-        .order-business img,.order-business>span{width:46px;height:46px;display:grid;place-items:center;object-fit:cover;flex:0 0 auto;border-radius:15px;color:#fff;background:linear-gradient(135deg,#df8500,#a95400);font-size:11px;font-weight:600}
-        .order-business small,.order-business strong{display:block}
-        .order-business small{overflow:hidden;color:#707985;font-size:10px;text-overflow:ellipsis;white-space:nowrap}
-        .order-business strong{margin-top:3px;font-size:14px;font-weight:600}
-        .order-status{padding:7px 9px;border-radius:999px;font-size:9px;white-space:nowrap}
-        .order-status.placed,.order-status.pending,.order-status.processing{color:#a96100;background:#fff1df}
-        .order-status.confirmed,.order-status.ready{color:#315fa8;background:#edf4ff}
-        .order-status.out-for-delivery{color:#6035c4;background:#eee8ff}
-        .order-status.delivered{color:#138645;background:#e8f8ee}
-        .order-status.cancelled{color:#b5414a;background:#fff0f1}
-
-        .order-main{margin-top:15px;padding:14px;display:flex;align-items:center;justify-content:space-between;gap:18px;border:1px solid #e7eaee;border-radius:17px;background:#fafbfc}
-        .order-product-preview{display:flex;align-items:center;gap:12px;min-width:0}
-        .order-product-preview img,.order-product-preview>span{width:62px;height:62px;display:grid;place-items:center;object-fit:cover;flex:0 0 auto;border-radius:14px;color:#777f8a;background:#eef1f4}
-        .order-product-preview strong,.order-product-preview p{display:block}
-        .order-product-preview strong{overflow:hidden;font-size:14px;font-weight:600;text-overflow:ellipsis;white-space:nowrap}
-        .order-product-preview p{margin:5px 0 0;color:#707985;font-size:11px}
-        .order-total{text-align:right;flex:0 0 auto}
-        .order-total small,.order-total strong,.order-total span{display:block}
-        .order-total small{color:#7a828d;font-size:8px;letter-spacing:.08em}
-        .order-total strong{margin-top:4px;font-size:20px;font-weight:600}
-        .order-total span{margin-top:4px;color:#707985;font-size:10px}
-
-        .order-progress{position:relative;margin-top:18px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr))}
-        .order-progress:before{content:'';position:absolute;left:5%;right:5%;top:16px;height:3px;border-radius:999px;background:#e5e8ed}
-        .order-progress>div{position:relative;z-index:1;display:grid;justify-items:center;text-align:center}
-        .order-progress>div>span{width:34px;height:34px;display:grid;place-items:center;border:3px solid #e3e7ec;border-radius:50%;color:#7a828d;background:#fff;font-size:10px}
-        .order-progress>div.reached>span{border-color:#19a85a;color:#fff;background:#19a85a}
-        .order-progress>div svg{width:16px}
-        .order-progress small{margin-top:7px;color:#7b838e;font-size:9px}
-        .order-progress>div.reached small{color:#168848}
-
-        .order-cancel-note{margin-top:15px;padding:12px 13px;display:flex;align-items:center;gap:8px;border:1px solid #f0d2d5;border-radius:13px;color:#a9434b;background:#fff5f6;font-size:12px}
-        .order-cancel-note svg{width:18px}
-        .order-card-footer{margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:14px}
-        .order-card-footer>span{display:flex;align-items:center;gap:6px;color:#76808b;font-size:10px}
-        .order-card-footer>span svg{width:14px}
-        .order-card-footer>div{display:flex;gap:9px}
-        .order-card-footer button{min-height:40px;padding:0 13px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid #e1e4e9;border-radius:11px;color:#4d5661;background:#fff;font-weight:500;cursor:pointer}
-        .order-card-footer button.primary{border-color:#d97c00;color:#fff;background:#e58900}
-        .order-card-footer svg{width:16px}
-
-        .orders-loading{min-height:420px;display:grid;place-items:center;align-content:center;gap:13px;color:#717a85}
-        .orders-loading span{width:36px;height:36px;border:3px solid #e0e3e8;border-top-color:#e58900;border-radius:50%;animation:ordersSpin .8s linear infinite}
-        .orders-empty-page,.orders-empty{min-height:340px;padding:30px;display:grid;place-items:center;align-content:center;text-align:center;border:1px solid #e4e7ec;border-radius:24px;background:#fff}
-        .orders-empty-page>svg,.orders-empty>svg{width:50px;height:50px;color:#d67c0b}
-        .orders-empty-page h2,.orders-empty h3{margin:12px 0 5px}.orders-empty-page p,.orders-empty p{max-width:520px;margin:0;color:#707985}
-
-        .orders-sample{padding:20px;border:1px dashed #cfd6e2;border-radius:22px;background:linear-gradient(180deg,#fcfdff,#f8fafc)}
-        .orders-sample-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:16px}
-        .orders-sample-head h3{margin:0;font-size:19px;font-weight:600}.orders-sample-head p{margin:6px 0 0;color:#707985;font-size:13px}
-        .orders-sample-head span{padding:8px 11px;border-radius:999px;color:#a35b00;background:#fff0db;font-size:10px;font-weight:600}
-        .orders-sample-card{padding:18px;border:1px solid #e2e6ec;border-radius:20px;background:#fff;box-shadow:0 12px 28px rgba(42,48,61,.06)}
-        .orders-sample-card .order-card-footer button{cursor:not-allowed;opacity:.7}
-        .orders-sample-note{margin-top:14px;padding:12px 13px;display:flex;align-items:center;gap:8px;border:1px solid #d7e9df;border-radius:13px;color:#3f6d50;background:#f3faf5;font-size:12px}
-
-        .order-modal-backdrop{position:fixed;inset:0;z-index:250;display:grid;place-items:center;padding:20px;background:rgba(20,24,30,.70);backdrop-filter:blur(7px)}
-        .order-modal{position:relative;width:min(760px,100%);max-height:92vh;overflow-y:auto;padding:27px;border:1px solid #e3e6eb;border-radius:26px;background:#fff;box-shadow:0 35px 100px rgba(0,0,0,.28)}
-        .order-modal-close{position:absolute;right:16px;top:16px;width:38px;height:38px;display:grid;place-items:center;border:1px solid #e3e6eb;border-radius:12px;background:#fff;cursor:pointer}
-        .order-modal-head{padding-right:48px;display:grid;grid-template-columns:58px minmax(0,1fr) auto;align-items:center;gap:13px}
-        .order-modal-icon{width:58px;height:58px;display:grid;place-items:center;border-radius:18px;color:#d77900;background:#fff0db}
-        .order-modal-head small,.order-modal-head h2,.order-modal-head p{display:block}.order-modal-head small{color:#7a828d;font-size:10px}.order-modal-head h2{margin:5px 0 3px;font-size:25px;font-weight:600}.order-modal-head p{margin:0;color:#707985;font-size:11px}
-        .order-modal-timeline{position:relative;margin-top:23px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr))}
-        .order-modal-timeline:before{content:'';position:absolute;left:6%;right:6%;top:18px;height:3px;background:#e5e8ed}
-        .order-modal-timeline article{position:relative;z-index:1;display:grid;justify-items:center;text-align:center}
-        .order-modal-timeline article>span{width:38px;height:38px;display:grid;place-items:center;border:3px solid #e3e7ec;border-radius:50%;color:#7a828d;background:#fff;font-size:10px}
-        .order-modal-timeline article.reached>span{border-color:#19a85a;color:#fff;background:#19a85a}
-        .order-modal-timeline svg{width:17px}.order-modal-timeline strong{margin-top:8px;font-size:10px;font-weight:500}
-        .order-modal-section{margin-top:23px}.order-modal-section h3{margin:0 0 12px;font-size:16px;font-weight:600}
-        .order-items{display:grid;gap:10px}
-        .order-items article{padding:11px;display:grid;grid-template-columns:54px minmax(0,1fr) auto;align-items:center;gap:11px;border:1px solid #e6e9ed;border-radius:14px;background:#fafbfc}
-        .order-items img,.order-items article>span{width:54px;height:54px;display:grid;place-items:center;object-fit:cover;border-radius:12px;background:#eef1f4}
-        .order-items strong,.order-items p,.order-items small{display:block}.order-items strong{font-size:13px;font-weight:600}.order-items p{margin:4px 0;color:#777f8a;font-size:10px}.order-items small{color:#5f6873;font-size:10px}.order-items b{font-size:13px;font-weight:600}
-        .order-no-items{padding:15px;color:#707985;border:1px solid #e6e9ed;border-radius:14px;background:#fafbfc}
-        .order-details-grid{margin-top:17px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-        .order-details-grid article{padding:13px;display:flex;align-items:flex-start;gap:10px;border:1px solid #e6e9ed;border-radius:14px;background:#fafbfc}
-        .order-details-grid svg{width:19px;color:#d77900;flex:0 0 auto}.order-details-grid small,.order-details-grid strong{display:block}.order-details-grid small{color:#7c8490;font-size:8px}.order-details-grid strong{margin-top:3px;font-size:12px;font-weight:500}
-        .order-bill{margin-top:17px;padding:15px;border:1px solid #e6e9ed;border-radius:15px;background:#fafbfc}
-        .order-bill>div{padding:6px 0;display:flex;justify-content:space-between;gap:12px;color:#5f6873;font-size:12px}
-        .order-bill strong{font-weight:500}.order-bill .discount{color:#158a48}.order-bill .total{margin-top:5px;padding-top:12px;border-top:1px solid #e1e5ea;color:#222;font-size:15px}.order-bill .total strong{font-weight:600}
-        .order-number-copy{width:100%;margin-top:15px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;border:1px dashed #efc58c;border-radius:14px;color:#9e5900;background:#fff8ee;text-align:left;cursor:pointer}
-        .order-number-copy small,.order-number-copy strong{display:block}.order-number-copy small{font-size:8px}.order-number-copy strong{margin-top:3px;font-size:14px;font-weight:600}
-        .order-modal-actions{margin-top:16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-        .order-modal-actions button{min-height:46px;display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid #e0e4e9;border-radius:13px;color:#4d5661;background:#fff;font-weight:500;cursor:pointer}
-        .order-modal-actions button.primary{border-color:#d97c00;color:#fff;background:#e58900}
-        .order-modal-actions svg{width:17px}
-
-        @keyframes ordersSpin{to{transform:rotate(360deg)}}
-
-        @media(max-width:1200px){
-          .orders-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+      <style jsx>{`
+        .simple-orders-page {
+          width: 100%;
+          color: #1d1915;
         }
 
-        @media(max-width:850px){
-          .orders-hero{display:block}.orders-value-card{margin-top:18px}.orders-hero:after{display:none}
-          .orders-toolbar{align-items:stretch;flex-direction:column}.orders-search{width:100%}
+        .simple-orders-head {
+          margin-bottom: 16px;
+          padding: 6px 2px 12px;
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 16px;
         }
 
-        @media(max-width:650px){
-          .orders-summary-grid{grid-template-columns:1fr}
-          .orders-list-section{padding:17px}.orders-section-head{display:block}.orders-section-head>span{margin-top:12px}
-          .order-main{align-items:flex-start;flex-direction:column}.order-total{text-align:left}
-          .order-progress{overflow-x:auto;grid-template-columns:repeat(5,110px);scrollbar-width:none}.order-progress::-webkit-scrollbar{display:none}
-          .order-card-footer{align-items:flex-start;flex-direction:column}.order-card-footer>div{width:100%;display:grid;grid-template-columns:1fr}
-          .order-modal{padding:21px}.order-modal-head{grid-template-columns:52px minmax(0,1fr);padding-right:38px}.order-modal-head>.order-status{grid-column:2;justify-self:start}
-          .order-modal-timeline{overflow-x:auto;grid-template-columns:repeat(5,105px);scrollbar-width:none}.order-modal-timeline::-webkit-scrollbar{display:none}
-          .order-details-grid,.order-modal-actions{grid-template-columns:1fr}
-          .orders-sample-head{display:block}.orders-sample-head span{display:inline-flex;margin-top:10px}
+        .simple-orders-head small {
+          color: #d97800;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: .12em;
         }
 
-        .dash-guest-preview-note{
-          width:100%;
-          padding:12px 14px;
-          display:flex;
-          align-items:center;
-          gap:9px;
-          border:1px solid #cfe5f0;
-          border-radius:14px;
-          color:#245b6d;
-          background:#eef9fc;
-          font-size:12px;
-          line-height:1.4;
-        }
-        .dash-guest-preview-note svg{
-          width:18px;
-          height:18px;
-          flex:0 0 auto;
-          color:#087e98;
-        }
-        .dash-guest-preview-note span{
-          min-width:0;
-          flex:1;
-        }
-        .dash-guest-preview-note button{
-          min-height:36px;
-          padding:0 13px;
-          flex:0 0 auto;
-          border:0;
-          border-radius:10px;
-          color:#fff;
-          background:#087e98;
-          font-weight:600;
-          cursor:pointer;
+        .simple-orders-head h2 {
+          margin: 5px 0 2px;
+          font-size: 30px;
+          line-height: 1.1;
         }
 
-        @media(max-width:650px){
-          .dash-guest-preview-note{
-            align-items:flex-start;
-            flex-wrap:wrap;
-          }
-          .dash-guest-preview-note button{
-            width:100%;
-          }
+        .simple-orders-head p {
+          margin: 0;
+          color: #777068;
+          font-size: 13px;
         }
 
-
-        /* ===== FINAL MOBILE METRIC GRID: 2 CARDS PER ROW ===== */
-        @media(max-width:650px){
-          .orders-summary-grid{
-            display:grid!important;
-            grid-template-columns:repeat(2,minmax(0,1fr))!important;
-            gap:10px!important;
-          }
-
-          .orders-summary-grid article{
-            width:100%!important;
-            min-width:0!important;
-            min-height:112px!important;
-            padding:13px 10px!important;
-            display:flex!important;
-            flex-direction:column!important;
-            align-items:flex-start!important;
-            justify-content:center!important;
-            gap:8px!important;
-            overflow:hidden!important;
-            border-radius:17px!important;
-          }
-
-          .orders-summary-icon{
-            width:40px!important;
-            height:40px!important;
-            border-radius:13px!important;
-          }
-
-          .orders-summary-icon svg{
-            width:20px!important;
-            height:20px!important;
-          }
-
-          .orders-summary-grid article>div{
-            width:100%!important;
-            min-width:0!important;
-          }
-
-          .orders-summary-grid small{
-            font-size:10px!important;
-            line-height:1.2!important;
-            white-space:normal!important;
-          }
-
-          .orders-summary-grid strong{
-            margin-top:3px!important;
-            font-size:22px!important;
-            line-height:1!important;
-          }
-
-          .orders-summary-grid p{
-            margin-top:5px!important;
-            font-size:9px!important;
-            line-height:1.25!important;
-            white-space:normal!important;
-          }
+        .simple-orders-head > span {
+          color: #81786e;
+          font-size: 13px;
         }
 
-        @media(max-width:380px){
-          .orders-summary-grid{
-            gap:8px!important;
-          }
-
-          .orders-summary-grid article{
-            padding:11px 9px!important;
-          }
-
-          .orders-summary-grid strong{
-            font-size:20px!important;
-          }
+        .simple-orders-tools {
+          margin-bottom: 14px;
+          padding: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          border: 1px solid #e5ded6;
+          border-radius: 15px;
+          background: #fff;
         }
 
+        .simple-orders-filters {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 7px;
+        }
+
+        .simple-orders-filters button {
+          min-height: 36px;
+          padding: 0 12px;
+          border: 1px solid transparent;
+          border-radius: 10px;
+          color: #6f675f;
+          background: transparent;
+          font-size: 12px;
+          cursor: pointer;
+        }
+
+        .simple-orders-filters button.active {
+          color: #995600;
+          border-color: #edc995;
+          background: #fff2df;
+          font-weight: 600;
+        }
+
+        .simple-orders-controls {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .simple-orders-search {
+          width: 220px;
+          min-height: 38px;
+          padding: 0 10px;
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          border: 1px solid #e4ddd6;
+          border-radius: 10px;
+          background: #faf9f7;
+        }
+
+        .simple-orders-search svg {
+          width: 16px;
+          color: #8b8178;
+        }
+
+        .simple-orders-search input {
+          width: 100%;
+          border: 0;
+          outline: 0;
+          color: #221e1a;
+          background: transparent;
+          font-size: 12px;
+        }
+
+        .simple-orders-controls select {
+          min-height: 38px;
+          padding: 0 30px 0 10px;
+          border: 1px solid #e4ddd6;
+          border-radius: 10px;
+          color: #5f5851;
+          background: #fff;
+          font-size: 12px;
+          cursor: pointer;
+        }
+
+        .simple-orders-list {
+          display: grid;
+          gap: 10px;
+        }
+
+        .simple-order-card {
+          width: 100%;
+          min-height: 92px;
+          padding: 12px 14px;
+          display: grid;
+          grid-template-columns: 68px minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 14px;
+          border: 1px solid #e6dfd7;
+          border-radius: 16px;
+          color: inherit;
+          background: #fff;
+          text-align: left;
+          cursor: pointer;
+          transition:
+            border-color .15s ease,
+            box-shadow .15s ease,
+            transform .15s ease;
+        }
+
+        .simple-order-card:hover {
+          border-color: #e4ba86;
+          box-shadow: 0 9px 24px rgba(37, 28, 18, .07);
+          transform: translateY(-1px);
+        }
+
+        .simple-order-image {
+          width: 68px;
+          height: 68px;
+          overflow: hidden;
+          display: grid;
+          place-items: center;
+          border-radius: 13px;
+          color: #9a8f84;
+          background: #f7f3ee;
+        }
+
+        .simple-order-image img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+
+        .simple-order-image svg {
+          width: 26px;
+        }
+
+        .simple-order-copy {
+          min-width: 0;
+        }
+
+        .simple-order-top {
+          margin-bottom: 6px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .simple-order-top > span {
+          overflow: hidden;
+          color: #8a8178;
+          font-size: 10px;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .simple-order-top em {
+          padding: 4px 7px;
+          border-radius: 999px;
+          color: #7e5a2e;
+          background: #fff2df;
+          font-size: 9px;
+          font-style: normal;
+          white-space: nowrap;
+        }
+
+        .simple-order-top em.status-delivered {
+          color: #137c43;
+          background: #e9f8ef;
+        }
+
+        .simple-order-top em.status-cancelled {
+          color: #b23b43;
+          background: #fff0f1;
+        }
+
+        .simple-order-copy > strong {
+          display: block;
+          overflow: hidden;
+          font-size: 14px;
+          font-weight: 600;
+          line-height: 1.35;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .simple-order-copy > small {
+          display: block;
+          margin-top: 5px;
+          color: #827970;
+          font-size: 11px;
+        }
+
+        .simple-order-copy > .simple-order-status-line {
+          color: #168648;
+          font-weight: 600;
+        }
+
+        .simple-order-gift-count {
+          display: inline-flex !important;
+          align-items: center;
+          gap: 5px;
+          color: #168648 !important;
+          font-weight: 600;
+        }
+
+        .simple-order-gift-count svg {
+          width: 13px;
+          height: 13px;
+        }
+
+        .simple-order-top em.status-processing,
+        .simple-order-top em.status-pending,
+        .simple-order-top em.status-confirmed,
+        .simple-order-top em.status-ready,
+        .simple-order-top em.status-out-for-delivery {
+          color: #176a8a;
+          background: #eaf7fb;
+        }
+
+        .simple-order-total {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+        }
+
+        .simple-order-total strong {
+          font-size: 16px;
+        }
+
+        .simple-order-total svg {
+          width: 18px;
+          color: #8c8379;
+        }
+
+        .simple-orders-empty-card {
+          min-height: 240px;
+          display: grid;
+          place-content: center;
+          justify-items: center;
+          border: 1px solid #e6dfd7;
+          border-radius: 18px;
+          background: #fff;
+          text-align: center;
+        }
+
+        .simple-orders-empty-card svg {
+          width: 36px;
+          height: 36px;
+          color: #978b80;
+        }
+
+        .simple-orders-empty-card h3 {
+          margin: 12px 0 0;
+        }
+
+        .simple-orders-empty-card p {
+          margin: 6px 0 0;
+          color: #81786e;
+        }
+
+        .simple-order-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 500;
+          padding: 24px;
+          display: grid;
+          place-items: center;
+          background: rgba(24, 20, 16, .48);
+          backdrop-filter: blur(4px);
+        }
+
+        .simple-order-details {
+          width: min(640px, 100%);
+          max-height: min(86vh, 780px);
+          overflow-y: auto;
+          padding: 22px;
+          border: 1px solid #e6dfd7;
+          border-radius: 22px;
+          background: #fff;
+          box-shadow: 0 30px 90px rgba(0, 0, 0, .22);
+        }
+
+        .simple-order-details > header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+        }
+
+        .simple-order-details > header small {
+          color: #d97800;
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: .12em;
+        }
+
+        .simple-order-details > header h2 {
+          margin: 5px 0 0;
+          font-size: 20px;
+        }
+
+        .simple-order-details > header button {
+          width: 38px;
+          height: 38px;
+          display: grid;
+          place-items: center;
+          border: 1px solid #e3dcd4;
+          border-radius: 11px;
+          background: #fff;
+          cursor: pointer;
+        }
+
+        .simple-order-details > header button svg {
+          width: 18px;
+        }
+
+        .simple-details-status,
+        .simple-details-payment {
+          margin-top: 18px;
+          padding: 13px 14px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+          border-radius: 12px;
+          background: #f8f5f1;
+        }
+
+        .simple-details-status > span {
+          min-width: 0;
+        }
+
+        .simple-details-status small,
+        .simple-details-status strong {
+          display: block;
+        }
+
+        .simple-details-status small,
+        .simple-details-payment span {
+          color: #766f67;
+          font-size: 11px;
+        }
+
+        .simple-details-status strong,
+        .simple-details-payment strong {
+          margin-top: 3px;
+          font-size: 13px;
+        }
+
+        .simple-details-date {
+          text-align: right;
+        }
+
+        .simple-details-items {
+          margin-top: 16px;
+          display: grid;
+          gap: 9px;
+        }
+
+        .simple-details-items article {
+          padding: 10px;
+          display: grid;
+          grid-template-columns: 58px minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 11px;
+          border: 1px solid #ece5de;
+          border-radius: 13px;
+        }
+
+        .simple-details-items article > div {
+          width: 58px;
+          height: 58px;
+          overflow: hidden;
+          display: grid;
+          place-items: center;
+          border-radius: 10px;
+          color: #988d82;
+          background: #f7f4ef;
+        }
+
+        .simple-details-items img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+
+        .simple-details-items article > span {
+          min-width: 0;
+        }
+
+        .simple-details-items article > span strong {
+          display: block;
+          font-size: 13px;
+          font-weight: 600;
+        }
+
+        .simple-details-items article > span small {
+          display: block;
+          margin-top: 4px;
+          color: #81786f;
+          font-size: 11px;
+        }
+
+        .simple-details-items article > b {
+          font-size: 13px;
+        }
+
+        .simple-details-gifts {
+          margin-top: 16px;
+          padding: 14px;
+          border: 1px solid #dcecdf;
+          border-radius: 13px;
+          background: #f7fcf8;
+        }
+
+        .simple-details-gifts > header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          color: #168648;
+        }
+
+        .simple-details-gifts > header > svg {
+          width: 20px;
+          height: 20px;
+          flex: 0 0 auto;
+        }
+
+        .simple-details-gifts > header strong,
+        .simple-details-gifts > header small {
+          display: block;
+        }
+
+        .simple-details-gifts > header strong {
+          font-size: 13px;
+          font-weight: 600;
+        }
+
+        .simple-details-gifts > header small {
+          margin-top: 3px;
+          color: #688171;
+          font-size: 10px;
+        }
+
+        .simple-details-gifts-list {
+          margin-top: 12px;
+          display: grid;
+          grid-template-columns:
+            repeat(
+              2,
+              minmax(0, 1fr)
+            );
+          gap: 8px;
+        }
+
+        .simple-details-gifts-list article {
+          min-width: 0;
+          padding: 9px;
+          display: grid;
+          grid-template-columns:
+            48px minmax(0, 1fr);
+          align-items: center;
+          gap: 9px;
+          border: 1px solid #dcecdf;
+          border-radius: 11px;
+          background: #fff;
+        }
+
+        .simple-details-gifts-list article > div {
+          width: 48px;
+          height: 48px;
+          overflow: hidden;
+          display: grid;
+          place-items: center;
+          border-radius: 9px;
+          color: #7b9a83;
+          background: #f7fcf8;
+        }
+
+        .simple-details-gifts-list article img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+
+        .simple-details-gifts-list article > span {
+          min-width: 0;
+        }
+
+        .simple-details-gifts-list article strong {
+          display: block;
+          overflow: hidden;
+          font-size: 12px;
+          font-weight: 500;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .simple-details-gifts-list article small {
+          display: block;
+          margin-top: 4px;
+          color: #168648;
+          font-size: 11px;
+          font-weight: 600;
+        }
+
+        .simple-details-address {
+          margin-top: 16px;
+          padding: 14px;
+          display: flex;
+          gap: 11px;
+          border: 1px solid #e3ece5;
+          border-radius: 13px;
+          background: #f6fbf7;
+        }
+
+        .simple-details-address > svg {
+          width: 20px;
+          flex: 0 0 auto;
+          color: #168648;
+        }
+
+        .simple-details-address small,
+        .simple-details-address strong {
+          display: block;
+        }
+
+        .simple-details-address small {
+          color: #738077;
+          font-size: 10px;
+        }
+
+        .simple-details-address strong {
+          margin-top: 4px;
+          font-size: 12px;
+          font-weight: 500;
+          line-height: 1.5;
+        }
+
+        .simple-details-address p {
+          margin: 4px 0 0;
+          color: #777069;
+          font-size: 11px;
+        }
+
+        .simple-details-bill {
+          margin-top: 16px;
+          padding: 14px;
+          border: 1px solid #e8e1da;
+          border-radius: 13px;
+        }
+
+        .simple-details-bill p {
+          margin: 0 0 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+          font-size: 12px;
+        }
+
+        .simple-details-bill p:last-child {
+          margin-bottom: 0;
+        }
+
+        .simple-details-bill p > span {
+          color: #746d65;
+        }
+
+        .simple-details-bill .total {
+          margin-top: 12px;
+          padding-top: 12px;
+          border-top: 1px solid #e5ddd5;
+          font-size: 15px;
+        }
+
+        .simple-details-bill .total > span {
+          color: #191612;
+          font-weight: 600;
+        }
+
+        @media (max-width: 650px) {
+          .simple-orders-head {
+            align-items: flex-start;
+          }
+
+          .simple-orders-tools {
+            display: grid;
+          }
+
+          .simple-orders-controls {
+            width: 100%;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+          }
+
+          .simple-orders-search {
+            width: 100%;
+          }
+
+          .simple-orders-filters {
+            overflow-x: auto;
+            flex-wrap: nowrap;
+            padding-bottom: 2px;
+          }
+
+          .simple-orders-head h2 {
+            font-size: 26px;
+          }
+
+          .simple-order-card {
+            grid-template-columns: 58px minmax(0, 1fr) auto;
+            gap: 10px;
+            padding: 10px;
+          }
+
+          .simple-order-image {
+            width: 58px;
+            height: 58px;
+          }
+
+          .simple-order-copy > strong {
+            font-size: 13px;
+          }
+
+          .simple-order-top em {
+            display: none;
+          }
+
+          .simple-order-total strong {
+            font-size: 14px;
+          }
+
+          .simple-order-total svg {
+            width: 16px;
+          }
+
+          .simple-details-gifts-list {
+            grid-template-columns: 1fr;
+          }
+
+          .simple-order-overlay {
+            padding: 10px;
+            align-items: end;
+          }
+
+          .simple-order-details {
+            width: 100%;
+            max-height: 88vh;
+            padding: 18px 14px;
+            border-radius: 22px 22px 12px 12px;
+          }
+        }
       `}</style>
-    </div>
-  );
-}
-
-function OrdersEmpty({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="orders-empty">
-      <Package />
-      <h3>{title}</h3>
-      <p>{description}</p>
-    </div>
-  );
-}
-
-function SampleOrdersPreview() {
-  return (
-    <div className="orders-sample">
-      <div className="orders-sample-head">
-        <div>
-          <h3>See how your real orders will appear</h3>
-          <p>
-            This is sample data only. Your actual products, status and totals
-            will replace it after you place an order.
-          </p>
-        </div>
-
-        <span>SAMPLE PREVIEW</span>
-      </div>
-
-      <article className="orders-sample-card">
-        <div className="order-card-head">
-          <div className="order-business">
-            <span>DF</span>
-            <div>
-              <small>DOTZ Fashion</small>
-              <strong>SPOTC-482916</strong>
-            </div>
-          </div>
-
-          <span className="order-status out-for-delivery">
-            Out for delivery
-          </span>
-        </div>
-
-        <div className="order-main">
-          <div className="order-product-preview">
-            <span><Package /></span>
-            <div>
-              <strong>Premium Cotton Shirt</strong>
-              <p>1 × ₹1,499 · +1 more item</p>
-            </div>
-          </div>
-
-          <div className="order-total">
-            <small>ORDER TOTAL</small>
-            <strong>₹2,299</strong>
-            <span>Cash on Delivery</span>
-          </div>
-        </div>
-
-        <div className="order-progress">
-          {STATUS_STEPS.map((step, index) => (
-            <div key={step} className={index <= 3 ? 'reached' : ''}>
-              <span>{index <= 3 ? <CheckCircle2 /> : index + 1}</span>
-              <small>{statusLabel(step)}</small>
-            </div>
-          ))}
-        </div>
-
-        <div className="order-card-footer">
-          <span><CalendarDays /> 21 Jul 2026, 12:30 PM</span>
-          <div>
-            <button type="button" disabled>View Details</button>
-            <button type="button" className="primary" disabled>
-              Track Order
-            </button>
-          </div>
-        </div>
-
-        <div className="orders-sample-note">
-          <BadgeCheck />
-          Sample orders are never counted in your order totals or spending.
-        </div>
-      </article>
     </div>
   );
 }

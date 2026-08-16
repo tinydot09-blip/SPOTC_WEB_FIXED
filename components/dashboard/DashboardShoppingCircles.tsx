@@ -163,6 +163,7 @@ export default function DashboardShoppingCircles() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [copiedCircleId, setCopiedCircleId] = useState('');
+  const [filter, setFilter] = useState<'active' | 'completed'>('active');
 
   useEffect(() => {
     if (!auth) {
@@ -619,7 +620,7 @@ export default function DashboardShoppingCircles() {
   const renderCircleCard = (circle: ShoppingCircleItem) => (
     <article
       key={circle.id}
-      className="circle-card"
+      className="circle-simple-card"
       role="button"
       tabIndex={0}
       onClick={() => openCircle(circle)}
@@ -630,103 +631,69 @@ export default function DashboardShoppingCircles() {
         }
       }}
     >
-      <div className="circle-image">
+      <div className="circle-simple-image">
         {circle.productImage ? (
           <img src={circle.productImage} alt={circle.productTitle} />
         ) : (
           <ShoppingBag />
         )}
-
-        <span className={`circle-status ${circle.status}`}>
-          {circle.status === 'active'
-            ? 'Active'
-            : circle.status || 'Active'}
-        </span>
-
-        <span className={`circle-relation ${circle.relation}`}>
-          {circle.relation === 'mine' ? 'My Circle' : 'Joined'}
-        </span>
-
-        {circle.hasNewActivity && (
-          <span className="circle-new-badge">New</span>
-        )}
       </div>
 
-      <div className="circle-content">
-        <p className="circle-business">{circle.businessName}</p>
-        <h3>{circle.productTitle}</h3>
-        <p className="circle-question">{circle.question}</p>
+      <div className="circle-simple-copy">
+        <div className="circle-simple-top">
+          <strong>{circle.productTitle}</strong>
+          {circle.hasNewActivity && (
+            <span className="circle-simple-new">New</span>
+          )}
+        </div>
 
-        {circle.latestMessage && (
-          <div className={circle.hasNewActivity ? 'circle-latest new' : 'circle-latest'}>
+        <small className="circle-simple-question">
+          {circle.question}
+        </small>
+
+        {circle.latestMessage ? (
+          <div
+            className={
+              circle.hasNewActivity
+                ? 'circle-simple-latest new'
+                : 'circle-simple-latest'
+            }
+          >
             <MessageCircle />
             <span>
-              <strong>{circle.latestSender}</strong>
+              <strong>{circle.latestSender || 'SPOTC User'}</strong>
               <small>{circle.latestMessage}</small>
             </span>
             <time>{formatActivityTime(circle.latestAt)}</time>
           </div>
+        ) : (
+          <small className="circle-simple-no-message">No messages yet</small>
         )}
 
-        <div className="circle-stats">
+        <div className="circle-simple-meta">
           <span>
-            <Users />
-            {circle.participants} participant
-            {circle.participants === 1 ? '' : 's'}
-          </span>
-
-          <span>
-            <MessageCircle />
             {circle.commentsCount} comment
             {circle.commentsCount === 1 ? '' : 's'}
           </span>
-
           <span>
-            <Users />
             {circle.totalVotes} vote
             {circle.totalVotes === 1 ? '' : 's'}
           </span>
-        </div>
-
-        <div className="circle-footer">
-          <span>
-            <Clock3 />
-            {formatDate(circle.createdAt)}
-          </span>
-
-          <div className="circle-actions">
-            <button
-              type="button"
-              aria-label="Copy Shopping Circle link"
-              onClick={(event) => void copyCircleLink(event, circle)}
-            >
-              <Copy />
-              {copiedCircleId === circle.id ? 'Copied' : 'Copy'}
-            </button>
-
-            <button
-              type="button"
-              aria-label="Share Shopping Circle"
-              onClick={(event) => void shareCircle(event, circle)}
-            >
-              <Share2 />
-              Share
-            </button>
-
-            <button
-              type="button"
-              className="open-circle"
-              onClick={(event) => {
-                event.stopPropagation();
-                openCircle(circle);
-              }}
-            >
-              <ExternalLink />
-              Open chat
-            </button>
-          </div>
+          <span>{formatDate(circle.createdAt)}</span>
         </div>
       </div>
+
+      <button
+        type="button"
+        className="circle-simple-open"
+        onClick={(event) => {
+          event.stopPropagation();
+          openCircle(circle);
+        }}
+      >
+        Open
+        <ExternalLink />
+      </button>
     </article>
   );
 
@@ -735,38 +702,34 @@ export default function DashboardShoppingCircles() {
       <section className="circles-state">
         <Loader2 className="spin" />
         <h2>Loading Shopping Circles</h2>
-        <p>Getting your product questions, votes and chats…</p>
+        <p>Getting your circles…</p>
 
         <style jsx>{styles}</style>
       </section>
     );
   }
 
+  const filteredCircles =
+    filter === 'active'
+      ? activeCircles
+      : completedCircles;
+
   return (
     <section className="circles-page">
-      <header className="circles-header">
+      <header className="circles-simple-header">
         <div>
-          <span>SHOPPING WITH PEOPLE YOU TRUST</span>
+          <span>SHOPPING CIRCLES</span>
           <h2>Shopping Circles</h2>
           <p>
-            Open a circle to continue the chat, view votes and share it with
-            friends and family.
+            Open a circle to continue the conversation and see the latest opinions.
           </p>
-        </div>
-
-        <div className="circles-count">
-          <strong>{activeCircles.length}</strong>
-          <span>active</span>
         </div>
       </header>
 
       {!currentUser && (
         <div className="dash-guest-preview-note">
           <Users />
-          <span>
-            Guest preview: explore how Shopping Circles work. Sign in only to
-            open, copy or share your real circles.
-          </span>
+          <span>Sign in to open your real Shopping Circles.</span>
           <button
             type="button"
             onClick={() => {
@@ -778,52 +741,6 @@ export default function DashboardShoppingCircles() {
         </div>
       )}
 
-      <section className="circles-summary-grid">
-        <article>
-          <span className="circles-summary-icon orange">
-            <Users />
-          </span>
-          <div>
-            <small>Active Circles</small>
-            <strong>{activeCircles.length}</strong>
-            <p>Open shopping decisions</p>
-          </div>
-        </article>
-
-        <article>
-          <span className="circles-summary-icon purple">
-            <ShoppingBag />
-          </span>
-          <div>
-            <small>Completed</small>
-            <strong>{completedCircles.length}</strong>
-            <p>Finished discussions</p>
-          </div>
-        </article>
-
-        <article>
-          <span className="circles-summary-icon blue">
-            <MessageCircle />
-          </span>
-          <div>
-            <small>Comments</small>
-            <strong>{summary.comments}</strong>
-            <p>Friends and family replies</p>
-          </div>
-        </article>
-
-        <article>
-          <span className="circles-summary-icon green">
-            <Users />
-          </span>
-          <div>
-            <small>Total Votes</small>
-            <strong>{summary.votes}</strong>
-            <p>Shopping opinions received</p>
-          </div>
-        </article>
-      </section>
-
       {error && <div className="circles-error">{error}</div>}
 
       {circles.length === 0 ? (
@@ -832,13 +749,11 @@ export default function DashboardShoppingCircles() {
             <div className="empty-icon">
               <Users />
             </div>
-
             <h3>No Shopping Circles yet</h3>
             <p>
               Open a product and tap <strong>Ask Friends &amp; Family</strong>.
               Your new circle will appear here automatically.
             </p>
-
             <button type="button" onClick={() => router.push('/shop')}>
               <ShoppingBag />
               Browse products
@@ -849,50 +764,48 @@ export default function DashboardShoppingCircles() {
         )
       ) : (
         <>
-          <section className="circles-section">
-            <div className="section-title">
-              <h3>My Shopping Circles</h3>
-              <span>{myActiveCircles.length}</span>
-            </div>
+          <section className="circles-simple-toolbar">
+            <div className="circles-simple-tabs">
+              <button
+                type="button"
+                className={filter === 'active' ? 'active' : ''}
+                onClick={() => setFilter('active')}
+              >
+                Active
+                <span>{activeCircles.length}</span>
+              </button>
 
-            {myActiveCircles.length > 0 ? (
-              <div className="circles-grid">
-                {myActiveCircles.map(renderCircleCard)}
-              </div>
-            ) : (
-              <p className="section-empty">
-                Circles you create will appear here.
-              </p>
-            )}
-          </section>
-
-          <section className="circles-section">
-            <div className="section-title">
-              <h3>Joined Shopping Circles</h3>
-              <span>{joinedActiveCircles.length}</span>
-            </div>
-
-            {joinedActiveCircles.length > 0 ? (
-              <div className="circles-grid">
-                {joinedActiveCircles.map(renderCircleCard)}
-              </div>
-            ) : (
-              <p className="section-empty">
-                Circles shared by friends will appear here after you open them.
-              </p>
-            )}
-          </section>
-
-          {completedCircles.length > 0 && (
-            <section className="circles-section completed-section">
-              <div className="section-title">
-                <h3>Completed circles</h3>
+              <button
+                type="button"
+                className={filter === 'completed' ? 'active' : ''}
+                onClick={() => setFilter('completed')}
+              >
+                Completed
                 <span>{completedCircles.length}</span>
-              </div>
+              </button>
+            </div>
 
-              <div className="circles-grid">
-                {completedCircles.map(renderCircleCard)}
-              </div>
+            <small>
+              {filteredCircles.length}{' '}
+              {filteredCircles.length === 1 ? 'circle' : 'circles'}
+            </small>
+          </section>
+
+          {filteredCircles.length > 0 ? (
+            <section className="circles-simple-list">
+              {filteredCircles.map(renderCircleCard)}
+            </section>
+          ) : (
+            <section className="circles-simple-empty-filter">
+              <MessageCircle />
+              <h3>
+                No {filter === 'active' ? 'active' : 'completed'} circles
+              </h3>
+              <p>
+                {filter === 'active'
+                  ? 'Your active Shopping Circles will appear here.'
+                  : 'Completed Shopping Circles will appear here.'}
+              </p>
             </section>
           )}
         </>
@@ -905,66 +818,20 @@ export default function DashboardShoppingCircles() {
 
 function ShoppingCircleSamplePreview() {
   return (
-    <section className="circles-sample">
-      <div className="circles-sample-head">
-        <div>
-          <h3>See how Shopping Circles will appear</h3>
-          <p>
-            This sample is shown while you are browsing as a guest. Real
-            products, comments, participants and votes appear after sign-in.
-          </p>
-        </div>
-
-        <span>SAMPLE PREVIEW</span>
-      </div>
-
-      <article className="circle-card">
-        <div className="circle-image">
-          <ShoppingBag />
-          <span className="circle-status active">Active</span>
-        </div>
-
-        <div className="circle-content">
-          <p className="circle-business">DOTZ Fashion</p>
-          <h3>Premium Casual Shirt</h3>
-          <p className="circle-question">Should I buy this for the weekend?</p>
-
-          <div className="circle-stats">
-            <span><Users /> 4 participants</span>
-            <span><MessageCircle /> 7 comments</span>
-            <span><Users /> 9 votes</span>
-          </div>
-
-          <div className="circle-footer">
-            <span><Clock3 /> Recently created</span>
-
-            <div className="circle-actions">
-              <button type="button" disabled><Copy /> Copy</button>
-              <button type="button" disabled><Share2 /> Share</button>
-              <button type="button" className="open-circle" disabled>
-                <ExternalLink /> Open chat
-              </button>
-            </div>
-          </div>
-        </div>
-      </article>
+    <section className="circles-simple-empty-filter">
+      <Users />
+      <h3>Shopping Circles</h3>
+      <p>Sign in to view the circles you created or joined.</p>
     </section>
   );
 }
 
 const styles = `
-  :global(*) {
-    box-sizing: border-box;
-  }
-
-  :global(.spin) {
-    animation: circles-spin 0.8s linear infinite;
-  }
+  :global(*) { box-sizing: border-box; }
+  :global(.spin) { animation: circles-spin .8s linear infinite; }
 
   @keyframes circles-spin {
-    to {
-      transform: rotate(360deg);
-    }
+    to { transform: rotate(360deg); }
   }
 
   .circles-page {
@@ -972,482 +839,43 @@ const styles = `
     color: #171814;
   }
 
-  .circles-header {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 20px;
-    margin-bottom: 24px;
+  .circles-simple-header {
+    margin-bottom: 16px;
+    padding: 4px 2px 8px;
   }
 
-  .circles-header > div:first-child {
-    min-width: 0;
-  }
-
-  .circles-header span {
+  .circles-simple-header span {
     color: #ca6808;
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: 0.12em;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .11em;
   }
 
-  .circles-header h2 {
-    margin: 6px 0 7px;
+  .circles-simple-header h2 {
+    margin: 5px 0 3px;
     font-size: 30px;
     line-height: 1.1;
-    letter-spacing: -0.035em;
   }
 
-  .circles-header p {
+  .circles-simple-header p {
     margin: 0;
-    color: #67707c;
-    line-height: 1.55;
-  }
-
-  .circles-count {
-    min-width: 96px;
-    padding: 12px 16px;
-    border: 1px solid #ead6bd;
-    border-radius: 16px;
-    background: #fff8ef;
-    text-align: center;
-  }
-
-  .circles-count strong,
-  .circles-count span {
-    display: block;
-  }
-
-  .circles-count strong {
-    color: #b85b00;
-    font-size: 25px;
-  }
-
-  .circles-count span {
-    margin-top: 1px;
-    color: #876b4c;
-    font-size: 10px;
-    letter-spacing: 0.08em;
-  }
-
-  .circles-error {
-    margin-bottom: 18px;
-    padding: 13px 15px;
-    border: 1px solid #efcbc7;
-    border-radius: 14px;
-    color: #a52b25;
-    background: #fff1ef;
-    font-weight: 750;
-  }
-
-  .circles-empty,
-  .circles-state {
-    min-height: 420px;
-    display: grid;
-    place-content: center;
-    justify-items: center;
-    padding: 40px 24px;
-    border: 1px dashed #d9dde4;
-    border-radius: 22px;
-    background: rgba(255, 255, 255, 0.64);
-    text-align: center;
-  }
-
-  .circles-state {
-    border: 0;
-    background: transparent;
-  }
-
-  .circles-state > :global(svg) {
-    width: 38px;
-    height: 38px;
-    color: #ca6808;
-  }
-
-  .circles-state h2,
-  .circles-empty h3 {
-    margin: 15px 0 7px;
-  }
-
-  .circles-state p,
-  .circles-empty p {
-    max-width: 520px;
-    margin: 0;
-    color: #6d7580;
-    line-height: 1.55;
-  }
-
-  .empty-icon {
-    width: 68px;
-    height: 68px;
-    display: grid;
-    place-items: center;
-    border-radius: 21px;
-    color: #b65b08;
-    background: #fff0df;
-  }
-
-  .empty-icon :global(svg) {
-    width: 31px;
-    height: 31px;
-  }
-
-  .circles-empty button {
-    margin-top: 20px;
-    min-height: 47px;
-    padding: 0 17px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    border: 0;
-    border-radius: 13px;
-    color: white;
-    background: #171814;
-    cursor: pointer;
-    font-weight: 850;
-  }
-
-  .circles-empty button :global(svg) {
-    width: 18px;
-    height: 18px;
-  }
-
-  .circles-section + .circles-section {
-    margin-top: 30px;
-  }
-
-  .section-title {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    margin-bottom: 13px;
-  }
-
-  .section-title h3 {
-    margin: 0;
-    font-size: 18px;
-  }
-
-  .section-title span {
-    min-width: 27px;
-    height: 27px;
-    padding: 0 8px;
-    display: inline-grid;
-    place-items: center;
-    border-radius: 999px;
-    color: #7a5c3b;
-    background: #f8ead9;
-    font-size: 11px;
-    font-weight: 900;
-  }
-
-  .section-empty {
-    margin: 0;
-    padding: 22px;
-    border: 1px dashed #d9dde4;
-    border-radius: 17px;
-    color: #737b86;
-    background: rgba(255, 255, 255, 0.55);
-  }
-
-  .circles-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-  }
-
-  .circle-card {
-    min-width: 0;
-    overflow: hidden;
-    display: grid;
-    grid-template-columns: 150px minmax(0, 1fr);
-    border: 1px solid #e1e5eb;
-    border-radius: 20px;
-    background: #fff;
-    box-shadow: 0 12px 35px rgba(38, 43, 51, 0.06);
-    cursor: pointer;
-    transition:
-      transform 0.18s ease,
-      box-shadow 0.18s ease;
-  }
-
-  .circle-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 17px 42px rgba(38, 43, 51, 0.1);
-  }
-
-  .circle-card:focus-visible {
-    outline: 3px solid rgba(202, 104, 8, 0.23);
-    outline-offset: 2px;
-  }
-
-  .circle-image {
-    position: relative;
-    min-height: 205px;
-    overflow: hidden;
-    display: grid;
-    place-items: center;
-    color: #9ba2ab;
-    background: #f2f3f5;
-  }
-
-  .circle-image img {
-    width: 100%;
-    height: 100%;
-    display: block;
-    object-fit: cover;
-  }
-
-  .circle-image > :global(svg) {
-    width: 38px;
-    height: 38px;
-  }
-
-  .circle-status {
-    position: absolute;
-    left: 10px;
-    bottom: 10px;
-    padding: 6px 9px;
-    border-radius: 999px;
-    color: #fff;
-    background: rgba(31, 35, 40, 0.82);
-    font-size: 10px;
-    font-weight: 900;
-    text-transform: capitalize;
-  }
-
-  .circle-status.active {
-    background: #168446;
-  }
-
-  .circle-content {
-    min-width: 0;
-    padding: 17px;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .circle-business {
-    margin: 0;
-    overflow: hidden;
-    color: #b45b08;
-    font-size: 10px;
-    font-weight: 900;
-    letter-spacing: 0.08em;
-    text-overflow: ellipsis;
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-
-  .circle-content h3 {
-    margin: 5px 0 7px;
-    overflow: hidden;
-    font-size: 17px;
-    line-height: 1.3;
-    letter-spacing: -0.02em;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-
-  .circle-question {
-    margin: 0;
-    overflow: hidden;
-    color: #5f6874;
+    color: #6f7780;
     font-size: 13px;
-    line-height: 1.45;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-
-  .circle-stats {
-    margin-top: 13px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-  }
-
-  .circle-stats span {
-    padding: 6px 8px;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    border-radius: 999px;
-    color: #5c6672;
-    background: #f3f5f7;
-    font-size: 10px;
-    font-weight: 750;
-  }
-
-  .circle-stats span :global(svg) {
-    width: 13px;
-    height: 13px;
-  }
-
-  .circle-footer {
-    margin-top: auto;
-    padding-top: 15px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .circle-footer > span {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    color: #7a828c;
-    font-size: 10px;
-    font-weight: 750;
-  }
-
-  .circle-footer > span :global(svg) {
-    width: 13px;
-    height: 13px;
-  }
-
-  .circle-actions {
-    display: flex;
-    gap: 6px;
-  }
-
-  .circle-actions button {
-    min-height: 34px;
-    padding: 0 9px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
-    border: 1px solid #dde1e6;
-    border-radius: 10px;
-    color: #49525e;
-    background: #fff;
-    cursor: pointer;
-    font-size: 10px;
-    font-weight: 850;
-  }
-
-  .circle-actions button :global(svg) {
-    width: 13px;
-    height: 13px;
-  }
-
-  .circle-actions .open-circle {
-    border-color: #171814;
-    color: #fff;
-    background: #171814;
-  }
-
-
-  .circle-relation {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    padding: 6px 9px;
-    border-radius: 999px;
-    color: #fff;
-    background: rgba(17, 24, 39, 0.84);
-    font-size: 9px;
-    font-weight: 900;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
-  .circle-relation.joined {
-    background: #6d3cdf;
-  }
-
-  .circle-new-badge {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    min-width: 38px;
-    height: 25px;
-    padding: 0 8px;
-    display: grid;
-    place-items: center;
-    border: 2px solid #fff;
-    border-radius: 999px;
-    color: #fff;
-    background: #ef4444;
-    font-size: 9px;
-    font-weight: 900;
-    text-transform: uppercase;
-    box-shadow: 0 7px 16px rgba(239, 68, 68, 0.28);
-  }
-
-  .circle-latest {
-    margin-top: 12px;
-    padding: 10px;
-    display: grid;
-    grid-template-columns: 20px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid #e6e9ee;
-    border-radius: 12px;
-    background: #f7f8fa;
-  }
-
-  .circle-latest.new {
-    border-color: #cbdcf8;
-    background: #eef5ff;
-  }
-
-  .circle-latest > :global(svg) {
-    width: 17px;
-    height: 17px;
-    color: #087e98;
-  }
-
-  .circle-latest span,
-  .circle-latest strong,
-  .circle-latest small {
-    min-width: 0;
-    display: block;
-  }
-
-  .circle-latest strong {
-    overflow: hidden;
-    color: #2d3641;
-    font-size: 10px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .circle-latest small {
-    margin-top: 2px;
-    overflow: hidden;
-    color: #66707c;
-    font-size: 11px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .circle-latest time {
-    color: #7d8792;
-    font-size: 9px;
-    white-space: nowrap;
-  }
-
-  .completed-section {
-    opacity: 0.86;
+    line-height: 1.5;
   }
 
   .dash-guest-preview-note {
     width: 100%;
-    margin-bottom: 18px;
-    padding: 12px 14px;
+    margin-bottom: 14px;
+    padding: 11px 13px;
     display: flex;
     align-items: center;
     gap: 9px;
     border: 1px solid #cfe5f0;
-    border-radius: 14px;
+    border-radius: 12px;
     color: #245b6d;
     background: #eef9fc;
     font-size: 12px;
-    line-height: 1.4;
   }
 
   .dash-guest-preview-note > :global(svg) {
@@ -1463,275 +891,375 @@ const styles = `
   }
 
   .dash-guest-preview-note button {
-    min-height: 36px;
-    padding: 0 13px;
-    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 0 12px;
     border: 0;
-    border-radius: 10px;
+    border-radius: 9px;
     color: #fff;
     background: #087e98;
-    font-weight: 800;
+    font-weight: 700;
     cursor: pointer;
   }
 
-  .circles-summary-grid {
-    margin-bottom: 22px;
+  .circles-error {
+    margin-bottom: 14px;
+    padding: 11px 13px;
+    border: 1px solid #efcbc7;
+    border-radius: 12px;
+    color: #a52b25;
+    background: #fff1ef;
+    font-size: 12px;
+  }
+
+  .circles-state,
+  .circles-empty,
+  .circles-simple-empty-filter {
+    min-height: 260px;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 16px;
-  }
-
-  .circles-summary-grid article {
-    min-width: 0;
-    min-height: 104px;
-    padding: 16px;
-    display: flex;
-    align-items: center;
-    gap: 13px;
-    border: 1px solid #e4e7ec;
-    border-radius: 19px;
+    place-content: center;
+    justify-items: center;
+    padding: 28px 20px;
+    border: 1px solid #e3e6eb;
+    border-radius: 16px;
     background: #fff;
-    box-shadow: 0 10px 25px rgba(42, 48, 61, 0.055);
+    text-align: center;
   }
 
-  .circles-summary-icon {
-    width: 52px;
-    height: 52px;
+  .circles-state {
+    border: 0;
+    background: transparent;
+  }
+
+  .circles-state > :global(svg),
+  .circles-simple-empty-filter > :global(svg) {
+    width: 34px;
+    height: 34px;
+    color: #ca6808;
+  }
+
+  .empty-icon {
+    width: 58px;
+    height: 58px;
     display: grid;
     place-items: center;
-    flex: 0 0 auto;
-    border-radius: 17px;
+    border-radius: 18px;
+    color: #b65b08;
+    background: #fff0df;
   }
 
-  .circles-summary-icon > :global(svg) {
-    width: 24px;
-    height: 24px;
+  .empty-icon :global(svg) {
+    width: 27px;
+    height: 27px;
   }
 
-  .circles-summary-icon.orange {
-    color: #df7a00;
-    background: #fff0db;
+  .circles-state h2,
+  .circles-empty h3,
+  .circles-simple-empty-filter h3 {
+    margin: 12px 0 6px;
   }
 
-  .circles-summary-icon.purple {
-    color: #6734da;
-    background: #eee8ff;
-  }
-
-  .circles-summary-icon.blue {
-    color: #1768e5;
-    background: #eaf2ff;
-  }
-
-  .circles-summary-icon.green {
-    color: #159b50;
-    background: #e8f8ef;
-  }
-
-  .circles-summary-grid small,
-  .circles-summary-grid strong,
-  .circles-summary-grid p {
-    display: block;
-  }
-
-  .circles-summary-grid small {
-    font-size: 11px;
-    font-weight: 700;
-  }
-
-  .circles-summary-grid strong {
-    margin-top: 4px;
-    font-size: 24px;
-    font-weight: 800;
-  }
-
-  .circles-summary-grid p {
-    margin: 6px 0 0;
-    color: #707985;
-    font-size: 11px;
-  }
-
-  .circles-sample {
-    padding: 20px;
-    border: 1px dashed #cfd6e2;
-    border-radius: 22px;
-    background:
-      radial-gradient(circle at 92% 8%, rgba(202, 104, 8, 0.08), transparent 24%),
-      linear-gradient(180deg, #fcfdff, #f8fafc);
-  }
-
-  .circles-sample-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 18px;
-    margin-bottom: 17px;
-  }
-
-  .circles-sample-head h3 {
+  .circles-state p,
+  .circles-empty p,
+  .circles-simple-empty-filter p {
+    max-width: 500px;
     margin: 0;
-    font-size: 19px;
-  }
-
-  .circles-sample-head p {
-    max-width: 720px;
-    margin: 6px 0 0;
-    color: #707985;
-    font-size: 13px;
+    color: #6d7580;
+    font-size: 12px;
     line-height: 1.5;
   }
 
-  .circles-sample-head span {
-    padding: 8px 11px;
+  .circles-empty button {
+    margin-top: 16px;
+    min-height: 42px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 0;
+    border-radius: 11px;
+    color: #fff;
+    background: #171814;
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  .circles-empty button :global(svg) {
+    width: 16px;
+    height: 16px;
+  }
+
+  .circles-simple-toolbar {
+    margin-bottom: 12px;
+    padding: 9px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid #e4e7ec;
+    border-radius: 13px;
+    background: #fff;
+  }
+
+  .circles-simple-tabs {
+    display: flex;
+    gap: 6px;
+  }
+
+  .circles-simple-tabs button {
+    min-height: 34px;
+    padding: 0 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    color: #666f79;
+    background: transparent;
+    font-size: 11px;
+    cursor: pointer;
+  }
+
+  .circles-simple-tabs button span {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 999px;
+    color: #7a7168;
+    background: #f0ede9;
+    font-size: 9px;
+  }
+
+  .circles-simple-tabs button.active {
+    border-color: #edc995;
+    color: #9a5600;
+    background: #fff3e4;
+    font-weight: 700;
+  }
+
+  .circles-simple-toolbar > small {
+    color: #817970;
+    font-size: 11px;
+  }
+
+  .circles-simple-list {
+    display: grid;
+    gap: 9px;
+  }
+
+  .circle-simple-card {
+    min-width: 0;
+    padding: 10px 12px;
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid #e3e6eb;
+    border-radius: 14px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+  }
+
+  .circle-simple-card:hover {
+    border-color: #e1bd8f;
+    box-shadow: 0 8px 22px rgba(38,43,51,.06);
+    transform: translateY(-1px);
+  }
+
+  .circle-simple-card:focus-visible {
+    outline: 3px solid rgba(202,104,8,.18);
+    outline-offset: 2px;
+  }
+
+  .circle-simple-image {
+    width: 72px;
+    height: 72px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    color: #969da6;
+    background: #f3f4f6;
+  }
+
+  .circle-simple-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .circle-simple-image > :global(svg) {
+    width: 26px;
+    height: 26px;
+  }
+
+  .circle-simple-copy { min-width: 0; }
+
+  .circle-simple-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .circle-simple-top > strong {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .circle-simple-new {
+    padding: 4px 6px;
     flex: 0 0 auto;
     border-radius: 999px;
-    color: #9a4c00;
-    background: #fff0df;
+    color: #fff;
+    background: #ef4444;
+    font-size: 8px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .circle-simple-question {
+    display: block;
+    margin-top: 3px;
+    overflow: hidden;
+    color: #7b838d;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .circle-simple-latest {
+    margin-top: 8px;
+    padding: 8px 9px;
+    display: grid;
+    grid-template-columns: 17px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 7px;
+    border-radius: 10px;
+    background: #f7f8fa;
+  }
+
+  .circle-simple-latest.new { background: #eef5ff; }
+
+  .circle-simple-latest > :global(svg) {
+    width: 15px;
+    height: 15px;
+    color: #087e98;
+  }
+
+  .circle-simple-latest span,
+  .circle-simple-latest strong,
+  .circle-simple-latest small {
+    min-width: 0;
+    display: block;
+  }
+
+  .circle-simple-latest strong {
+    overflow: hidden;
+    color: #3b434c;
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .circle-simple-latest small {
+    margin-top: 1px;
+    overflow: hidden;
+    color: #69727c;
     font-size: 10px;
-    font-weight: 900;
-    letter-spacing: 0.08em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .circles-sample .circle-card {
-    max-width: 760px;
-    cursor: default;
+  .circle-simple-latest time {
+    color: #8a929b;
+    font-size: 8px;
+    white-space: nowrap;
   }
 
-  .circles-sample .circle-card:hover {
-    transform: none;
+  .circle-simple-no-message {
+    display: block;
+    margin-top: 7px;
+    color: #9a9188;
+    font-size: 10px;
   }
 
-  .circles-sample .circle-actions button {
-    cursor: not-allowed;
-    opacity: 0.68;
+  .circle-simple-meta {
+    margin-top: 7px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
   }
 
-  @media (max-width: 1120px) {
-    .circles-grid {
-      grid-template-columns: 1fr;
-    }
+  .circle-simple-meta span {
+    color: #858d96;
+    font-size: 9px;
   }
 
-  @media (max-width: 720px) {
-    .circles-summary-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-    }
-
-    .circles-summary-grid article {
-      min-height: 112px;
-      padding: 13px 10px;
-      flex-direction: column;
-      align-items: flex-start;
-      justify-content: center;
-      gap: 8px;
-      overflow: hidden;
-      border-radius: 17px;
-    }
-
-    .circles-summary-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 13px;
-    }
-
-    .circles-summary-icon > :global(svg) {
-      width: 20px;
-      height: 20px;
-    }
-
-    .circles-summary-grid article > div {
-      width: 100%;
-      min-width: 0;
-    }
-
-    .circles-summary-grid small {
-      font-size: 10px;
-      line-height: 1.2;
-    }
-
-    .circles-summary-grid strong {
-      margin-top: 3px;
-      font-size: 21px;
-      line-height: 1;
-    }
-
-    .circles-summary-grid p {
-      margin-top: 5px;
-      font-size: 9px;
-      line-height: 1.25;
-    }
-
-    .dash-guest-preview-note {
-      align-items: flex-start;
-      flex-wrap: wrap;
-    }
-
-    .dash-guest-preview-note button {
-      width: 100%;
-    }
-
-    .circles-header {
-      align-items: flex-start;
-    }
-
-    .circles-header h2 {
-      font-size: 25px;
-    }
-
-    .circles-count {
-      min-width: 76px;
-      padding: 9px 11px;
-    }
-
-    .circle-card {
-      grid-template-columns: 105px minmax(0, 1fr);
-    }
-
-    .circle-image {
-      min-height: 190px;
-    }
-
-    .circle-footer {
-      align-items: flex-start;
-      flex-direction: column;
-    }
-
-    .circle-actions {
-      width: 100%;
-    }
-
-    .circle-actions button {
-      flex: 1;
-    }
+  .circle-simple-open {
+    min-height: 36px;
+    padding: 0 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid #171814;
+    border-radius: 10px;
+    color: #fff;
+    background: #171814;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
   }
 
-  @media (max-width: 480px) {
-    .circles-header {
-      display: block;
+  .circle-simple-open :global(svg) {
+    width: 13px;
+    height: 13px;
+  }
+
+  @media (max-width: 650px) {
+    .circles-simple-header h2 { font-size: 26px; }
+
+    .circles-simple-toolbar { align-items: flex-start; }
+    .circles-simple-toolbar > small { display: none; }
+
+    .circle-simple-card {
+      grid-template-columns: 58px minmax(0, 1fr) auto;
+      gap: 9px;
+      padding: 9px;
     }
 
-    .circles-count {
-      width: 100%;
-      margin-top: 13px;
+    .circle-simple-image {
+      width: 58px;
+      height: 58px;
     }
 
-    .circle-card {
-      grid-template-columns: 88px minmax(0, 1fr);
-    }
+    .circle-simple-top > strong { font-size: 13px; }
+    .circle-simple-latest { margin-top: 6px; }
+    .circle-simple-meta span:last-child { display: none; }
 
-    .circle-content {
-      padding: 13px;
-    }
-
-    .circle-stats span:first-child {
-      display: none;
-    }
-
-    .circle-actions button:not(.open-circle) {
-      width: 35px;
+    .circle-simple-open {
+      min-width: 36px;
+      width: 36px;
       padding: 0;
       font-size: 0;
     }
+  }
+
+  @media (max-width: 430px) {
+    .circle-simple-question { display: none; }
+    .circle-simple-latest time { display: none; }
+
+    .circle-simple-latest {
+      grid-template-columns: 15px minmax(0, 1fr);
+    }
+
+    .circle-simple-meta { gap: 7px; }
   }
 `;

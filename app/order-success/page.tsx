@@ -58,6 +58,100 @@ type OrderItem = {
   subtotal?: number;
 };
 
+type SavedFreeGift = {
+  id: string;
+  title: string;
+  image: string;
+  original_price: number;
+  price: number;
+  is_free_gift: boolean;
+};
+
+type SavedGiftBundle = {
+  product_id: string;
+  quantity: number;
+  entitlement: number;
+  gifts: SavedFreeGift[];
+};
+
+const readSavedGifts = (
+  productId: string,
+): SavedGiftBundle | null => {
+  if (
+    typeof window === 'undefined' ||
+    !productId
+  ) {
+    return null;
+  }
+
+  try {
+    const raw =
+      window.localStorage.getItem(
+        `spotc-free-gifts:${productId}`,
+      );
+
+    if (!raw) {
+      return null;
+    }
+
+    const parsed =
+      JSON.parse(raw) as Partial<SavedGiftBundle>;
+
+    if (
+      !parsed ||
+      !Array.isArray(parsed.gifts)
+    ) {
+      return null;
+    }
+
+    return {
+      product_id:
+        String(
+          parsed.product_id ||
+            productId,
+        ),
+
+      quantity:
+        Number(parsed.quantity) || 1,
+
+      entitlement:
+        Number(parsed.entitlement) ||
+        parsed.gifts.length,
+
+      gifts: parsed.gifts
+        .filter(
+          (
+            gift,
+          ): gift is SavedFreeGift =>
+            Boolean(
+              gift &&
+                typeof gift ===
+                  'object' &&
+                'id' in gift,
+            ),
+        )
+        .map((gift) => ({
+          id: String(gift.id),
+          title:
+            String(
+              gift.title ||
+                'FREE Gift',
+            ),
+          image:
+            String(gift.image || ''),
+          original_price:
+            Number(
+              gift.original_price,
+            ) || 0,
+          price: 0,
+          is_free_gift: true,
+        })),
+    };
+  } catch {
+    return null;
+  }
+};
+
 type AddressSnapshot = {
   full_name?: string;
   phone?: string;
@@ -98,8 +192,6 @@ type OrderData = {
 
   items?: OrderItem[];
 
-  reward_points_pending?: number;
-  coupon_count_pending?: number;
 };
 
 type BusinessData = {
@@ -895,29 +987,35 @@ export default function OrderSuccessPage() {
           Number(order.total || 0),
         0,
       ),
-
-      points: orders.reduce(
-        (sum, order) =>
-          sum +
-          Number(
-            order.reward_points_pending ||
-              0,
-          ),
-        0,
-      ),
-
-      coupons: orders.reduce(
-        (sum, order) =>
-          sum +
-          Number(
-            order.coupon_count_pending ||
-              0,
-          ),
-        0,
-      ),
     }),
     [orders],
   );
+
+  const selectedFreeGifts =
+    useMemo(() => {
+      const giftMap =
+        new Map<string, SavedFreeGift>();
+
+      for (const order of orders) {
+        for (const item of order.items || []) {
+          const productId =
+            text(item.id);
+
+          const bundle =
+            readSavedGifts(productId);
+
+          for (const gift of
+            bundle?.gifts || []) {
+            giftMap.set(
+              gift.id,
+              gift,
+            );
+          }
+        }
+      }
+
+      return [...giftMap.values()];
+    }, [orders]);
 
   if (loading) {
     return (
@@ -1257,21 +1355,49 @@ export default function OrderSuccessPage() {
           })}
         </section>
 
-        <section className="spotc-order-success-v6__rewards">
-          <Gift size={24} />
+        {selectedFreeGifts.length > 0 && (
+          <section className="spotc-order-success-v6__free-gifts">
+            <div className="spotc-order-success-v6__free-gifts-head">
+              <Gift size={22} />
 
-          <div>
-            <strong>
-              {totals.points} points +{' '}
-              {totals.coupons} coupons pending
-            </strong>
+              <div>
+                <strong>
+                  {selectedFreeGifts.length} FREE Gift
+                  {selectedFreeGifts.length === 1 ? '' : 's'} Included
+                </strong>
 
-            <p>
-              Rewards and coupons will unlock
-              after successful delivery.
-            </p>
-          </div>
-        </section>
+                <p>
+                  Your selected gifts are included at no extra cost.
+                </p>
+              </div>
+            </div>
+
+            <div className="spotc-order-success-v6__free-gifts-list">
+              {selectedFreeGifts.map((gift) => (
+                <article
+                  className="spotc-order-success-v6__free-gift"
+                  key={gift.id}
+                >
+                  <div className="spotc-order-success-v6__free-gift-image">
+                    {gift.image ? (
+                      <img
+                        src={gift.image}
+                        alt={gift.title}
+                      />
+                    ) : (
+                      <Gift size={22} />
+                    )}
+                  </div>
+
+                  <div>
+                    <strong>{gift.title}</strong>
+                    <span>FREE</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         <nav className="spotc-order-success-v6__actions">
           <Link
@@ -1308,12 +1434,12 @@ const styles = `
 
   .spotc-order-success-v6 {
     width: 100% !important;
-    min-height: 100vh !important;
+    min-height: 0 !important;
     margin: 0 !important;
     padding:
       46px 20px
       max(
-        80px,
+        24px,
         env(safe-area-inset-bottom)
       ) !important;
 
@@ -1798,37 +1924,116 @@ const styles = `
     font-weight: 650 !important;
   }
 
-  .spotc-order-success-v6__rewards {
+  .spotc-order-success-v6__free-gifts {
     width: 100% !important;
     margin-top: 20px !important;
     padding: 18px 20px !important;
 
-    display: flex !important;
-    align-items: flex-start !important;
-    gap: 13px !important;
-
     border: 1px solid
-      #b8e2c6 !important;
+      #cfe8d7 !important;
 
     border-radius: 18px !important;
 
+    background: #f7fcf8 !important;
+  }
+
+  .spotc-order-success-v6__free-gifts-head {
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+
     color: #176d3d !important;
-    background: #edf9f1 !important;
   }
 
-  .spotc-order-success-v6__rewards
+  .spotc-order-success-v6__free-gifts-head
     strong {
+    display: block !important;
     font-size: 15px !important;
-    font-weight: 650 !important;
+    font-weight: 600 !important;
   }
 
-  .spotc-order-success-v6__rewards
+  .spotc-order-success-v6__free-gifts-head
     p {
-    margin: 5px 0 0 !important;
+    margin: 4px 0 0 !important;
+    color: #5e7465 !important;
+    font-size: 13px !important;
+  }
 
-    color: #3b7252 !important;
+  .spotc-order-success-v6__free-gifts-list {
+    margin-top: 14px !important;
+
+    display: grid !important;
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      ) !important;
+    gap: 10px !important;
+  }
+
+  .spotc-order-success-v6__free-gift {
+    min-width: 0 !important;
+    padding: 10px !important;
+
+    display: grid !important;
+    grid-template-columns:
+      54px minmax(0, 1fr) !important;
+    align-items: center !important;
+    gap: 11px !important;
+
+    border: 1px solid
+      #dcecdf !important;
+    border-radius: 13px !important;
+
+    background: #ffffff !important;
+  }
+
+  .spotc-order-success-v6__free-gift-image {
+    width: 54px !important;
+    height: 54px !important;
+
+    overflow: hidden !important;
+
+    display: grid !important;
+    place-items: center !important;
+
+    border-radius: 10px !important;
+
+    color: #6f9178 !important;
+    background: #f7fcf8 !important;
+  }
+
+  .spotc-order-success-v6__free-gift-image
+    img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+  }
+
+  .spotc-order-success-v6__free-gift
+    strong {
+    display: block !important;
+
+    overflow: hidden !important;
+
+    color: #24201c !important;
 
     font-size: 13px !important;
+    font-weight: 500 !important;
+
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .spotc-order-success-v6__free-gift
+    span {
+    display: inline-block !important;
+    margin-top: 5px !important;
+
+    color: #168648 !important;
+
+    font-size: 12px !important;
+    font-weight: 600 !important;
   }
 
   .spotc-order-success-v6__actions {
@@ -1926,16 +2131,26 @@ const styles = `
     }
   }
 
+  body:has(.spotc-order-success-v6)
+    .spotc-footer {
+    margin-top: 0 !important;
+  }
+
   @media (max-width: 680px) {
     .spotc-order-success-v6 {
       padding:
         28px 12px
         max(
-          70px,
+          18px,
           env(
             safe-area-inset-bottom
           )
         ) !important;
+    }
+
+    .spotc-order-success-v6__free-gifts-list {
+      grid-template-columns:
+        1fr !important;
     }
 
     .spotc-order-success-v6__hero

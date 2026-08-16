@@ -1,4 +1,1182 @@
 'use client';
-import{FormEvent,useEffect,useState}from'react';import{useRouter}from'next/navigation';import{ArrowLeft,CheckCircle2,Home,Loader2,MapPin,Plus}from'lucide-react';import type{User}from'firebase/auth';import{createAddress,formatAddress,loadUserAddresses,selectedAddressFrom,setDefaultAddress,type AddressInput,type SavedAddress}from'@/lib/addresses';import{requireGoogleLogin}from'@/lib/auth';import{db,firebaseReady}from'@/lib/firebase';
-const EMPTY:AddressInput={fullName:'',phone:'',addressType:'Home',houseNo:'',street:'',landmark:'',area:'',city:'',pincode:'',state:'Tamil Nadu',country:'India',deliveryNote:'',latitude:null,longitude:null};
-export default function AddressPage(){const router=useRouter();const[user,setUser]=useState<User|null>(null),[addresses,setAddresses]=useState<SavedAddress[]>([]),[selectedId,setSelectedId]=useState(''),[formOpen,setFormOpen]=useState(false),[form,setForm]=useState<AddressInput>(EMPTY),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false);useEffect(()=>{let active=true;(async()=>{if(!firebaseReady||!db){setLoading(false);return}const u=await requireGoogleLogin();if(!u||!active){setLoading(false);return}setUser(u);const list=await loadUserAddresses(db,u);if(!active)return;setAddresses(list);setSelectedId(selectedAddressFrom(list)?.id||'');setForm(v=>({...v,fullName:v.fullName||u.displayName||''}));setFormOpen(!list.length);setLoading(false)})();return()=>{active=false}},[]);const select=async(a:SavedAddress)=>{if(!db||!user)return;setSelectedId(a.id);await setDefaultAddress(db,user,addresses,a);setAddresses(v=>v.map(x=>({...x,isDefault:x.id===a.id})))};const save=async(e:FormEvent)=>{e.preventDefault();if(!db||!user||saving)return;if(!form.fullName||!form.phone||!form.houseNo||!form.area||!form.city||!form.pincode){alert('Please fill all required address details.');return}setSaving(true);try{const a=await createAddress(db,user,form,addresses);setAddresses(v=>[a,...v.map(x=>({...x,isDefault:false}))]);setSelectedId(a.id);setFormOpen(false);setForm(EMPTY)}catch(err){console.error(err);alert('Unable to save address.')}finally{setSaving(false)}};if(loading)return<main className="address-state"><Loader2 className="spin"/><p>Loading saved addresses…</p></main>;if(!user||!db)return<main className="address-state"><MapPin/><h1>Sign in required</h1></main>;return<main className="address-page"><div className="address-shell"><header className="address-head"><button onClick={()=>router.back()}><ArrowLeft/></button><div><small>DELIVERY</small><h1>Delivery Address</h1></div></header>{!formOpen?<><button className="location-card" onClick={()=>alert('Current location can be connected to your reverse-geocode Cloud Function next.')}><MapPin/><span>Use Current Location</span></button><section className="saved-addresses">{addresses.map(a=><button className={selectedId===a.id?'saved-address selected':'saved-address'} key={a.id} onClick={()=>void select(a)}><Home/><span><strong>{a.addressType}{a.isDefault&&<em>Default</em>}</strong><small>{formatAddress(a)}</small><small>{a.phone}</small></span>{selectedId===a.id?<CheckCircle2/>:<span className="radio"/>}</button>)}</section><button className="add-address-card" onClick={()=>setFormOpen(true)}><Plus/>Add New Address</button><button className="continue-address" disabled={!selectedId} onClick={()=>router.push('/checkout')}>Continue to Checkout</button></>:<form className="address-form" onSubmit={save}><header><div><small>NEW ADDRESS</small><h2>Add delivery address</h2></div>{addresses.length>0&&<button type="button" onClick={()=>setFormOpen(false)}>Cancel</button>}</header><div className="address-type-row">{['Home','Office','Other'].map(type=><button type="button" key={type} className={form.addressType===type?'active':''} onClick={()=>setForm({...form,addressType:type})}>{type}</button>)}</div><div className="form-grid">{([['fullName','Full name *'],['phone','Phone *'],['houseNo','House / Flat no *'],['street','Street'],['landmark','Landmark'],['area','Area *'],['city','City *'],['pincode','Pincode *']] as const).map(([key,label])=><label key={key}>{label}<input value={String(form[key]??'')} onChange={e=>setForm({...form,[key]:e.target.value})}/></label>)}<label className="wide">Delivery note<textarea value={form.deliveryNote} onChange={e=>setForm({...form,deliveryNote:e.target.value})}/></label></div><button className="save-address" disabled={saving}>{saving?<><Loader2 className="spin"/>Saving…</>:'Save & Use Address'}</button></form>}</div><style jsx>{`.address-page{min-height:100vh;padding:28px 18px 80px;background:#f7f5f1}.address-shell{width:min(900px,100%);margin:auto}.address-head{display:flex;align-items:center;gap:15px;margin-bottom:24px}.address-head button{width:44px;height:44px;display:grid;place-items:center;border:1px solid #dfd8cf;border-radius:14px;background:#fff}.address-head small,.address-form small{color:#d66d0d;font-size:10px;letter-spacing:.12em}.address-head h1,.address-form h2{margin:4px 0 0}.location-card,.add-address-card,.saved-address{width:100%;margin-bottom:14px;padding:18px;display:flex;align-items:center;gap:14px;border:1px solid #e3dbd2;border-radius:18px;background:#fff;text-align:left}.saved-address>span{min-width:0;flex:1}.saved-address strong,.saved-address small{display:block}.saved-address strong{font-size:17px}.saved-address em{margin-left:8px;padding:4px 7px;border-radius:999px;color:#168648;background:#e8f8ef;font-size:10px;font-style:normal}.saved-address small{margin-top:5px;color:#756b62}.saved-address.selected{border-color:#22a65a}.radio{width:22px;height:22px;flex:0 0 auto!important;border:2px solid #bbb3aa;border-radius:50%}.continue-address,.save-address{width:100%;min-height:52px;margin-top:12px;border:0;border-radius:15px;color:#fff;background:#22c55e;font-weight:700}.address-form{padding:22px;border:1px solid #e3dbd2;border-radius:22px;background:#fff}.address-form header{display:flex;justify-content:space-between}.address-type-row{margin:20px 0;display:flex;gap:9px}.address-type-row button{padding:9px 14px;border:1px solid #dfd8cf;border-radius:999px;background:#fff}.address-type-row .active{color:#fff;background:#171717}.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:15px}.form-grid label{display:grid;gap:7px;font-size:12px;font-weight:600}.form-grid input,.form-grid textarea{padding:12px;border:1px solid #ddd6cd;border-radius:12px}.wide{grid-column:1/-1}.save-address{display:flex;align-items:center;justify-content:center;gap:8px}.address-state{min-height:100vh;display:grid;place-content:center;justify-items:center;gap:12px;background:#f7f5f1}.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:620px){.form-grid{grid-template-columns:1fr}.wide{grid-column:auto}}`}</style></main>}
+
+import {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
+import { useRouter } from 'next/navigation';
+
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Home,
+  Loader2,
+  MapPin,
+  Plus,
+} from 'lucide-react';
+
+import type { User } from 'firebase/auth';
+
+import {
+  createAddress,
+  formatAddress,
+  loadUserAddresses,
+  selectedAddressFrom,
+  setDefaultAddress,
+  type AddressInput,
+  type SavedAddress,
+} from '@/lib/addresses';
+
+import { requireGoogleLogin } from '@/lib/auth';
+import { db, firebaseReady } from '@/lib/firebase';
+import PageLoader from '@/components/PageLoader';
+
+const EMPTY: AddressInput = {
+  fullName: '',
+  phone: '',
+  addressType: 'Home',
+  houseNo: '',
+  street: '',
+  landmark: '',
+  area: '',
+  city: '',
+  pincode: '',
+  state: 'Tamil Nadu',
+  country: 'India',
+  deliveryNote: '',
+  latitude: null,
+  longitude: null,
+};
+
+type AddressTypeOption = 'Home' | 'Office' | 'Other';
+
+const ADDRESS_TYPES: AddressTypeOption[] = [
+  'Home',
+  'Office',
+  'Other',
+];
+
+const cleanPhone = (value: string) =>
+  value.replace(/\D/g, '').slice(0, 10);
+
+const cleanPincode = (value: string) =>
+  value.replace(/\D/g, '').slice(0, 6);
+
+export default function AddressPage() {
+  const router = useRouter();
+
+  const [user, setUser] =
+    useState<User | null>(null);
+
+  const [addresses, setAddresses] =
+    useState<SavedAddress[]>([]);
+
+  const [selectedId, setSelectedId] =
+    useState('');
+
+  const [formOpen, setFormOpen] =
+    useState(false);
+
+  const [form, setForm] =
+    useState<AddressInput>(EMPTY);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [formError, setFormError] =
+    useState('');
+
+  useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      if (!firebaseReady || !db) {
+        setLoading(false);
+        return;
+      }
+
+      const currentUser =
+        await requireGoogleLogin();
+
+      if (!currentUser || !active) {
+        setLoading(false);
+        return;
+      }
+
+      setUser(currentUser);
+
+      const list =
+        await loadUserAddresses(
+          db,
+          currentUser,
+        );
+
+      if (!active) {
+        return;
+      }
+
+      setAddresses(list);
+
+      setSelectedId(
+        selectedAddressFrom(list)?.id ||
+          '',
+      );
+
+      setForm((current) => ({
+        ...current,
+        fullName:
+          current.fullName ||
+          currentUser.displayName ||
+          '',
+      }));
+
+      setFormOpen(!list.length);
+      setLoading(false);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const requiredComplete = useMemo(
+    () =>
+      Boolean(
+        form.fullName.trim() &&
+          form.phone.trim() &&
+          form.houseNo.trim() &&
+          form.area.trim() &&
+          form.city.trim() &&
+          form.pincode.trim(),
+      ),
+    [
+      form.fullName,
+      form.phone,
+      form.houseNo,
+      form.area,
+      form.city,
+      form.pincode,
+    ],
+  );
+
+  const updateForm = <
+    K extends keyof AddressInput,
+  >(
+    key: K,
+    value: AddressInput[K],
+  ) => {
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+    }));
+
+    if (formError) {
+      setFormError('');
+    }
+  };
+
+  const select = async (
+    address: SavedAddress,
+  ) => {
+    if (!db || !user) {
+      return;
+    }
+
+    setSelectedId(address.id);
+
+    await setDefaultAddress(
+      db,
+      user,
+      addresses,
+      address,
+    );
+
+    setAddresses((current) =>
+      current.map((item) => ({
+        ...item,
+        isDefault:
+          item.id === address.id,
+      })),
+    );
+  };
+
+  const openNewAddress = () => {
+    setForm((current) => ({
+      ...EMPTY,
+      fullName:
+        current.fullName ||
+        user?.displayName ||
+        '',
+    }));
+
+    setFormError('');
+    setFormOpen(true);
+  };
+
+  const cancelNewAddress = () => {
+    setFormError('');
+    setFormOpen(false);
+
+    setForm((current) => ({
+      ...EMPTY,
+      fullName:
+        current.fullName ||
+        user?.displayName ||
+        '',
+    }));
+  };
+
+  const validateForm = (): string => {
+    if (!form.fullName.trim()) {
+      return 'Enter the full name.';
+    }
+
+    if (!form.phone.trim()) {
+      return 'Enter the phone number.';
+    }
+
+    if (!/^[6-9]\d{9}$/.test(form.phone)) {
+      return 'Enter a valid 10-digit Indian mobile number.';
+    }
+
+    if (!form.houseNo.trim()) {
+      return 'Enter the house / flat number.';
+    }
+
+    if (!form.area.trim()) {
+      return 'Enter the area.';
+    }
+
+    if (!form.city.trim()) {
+      return 'Enter the city.';
+    }
+
+    if (!/^\d{6}$/.test(form.pincode)) {
+      return 'Enter a valid 6-digit pincode.';
+    }
+
+    return '';
+  };
+
+  const save = async (
+    event: FormEvent,
+  ) => {
+    event.preventDefault();
+
+    if (!db || !user || saving) {
+      return;
+    }
+
+    const validationError =
+      validateForm();
+
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+
+    setSaving(true);
+    setFormError('');
+
+    try {
+      const nextAddress: AddressInput = {
+        ...form,
+        fullName: form.fullName.trim(),
+        phone: form.phone.trim(),
+        houseNo: form.houseNo.trim(),
+        street: form.street.trim(),
+        landmark: form.landmark.trim(),
+        area: form.area.trim(),
+        city: form.city.trim(),
+        pincode: form.pincode.trim(),
+        deliveryNote:
+          form.deliveryNote.trim(),
+      };
+
+      const address =
+        await createAddress(
+          db,
+          user,
+          nextAddress,
+          addresses,
+        );
+
+      setAddresses((current) => [
+        address,
+        ...current.map((item) => ({
+          ...item,
+          isDefault: false,
+        })),
+      ]);
+
+      setSelectedId(address.id);
+      setFormOpen(false);
+
+      setForm({
+        ...EMPTY,
+        fullName:
+          user.displayName || '',
+      });
+    } catch (error) {
+      console.error(error);
+
+      setFormError(
+        'Unable to save address. Please try again.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <PageLoader />;
+  }
+
+  if (!user || !db) {
+    return (
+      <main className="address-state">
+        <MapPin />
+        <h1>Sign in required</h1>
+      </main>
+    );
+  }
+
+  return (
+    <main className="address-page">
+      <div className="address-shell">
+        <header className="address-head">
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Go back"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft />
+          </button>
+
+          <div>
+            <small>DELIVERY</small>
+            <h1>Delivery Address</h1>
+          </div>
+        </header>
+
+        {!formOpen ? (
+          <>
+            <button
+              type="button"
+              className="location-card"
+              onClick={() =>
+                alert(
+                  'Current location can be connected to your reverse-geocode Cloud Function next.',
+                )
+              }
+            >
+              <MapPin />
+              <span>Use Current Location</span>
+            </button>
+
+            <section className="saved-addresses">
+              {addresses.map(
+                (address) => (
+                  <button
+                    type="button"
+                    className={
+                      selectedId ===
+                      address.id
+                        ? 'saved-address selected'
+                        : 'saved-address'
+                    }
+                    key={address.id}
+                    onClick={() =>
+                      void select(
+                        address,
+                      )
+                    }
+                  >
+                    <Home />
+
+                    <span>
+                      <strong>
+                        {address.addressType}
+
+                        {address.isDefault && (
+                          <em>
+                            Default
+                          </em>
+                        )}
+                      </strong>
+
+                      <small>
+                        {formatAddress(
+                          address,
+                        )}
+                      </small>
+
+                      <small>
+                        {address.phone}
+                      </small>
+                    </span>
+
+                    {selectedId ===
+                    address.id ? (
+                      <CheckCircle2 />
+                    ) : (
+                      <span className="radio" />
+                    )}
+                  </button>
+                ),
+              )}
+            </section>
+
+            <button
+              type="button"
+              className="add-address-card"
+              onClick={
+                openNewAddress
+              }
+            >
+              <Plus />
+              <span>
+                Add New Address
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className="continue-address"
+              disabled={!selectedId}
+              onClick={() =>
+                router.push(
+                  '/checkout',
+                )
+              }
+            >
+              Continue to Checkout
+            </button>
+          </>
+        ) : (
+          <form
+            className="address-form"
+            onSubmit={save}
+            noValidate
+          >
+            <header className="address-form-head">
+              <div>
+                <small>
+                  NEW ADDRESS
+                </small>
+
+                <h2>
+                  Add delivery
+                  address
+                </h2>
+              </div>
+
+              {addresses.length >
+                0 && (
+                <button
+                  type="button"
+                  className="cancel-address"
+                  onClick={
+                    cancelNewAddress
+                  }
+                >
+                  Cancel
+                </button>
+              )}
+            </header>
+
+            <div
+              className="address-type-row"
+              role="group"
+              aria-label="Address type"
+            >
+              {ADDRESS_TYPES.map(
+                (type) => (
+                  <button
+                    type="button"
+                    key={type}
+                    className={
+                      form.addressType ===
+                      type
+                        ? 'active'
+                        : ''
+                    }
+                    aria-pressed={
+                      form.addressType ===
+                      type
+                    }
+                    onClick={() =>
+                      updateForm(
+                        'addressType',
+                        type as AddressInput['addressType'],
+                      )
+                    }
+                  >
+                    {type}
+                  </button>
+                ),
+              )}
+            </div>
+
+            {formError && (
+              <div
+                className="form-error"
+                role="alert"
+              >
+                {formError}
+              </div>
+            )}
+
+            <div className="form-grid">
+              <label>
+                Full name
+                <span className="required">
+                  *
+                </span>
+
+                <input
+                  autoComplete="name"
+                  required
+                  value={
+                    form.fullName
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    updateForm(
+                      'fullName',
+                      event.target
+                        .value,
+                    )
+                  }
+                />
+              </label>
+
+              <label>
+                Phone
+                <span className="required">
+                  *
+                </span>
+
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  required
+                  maxLength={10}
+                  value={form.phone}
+                  onChange={(
+                    event,
+                  ) =>
+                    updateForm(
+                      'phone',
+                      cleanPhone(
+                        event.target
+                          .value,
+                      ),
+                    )
+                  }
+                />
+              </label>
+
+              <label>
+                House / Flat no
+                <span className="required">
+                  *
+                </span>
+
+                <input
+                  autoComplete="address-line1"
+                  required
+                  value={
+                    form.houseNo
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    updateForm(
+                      'houseNo',
+                      event.target
+                        .value,
+                    )
+                  }
+                />
+              </label>
+
+              <label>
+                Street
+                <span className="optional">
+                  Optional
+                </span>
+
+                <input
+                  autoComplete="address-line2"
+                  value={form.street}
+                  onChange={(
+                    event,
+                  ) =>
+                    updateForm(
+                      'street',
+                      event.target
+                        .value,
+                    )
+                  }
+                />
+              </label>
+
+              <label>
+                Landmark
+                <span className="optional">
+                  Optional
+                </span>
+
+                <input
+                  value={
+                    form.landmark
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    updateForm(
+                      'landmark',
+                      event.target
+                        .value,
+                    )
+                  }
+                />
+              </label>
+
+              <label>
+                Area
+                <span className="required">
+                  *
+                </span>
+
+                <input
+                  required
+                  value={form.area}
+                  onChange={(
+                    event,
+                  ) =>
+                    updateForm(
+                      'area',
+                      event.target
+                        .value,
+                    )
+                  }
+                />
+              </label>
+
+              <label>
+                City
+                <span className="required">
+                  *
+                </span>
+
+                <input
+                  autoComplete="address-level2"
+                  required
+                  value={form.city}
+                  onChange={(
+                    event,
+                  ) =>
+                    updateForm(
+                      'city',
+                      event.target
+                        .value,
+                    )
+                  }
+                />
+              </label>
+
+              <label>
+                Pincode
+                <span className="required">
+                  *
+                </span>
+
+                <input
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  required
+                  maxLength={6}
+                  value={
+                    form.pincode
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    updateForm(
+                      'pincode',
+                      cleanPincode(
+                        event.target
+                          .value,
+                      ),
+                    )
+                  }
+                />
+              </label>
+
+              <label className="wide">
+                Delivery note
+                <span className="optional">
+                  Optional
+                </span>
+
+                <textarea
+                  rows={3}
+                  value={
+                    form.deliveryNote
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    updateForm(
+                      'deliveryNote',
+                      event.target
+                        .value,
+                    )
+                  }
+                />
+              </label>
+            </div>
+
+            <button
+              type="submit"
+              className="save-address"
+              disabled={
+                saving ||
+                !requiredComplete
+              }
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="spin" />
+                  Saving…
+                </>
+              ) : (
+                'Save & Use Address'
+              )}
+            </button>
+          </form>
+        )}
+      </div>
+
+      <style jsx>{`
+        .address-page {
+          min-height: 100vh;
+          padding: 28px 18px 80px;
+          background: #f7f5f1;
+          color: #17120d;
+        }
+
+        .address-shell {
+          width: min(900px, 100%);
+          margin: 0 auto;
+        }
+
+        button,
+        .location-card,
+        .saved-address,
+        .add-address-card,
+        .continue-address,
+        .save-address,
+        .cancel-address,
+        .address-type-row button,
+        .icon-button {
+          cursor: pointer;
+        }
+
+        button:disabled,
+        .continue-address:disabled,
+        .save-address:disabled {
+          cursor: not-allowed;
+        }
+
+        .address-head {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          margin-bottom: 24px;
+        }
+
+        .icon-button {
+          width: 44px;
+          height: 44px;
+          flex: 0 0 44px;
+          display: grid;
+          place-items: center;
+          padding: 0;
+          border: 1px solid #dfd8cf;
+          border-radius: 14px;
+          color: #17120d;
+          background: #ffffff;
+          transition:
+            border-color 0.18s ease,
+            background 0.18s ease;
+        }
+
+        .icon-button:hover {
+          border-color: #cfc3b7;
+          background: #fbf8f4;
+        }
+
+        .icon-button svg {
+          width: 21px;
+          height: 21px;
+        }
+
+        .address-head small,
+        .address-form small {
+          color: #d66d0d;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+        }
+
+        .address-head h1,
+        .address-form h2 {
+          margin: 4px 0 0;
+        }
+
+        .address-head h1 {
+          font-size: 32px;
+          line-height: 1.1;
+        }
+
+        .location-card,
+        .add-address-card,
+        .saved-address {
+          width: 100%;
+          margin-bottom: 14px;
+          padding: 18px;
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          border: 1px solid #e3dbd2;
+          border-radius: 18px;
+          color: #17120d;
+          background: #ffffff;
+          text-align: left;
+          transition:
+            border-color 0.18s ease,
+            box-shadow 0.18s ease,
+            background 0.18s ease;
+        }
+
+        .location-card:hover,
+        .add-address-card:hover,
+        .saved-address:hover {
+          border-color: #cabfb4;
+          background: #fffdfb;
+          box-shadow:
+            0 7px 20px
+            rgba(56, 39, 24, 0.05);
+        }
+
+        .saved-address > span {
+          min-width: 0;
+          flex: 1;
+        }
+
+        .saved-address strong,
+        .saved-address small {
+          display: block;
+        }
+
+        .saved-address strong {
+          font-size: 17px;
+        }
+
+        .saved-address em {
+          margin-left: 8px;
+          padding: 4px 7px;
+          border-radius: 999px;
+          color: #168648;
+          background: #e8f8ef;
+          font-size: 10px;
+          font-style: normal;
+        }
+
+        .saved-address small {
+          margin-top: 5px;
+          color: #756b62;
+        }
+
+        .saved-address.selected {
+          border-color: #22a65a;
+          box-shadow:
+            0 0 0 1px
+            rgba(34, 166, 90, 0.05);
+        }
+
+        .radio {
+          width: 22px;
+          height: 22px;
+          flex: 0 0 auto !important;
+          border: 2px solid #bbb3aa;
+          border-radius: 50%;
+        }
+
+        .add-address-card span {
+          flex: 1;
+        }
+
+        .continue-address,
+        .save-address {
+          width: 100%;
+          min-height: 52px;
+          margin-top: 12px;
+          border: 0;
+          border-radius: 15px;
+          color: #ffffff;
+          background: #22c55e;
+          font-size: 16px;
+          font-weight: 800;
+          transition:
+            background 0.18s ease,
+            opacity 0.18s ease;
+        }
+
+        .continue-address:hover:not(:disabled),
+        .save-address:hover:not(:disabled) {
+          background: #19b954;
+        }
+
+        .continue-address:disabled,
+        .save-address:disabled {
+          opacity: 0.5;
+        }
+
+        .address-form {
+          padding: 22px;
+          border: 1px solid #e3dbd2;
+          border-radius: 22px;
+          background: #ffffff;
+        }
+
+        .address-form-head {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 18px;
+        }
+
+        .cancel-address {
+          min-width: 0;
+          height: 38px;
+          padding: 0 14px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid #d9d0c7;
+          border-radius: 11px;
+          color: #3d352e;
+          background: #ffffff;
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1;
+          transition:
+            border-color 0.18s ease,
+            background 0.18s ease;
+        }
+
+        .cancel-address:hover {
+          border-color: #bfb3a7;
+          background: #f8f4ef;
+        }
+
+        .address-type-row {
+          margin: 20px 0;
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          gap: 9px;
+          width: 100%;
+        }
+
+        .address-type-row button {
+          min-width: 0;
+          height: 40px;
+          padding: 0 16px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid #dfd8cf;
+          border-radius: 999px;
+          color: #17120d;
+          background: #ffffff;
+          font-size: 14px;
+          font-weight: 650;
+          transition:
+            color 0.18s ease,
+            background 0.18s ease,
+            border-color 0.18s ease;
+        }
+
+        .address-type-row button:hover {
+          border-color: #bfb4aa;
+        }
+
+        .address-type-row button.active {
+          border-color: #171717;
+          color: #ffffff;
+          background: #171717;
+        }
+
+        .form-error {
+          margin: -4px 0 16px;
+          padding: 11px 13px;
+          border: 1px solid #f1c9c5;
+          border-radius: 11px;
+          color: #a52a22;
+          background: #fff3f2;
+          font-size: 13px;
+          font-weight: 650;
+        }
+
+        .form-grid {
+          display: grid;
+          grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+          gap: 15px;
+        }
+
+        .form-grid label {
+          display: grid;
+          grid-template-columns:
+            auto 1fr;
+          gap: 7px 5px;
+          align-items: center;
+          color: #17120d;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .form-grid label input,
+        .form-grid label textarea {
+          grid-column: 1 / -1;
+        }
+
+        .required {
+          color: #c64932;
+          font-weight: 900;
+        }
+
+        .optional {
+          justify-self: start;
+          color: #9b9085;
+          font-size: 10px;
+          font-weight: 600;
+        }
+
+        .form-grid input,
+        .form-grid textarea {
+          width: 100%;
+          padding: 12px;
+          border: 1px solid #ddd6cd;
+          border-radius: 12px;
+          outline: none;
+          color: #17120d;
+          background: #ffffff;
+          font: inherit;
+          transition:
+            border-color 0.18s ease,
+            box-shadow 0.18s ease;
+        }
+
+        .form-grid textarea {
+          resize: vertical;
+          min-height: 92px;
+        }
+
+        .form-grid input:focus,
+        .form-grid textarea:focus {
+          border-color: #22a65a;
+          box-shadow:
+            0 0 0 3px
+            rgba(34, 166, 90, 0.1);
+        }
+
+        .wide {
+          grid-column: 1 / -1;
+        }
+
+        .save-address {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
+
+        .address-state {
+          min-height: 100vh;
+          display: grid;
+          place-content: center;
+          justify-items: center;
+          gap: 12px;
+          background: #f7f5f1;
+        }
+
+        .spin {
+          animation:
+            spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+          to {
+            transform:
+              rotate(360deg);
+          }
+        }
+
+        @media (max-width: 620px) {
+          .address-page {
+            padding:
+              18px 12px 60px;
+          }
+
+          .address-head h1 {
+            font-size: 28px;
+          }
+
+          .address-form {
+            padding: 17px;
+          }
+
+          .form-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .wide {
+            grid-column: auto;
+          }
+
+          .address-type-row {
+            justify-content:
+              flex-start;
+            overflow-x: auto;
+            padding-bottom: 2px;
+          }
+
+          .address-type-row button {
+            flex: 0 0 auto;
+          }
+
+          .cancel-address {
+            height: 36px;
+            padding: 0 12px;
+            font-size: 12px;
+          }
+        }
+      `}</style>
+    </main>
+  );
+}

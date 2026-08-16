@@ -25,19 +25,25 @@ const num = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const text = (value: unknown): string =>
+  value == null ? '' : String(value);
+
 const orderItem = (item: CartItem) => ({
-  id: item.id,
-  product_id: item.id,
-  title: item.title,
-  image: item.image,
+  id: text(item.id),
+  product_id: text(item.id),
+  title: text(item.title),
+  image: text(item.image),
   price: num(item.price),
-  quantity: item.qty,
-  qty: item.qty,
-  subtotal: num(item.price) * item.qty,
-  size: item.size || '',
-  color: item.color || '',
-  business_id: item.businessId || '',
-  business_name: item.businessName || 'SPOTC Shop',
+  quantity: Math.max(1, num(item.qty) || 1),
+  qty: Math.max(1, num(item.qty) || 1),
+  subtotal:
+    num(item.price) *
+    Math.max(1, num(item.qty) || 1),
+  size: text(item.size),
+  color: text(item.color),
+  business_id: text(item.businessId),
+  business_name:
+    text(item.businessName) || 'SPOTC Shop',
 });
 
 async function businessData(
@@ -81,27 +87,76 @@ export async function createBusinessOrder({
     .slice(2, 6)
     .toUpperCase();
 
-  const orderNumber = `SPOTC-${String(now).slice(-8)}-${suffix}`;
+  const orderNumber =
+    `SPOTC-${String(now).slice(-8)}-${suffix}`;
 
-  const documentId = `${user.uid}_${now}_${suffix}`;
+  const documentId =
+    `${user.uid}_${now}_${suffix}`;
+
+  const businessId =
+    text(group.businessId) || 'SPOTC';
 
   const business = await businessData(
     db,
-    group.businessId,
+    businessId,
   );
 
-  const businessRef = group.businessId
-    ? doc(
-        db,
-        'BusinessListings',
-        group.businessId,
-      )
-    : null;
+  const businessRef =
+    businessId === 'SPOTC'
+      ? null
+      : doc(
+          db,
+          'BusinessListings',
+          businessId,
+        );
+
+  const subtotal = num(group.subtotal);
+  const delivery = num(group.delivery);
+  const safeDiscount = num(discount);
 
   const total =
-    group.subtotal +
-    group.delivery -
-    discount;
+    subtotal +
+    delivery -
+    safeDiscount;
+
+  /*
+   * IMPORTANT:
+   * Firestore rejects any field whose value is undefined.
+   * Every optional reward/address/business value below is converted
+   * to a safe number, string, null, or boolean before setDoc().
+   */
+  const purchasePoints =
+    num(rewards?.purchasePoints);
+
+  const nearbyBonusPoints =
+    num(rewards?.nearbyBonusPoints);
+
+  const totalPoints =
+    num(rewards?.totalPoints);
+
+  const couponCount =
+    num(rewards?.couponCount);
+
+  const couponValueEach =
+    num(
+      (
+        rewards as RewardEstimate & {
+          couponValueEach?: unknown;
+        }
+      )?.couponValueEach,
+    );
+
+  const rewardsStatus =
+    text(
+      (
+        rewards as RewardEstimate & {
+          status?: unknown;
+        }
+      )?.status,
+    );
+
+  const fullName = text(address.fullName);
+  const phone = text(address.phone);
 
   await setDoc(
     doc(db, 'Orders', documentId),
@@ -112,85 +167,109 @@ export async function createBusinessOrder({
       user_ref: doc(db, 'Users', user.uid),
 
       customer_uid: user.uid,
-      customer_name: address.fullName,
-      customer_phone: address.phone,
-      customer_email: user.email || '',
+      customer_name: fullName,
+      customer_phone: phone,
+      customer_email: text(user.email),
 
-      business_id: group.businessId,
+      business_id: businessId,
       business_ref: businessRef,
-      business_name: String(
-        business.business_name ??
-          business.shop_name ??
-          group.businessName,
-      ),
-      business_logo: String(
+      business_name:
+        text(
+          business.business_name ??
+            business.shop_name ??
+            group.businessName,
+        ) || 'SPOTC Shop',
+
+      business_logo: text(
         business.logo_url ??
-          business.business_logo_url ??
-          '',
+          business.business_logo_url,
       ),
-      business_address: String(
+
+      business_address: text(
         business.address ??
-          business.business_address ??
-          '',
+          business.business_address,
       ),
-      business_phone: String(
+
+      business_phone: text(
         business.phone ??
-          business.business_phone ??
-          '',
+          business.business_phone,
       ),
-      business_whatsapp: String(
+
+      business_whatsapp: text(
         business.whatsapp ??
-          business.business_whatsapp ??
-          '',
+          business.business_whatsapp,
       ),
-      business_category: String(
-        business.category ?? '',
+
+      business_category: text(
+        business.category,
       ),
+
       business_location:
         business.business_location ??
         business.location ??
         null,
+
       business_verified:
         business.isVerified === true ||
         business.is_verified === true,
 
-      address_ref: address.ref,
+      address_ref:
+        address.ref ?? null,
 
       address: {
-        full_name: address.fullName,
-        phone: address.phone,
-        address_type: address.addressType,
-        house_no: address.houseNo,
-        street: address.street,
-        landmark: address.landmark,
-        area: address.area,
-        city: address.city,
-        pincode: address.pincode,
-        state: address.state,
-        country: address.country,
-        delivery_note: address.deliveryNote,
-        latitude: address.latitude,
-        longitude: address.longitude,
+        full_name: fullName,
+        phone,
+        address_type:
+          text(address.addressType),
+        house_no:
+          text(address.houseNo),
+        street:
+          text(address.street),
+        landmark:
+          text(address.landmark),
+        area:
+          text(address.area),
+        city:
+          text(address.city),
+        pincode:
+          text(address.pincode),
+        state:
+          text(address.state),
+        country:
+          text(address.country),
+        delivery_note:
+          text(address.deliveryNote),
+        latitude:
+          address.latitude ?? null,
+        longitude:
+          address.longitude ?? null,
       },
 
-      delivery_address: formatAddress(address),
-      address_text: formatAddress(address),
+      delivery_address:
+        formatAddress(address),
 
-      items: group.items.map(orderItem),
+      address_text:
+        formatAddress(address),
 
-      subtotal: group.subtotal,
-      delivery_charge: group.delivery,
+      items:
+        group.items.map(orderItem),
+
+      subtotal,
+      delivery_charge: delivery,
       platform_fee: 0,
-      discount,
+      discount: safeDiscount,
       total,
 
-      welcome_discount_applied: discount > 0,
+      welcome_discount_applied:
+        safeDiscount > 0,
+
       applied_coupon_type:
-        discount > 0
+        safeDiscount > 0
           ? 'welcome_discount'
           : '',
+
       applied_coupon_title:
-        discount > 0
+        safeDiscount > 0
           ? 'First order from this shop'
           : '',
 
@@ -203,27 +282,35 @@ export async function createBusinessOrder({
       estimated_delivery: '15–45 mins',
 
       purchase_reward_points:
-        rewards.purchasePoints,
+        purchasePoints,
 
       nearby_bonus_points:
-        rewards.nearbyBonusPoints,
+        nearbyBonusPoints,
 
       reward_points_pending:
-        rewards.totalPoints,
+        totalPoints,
 
       coupon_count_pending:
-        rewards.couponCount,
+        couponCount,
 
+      /*
+       * FIX:
+       * Previously this could be undefined and Firestore rejected
+       * the whole Orders document.
+       */
       coupon_value_each:
-        rewards.couponValueEach,
+        couponValueEach,
 
       rewards_status:
-        rewards.status,
+        rewardsStatus,
 
       rewards_unlocked: false,
 
-      created_at: serverTimestamp(),
-      updated_at: serverTimestamp(),
+      created_at:
+        serverTimestamp(),
+
+      updated_at:
+        serverTimestamp(),
     },
   );
 
@@ -231,7 +318,9 @@ export async function createBusinessOrder({
     documentId,
     orderNumber,
     total,
-    businessName: group.businessName,
+    businessName:
+      text(group.businessName) ||
+      'SPOTC Shop',
   };
 }
 
