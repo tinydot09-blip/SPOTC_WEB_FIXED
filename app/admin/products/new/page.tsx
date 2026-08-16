@@ -15,7 +15,6 @@ import {
   type DocumentData,
 } from 'firebase/firestore';
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
 
 type ProductRow = { id: string; data: DocumentData };
@@ -135,6 +134,18 @@ function offerPriceOf(data: DocumentData): number {
 
 function displayPriceOf(data: DocumentData): number {
   return offerPriceOf(data) || sellingPriceOf(data);
+}
+
+function automaticOfferOf(data: DocumentData): string {
+  const mrp = mrpOf(data);
+  const finalPrice = displayPriceOf(data);
+
+  if (mrp <= 0 || finalPrice <= 0 || finalPrice >= mrp) {
+    return '';
+  }
+
+  const percent = Math.round(((mrp - finalPrice) / mrp) * 100);
+  return `${percent}% OFF`;
 }
 
 function stockOf(data: DocumentData): number {
@@ -301,8 +312,6 @@ function editFormFromProduct(data: DocumentData): EditForm {
 }
 
 export default function AdminProductsPage() {
-  const router = useRouter();
-
   const [rows, setRows] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -378,6 +387,7 @@ export default function AdminProductsPage() {
 
     try {
       await loadProducts(false);
+      setMessage('Products refreshed.');
     } finally {
       setRefreshing(false);
     }
@@ -840,11 +850,8 @@ export default function AdminProductsPage() {
 
       const mrp = money(editForm.mrp);
       const purchaseCost = money(editForm.purchaseCost);
-      const offerPrice = money(editForm.offerPrice);
-      const finalCustomerPrice =
-        offerPrice > 0 && offerPrice < sellingPrice
-          ? offerPrice
-          : sellingPrice;
+      const offerPrice = 0;
+      const finalCustomerPrice = sellingPrice;
 
       const discount =
         mrp > finalCustomerPrice && mrp > 0
@@ -1113,7 +1120,9 @@ export default function AdminProductsPage() {
 
           <button
             type="button"
-            onClick={() => router.push('/admin/products/new')}
+            onClick={() => {
+              window.location.href = '/admin/products/new';
+            }}
             style={addButton}
           >
             + Add Product
@@ -1208,7 +1217,7 @@ export default function AdminProductsPage() {
           <table style={tableStyle}>
             <thead>
               <tr style={tableHeadRow}>
-                {['Product', 'SKU / QR', 'MRP', 'Sell', 'Offer', 'Stock', 'Sold', 'Location', 'Gift', 'Status', ''].map((heading) => (
+                {['Product', 'Purchase', 'MRP', 'Sell', 'Offer', 'Stock', 'Sold', 'Location', 'Gift', 'Status', ''].map((heading) => (
                   <th key={heading} style={tableHeadCell}>{heading}</th>
                 ))}
               </tr>
@@ -1246,9 +1255,10 @@ export default function AdminProductsPage() {
                       </button>
                     </td>
 
-                    <td style={normalCell}>
-                      <div style={{ fontWeight: 400 }}>{data.sku || '—'}</div>
-                      <div style={mutedText}>{data.qr_code || data.qr_sticker_id || '—'}</div>
+                    <td style={priceCell}>
+                      {Number(data.purchase_cost ?? 0) > 0
+                        ? `₹${Number(data.purchase_cost)}`
+                        : '—'}
                     </td>
 
                     <td style={priceCell}>{mrp > 0 ? `₹${mrp}` : '—'}</td>
@@ -1258,8 +1268,10 @@ export default function AdminProductsPage() {
                     </td>
 
                     <td style={priceCell}>
-                      {offerPrice > 0 ? (
-                        <span style={offerPriceBadge}>₹{offerPrice}</span>
+                      {automaticOfferOf(data) ? (
+                        <span style={offerPriceBadge}>
+                          {automaticOfferOf(data)}
+                        </span>
                       ) : (
                         <span style={mutedText}>—</span>
                       )}
@@ -1269,8 +1281,8 @@ export default function AdminProductsPage() {
                       <div style={stockControl}>
                         <button
                           type="button"
-                          title="Reduce physical stock"
-                          aria-label="Reduce physical stock"
+                          title="Reduce stock"
+                          aria-label="Reduce stock"
                           disabled={busy || stock <= 0}
                           onClick={() => void adjustStock(row, -1)}
                           style={{ ...stockButton, opacity: busy || stock <= 0 ? 0.4 : 1 }}
@@ -1284,21 +1296,17 @@ export default function AdminProductsPage() {
                               ...stockNumber,
                               color: available <= 2 ? '#b42318' : '#111',
                             }}
-                            title={`Physical stock: ${stock}`}
+                            title={`Stock: ${stock}`}
                           >
                             {available}
                           </div>
-                          <div style={stockSubText}>
-                            {reserved > 0
-                              ? `${reserved} reserved`
-                              : `${stock} physical`}
-                          </div>
+
                         </div>
 
                         <button
                           type="button"
-                          title="Increase physical stock"
-                          aria-label="Increase physical stock"
+                          title="Increase stock"
+                          aria-label="Increase stock"
                           disabled={busy}
                           onClick={() => void adjustStock(row, 1)}
                           style={{ ...stockButton, opacity: busy ? 0.4 : 1 }}
@@ -1525,17 +1533,63 @@ export default function AdminProductsPage() {
 
               <EditSection title="Pricing">
                 <div style={editGrid3}>
-                  <EditField label="Purchase Cost" value={editForm.purchaseCost} type="number" onChange={(value) => updateEditField('purchaseCost', value)} />
-                  <EditField label="MRP" value={editForm.mrp} type="number" onChange={(value) => updateEditField('mrp', value)} />
-                  <EditField label="Selling Price" value={editForm.sellingPrice} type="number" onChange={(value) => updateEditField('sellingPrice', value)} />
-                  <EditField label="Offer Price (optional)" value={editForm.offerPrice} type="number" onChange={(value) => updateEditField('offerPrice', value)} />
+                  <EditField
+                    label="Purchase Cost"
+                    value={editForm.purchaseCost}
+                    type="number"
+                    onChange={(value) =>
+                      updateEditField('purchaseCost', value)
+                    }
+                  />
+
+                  <EditField
+                    label="MRP"
+                    value={editForm.mrp}
+                    type="number"
+                    onChange={(value) =>
+                      updateEditField('mrp', value)
+                    }
+                  />
+
+                  <EditField
+                    label="Selling Price"
+                    value={editForm.sellingPrice}
+                    type="number"
+                    onChange={(value) =>
+                      updateEditField('sellingPrice', value)
+                    }
+                  />
+
+                  <label>
+                    <span style={modalLabel}>Offer</span>
+                    <input
+                      value={(() => {
+                        const mrp = money(editForm.mrp);
+                        const price = money(editForm.sellingPrice);
+
+                        if (mrp <= 0 || price <= 0 || price >= mrp) {
+                          return '';
+                        }
+
+                        return `${Math.round(
+                          ((mrp - price) / mrp) * 100,
+                        )}% OFF`;
+                      })()}
+                      readOnly
+                      placeholder="Auto calculated"
+                      style={{
+                        ...modalInput,
+                        background: '#f7f7f7',
+                        color: '#9a5300',
+                        fontWeight: 600,
+                      }}
+                    />
+                  </label>
                 </div>
               </EditSection>
 
               <EditSection title="Inventory">
                 <div style={editGrid3}>
-                  <EditField label="SKU" value={editForm.sku} onChange={(value) => updateEditField('sku', value)} />
-                  <EditField label="QR Code" value={editForm.qrCode} onChange={(value) => updateEditField('qrCode', value)} />
                   <EditField label="Stock Quantity" value={editForm.stockQty} type="number" onChange={(value) => updateEditField('stockQty', value)} />
                   <EditField label="Rack" value={editForm.rack} onChange={(value) => updateEditField('rack', value)} />
                   <EditField label="Box" value={editForm.box} onChange={(value) => updateEditField('box', value)} />
