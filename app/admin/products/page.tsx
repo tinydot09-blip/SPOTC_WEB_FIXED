@@ -1,5 +1,7 @@
 'use client';
 
+import { getApp } from 'firebase/app';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import {
   collection,
   deleteDoc,
@@ -12,8 +14,8 @@ import {
   updateDoc,
   type DocumentData,
 } from 'firebase/firestore';
-import { useEffect, useMemo, useState } from 'react';
-import { db } from '@/lib/firebase';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { auth, db } from '@/lib/firebase';
 
 type ProductRow = { id: string; data: DocumentData };
 type StockFilter = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock';
@@ -53,6 +55,39 @@ type EditForm = {
   freeGiftValue: string;
   isActive: boolean;
 };
+
+type SlotKey =
+  | 'ai_main'
+  | 'real_front'
+  | 'real_back'
+  | 'detail'
+  | 'product_video';
+
+type MediaKind = 'image' | 'video';
+
+type EditMediaAsset = {
+  file: File;
+  previewUrl: string;
+  kind: MediaKind;
+  slot: SlotKey;
+};
+
+type UploadResult = {
+  uploadUrl: string;
+  publicUrl: string;
+};
+
+const MEDIA_SLOTS: Array<{
+  slot: SlotKey;
+  label: string;
+  kind: MediaKind;
+}> = [
+  { slot: 'ai_main', label: 'Main Image', kind: 'image' },
+  { slot: 'real_front', label: 'Real Front', kind: 'image' },
+  { slot: 'real_back', label: 'Real Back', kind: 'image' },
+  { slot: 'detail', label: 'Detail Image', kind: 'image' },
+  { slot: 'product_video', label: 'Product Video', kind: 'video' },
+];
 
 const PAGE_SIZE_OPTIONS = [10, 20, 100];
 
@@ -101,6 +136,18 @@ function displayPriceOf(data: DocumentData): number {
   return offerPriceOf(data) || sellingPriceOf(data);
 }
 
+function automaticOfferOf(data: DocumentData): string {
+  const mrp = mrpOf(data);
+  const finalPrice = displayPriceOf(data);
+
+  if (mrp <= 0 || finalPrice <= 0 || finalPrice >= mrp) {
+    return '';
+  }
+
+  const percent = Math.round(((mrp - finalPrice) / mrp) * 100);
+  return `${percent}% OFF`;
+}
+
 function stockOf(data: DocumentData): number {
   return Math.max(
     0,
@@ -137,6 +184,84 @@ function createdMillis(data: DocumentData): number {
 
 function money(value: string): number {
   return Number(value.replace(/[^0-9.]/g, '')) || 0;
+}
+
+function cleanText(value: unknown): string {
+  return String(value ?? '').trim();
+}
+
+function extensionFor(file: File): string {
+  const fromName = file.name.split('.').pop()?.toLowerCase().trim();
+
+  if (fromName && /^[a-z0-9]{2,6}$/.test(fromName)) {
+    return fromName;
+  }
+
+  if (file.type === 'image/png') return 'png';
+  if (file.type === 'image/webp') return 'webp';
+  if (file.type === 'video/mp4') return 'mp4';
+  if (file.type === 'video/webm') return 'webm';
+
+  return file.type.startsWith('video/') ? 'mp4' : 'jpg';
+}
+
+function safeFilePart(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50);
+}
+
+function existingMediaUrl(data: DocumentData, slot: SlotKey): string {
+  const media = Array.isArray(data.media) ? data.media : [];
+
+  const fromMedia = media.find(
+    (item: unknown) =>
+      item &&
+      typeof item === 'object' &&
+      cleanText((item as Record<string, unknown>).slot) === slot,
+  ) as Record<string, unknown> | undefined;
+
+  if (fromMedia) {
+    const mediaUrl = cleanText(fromMedia.url);
+    if (mediaUrl) return mediaUrl;
+  }
+
+  if (slot === 'ai_main') {
+    return cleanText(
+      data.image_url ||
+        data.image ||
+        data.product_image_url ||
+        data.thumbnail_url ||
+        data.studio_image_url ||
+        (Array.isArray(data.images) ? data.images[0] : ''),
+    );
+  }
+
+  if (slot === 'real_front') {
+    return cleanText(
+      data.real_front_url ||
+        data.raw_image_url ||
+        (Array.isArray(data.images) ? data.images[1] : ''),
+    );
+  }
+
+  if (slot === 'real_back') {
+    return cleanText(
+      data.real_back_url ||
+        (Array.isArray(data.images) ? data.images[2] : ''),
+    );
+  }
+
+  if (slot === 'detail') {
+    return cleanText(
+      data.detail_image_url ||
+        (Array.isArray(data.images) ? data.images[3] : ''),
+    );
+  }
+
+  return cleanText(data.product_video_url);
 }
 
 function locationParts(data: DocumentData) {
@@ -189,6 +314,7 @@ function editFormFromProduct(data: DocumentData): EditForm {
 export default function AdminProductsPage() {
   const [rows, setRows] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState('');
   const [message, setMessage] = useState('');
 
@@ -205,6 +331,13 @@ export default function AdminProductsPage() {
   const [editing, setEditing] = useState<ProductRow | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+
+  const editMediaInputRef = useRef<HTMLInputElement | null>(null);
+  const [editMediaTarget, setEditMediaTarget] = useState<SlotKey>('ai_main');
+  const [editMediaChanges, setEditMediaChanges] = useState<
+    Partial<Record<SlotKey, EditMediaAsset>>
+  >({});
+  const [editUploadStatus, setEditUploadStatus] = useState('');
 
   async function loadProducts(showLoader = true) {
     if (!db) {
@@ -243,6 +376,20 @@ export default function AdminProductsPage() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function refreshProducts() {
+    if (refreshing) return;
+
+    setRefreshing(true);
+    setMessage('');
+
+    try {
+      await loadProducts(false);
+      setMessage('Products refreshed.');
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -396,7 +543,19 @@ export default function AdminProductsPage() {
   const pageStart = filtered.length === 0 ? 0 : (page - 1) * pageSize + 1;
   const pageEnd = Math.min(page * pageSize, filtered.length);
 
+  function clearEditMediaChanges() {
+    Object.values(editMediaChanges).forEach((asset) => {
+      if (asset?.previewUrl) {
+        URL.revokeObjectURL(asset.previewUrl);
+      }
+    });
+
+    setEditMediaChanges({});
+    setEditUploadStatus('');
+  }
+
   function openEdit(row: ProductRow) {
+    clearEditMediaChanges();
     setEditing(row);
     setEditForm(editFormFromProduct(row.data));
     setMessage('');
@@ -404,8 +563,163 @@ export default function AdminProductsPage() {
 
   function closeEdit() {
     if (savingEdit) return;
+    clearEditMediaChanges();
     setEditing(null);
     setEditForm(null);
+  }
+
+  function chooseEditMedia(slot: SlotKey) {
+    if (savingEdit) return;
+
+    setEditMediaTarget(slot);
+
+    if (editMediaInputRef.current) {
+      editMediaInputRef.current.accept =
+        slot === 'product_video' ? 'video/*' : 'image/*';
+      editMediaInputRef.current.value = '';
+      editMediaInputRef.current.click();
+    }
+  }
+
+  function handleEditMediaSelection(
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+
+    const expectedKind: MediaKind =
+      editMediaTarget === 'product_video' ? 'video' : 'image';
+
+    const actualKind: MediaKind = file.type.startsWith('video/')
+      ? 'video'
+      : 'image';
+
+    if (actualKind !== expectedKind) {
+      setMessage(
+        expectedKind === 'video'
+          ? 'Please select a video file for Product Video.'
+          : 'Please select an image file for this media slot.',
+      );
+      return;
+    }
+
+    setEditMediaChanges((prev) => {
+      const previous = prev[editMediaTarget];
+
+      if (previous?.previewUrl) {
+        URL.revokeObjectURL(previous.previewUrl);
+      }
+
+      return {
+        ...prev,
+        [editMediaTarget]: {
+          file,
+          previewUrl: URL.createObjectURL(file),
+          kind: actualKind,
+          slot: editMediaTarget,
+        },
+      };
+    });
+
+    setMessage('');
+  }
+
+  function removeEditMediaSelection(slot: SlotKey) {
+    setEditMediaChanges((prev) => {
+      const previous = prev[slot];
+
+      if (previous?.previewUrl) {
+        URL.revokeObjectURL(previous.previewUrl);
+      }
+
+      const next = { ...prev };
+      delete next[slot];
+      return next;
+    });
+  }
+
+  async function uploadReplacementMedia(
+    asset: EditMediaAsset,
+    index: number,
+    total: number,
+  ): Promise<string> {
+    const user = auth?.currentUser;
+
+    if (!user) {
+      throw new Error('Admin login is required before uploading media.');
+    }
+
+    if (!editForm) {
+      throw new Error('Product edit form is not available.');
+    }
+
+    const contentType =
+      asset.file.type ||
+      (asset.kind === 'video' ? 'video/mp4' : 'image/jpeg');
+
+    const ext = extensionFor(asset.file);
+
+    const skuPart =
+      safeFilePart(editForm.sku) ||
+      safeFilePart(editForm.title) ||
+      'product';
+
+    const fileName =
+      `business_products/web_admin/${user.uid}/` +
+      `${Date.now()}_${skuPart}_${asset.slot}.${ext}`;
+
+    setEditUploadStatus(
+      `Uploading ${index + 1} of ${total}: ${
+        MEDIA_SLOTS.find((item) => item.slot === asset.slot)?.label ??
+        asset.slot
+      }`,
+    );
+
+    const functions = getFunctions(getApp(), 'asia-south1');
+
+    const getUploadUrl = httpsCallable<
+      {
+        fileName: string;
+        contentType: string;
+      },
+      UploadResult
+    >(functions, 'getR2UploadUrl');
+
+    const result = await getUploadUrl({
+      fileName,
+      contentType,
+    });
+
+    const uploadUrl = cleanText(result.data?.uploadUrl);
+    const publicUrl = cleanText(result.data?.publicUrl);
+
+    if (!uploadUrl || !publicUrl) {
+      throw new Error(
+        'R2 upload URL was not returned by getR2UploadUrl.',
+      );
+    }
+
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': contentType,
+      },
+      body: asset.file,
+    });
+
+    if (!uploadResponse.ok) {
+      const detail = await uploadResponse.text().catch(() => '');
+
+      throw new Error(
+        `R2 upload failed (${uploadResponse.status})${
+          detail ? `: ${detail}` : ''
+        }`,
+      );
+    }
+
+    return publicUrl;
   }
 
   function updateEditField(field: keyof EditForm, value: string | boolean) {
@@ -426,8 +740,107 @@ export default function AdminProductsPage() {
     }
 
     setSavingEdit(true);
+    setEditUploadStatus('');
 
     try {
+      const changedAssets = Object.values(editMediaChanges).filter(
+        (asset): asset is EditMediaAsset => Boolean(asset),
+      );
+
+      const uploadedChanges: Partial<Record<SlotKey, string>> = {};
+
+      for (let index = 0; index < changedAssets.length; index += 1) {
+        const asset = changedAssets[index];
+
+        uploadedChanges[asset.slot] = await uploadReplacementMedia(
+          asset,
+          index,
+          changedAssets.length,
+        );
+      }
+
+      const finalMediaUrls: Record<SlotKey, string> = {
+        ai_main:
+          cleanText(uploadedChanges.ai_main) ||
+          existingMediaUrl(editing.data, 'ai_main'),
+        real_front:
+          cleanText(uploadedChanges.real_front) ||
+          existingMediaUrl(editing.data, 'real_front'),
+        real_back:
+          cleanText(uploadedChanges.real_back) ||
+          existingMediaUrl(editing.data, 'real_back'),
+        detail:
+          cleanText(uploadedChanges.detail) ||
+          existingMediaUrl(editing.data, 'detail'),
+        product_video:
+          cleanText(uploadedChanges.product_video) ||
+          existingMediaUrl(editing.data, 'product_video'),
+      };
+
+      if (!finalMediaUrls.ai_main) {
+        throw new Error('Main product image is required.');
+      }
+
+      const images = [
+        finalMediaUrls.ai_main,
+        finalMediaUrls.real_front,
+        finalMediaUrls.real_back,
+        finalMediaUrls.detail,
+      ].filter(Boolean);
+
+      const media = [
+        finalMediaUrls.ai_main
+          ? {
+              slot: 'ai_main',
+              role: 'ai',
+              type: 'image',
+              label: 'AI Main Image',
+              url: finalMediaUrls.ai_main,
+              order: 1,
+            }
+          : null,
+        finalMediaUrls.real_front
+          ? {
+              slot: 'real_front',
+              role: 'front',
+              type: 'image',
+              label: 'Real Front',
+              url: finalMediaUrls.real_front,
+              order: 2,
+            }
+          : null,
+        finalMediaUrls.real_back
+          ? {
+              slot: 'real_back',
+              role: 'back',
+              type: 'image',
+              label: 'Real Back',
+              url: finalMediaUrls.real_back,
+              order: 3,
+            }
+          : null,
+        finalMediaUrls.detail
+          ? {
+              slot: 'detail',
+              role: 'additional',
+              type: 'image',
+              label: 'Detail Image',
+              url: finalMediaUrls.detail,
+              order: 4,
+            }
+          : null,
+        finalMediaUrls.product_video
+          ? {
+              slot: 'product_video',
+              role: 'video',
+              type: 'video',
+              label: 'Product Video',
+              url: finalMediaUrls.product_video,
+              order: 5,
+            }
+          : null,
+      ].filter(Boolean);
+
       const stock = Math.max(
         0,
         Number.parseInt(editForm.stockQty || '0', 10) || 0,
@@ -437,11 +850,8 @@ export default function AdminProductsPage() {
 
       const mrp = money(editForm.mrp);
       const purchaseCost = money(editForm.purchaseCost);
-      const offerPrice = money(editForm.offerPrice);
-      const finalCustomerPrice =
-        offerPrice > 0 && offerPrice < sellingPrice
-          ? offerPrice
-          : sellingPrice;
+      const offerPrice = 0;
+      const finalCustomerPrice = sellingPrice;
 
       const discount =
         mrp > finalCustomerPrice && mrp > 0
@@ -494,6 +904,24 @@ export default function AdminProductsPage() {
         ]
           .filter(Boolean)
           .join(' / '),
+
+        images,
+        media,
+
+        image: finalMediaUrls.ai_main,
+        image_url: finalMediaUrls.ai_main,
+        product_image: finalMediaUrls.ai_main,
+        product_image_url: finalMediaUrls.ai_main,
+        thumbnail_url: finalMediaUrls.ai_main,
+        studio_image_url: finalMediaUrls.ai_main,
+
+        raw_image_url:
+          finalMediaUrls.real_front || finalMediaUrls.ai_main,
+        real_front_url: finalMediaUrls.real_front,
+        real_back_url: finalMediaUrls.real_back,
+        detail_image_url: finalMediaUrls.detail,
+        product_video_url: finalMediaUrls.product_video,
+
         free_gift_eligible: editForm.freeGiftEligible,
         free_gift_value: money(editForm.freeGiftValue),
         isActive: editForm.isActive,
@@ -511,9 +939,15 @@ export default function AdminProductsPage() {
         ),
       );
 
+      clearEditMediaChanges();
       setEditing(null);
       setEditForm(null);
-      setMessage('Product updated successfully.');
+      setEditUploadStatus('');
+      setMessage(
+        changedAssets.length > 0
+          ? 'Product and media updated successfully.'
+          : 'Product updated successfully.',
+      );
     } catch (error) {
       console.error('Edit product failed:', error);
       setMessage(
@@ -523,6 +957,7 @@ export default function AdminProductsPage() {
       );
     } finally {
       setSavingEdit(false);
+      setEditUploadStatus('');
     }
   }
 
@@ -627,7 +1062,17 @@ export default function AdminProductsPage() {
 
     try {
       await deleteDoc(doc(db, 'BusinessProducts', row.id));
-      setRows((prev) => prev.filter((item) => item.id !== row.id));
+
+      setRows((prev) =>
+        prev.filter((item) => item.id !== row.id),
+      );
+
+      if (editing?.id === row.id) {
+        clearEditMediaChanges();
+        setEditing(null);
+        setEditForm(null);
+      }
+
       setMessage('Product deleted permanently.');
     } catch (error) {
       console.error('Delete product failed:', error);
@@ -660,10 +1105,28 @@ export default function AdminProductsPage() {
         </div>
 
         <div style={headerActions}>
-          <button type="button" onClick={() => void loadProducts(false)} style={secondaryButton}>
-            ↻ Refresh
+          <button
+            type="button"
+            onClick={() => void refreshProducts()}
+            disabled={refreshing}
+            style={{
+              ...secondaryButton,
+              opacity: refreshing ? 0.55 : 1,
+              cursor: refreshing ? 'wait' : 'pointer',
+            }}
+          >
+            {refreshing ? '↻ Refreshing…' : '↻ Refresh'}
           </button>
-          <a href="/admin/products/new" style={addButton}>+ Add Product</a>
+
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = '/admin/products/new';
+            }}
+            style={addButton}
+          >
+            + Add Product
+          </button>
         </div>
       </div>
 
@@ -754,7 +1217,7 @@ export default function AdminProductsPage() {
           <table style={tableStyle}>
             <thead>
               <tr style={tableHeadRow}>
-                {['Product', 'SKU / QR', 'MRP', 'Sell', 'Offer', 'Stock', 'Sold', 'Location', 'Gift', 'Status', ''].map((heading) => (
+                {['Product', 'Purchase', 'MRP', 'Sell', 'Offer', 'Stock', 'Sold', 'Location', 'Gift', 'Status', ''].map((heading) => (
                   <th key={heading} style={tableHeadCell}>{heading}</th>
                 ))}
               </tr>
@@ -792,9 +1255,10 @@ export default function AdminProductsPage() {
                       </button>
                     </td>
 
-                    <td style={normalCell}>
-                      <div style={{ fontWeight: 400 }}>{data.sku || '—'}</div>
-                      <div style={mutedText}>{data.qr_code || data.qr_sticker_id || '—'}</div>
+                    <td style={priceCell}>
+                      {Number(data.purchase_cost ?? 0) > 0
+                        ? `₹${Number(data.purchase_cost)}`
+                        : '—'}
                     </td>
 
                     <td style={priceCell}>{mrp > 0 ? `₹${mrp}` : '—'}</td>
@@ -804,8 +1268,10 @@ export default function AdminProductsPage() {
                     </td>
 
                     <td style={priceCell}>
-                      {offerPrice > 0 ? (
-                        <span style={offerPriceBadge}>₹{offerPrice}</span>
+                      {automaticOfferOf(data) ? (
+                        <span style={offerPriceBadge}>
+                          {automaticOfferOf(data)}
+                        </span>
                       ) : (
                         <span style={mutedText}>—</span>
                       )}
@@ -815,8 +1281,8 @@ export default function AdminProductsPage() {
                       <div style={stockControl}>
                         <button
                           type="button"
-                          title="Reduce physical stock"
-                          aria-label="Reduce physical stock"
+                          title="Reduce stock"
+                          aria-label="Reduce stock"
                           disabled={busy || stock <= 0}
                           onClick={() => void adjustStock(row, -1)}
                           style={{ ...stockButton, opacity: busy || stock <= 0 ? 0.4 : 1 }}
@@ -830,21 +1296,17 @@ export default function AdminProductsPage() {
                               ...stockNumber,
                               color: available <= 2 ? '#b42318' : '#111',
                             }}
-                            title={`Physical stock: ${stock}`}
+                            title={`Stock: ${stock}`}
                           >
                             {available}
                           </div>
-                          <div style={stockSubText}>
-                            {reserved > 0
-                              ? `${reserved} reserved`
-                              : `${stock} physical`}
-                          </div>
+
                         </div>
 
                         <button
                           type="button"
-                          title="Increase physical stock"
-                          aria-label="Increase physical stock"
+                          title="Increase stock"
+                          aria-label="Increase stock"
                           disabled={busy}
                           onClick={() => void adjustStock(row, 1)}
                           style={{ ...stockButton, opacity: busy ? 0.4 : 1 }}
@@ -955,17 +1417,105 @@ export default function AdminProductsPage() {
             </div>
 
             <div style={modalBody}>
-              <div style={editMediaStrip}>
-                {productImage(editing.data) ? (
-                  <img src={productImage(editing.data)} alt="" style={editMainImage} />
-                ) : (
-                  <div style={editImagePlaceholder}>No image</div>
-                )}
-                <div>
-                  <div style={{ fontWeight: 400 }}>Current Media</div>
-                  <div style={mutedText}>Product details, pricing, stock and location can be edited here. Media replacement can be added next.</div>
+              <input
+                ref={editMediaInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleEditMediaSelection}
+                style={{ display: 'none' }}
+              />
+
+              <EditSection title="Product Media">
+                <div style={editMediaHelp}>
+                  Change only the media you want to replace. Existing media is
+                  kept automatically when no new file is selected.
                 </div>
-              </div>
+
+                <div style={editMediaGrid}>
+                  {MEDIA_SLOTS.map((item) => {
+                    const replacement = editMediaChanges[item.slot];
+                    const currentUrl = existingMediaUrl(
+                      editing.data,
+                      item.slot,
+                    );
+
+                    const previewUrl =
+                      replacement?.previewUrl || currentUrl;
+
+                    return (
+                      <div key={item.slot} style={editMediaCard}>
+                        <div style={editMediaCardTitle}>
+                          {item.label}
+                        </div>
+
+                        <div style={editMediaPreviewWrap}>
+                          {previewUrl ? (
+                            item.kind === 'video' ? (
+                              <video
+                                src={previewUrl}
+                                controls
+                                muted
+                                playsInline
+                                style={editMediaPreview}
+                              />
+                            ) : (
+                              <img
+                                src={previewUrl}
+                                alt={item.label}
+                                style={editMediaPreview}
+                              />
+                            )
+                          ) : (
+                            <div style={editImagePlaceholder}>
+                              No {item.kind}
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={editMediaStatus}>
+                          {replacement
+                            ? 'New file selected'
+                            : currentUrl
+                              ? 'Current media'
+                              : 'Not added'}
+                        </div>
+
+                        <div style={editMediaActions}>
+                          <button
+                            type="button"
+                            onClick={() => chooseEditMedia(item.slot)}
+                            disabled={savingEdit}
+                            style={editMediaChangeButton}
+                          >
+                            {currentUrl || replacement
+                              ? 'Change'
+                              : 'Add'}
+                          </button>
+
+                          {replacement && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                removeEditMediaSelection(item.slot)
+                              }
+                              disabled={savingEdit}
+                              style={editMediaCancelButton}
+                            >
+                              Cancel Change
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {editUploadStatus && (
+                  <div style={editUploadNotice}>
+                    {editUploadStatus}
+                  </div>
+                )}
+              </EditSection>
 
               <EditSection title="Basic Details">
                 <div style={editGrid3}>
@@ -983,17 +1533,63 @@ export default function AdminProductsPage() {
 
               <EditSection title="Pricing">
                 <div style={editGrid3}>
-                  <EditField label="Purchase Cost" value={editForm.purchaseCost} type="number" onChange={(value) => updateEditField('purchaseCost', value)} />
-                  <EditField label="MRP" value={editForm.mrp} type="number" onChange={(value) => updateEditField('mrp', value)} />
-                  <EditField label="Selling Price" value={editForm.sellingPrice} type="number" onChange={(value) => updateEditField('sellingPrice', value)} />
-                  <EditField label="Offer Price (optional)" value={editForm.offerPrice} type="number" onChange={(value) => updateEditField('offerPrice', value)} />
+                  <EditField
+                    label="Purchase Cost"
+                    value={editForm.purchaseCost}
+                    type="number"
+                    onChange={(value) =>
+                      updateEditField('purchaseCost', value)
+                    }
+                  />
+
+                  <EditField
+                    label="MRP"
+                    value={editForm.mrp}
+                    type="number"
+                    onChange={(value) =>
+                      updateEditField('mrp', value)
+                    }
+                  />
+
+                  <EditField
+                    label="Selling Price"
+                    value={editForm.sellingPrice}
+                    type="number"
+                    onChange={(value) =>
+                      updateEditField('sellingPrice', value)
+                    }
+                  />
+
+                  <label>
+                    <span style={modalLabel}>Offer</span>
+                    <input
+                      value={(() => {
+                        const mrp = money(editForm.mrp);
+                        const price = money(editForm.sellingPrice);
+
+                        if (mrp <= 0 || price <= 0 || price >= mrp) {
+                          return '';
+                        }
+
+                        return `${Math.round(
+                          ((mrp - price) / mrp) * 100,
+                        )}% OFF`;
+                      })()}
+                      readOnly
+                      placeholder="Auto calculated"
+                      style={{
+                        ...modalInput,
+                        background: '#f7f7f7',
+                        color: '#9a5300',
+                        fontWeight: 600,
+                      }}
+                    />
+                  </label>
                 </div>
               </EditSection>
 
               <EditSection title="Inventory">
                 <div style={editGrid3}>
-                  <EditField label="SKU" value={editForm.sku} onChange={(value) => updateEditField('sku', value)} />
-                  <EditField label="QR Code" value={editForm.qrCode} onChange={(value) => updateEditField('qrCode', value)} />
                   <EditField label="Stock Quantity" value={editForm.stockQty} type="number" onChange={(value) => updateEditField('stockQty', value)} />
                   <EditField label="Rack" value={editForm.rack} onChange={(value) => updateEditField('rack', value)} />
                   <EditField label="Box" value={editForm.box} onChange={(value) => updateEditField('box', value)} />
@@ -1042,8 +1638,48 @@ export default function AdminProductsPage() {
             </div>
 
             <div style={modalFooter}>
-              <button type="button" onClick={closeEdit} disabled={savingEdit} style={secondaryButton}>Cancel</button>
-              <button type="button" onClick={() => void saveEdit()} disabled={savingEdit} style={{ ...modalSaveButton, opacity: savingEdit ? 0.55 : 1 }}>{savingEdit ? 'Saving…' : 'Save Changes'}</button>
+              <button
+                type="button"
+                onClick={() => void deleteProduct(editing)}
+                disabled={savingEdit || busyId === editing.id}
+                style={{
+                  ...modalDeleteButton,
+                  opacity:
+                    savingEdit || busyId === editing.id
+                      ? 0.5
+                      : 1,
+                }}
+              >
+                {busyId === editing.id
+                  ? 'Deleting…'
+                  : 'Delete Product'}
+              </button>
+
+              <div style={modalFooterRight}>
+                <button
+                  type="button"
+                  onClick={closeEdit}
+                  disabled={savingEdit || busyId === editing.id}
+                  style={secondaryButton}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void saveEdit()}
+                  disabled={savingEdit || busyId === editing.id}
+                  style={{
+                    ...modalSaveButton,
+                    opacity:
+                      savingEdit || busyId === editing.id
+                        ? 0.55
+                        : 1,
+                  }}
+                >
+                  {savingEdit ? 'Saving…' : 'Save Changes'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1089,7 +1725,7 @@ function EditField({ label, value, onChange, type = 'text' }: { label: string; v
 
 const pageHeader: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' };
 const headerActions: React.CSSProperties = { display: 'flex', gap: 9, flexWrap: 'wrap' };
-const addButton: React.CSSProperties = { background: '#111', color: 'white', textDecoration: 'none', fontWeight: 400, padding: '12px 18px', borderRadius: 12 };
+const addButton: React.CSSProperties = { border: 0, background: '#111', color: 'white', textDecoration: 'none', fontWeight: 400, padding: '12px 18px', borderRadius: 12, cursor: 'pointer', fontSize: 14 };
 const secondaryButton: React.CSSProperties = { border: '1px solid #dcdcdc', background: '#fff', color: '#222', fontWeight: 400, padding: '10px 14px', borderRadius: 10, cursor: 'pointer' };
 const summaryGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, margin: '22px 0' };
 const summaryCard: React.CSSProperties = { background: 'white', padding: 16, border: '1px solid #e8e8e8', borderRadius: 14 };
@@ -1150,11 +1786,22 @@ const modalCard: React.CSSProperties = { width: 'min(980px, 100%)', maxHeight: '
 const modalHeader: React.CSSProperties = { background: '#fff', borderBottom: '1px solid #e7e7e7', padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 };
 const modalClose: React.CSSProperties = { border: 0, background: '#f2f2f2', width: 36, height: 36, borderRadius: 10, fontSize: 22, cursor: 'pointer' };
 const modalBody: React.CSSProperties = { overflowY: 'auto', padding: 18 };
-const modalFooter: React.CSSProperties = { background: '#fff', borderTop: '1px solid #e7e7e7', padding: 14, display: 'flex', justifyContent: 'flex-end', gap: 10 };
+const modalFooter: React.CSSProperties = { background: '#fff', borderTop: '1px solid #e7e7e7', padding: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' };
+const modalFooterRight: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' };
+const modalDeleteButton: React.CSSProperties = { border: '1px solid #efb7b3', background: '#fff1f0', color: '#b42318', padding: '11px 16px', borderRadius: 10, fontWeight: 500, cursor: 'pointer' };
 const modalSaveButton: React.CSSProperties = { border: 0, background: '#111', color: '#fff', padding: '11px 18px', borderRadius: 10, fontWeight: 400, cursor: 'pointer' };
-const editMediaStrip: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 14, padding: 14, borderRadius: 14, background: '#fff', border: '1px solid #e7e7e7', marginBottom: 14 };
-const editMainImage: React.CSSProperties = { width: 88, height: 88, minWidth: 88, objectFit: 'contain', borderRadius: 12, background: '#eee' };
-const editImagePlaceholder: React.CSSProperties = { width: 88, height: 88, minWidth: 88, display: 'grid', placeItems: 'center', borderRadius: 12, background: '#eee', color: '#777', fontSize: 12 };
+const editMediaHelp: React.CSSProperties = { marginBottom: 14, color: '#666', fontSize: 12, lineHeight: 1.45 };
+const editMediaGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 };
+const editMediaCard: React.CSSProperties = { minWidth: 0, padding: 10, border: '1px solid #e5e5e5', borderRadius: 12, background: '#fafafa' };
+const editMediaCardTitle: React.CSSProperties = { marginBottom: 8, fontSize: 12, fontWeight: 500, color: '#222' };
+const editMediaPreviewWrap: React.CSSProperties = { width: '100%', aspectRatio: '1 / 1', overflow: 'hidden', borderRadius: 10, background: '#eee' };
+const editMediaPreview: React.CSSProperties = { width: '100%', height: '100%', display: 'block', objectFit: 'contain', background: '#eee' };
+const editImagePlaceholder: React.CSSProperties = { width: '100%', height: '100%', minHeight: 110, display: 'grid', placeItems: 'center', borderRadius: 10, background: '#eee', color: '#777', fontSize: 12 };
+const editMediaStatus: React.CSSProperties = { marginTop: 7, color: '#777', fontSize: 10 };
+const editMediaActions: React.CSSProperties = { display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 };
+const editMediaChangeButton: React.CSSProperties = { border: 0, background: '#111', color: '#fff', padding: '7px 10px', borderRadius: 8, fontSize: 11, fontWeight: 500, cursor: 'pointer' };
+const editMediaCancelButton: React.CSSProperties = { border: '1px solid #ddd', background: '#fff', color: '#555', padding: '7px 10px', borderRadius: 8, fontSize: 11, fontWeight: 400, cursor: 'pointer' };
+const editUploadNotice: React.CSSProperties = { marginTop: 12, padding: 10, borderRadius: 9, background: '#fff7e8', border: '1px solid #f2d8a5', fontSize: 12, fontWeight: 500 };
 const editSection: React.CSSProperties = { background: '#fff', border: '1px solid #e7e7e7', borderRadius: 14, padding: 16, marginBottom: 14 };
 const editGrid3: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 12, marginBottom: 12 };
 const modalLabel: React.CSSProperties = { display: 'block', fontSize: 11, color: '#555', fontWeight: 400, marginBottom: 5 };
