@@ -305,15 +305,21 @@ export default function NewProductPage() {
   }
 
   async function generateAiText() {
-    const source = media.find((item) => item.slot === 'real_front') || media.find((item) => item.slot === 'ai_main');
+    const source =
+      media.find((item) => item.slot === 'real_front') ||
+      media.find((item) => item.slot === 'ai_main');
+
     if (!source) {
       setMessage('Select AI Main or Real Front image first.');
       return;
     }
+
     if (!source.file.type.startsWith('image/')) {
       setMessage('AI text generation requires an image.');
       return;
     }
+
+    if (aiGenerating) return;
 
     setAiGenerating(true);
     setMessage('AI is identifying the product…');
@@ -321,15 +327,52 @@ export default function NewProductPage() {
     try {
       const body = new FormData();
       body.append('image', source.file);
+      body.append('uid', auth?.currentUser?.uid || 'web_admin');
+      body.append(
+        'instruction',
+        'Identify this retail product and return strict JSON with productDetails containing title, brand, main_category, sub_category, child_category, color, secondary_color, size, material, fabric, pattern, style, fit, gender, audience, occasion, season, sku, product_code, manufacturer, country_of_origin, weight, description, highlights, features, tags, keywords, search_tags, mrp, selling_price, offer_price, discount_percent.',
+      );
 
-      const response = await fetch('/api/admin/product-ai', { method: 'POST', body });
-      const data = (await response.json()) as IdentifyResponse & { error?: string };
-      if (!response.ok) throw new Error(data.error || 'AI product identification failed.');
+      const response = await fetch(
+        'https://spotc-ai-product-studio.tinydot09.workers.dev/identify',
+        {
+          method: 'POST',
+          body,
+        },
+      );
+
+      const responseText = await response.text();
+
+      let data: IdentifyResponse & { error?: string };
+
+      try {
+        data = responseText
+          ? (JSON.parse(responseText) as IdentifyResponse & { error?: string })
+          : {};
+      } catch {
+        throw new Error(
+          `AI returned invalid response: ${responseText.slice(0, 300)}`,
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            `AI product identification failed (${response.status}).`,
+        );
+      }
 
       applyAiDetails(data);
-      setMessage('AI product details generated. Review and edit before saving.');
+      setMessage(
+        'AI product details generated. Review and edit before saving.',
+      );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'AI text generation failed.');
+      console.error('AI product identification failed:', error);
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'AI text generation failed.',
+      );
     } finally {
       setAiGenerating(false);
     }
