@@ -1118,15 +1118,12 @@ export default function AdminProductsPage() {
             {refreshing ? '↻ Refreshing…' : '↻ Refresh'}
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              window.location.href = '/admin/products/new';
-            }}
-            style={addButton}
-          >
-            + Add Product
-          </button>
+         <a
+  href="/admin/products/new"
+  style={addButton}
+>
+  + Add Product
+</a>
         </div>
       </div>
 
