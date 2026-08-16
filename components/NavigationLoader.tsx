@@ -1,7 +1,7 @@
 'use client';
 
 import { Loader2 } from 'lucide-react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 const NAV_EVENT = 'spotc-navigation-start';
@@ -13,7 +13,6 @@ export function startPageNavigation() {
 
 export default function NavigationLoader() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<number | null>(null);
 
@@ -29,7 +28,7 @@ export default function NavigationLoader() {
   useEffect(() => {
     // The new route has committed.
     hide();
-  }, [pathname, searchParams]);
+  }, [pathname]);
 
   useEffect(() => {
     const show = () => {
