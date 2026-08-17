@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { addDoc, collection, getDocs, orderBy, query, serverTimestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
@@ -23,6 +23,60 @@ type IdentifyResponse = {
   product_details?: Record<string, unknown>;
   [key: string]: unknown;
 };
+
+
+type ProductCategoryConfig = {
+  id: string;
+  name: string;
+  subcategories: string[];
+  isActive: boolean;
+  sortOrder: number;
+};
+
+const FALLBACK_CATEGORIES: ProductCategoryConfig[] = [
+  {
+    id: 'toys',
+    name: 'Toys',
+    subcategories: [
+      'Dolls & Pretend Play',
+      'Vehicles & Guns',
+      'Learning & Creative',
+      'Balls & Outdoor',
+      'Fun & Fidget',
+      'Other Toys',
+    ],
+    isActive: true,
+    sortOrder: 1,
+  },
+  {
+    id: 'earrings',
+    name: 'Earrings',
+    subcategories: [
+      'Stud',
+      'Hoop',
+      'Drop',
+      'Jhumka',
+      'Kids',
+      'Other Earrings',
+    ],
+    isActive: true,
+    sortOrder: 2,
+  },
+  {
+    id: 'girl-dress',
+    name: 'Girl Dress',
+    subcategories: [
+      '0-1 Years',
+      '1-2 Years',
+      '2-3 Years',
+      '3-5 Years',
+      '6-8 Years',
+      '9-12 Years',
+    ],
+    isActive: true,
+    sortOrder: 3,
+  },
+];
 
 const SLOT_OPTIONS: Array<{ value: SlotKey; label: string; type: 'image' | 'video' }> = [
   { value: 'ai_main', label: 'AI Main Image', type: 'image' },
@@ -60,6 +114,10 @@ export default function NewProductPage() {
   const [uploadingAll, setUploadingAll] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [message, setMessage] = useState('');
+  const [categoryConfigs, setCategoryConfigs] =
+    useState<ProductCategoryConfig[]>(FALLBACK_CATEGORIES);
+  const [categoriesLoading, setCategoriesLoading] =
+    useState(true);
 
   const [form, setForm] = useState({
     title: '',
@@ -94,6 +152,128 @@ export default function NewProductPage() {
 
   function updateField(field: keyof typeof form, value: string | boolean) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      if (!db) {
+        if (active) {
+          setCategoryConfigs(FALLBACK_CATEGORIES);
+          setCategoriesLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const snapshot = await getDocs(
+          query(
+            collection(db, 'ProductCategories'),
+            orderBy('sort_order', 'asc'),
+          ),
+        );
+
+        if (!active) return;
+
+        const loaded = snapshot.docs
+          .map((item) => {
+            const data = item.data() as Record<string, unknown>;
+
+            const subcategories = Array.isArray(data.subcategories)
+              ? data.subcategories
+                  .map((value) => String(value).trim())
+                  .filter(Boolean)
+              : [];
+
+            return {
+              id: item.id,
+              name: String(data.name || '').trim(),
+              subcategories,
+              isActive: data.is_active !== false,
+              sortOrder: Number(data.sort_order) || 0,
+            } satisfies ProductCategoryConfig;
+          })
+          .filter((item) => item.name && item.isActive);
+
+        setCategoryConfigs(
+          loaded.length ? loaded : FALLBACK_CATEGORIES,
+        );
+      } catch (error) {
+        console.error('Unable to load product categories:', error);
+
+        if (active) {
+          setCategoryConfigs(FALLBACK_CATEGORIES);
+        }
+      } finally {
+        if (active) {
+          setCategoriesLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const selectedCategoryConfig = useMemo(
+    () =>
+      categoryConfigs.find(
+        (item) =>
+          item.name.toLowerCase() ===
+          form.mainCategory.trim().toLowerCase(),
+      ) || null,
+    [categoryConfigs, form.mainCategory],
+  );
+
+  const mainCategoryOptions = useMemo(() => {
+    const values = categoryConfigs
+      .map((item) => item.name)
+      .filter(Boolean);
+
+    const current = form.mainCategory.trim();
+
+    if (
+      current &&
+      !values.some(
+        (value) =>
+          value.toLowerCase() === current.toLowerCase(),
+      )
+    ) {
+      values.unshift(current);
+    }
+
+    return Array.from(new Set(values));
+  }, [categoryConfigs, form.mainCategory]);
+
+  const subCategoryOptions = useMemo(() => {
+    const values = selectedCategoryConfig
+      ? [...selectedCategoryConfig.subcategories]
+      : [];
+
+    const current = form.subCategory.trim();
+
+    if (
+      current &&
+      !values.some(
+        (value) =>
+          value.toLowerCase() === current.toLowerCase(),
+      )
+    ) {
+      values.unshift(current);
+    }
+
+    return Array.from(new Set(values));
+  }, [selectedCategoryConfig, form.subCategory]);
+
+  function changeMainCategory(value: string) {
+    setForm((prev) => ({
+      ...prev,
+      mainCategory: value,
+      subCategory: '',
+      childCategory: '',
+    }));
   }
 
   const finalPrice = useMemo(() => {
@@ -383,6 +563,8 @@ export default function NewProductPage() {
     const user = auth?.currentUser;
     if (!user) return setMessage('Admin login is required.');
     if (!form.title.trim()) return setMessage('Product name is required.');
+    if (!form.mainCategory.trim()) return setMessage('Main category is required.');
+    if (!form.subCategory.trim()) return setMessage('Sub category is required.');
     if (finalPrice <= 0) return setMessage('Selling price is required.');
 
     const slotError = validateSlots();
@@ -580,9 +762,76 @@ export default function NewProductPage() {
         <div style={grid3}>
           <Field label="Product Name" value={form.title} onChange={(v) => updateField('title', v)} />
           <Field label="Brand" value={form.brand} onChange={(v) => updateField('brand', v)} />
-          <Field label="Main Category" value={form.mainCategory} onChange={(v) => updateField('mainCategory', v)} />
-          <Field label="Sub Category" value={form.subCategory} onChange={(v) => updateField('subCategory', v)} />
-          <Field label="Child Category" value={form.childCategory} onChange={(v) => updateField('childCategory', v)} />
+          <div>
+            <label style={labelStyle}>Main Category</label>
+            <select
+              value={form.mainCategory}
+              onChange={(event) =>
+                changeMainCategory(event.target.value)
+              }
+              style={inputStyle}
+            >
+              <option value="">
+                {categoriesLoading
+                  ? 'Loading categories…'
+                  : 'Select main category'}
+              </option>
+
+              {mainCategoryOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={() => router.push('/admin/categories')}
+              style={{
+                marginTop: 7,
+                padding: 0,
+                border: 0,
+                background: 'transparent',
+                color: '#b36a00',
+                fontSize: 12,
+                fontWeight: 900,
+                cursor: 'pointer',
+              }}
+            >
+              + Manage Categories
+            </button>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Sub Category</label>
+            <select
+              value={form.subCategory}
+              onChange={(event) =>
+                updateField('subCategory', event.target.value)
+              }
+              style={inputStyle}
+              disabled={!form.mainCategory}
+            >
+              <option value="">
+                {form.mainCategory
+                  ? 'Select sub category'
+                  : 'Select main category first'}
+              </option>
+
+              {subCategoryOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <Field
+            label="Child Category"
+            value={form.childCategory}
+            onChange={(v) => updateField('childCategory', v)}
+            placeholder="Optional"
+          />
           <Field label="Colour" value={form.color} onChange={(v) => updateField('color', v)} />
           <Field label="Second Colour" value={form.secondaryColor} onChange={(v) => updateField('secondaryColor', v)} />
           <Field label="Size" value={form.size} onChange={(v) => updateField('size', v)} />
