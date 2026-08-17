@@ -18,7 +18,6 @@ import {
 } from 'react';
 
 import {
-  completeGoogleRedirectLogin,
   isUserProfileComplete,
 } from '@/lib/auth';
 
@@ -36,31 +35,6 @@ const PROFILE_SKIP_KEY =
 const AUTH_RETURN_PATH_KEY =
   'spotc-auth-return-path';
 
-/*
- * completeGoogleRedirectLogin() should not be restarted on every route.
- * Keep one shared promise for the lifetime of this browser bundle.
- */
-let redirectLoginPromise:
-  | Promise<User | null>
-  | null = null;
-
-function getRedirectLoginOnce(): Promise<User | null> {
-  if (!redirectLoginPromise) {
-    redirectLoginPromise =
-      completeGoogleRedirectLogin()
-        .catch((error) => {
-          console.error(
-            'Unable to complete Google redirect login:',
-            error,
-          );
-
-          return null;
-        });
-  }
-
-  return redirectLoginPromise;
-}
-
 function safeReturnPath(
   value: string | null,
 ): string {
@@ -68,7 +42,9 @@ function safeReturnPath(
     !value ||
     !value.startsWith('/') ||
     value.startsWith('//') ||
-    value.startsWith(COMPLETE_PROFILE_PATH)
+    value.startsWith(
+      COMPLETE_PROFILE_PATH,
+    )
   ) {
     return '';
   }
@@ -77,7 +53,9 @@ function safeReturnPath(
 }
 
 function readStoredReturnPath(): string {
-  if (typeof window === 'undefined') {
+  if (
+    typeof window === 'undefined'
+  ) {
     return '';
   }
 
@@ -122,7 +100,7 @@ function storeReturnPath(
       safePath,
     );
   } catch {
-    // Storage can be unavailable in private browsing.
+    // Storage may be unavailable.
   }
 }
 
@@ -142,7 +120,7 @@ function clearStoredReturnPath() {
       AUTH_RETURN_PATH_KEY,
     );
   } catch {
-    // Nothing else is required.
+    // Nothing else required.
   }
 }
 
@@ -157,15 +135,22 @@ export default function ProfileCompletionGate({
   const router =
     useRouter();
 
-  const checkingUserRef =
+  const [gateReady, setGateReady] =
+    useState(false);
+
+  /*
+   * Prevent duplicate Firestore profile checks for
+   * the same signed-in user.
+   */
+  const checkingUidRef =
     useRef<string | null>(
       null,
     );
 
   /*
-   * Cache the UID after we have confirmed the profile is complete.
-   * This prevents a Firestore/profile check on every route change,
-   * so Cart -> Address opens immediately.
+   * Once a user is confirmed complete during this
+   * browser session, route changes do not need
+   * another profile query.
    */
   const completeUidRef =
     useRef<string | null>(
@@ -173,11 +158,11 @@ export default function ProfileCompletionGate({
     );
 
   /*
-   * Only hide children during the very first auth/profile resolution
-   * or when we genuinely need to redirect to Complete Profile.
+   * Prevent more than one redirect from being fired
+   * during the same auth/profile resolution.
    */
-  const [gateReady, setGateReady] =
-    useState(false);
+  const redirectingRef =
+    useRef(false);
 
   useEffect(() => {
     if (
@@ -188,8 +173,14 @@ export default function ProfileCompletionGate({
       return;
     }
 
-    const firebaseAuth = auth;
-    let active = true;
+    const firebaseAuth =
+      auth;
+
+    let active =
+      true;
+
+    redirectingRef.current =
+      false;
 
     const browserSearch =
       typeof window !== 'undefined'
@@ -206,22 +197,27 @@ export default function ProfileCompletionGate({
         ? `${pathname}?${currentQuery}`
         : pathname;
 
-    const browserParams =
+    /*
+     * Preserve ?next= only when it is genuinely supplied.
+     */
+    if (
       typeof window !== 'undefined'
-        ? new URLSearchParams(
-            window.location.search,
-          )
-        : new URLSearchParams();
+    ) {
+      const params =
+        new URLSearchParams(
+          window.location.search,
+        );
 
-    const nextFromQuery =
-      safeReturnPath(
-        browserParams.get('next'),
-      );
+      const nextFromQuery =
+        safeReturnPath(
+          params.get('next'),
+        );
 
-    if (nextFromQuery) {
-      storeReturnPath(
-        nextFromQuery,
-      );
+      if (nextFromQuery) {
+        storeReturnPath(
+          nextFromQuery,
+        );
+      }
     }
 
     const checkProfile =
@@ -234,26 +230,30 @@ export default function ProfileCompletionGate({
         }
 
         /*
-         * Not signed in / anonymous:
-         * this gate should not create route flashes.
-         * Individual protected actions can request login.
+         * Guest / signed-out users:
+         * do not redirect anywhere.
          */
         if (
           !user ||
           user.isAnonymous
         ) {
-          checkingUserRef.current =
+          checkingUidRef.current =
             null;
+
           completeUidRef.current =
             null;
+
           setGateReady(true);
           return;
         }
 
         const skippedUid =
-          sessionStorage.getItem(
-            PROFILE_SKIP_KEY,
-          );
+          typeof window !==
+          'undefined'
+            ? sessionStorage.getItem(
+                PROFILE_SKIP_KEY,
+              )
+            : null;
 
         if (
           skippedUid ===
@@ -264,48 +264,56 @@ export default function ProfileCompletionGate({
         }
 
         /*
-         * Already verified during this session:
-         * do not hit Firestore again just because pathname changed.
+         * Already confirmed complete.
          */
         if (
           !force &&
           completeUidRef.current ===
             user.uid
         ) {
-          const storedReturnPath =
-            readStoredReturnPath();
-
           if (
             pathname.startsWith(
               COMPLETE_PROFILE_PATH,
             )
           ) {
+            if (
+              redirectingRef.current
+            ) {
+              return;
+            }
+
+            redirectingRef.current =
+              true;
+
+            const returnPath =
+              readStoredReturnPath();
+
             clearStoredReturnPath();
 
             router.replace(
-              storedReturnPath ||
+              returnPath ||
                 '/offers',
             );
 
             return;
           }
 
-          if (storedReturnPath) {
-            clearStoredReturnPath();
-          }
-
+          clearStoredReturnPath();
           setGateReady(true);
           return;
         }
 
+        /*
+         * Do not start the same profile check twice.
+         */
         if (
-          checkingUserRef.current ===
+          checkingUidRef.current ===
           user.uid
         ) {
           return;
         }
 
-        checkingUserRef.current =
+        checkingUidRef.current =
           user.uid;
 
         try {
@@ -318,48 +326,63 @@ export default function ProfileCompletionGate({
             return;
           }
 
-          const storedReturnPath =
-            readStoredReturnPath();
-
           if (complete) {
             completeUidRef.current =
               user.uid;
 
-            sessionStorage.removeItem(
-              PROFILE_SKIP_KEY,
-            );
+            if (
+              typeof window !==
+              'undefined'
+            ) {
+              sessionStorage.removeItem(
+                PROFILE_SKIP_KEY,
+              );
+            }
 
             /*
-             * Only consume the stored return path while actually
-             * leaving Complete Profile. Never redirect /address,
-             * /cart, /checkout, etc. because of an old stored path.
+             * Only redirect when we are actually
+             * leaving Complete Profile.
              */
             if (
               pathname.startsWith(
                 COMPLETE_PROFILE_PATH,
               )
             ) {
+              if (
+                redirectingRef.current
+              ) {
+                return;
+              }
+
+              redirectingRef.current =
+                true;
+
+              const returnPath =
+                readStoredReturnPath();
+
               clearStoredReturnPath();
 
               router.replace(
-                storedReturnPath ||
+                returnPath ||
                   '/offers',
               );
 
               return;
             }
 
-            if (storedReturnPath) {
-              clearStoredReturnPath();
-            }
+            /*
+             * Important:
+             * Do not redirect from Offers, Shop,
+             * Cart, Address, Checkout, etc.
+             */
+            clearStoredReturnPath();
 
             setGateReady(true);
             return;
           }
 
           /*
-           * Profile is incomplete.
-           * Save only the page the user is currently trying to access.
+           * Profile incomplete.
            */
           completeUidRef.current =
             null;
@@ -369,6 +392,15 @@ export default function ProfileCompletionGate({
               COMPLETE_PROFILE_PATH,
             )
           ) {
+            if (
+              redirectingRef.current
+            ) {
+              return;
+            }
+
+            redirectingRef.current =
+              true;
+
             storeReturnPath(
               currentPath,
             );
@@ -388,43 +420,32 @@ export default function ProfileCompletionGate({
           }
 
           setGateReady(true);
-        } catch (
-          error
-        ) {
+        } catch (error) {
           console.error(
             'Unable to check profile completion:',
             error,
           );
 
           /*
-           * Do not trap the user behind a blank gate because of a
-           * temporary Firebase/network problem.
+           * Never leave the screen blank because
+           * Firestore temporarily failed.
            */
           setGateReady(true);
         } finally {
-          checkingUserRef.current =
+          checkingUidRef.current =
             null;
         }
       };
 
     /*
-     * Resolve Google redirect only once for the whole app bundle.
-     * After that, normal page navigation relies on Firebase auth state.
+     * ONE auth source only.
+     *
+     * signInWithPopup() updates Firebase Auth and this
+     * callback fires once the user is signed in.
+     *
+     * We intentionally do NOT call
+     * completeGoogleRedirectLogin() here anymore.
      */
-    void (async () => {
-      const redirectUser =
-        await getRedirectLoginOnce();
-
-      if (!active) {
-        return;
-      }
-
-      await checkProfile(
-        redirectUser ||
-          firebaseAuth.currentUser,
-      );
-    })();
-
     const unsubscribe =
       onAuthStateChanged(
         firebaseAuth,
@@ -440,6 +461,9 @@ export default function ProfileCompletionGate({
         completeUidRef.current =
           null;
 
+        redirectingRef.current =
+          false;
+
         setGateReady(false);
 
         void checkProfile(
@@ -454,7 +478,9 @@ export default function ProfileCompletionGate({
     );
 
     return () => {
-      active = false;
+      active =
+        false;
+
       unsubscribe();
 
       window.removeEventListener(
@@ -468,8 +494,8 @@ export default function ProfileCompletionGate({
   ]);
 
   /*
-   * Prevent previous/intermediate route content from flashing while
-   * the first profile check is resolving.
+   * Neutral shell while auth/profile state is resolving.
+   * This prevents the previous route from flashing.
    */
   if (!gateReady) {
     return (
@@ -477,6 +503,7 @@ export default function ProfileCompletionGate({
         aria-label="Loading"
         aria-busy="true"
         style={{
+          width: '100%',
           minHeight:
             'calc(100vh - 72px)',
           background:
