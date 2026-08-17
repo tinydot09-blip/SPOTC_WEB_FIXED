@@ -28,6 +28,7 @@ import { requireGoogleLogin } from '@/lib/auth';
 import { db, firebaseReady } from '@/lib/firebase';
 import PageLoader from '@/components/PageLoader';
 import { groupCartByBusiness } from '@/lib/delivery';
+import { distanceKm, SPOTC_DELIVERY_CENTER } from '@/lib/delivery-radius';
 import {
   createBusinessOrder,
   type CreatedOrder,
@@ -35,6 +36,74 @@ import {
 
 const money = (value: number) =>
   `₹${Math.round(value).toLocaleString('en-IN')}`;
+
+
+type AddressDeliveryStatus =
+  | 'available'
+  | 'outside'
+  | 'location_missing';
+
+const addressCoordinate = (
+  address: SavedAddress,
+  keys: string[],
+): number | null => {
+  const raw = address as SavedAddress & Record<string, unknown>;
+
+  for (const key of keys) {
+    const value = Number(raw[key]);
+
+    if (Number.isFinite(value) && value !== 0) {
+      return value;
+    }
+  }
+
+  return null;
+};
+
+const getAddressDeliveryCheck = (address: SavedAddress | null) => {
+  if (!address) {
+    return {
+      status: 'location_missing' as AddressDeliveryStatus,
+      distanceKm: null as number | null,
+    };
+  }
+
+  const latitude = addressCoordinate(address, [
+    'latitude',
+    'lat',
+    'delivery_lat',
+  ]);
+
+  const longitude = addressCoordinate(address, [
+    'longitude',
+    'lng',
+    'lon',
+    'delivery_lng',
+  ]);
+
+  if (latitude == null || longitude == null) {
+    return {
+      status: 'location_missing' as AddressDeliveryStatus,
+      distanceKm: null as number | null,
+    };
+  }
+
+  const calculatedDistance = distanceKm(
+    { latitude, longitude },
+    {
+      latitude: SPOTC_DELIVERY_CENTER.latitude,
+      longitude: SPOTC_DELIVERY_CENTER.longitude,
+    },
+  );
+
+  return {
+    status:
+      calculatedDistance <= SPOTC_DELIVERY_CENTER.radiusKm
+        ? ('available' as AddressDeliveryStatus)
+        : ('outside' as AddressDeliveryStatus),
+    distanceKm: calculatedDistance,
+  };
+};
 
 type DeliveryOptionId =
   | 'instant'
@@ -264,6 +333,14 @@ export default function CheckoutPage() {
 
   const total = subtotal + delivery;
 
+  const addressDeliveryCheck = useMemo(
+    () => getAddressDeliveryCheck(address),
+    [address],
+  );
+
+  const canDeliverToAddress =
+    addressDeliveryCheck.status === 'available';
+
   const selectedFreeGifts = Object.values(
     giftBundles,
   ).flatMap((bundle) => bundle.gifts);
@@ -279,6 +356,20 @@ export default function CheckoutPage() {
       !address ||
       !groups.length
     ) {
+      return;
+    }
+
+    if (!canDeliverToAddress) {
+      if (addressDeliveryCheck.status === 'outside') {
+        window.alert(
+          'Delivery is not available at this address yet. SPOTC currently delivers within 5 km of our Karamadai dispatch point.',
+        );
+      } else {
+        window.alert(
+          'Please verify this delivery address location before placing the order.',
+        );
+      }
+
       return;
     }
 
@@ -395,6 +486,48 @@ export default function CheckoutPage() {
             Change
           </button>
         </section>
+
+        {addressDeliveryCheck.status !== 'available' && (
+          <section
+            className={`address-delivery-warning ${
+              addressDeliveryCheck.status === 'outside'
+                ? 'is-outside'
+                : 'is-missing'
+            }`}
+            role="alert"
+          >
+            <MapPin />
+
+            <div>
+              <strong>
+                {addressDeliveryCheck.status === 'outside'
+                  ? 'Delivery not available at this address yet'
+                  : 'Verify delivery location'}
+              </strong>
+
+              <p>
+                {addressDeliveryCheck.status === 'outside'
+                  ? `This address is ${
+                      addressDeliveryCheck.distanceKm?.toFixed(1) ?? ''
+                    } km from our current SPOTC delivery point. We currently deliver within ${SPOTC_DELIVERY_CENTER.radiusKm} km.`
+                  : 'This saved address does not have a verified map location. Select or update the address location before ordering.'}
+              </p>
+
+              <small>
+                SPOTC is coming to your area shortly. You can continue browsing all products.
+              </small>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => router.push('/address')}
+            >
+              {addressDeliveryCheck.status === 'outside'
+                ? 'Change address'
+                : 'Verify address'}
+            </button>
+          </section>
+        )}
 
         <div className="checkout-grid">
           <section className="checkout-main">
@@ -569,13 +702,24 @@ export default function CheckoutPage() {
 
             <button
               onClick={() => void place()}
-              disabled={placing}
+              disabled={placing || !canDeliverToAddress}
+              title={
+                canDeliverToAddress
+                  ? 'Place cash on delivery order'
+                  : addressDeliveryCheck.status === 'outside'
+                    ? 'Delivery is not available at this address yet'
+                    : 'Verify the delivery address location first'
+              }
             >
               {placing ? (
                 <>
                   <Loader2 className="spin" />
                   Placing Order…
                 </>
+              ) : !canDeliverToAddress ? (
+                addressDeliveryCheck.status === 'outside'
+                  ? 'Delivery unavailable at this address'
+                  : 'Verify address to order'
               ) : (
                 `Place COD Order · ${money(total)}`
               )}
@@ -644,6 +788,60 @@ export default function CheckoutPage() {
           background: transparent;
           font-weight: 600;
           cursor: pointer;
+        }
+
+
+        .address-delivery-warning {
+          margin: -4px 0 20px;
+          padding: 16px 18px;
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 13px;
+          border: 1px solid #f2c982;
+          border-radius: 16px;
+          background: #fff8e8;
+        }
+
+        .address-delivery-warning > svg {
+          color: #d97706;
+        }
+
+        .address-delivery-warning strong,
+        .address-delivery-warning p,
+        .address-delivery-warning small {
+          display: block;
+        }
+
+        .address-delivery-warning p {
+          margin: 4px 0 0;
+          color: #6f5a3f;
+          line-height: 1.45;
+        }
+
+        .address-delivery-warning small {
+          margin-top: 4px;
+          color: #8a704f;
+        }
+
+        .address-delivery-warning button {
+          min-height: 40px;
+          padding: 0 14px;
+          border: 0;
+          border-radius: 11px;
+          color: #ffffff;
+          background: #171717;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .address-delivery-warning.is-outside {
+          border-color: #efb0a8;
+          background: #fff4f2;
+        }
+
+        .address-delivery-warning.is-outside > svg {
+          color: #c24132;
         }
 
         .checkout-grid {
@@ -909,6 +1107,15 @@ export default function CheckoutPage() {
         }
 
         @media (max-width: 620px) {
+          .address-delivery-warning {
+            grid-template-columns: auto minmax(0, 1fr);
+          }
+
+          .address-delivery-warning button {
+            grid-column: 1 / -1;
+            width: 100%;
+          }
+
           .checkout-page {
             padding:
               18px 12px 10px;
