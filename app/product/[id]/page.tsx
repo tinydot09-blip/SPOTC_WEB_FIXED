@@ -1070,6 +1070,135 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     ratingSnapshot?.count ?? (storedReviewCount > 0 ? storedReviewCount : calculatedCount);
 
   const description = text(record.description || record.product_description);
+  const highlightsText = text(record.highlights || record.features);
+
+  const mainCategoryText = text(
+    record.main_category || record.category,
+  ).trim();
+
+  const subCategoryText = text(record.sub_category).trim();
+
+  const isGirlDressProduct =
+    mainCategoryText.toLowerCase() === 'girl dress' ||
+    mainCategoryText.toLowerCase().includes('girl dress');
+
+  const descriptiveColours = stringList(
+    record.color,
+    record.secondary_color,
+  );
+
+  const productDetailRows = (
+    isGirlDressProduct
+      ? [
+          {
+            label: 'Age Group',
+            value: text(
+              record.age_group || record.sub_category,
+            ).trim(),
+          },
+          {
+            label: 'Dress Type',
+            value: text(record.dress_type).trim(),
+          },
+          {
+            label: 'Colour',
+            value: descriptiveColours.join(', '),
+          },
+          {
+            label: 'Material',
+            value: text(
+              record.material || record.fabric,
+            ).trim(),
+          },
+          {
+            label: 'Pattern',
+            value: text(
+              record.pattern || record.style,
+            ).trim(),
+          },
+          {
+            label: 'Available Sizes',
+            value: sizes.join(', '),
+          },
+          {
+            label: 'Dress Length',
+            value: text(
+              record.dress_length ||
+                record.garment_length,
+            ).trim(),
+          },
+          {
+            label: 'Chest',
+            value: text(
+              record.chest_size ||
+                record.chest ||
+                record.bust_size,
+            ).trim(),
+          },
+          {
+            label: 'Waist',
+            value: text(
+              record.waist_size ||
+                record.waist,
+            ).trim(),
+          },
+          {
+            label: 'Brand',
+            value: text(record.brand).trim(),
+          },
+          {
+            label: 'Availability',
+            value: inStock
+              ? stockQuantity
+                ? `${stockQuantity} in stock`
+                : 'In stock'
+              : 'Out of stock',
+          },
+        ]
+      : [
+          {
+            label: 'Brand',
+            value: text(record.brand).trim(),
+          },
+          {
+            label: 'Category',
+            value: mainCategoryText,
+          },
+          {
+            label: 'Sub Category',
+            value: subCategoryText,
+          },
+          {
+            label: 'Colour',
+            value: descriptiveColours.join(', '),
+          },
+          {
+            label: 'Size',
+            value: sizes.join(', '),
+          },
+          {
+            label: 'Material',
+            value: text(
+              record.material || record.fabric,
+            ).trim(),
+          },
+          {
+            label: 'Pattern',
+            value: text(
+              record.pattern || record.style,
+            ).trim(),
+          },
+          {
+            label: 'Availability',
+            value: inStock
+              ? stockQuantity
+                ? `${stockQuantity} in stock`
+                : 'In stock'
+              : 'Out of stock',
+          },
+        ]
+  ).filter((item) => item.value);
+
   const deliveryText =
     text(record.delivery_text || record.delivery_estimate || record.estimated_delivery_text) ||
     'Fast local delivery';
@@ -1886,22 +2015,25 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
       subtitle: 'Details, brand, colour, size and availability',
       content: (
         <div className="pd-accordion-copy">
-          <p>{description || 'Contact the business for additional product details.'}</p>
-          <dl>
-            <div><dt>Brand</dt><dd>{text(record.brand) || '—'}</dd></div>
-            {showColorSelector && (
-              <div>
-                <dt>Colour</dt>
-                <dd>{selectableColors.join(', ')}</dd>
-              </div>
-            )}
-            <div><dt>Size</dt><dd>{sizes.length ? sizes.join(', ') : '—'}</dd></div>
-            <div><dt>Variant</dt><dd>{text(record.variant) || '—'}</dd></div>
-            <div>
-              <dt>Availability</dt>
-              <dd>{inStock ? (stockQuantity ? `${stockQuantity} available` : 'Available') : 'Out of stock'}</dd>
+          <p>
+            {description ||
+              'Contact SPOTC for additional product details.'}
+          </p>
+
+          {highlightsText && (
+            <div className="pd-description-highlights">
+              <strong>Highlights</strong>
+              <ul>
+                {highlightsText
+                  .split(/\n|•/)
+                  .map((item) => item.trim())
+                  .filter(Boolean)
+                  .map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+              </ul>
             </div>
-          </dl>
+          )}
         </div>
       ),
     },
@@ -2352,6 +2484,33 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
               <span>{inStock ? 'Buy Now' : 'Out of stock'}</span>
             </button>
           </div>
+
+          {productDetailRows.length > 0 && (
+            <section
+              className="pd-inline-details"
+              aria-label="Product details"
+            >
+              <div className="pd-inline-details-heading">
+                <div>
+                  <small>PRODUCT DETAILS</small>
+                  <h2>
+                    {isGirlDressProduct
+                      ? 'Dress details & measurements'
+                      : 'Product details'}
+                  </h2>
+                </div>
+              </div>
+
+              <dl className="pd-inline-details-grid">
+                {productDetailRows.map((item) => (
+                  <div key={item.label}>
+                    <dt>{item.label}</dt>
+                    <dd>{item.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
 
         </div>
       </section>
@@ -6172,7 +6331,119 @@ width:200px;
           }
         }
 
-      `}</style>
+/* =========================================================
+   PRODUCT DETAILS — RIGHT COLUMN WHITE-SPACE FILL
+========================================================= */
+
+.pd-inline-details{
+  margin-top:22px;
+  padding-top:18px;
+  border-top:1px solid #eadfce;
+}
+
+.pd-inline-details-heading{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px;
+}
+
+.pd-inline-details-heading small{
+  display:block;
+  margin-bottom:3px;
+  color:#a76612;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.12em;
+}
+
+.pd-inline-details-heading h2{
+  margin:0;
+  color:#17120d;
+  font-size:18px;
+  line-height:1.2;
+}
+
+.pd-inline-details-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  margin:0;
+}
+
+.pd-inline-details-grid > div{
+  min-width:0;
+  padding:11px 12px;
+  border:1px solid #eadfce;
+  border-radius:12px;
+  background:#fff;
+}
+
+.pd-inline-details-grid dt{
+  margin:0 0 3px;
+  color:#8c7661;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+}
+
+.pd-inline-details-grid dd{
+  margin:0;
+  color:#17120d;
+  font-size:13px;
+  font-weight:850;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+
+.pd-description-highlights{
+  margin-top:16px;
+}
+
+.pd-description-highlights > strong{
+  display:block;
+  margin-bottom:8px;
+}
+
+.pd-description-highlights ul{
+  margin:0;
+  padding-left:20px;
+}
+
+.pd-description-highlights li{
+  margin:5px 0;
+  line-height:1.45;
+}
+
+@media (max-width:760px){
+  .pd-inline-details{
+    margin-top:18px;
+    padding-top:16px;
+  }
+
+  .pd-inline-details-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:8px;
+  }
+
+  .pd-inline-details-grid > div{
+    padding:10px;
+  }
+
+  .pd-inline-details-heading h2{
+    font-size:17px;
+  }
+}
+
+@media (max-width:430px){
+  .pd-inline-details-grid{
+    grid-template-columns:1fr;
+  }
+}
+      `}
+</style>
     </main>
   );
 
