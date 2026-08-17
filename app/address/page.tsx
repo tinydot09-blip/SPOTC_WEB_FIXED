@@ -65,6 +65,62 @@ const cleanPhone = (value: string) =>
 const cleanPincode = (value: string) =>
   value.replace(/\D/g, '').slice(0, 6);
 
+
+type ReverseGeocodeAddress = {
+  house_number?: string;
+  road?: string;
+  pedestrian?: string;
+  footway?: string;
+  neighbourhood?: string;
+  suburb?: string;
+  quarter?: string;
+  village?: string;
+  town?: string;
+  city?: string;
+  municipality?: string;
+  county?: string;
+  state?: string;
+  postcode?: string;
+  country?: string;
+};
+
+type ReverseGeocodeResponse = {
+  display_name?: string;
+  address?: ReverseGeocodeAddress;
+};
+
+const reverseGeocode = async (
+  latitude: number,
+  longitude: number,
+): Promise<ReverseGeocodeResponse> => {
+  const params = new URLSearchParams({
+    format: 'jsonv2',
+    lat: String(latitude),
+    lon: String(longitude),
+    zoom: '18',
+    addressdetails: '1',
+    'accept-language': 'en',
+  });
+
+  const response = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?${params.toString()}`,
+    {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Reverse geocoding failed with status ${response.status}.`,
+    );
+  }
+
+  return (await response.json()) as ReverseGeocodeResponse;
+};
+
 export default function AddressPage() {
   const router = useRouter();
 
@@ -91,6 +147,9 @@ export default function AddressPage() {
 
   const [formError, setFormError] =
     useState('');
+
+  const [locating, setLocating] =
+    useState(false);
 
   useEffect(() => {
     let active = true;
@@ -232,6 +291,216 @@ export default function AddressPage() {
     }));
   };
 
+  const useCurrentLocation = async () => {
+    if (locating) {
+      return;
+    }
+
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.geolocation
+    ) {
+      setFormError(
+        'Location is not supported on this device. Please add the address manually.',
+      );
+      setFormOpen(true);
+      return;
+    }
+
+    setLocating(true);
+    setFormError('');
+
+    try {
+      const position =
+        await new Promise<GeolocationPosition>(
+          (resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+              resolve,
+              reject,
+              {
+                enableHighAccuracy: true,
+                timeout: 15000,
+                maximumAge: 30000,
+              },
+            );
+          },
+        );
+
+      const latitude =
+        position.coords.latitude;
+
+      const longitude =
+        position.coords.longitude;
+
+      const result =
+        await reverseGeocode(
+          latitude,
+          longitude,
+        );
+
+      const address =
+        result.address || {};
+
+      const houseNo =
+        String(
+          address.house_number || '',
+        ).trim();
+
+      const street =
+        String(
+          address.road ||
+            address.pedestrian ||
+            address.footway ||
+            '',
+        ).trim();
+
+      const area =
+        String(
+          address.neighbourhood ||
+            address.suburb ||
+            address.quarter ||
+            address.village ||
+            '',
+        ).trim();
+
+      const city =
+        String(
+          address.city ||
+            address.town ||
+            address.municipality ||
+            address.village ||
+            address.county ||
+            '',
+        ).trim();
+
+      const pincode =
+        cleanPincode(
+          String(
+            address.postcode || '',
+          ),
+        );
+
+      const state =
+        String(
+          address.state ||
+            'Tamil Nadu',
+        ).trim();
+
+      const country =
+        String(
+          address.country ||
+            'India',
+        ).trim();
+
+      const selectedAddress =
+        addresses.find(
+          (item) =>
+            item.id === selectedId,
+        );
+
+      setForm({
+        ...EMPTY,
+
+        fullName:
+          user?.displayName ||
+          selectedAddress?.fullName ||
+          '',
+
+        phone:
+          selectedAddress?.phone ||
+          '',
+
+        addressType:
+          'Home',
+
+        houseNo,
+
+        street,
+
+        landmark: '',
+
+        area,
+
+        city,
+
+        pincode,
+
+        state,
+
+        country,
+
+        deliveryNote: '',
+
+        latitude,
+
+        longitude,
+      });
+
+      setFormOpen(true);
+
+      if (
+        !houseNo ||
+        !area ||
+        !city ||
+        !pincode
+      ) {
+        setFormError(
+          'Location found. Please check and complete any missing address fields before saving.',
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Current location lookup failed:',
+        error,
+      );
+
+      let message =
+        'Unable to find your current address. Please try again or add the address manually.';
+
+      if (
+        typeof GeolocationPositionError !==
+          'undefined' &&
+        error instanceof
+          GeolocationPositionError
+      ) {
+        if (
+          error.code ===
+          error.PERMISSION_DENIED
+        ) {
+          message =
+            'Location permission is blocked. Allow location access in your browser, or add the address manually.';
+        } else if (
+          error.code ===
+          error.POSITION_UNAVAILABLE
+        ) {
+          message =
+            'Your current location is unavailable. Please try again or add the address manually.';
+        } else if (
+          error.code ===
+          error.TIMEOUT
+        ) {
+          message =
+            'Location request timed out. Please try again or add the address manually.';
+        }
+      }
+
+      setForm((current) => ({
+        ...EMPTY,
+        fullName:
+          current.fullName ||
+          user?.displayName ||
+          '',
+        phone:
+          current.phone || '',
+      }));
+
+      setFormError(message);
+      setFormOpen(true);
+    } finally {
+      setLocating(false);
+    }
+  };
+
   const validateForm = (): string => {
     if (!form.fullName.trim()) {
       return 'Enter the full name.';
@@ -371,14 +640,22 @@ export default function AddressPage() {
             <button
               type="button"
               className="location-card"
+              disabled={locating}
               onClick={() =>
-                alert(
-                  'Current location can be connected to your reverse-geocode Cloud Function next.',
-                )
+                void useCurrentLocation()
               }
             >
-              <MapPin />
-              <span>Use Current Location</span>
+              {locating ? (
+                <Loader2 className="spin" />
+              ) : (
+                <MapPin />
+              )}
+
+              <span>
+                {locating
+                  ? 'Finding your address…'
+                  : 'Use Current Location'}
+              </span>
             </button>
 
             <section className="saved-addresses">
@@ -869,6 +1146,17 @@ export default function AddressPage() {
             border-color 0.18s ease,
             box-shadow 0.18s ease,
             background 0.18s ease;
+        }
+
+        .location-card:disabled {
+          opacity: 0.72;
+          cursor: wait;
+        }
+
+        .location-card:disabled:hover {
+          border-color: #e3dbd2;
+          background: #ffffff;
+          box-shadow: none;
         }
 
         .location-card:hover,
