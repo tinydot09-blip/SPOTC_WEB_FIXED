@@ -6,10 +6,8 @@ import {
   GitCompareArrows,
   Gift,
   Heart,
-  Search,
   ShoppingBag,
   SlidersHorizontal,
-  X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -48,6 +46,46 @@ const textValue = (value: unknown): string =>
   typeof value === 'string'
     ? value.trim()
     : String(value ?? '').trim();
+
+const shopMainCategoryOf = (product: BusinessProduct): string => {
+  const rawMain = textValue(
+    product.main_category || product.category || '',
+  );
+
+  const combined = [
+    product.main_category,
+    product.category,
+    product.sub_category,
+    product.title,
+    product.product_name,
+  ]
+    .map(textValue)
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  if (
+    combined.includes('earring') ||
+    combined.includes('ear ring')
+  ) {
+    return 'Earrings';
+  }
+
+  if (
+    combined.includes('dress') ||
+    combined.includes('frock') ||
+    combined.includes('kids wear') ||
+    combined.includes('girls wear') ||
+    combined.includes('boys wear')
+  ) {
+    return 'Dress';
+  }
+
+  return rawMain || 'Other';
+};
+
+const shopSubCategoryOf = (product: BusinessProduct): string =>
+  textValue(product.sub_category || product.category || '');
 
 const imageOf = (product: BusinessProduct): string =>
   product.product_thumbnail ||
@@ -139,7 +177,6 @@ export function ProductGrid({
 }: ProductGridProps) {
   const router = useRouter();
   const delivery = useDeliveryAvailability();
-  const [outsideNoticeClosed, setOutsideNoticeClosed] = useState(false);
 
   const [items, setItems] =
     useState<BusinessProduct[] | null>(null);
@@ -148,7 +185,8 @@ export function ProductGrid({
 
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('Featured');
-  const [category, setCategory] = useState('All');
+  const [mainCategory, setMainCategory] = useState('Toys');
+  const [subCategory, setSubCategory] = useState('All');
 
   const [user, setUser] =
     useState<User | null>(auth?.currentUser ?? null);
@@ -263,23 +301,66 @@ export function ProductGrid({
     };
   }, []);
 
-  const categories = useMemo(() => {
+  const mainCategories = useMemo(() => {
     const values = (items || [])
-      .map((product) =>
-        String(
-          product.main_category ||
-            product.category ||
-            product.sub_category ||
-            '',
-        ).trim(),
+      .map(shopMainCategoryOf)
+      .filter(Boolean);
+
+    const unique = Array.from(new Set(values));
+
+    const preferredOrder = [
+      'Toys',
+      'Earrings',
+      'Dress',
+      'Stationery',
+      'Home & Party Supplies',
+      'Sports & Outdoors',
+      'Electronics',
+    ];
+
+    return [...unique].sort((a, b) => {
+      const aIndex = preferredOrder.indexOf(a);
+      const bIndex = preferredOrder.indexOf(b);
+
+      if (aIndex !== -1 || bIndex !== -1) {
+        if (aIndex === -1) return 1;
+        if (bIndex === -1) return -1;
+        return aIndex - bIndex;
+      }
+
+      return a.localeCompare(b);
+    });
+  }, [items]);
+
+  const subCategories = useMemo(() => {
+    const values = (items || [])
+      .filter(
+        (product) =>
+          shopMainCategoryOf(product) === mainCategory,
       )
+      .map(shopSubCategoryOf)
       .filter(Boolean);
 
     return [
       'All',
-      ...Array.from(new Set(values)).slice(0, 8),
+      ...Array.from(new Set(values)).sort((a, b) =>
+        a.localeCompare(b),
+      ),
     ];
-  }, [items]);
+  }, [items, mainCategory]);
+
+  useEffect(() => {
+    if (!mainCategories.length) return;
+
+    if (!mainCategories.includes(mainCategory)) {
+      setMainCategory(
+        mainCategories.includes('Toys')
+          ? 'Toys'
+          : mainCategories[0],
+      );
+      setSubCategory('All');
+    }
+  }, [mainCategories, mainCategory]);
 
   const filteredProducts = useMemo(() => {
     const searchQuery = search.toLowerCase().trim();
@@ -302,22 +383,29 @@ export function ProductGrid({
           .join(' ')
           .toLowerCase();
 
-        const productCategory = String(
-          product.main_category ||
-            product.category ||
-            product.sub_category ||
-            '',
-        );
+        const productMainCategory =
+          shopMainCategoryOf(product);
+
+        const productSubCategory =
+          shopSubCategoryOf(product);
 
         const matchesSearch =
           !searchQuery ||
           searchableText.includes(searchQuery);
 
-        const matchesCategory =
-          category === 'All' ||
-          productCategory === category;
+        const matchesMainCategory =
+          !mainCategory ||
+          productMainCategory === mainCategory;
 
-        return matchesSearch && matchesCategory;
+        const matchesSubCategory =
+          subCategory === 'All' ||
+          productSubCategory === subCategory;
+
+        return (
+          matchesSearch &&
+          matchesMainCategory &&
+          matchesSubCategory
+        );
       },
     );
 
@@ -344,7 +432,13 @@ export function ProductGrid({
     }
 
     return result;
-  }, [items, search, sort, category]);
+  }, [
+    items,
+    search,
+    sort,
+    mainCategory,
+    subCategory,
+  ]);
 
   const toggleCompare = (id: string) => {
     setCompare((current) => {
@@ -653,48 +747,36 @@ export function ProductGrid({
 
   return (
     <>
-      {delivery.status === 'outside' && !outsideNoticeClosed && (
-        <section
-          className="spotc-area-top-overlay"
-          role="status"
-          aria-live="polite"
+      <section className="spotc-shop-category-toolbar">
+        <div
+          className="spotc-main-category-strip"
+          aria-label="Main product categories"
         >
-          <div className="spotc-area-top-overlay__copy">
-            <strong>SPOTC is coming to your area shortly</strong>
-            <span>
-              Browse all products now. Ordering will be available when SPOTC launches in your area.
-            </span>
-          </div>
-
-          <button
-            type="button"
-            className="spotc-area-top-overlay__close"
-            aria-label="Close area availability message"
-            onClick={() => setOutsideNoticeClosed(true)}
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </section>
-      )}
-
-      <section className="shop-toolbar">
-        <div className="shop-search">
-          <Search size={19} />
-
-          <input
-            value={search}
-            onChange={(event) =>
-              setSearch(event.target.value)
-            }
-            placeholder="Search products, brands, colours…"
-          />
+          {mainCategories.map((categoryName) => (
+            <button
+              key={categoryName}
+              type="button"
+              className={
+                mainCategory === categoryName
+                  ? 'active'
+                  : ''
+              }
+              onClick={() => {
+                setMainCategory(categoryName);
+                setSubCategory('All');
+              }}
+            >
+              {categoryName}
+            </button>
+          ))}
         </div>
 
-        <div className="sort-box">
+        <div className="sort-box spotc-shop-sort-box">
           <SlidersHorizontal size={18} />
 
           <select
             value={sort}
+            aria-label="Sort products"
             onChange={(event) =>
               setSort(event.target.value)
             }
@@ -712,18 +794,21 @@ export function ProductGrid({
         </div>
       </section>
 
-      <div className="category-strip">
-        {categories.map((categoryName) => (
+      <div
+        className="spotc-sub-category-strip"
+        aria-label={`${mainCategory} subcategories`}
+      >
+        {subCategories.map((categoryName) => (
           <button
             key={categoryName}
             type="button"
             className={
-              category === categoryName
+              subCategory === categoryName
                 ? 'active'
                 : ''
             }
             onClick={() =>
-              setCategory(categoryName)
+              setSubCategory(categoryName)
             }
           >
             {categoryName}
@@ -976,95 +1061,9 @@ export function ProductGrid({
       )}
 
       <style jsx global>{`
-        .spotc-area-top-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          z-index: 100000;
-          min-height: 58px;
-          padding: 10px 54px 10px 18px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-sizing: border-box;
-          color: #ffffff;
-          background: #4b1715;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-        }
-
-        .spotc-area-top-overlay__copy {
-          width: min(100%, 980px);
-          display: flex;
-          align-items: baseline;
-          justify-content: center;
-          flex-wrap: wrap;
-          gap: 4px 9px;
-          text-align: center;
-        }
-
-        .spotc-area-top-overlay__copy strong {
-          color: #ffffff;
-          font-size: 13px;
-          font-weight: 800;
-          line-height: 1.35;
-        }
-
-        .spotc-area-top-overlay__copy span {
-          color: rgba(255, 255, 255, 0.88);
-          font-size: 12px;
-          font-weight: 500;
-          line-height: 1.4;
-        }
-
-        .spotc-area-top-overlay__close {
-          position: absolute;
-          top: 50%;
-          right: 14px;
-          width: 34px;
-          height: 34px;
-          transform: translateY(-50%);
-          display: grid;
-          place-items: center;
-          border: 1px solid rgba(255, 255, 255, 0.22);
-          border-radius: 999px;
-          color: #ffffff;
-          background: rgba(255, 255, 255, 0.08);
-          cursor: pointer;
-        }
-
         .product-add-button:disabled {
           opacity: 0.55 !important;
           cursor: not-allowed !important;
-        }
-
-        @media (max-width: 700px) {
-          .spotc-area-top-overlay {
-            min-height: 64px;
-            padding: 9px 48px 9px 12px;
-          }
-
-          .spotc-area-top-overlay__copy {
-            display: grid;
-            gap: 2px;
-            justify-items: start;
-            text-align: left;
-          }
-
-          .spotc-area-top-overlay__copy strong {
-            font-size: 12px;
-          }
-
-          .spotc-area-top-overlay__copy span {
-            font-size: 10.5px;
-          }
-
-          .spotc-area-top-overlay__close {
-            right: 10px;
-            width: 32px;
-            height: 32px;
-          }
         }
 
         /*
@@ -1565,6 +1564,140 @@ export function ProductGrid({
             }
           }
         }
+          /* =====================================================
+             SHOP CATEGORY NAVIGATION
+             Row 1: main categories + sort
+             Row 2: subcategories for the selected main category
+          ===================================================== */
+
+          .spotc-shop-category-toolbar {
+            width: 100%;
+            margin: 0 0 10px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 14px;
+          }
+
+          .spotc-main-category-strip,
+          .spotc-sub-category-strip {
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .spotc-main-category-strip::-webkit-scrollbar,
+          .spotc-sub-category-strip::-webkit-scrollbar {
+            display: none;
+          }
+
+          .spotc-main-category-strip button,
+          .spotc-sub-category-strip button {
+            flex: 0 0 auto;
+            min-height: 40px;
+            padding: 0 18px;
+            border: 1px solid #ded8cf;
+            border-radius: 999px;
+            color: #655f58;
+            background: #ffffff;
+            font: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1;
+            white-space: nowrap;
+            cursor: pointer;
+          }
+
+          .spotc-main-category-strip button.active {
+            border-color: #171717;
+            color: #ffffff;
+            background: #171717;
+          }
+
+          .spotc-sub-category-strip {
+            width: 100%;
+            margin: 0 0 16px;
+            padding-bottom: 1px;
+          }
+
+          .spotc-sub-category-strip button {
+            min-height: 36px;
+            padding: 0 15px;
+            font-size: 13px;
+            font-weight: 650;
+          }
+
+          .spotc-sub-category-strip button.active {
+            border-color: #e0a12e;
+            color: #7c5000;
+            background: #fff5df;
+          }
+
+          .spotc-shop-sort-box {
+            width: auto !important;
+            min-width: 185px !important;
+            margin: 0 !important;
+          }
+
+          @media (max-width: 700px) {
+            .spotc-shop-category-toolbar {
+              grid-template-columns: minmax(0, 1fr) auto;
+              gap: 8px;
+              margin-bottom: 8px;
+            }
+
+            .spotc-main-category-strip {
+              gap: 7px;
+            }
+
+            .spotc-main-category-strip button {
+              min-height: 36px;
+              padding: 0 13px;
+              font-size: 12px;
+            }
+
+            .spotc-shop-sort-box {
+              min-width: 132px !important;
+              max-width: 145px !important;
+            }
+
+            .spotc-shop-sort-box select {
+              font-size: 12px !important;
+            }
+
+            .spotc-sub-category-strip {
+              gap: 7px;
+              margin-bottom: 13px;
+            }
+
+            .spotc-sub-category-strip button {
+              min-height: 33px;
+              padding: 0 12px;
+              font-size: 11px;
+            }
+          }
+
+          @media (max-width: 420px) {
+            .spotc-shop-category-toolbar {
+              grid-template-columns: minmax(0, 1fr) 118px;
+            }
+
+            .spotc-shop-sort-box {
+              width: 118px !important;
+              min-width: 118px !important;
+              max-width: 118px !important;
+            }
+
+            .spotc-main-category-strip button {
+              padding: 0 11px;
+            }
+          }
+
       `}</style>
     </>
   );
