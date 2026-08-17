@@ -131,6 +131,8 @@ export default function NewProductPage() {
     color: '',
     secondaryColor: '',
     size: '',
+    availableSizes: '',
+    dressType: '',
     material: '',
     pattern: '',
     gender: '',
@@ -275,6 +277,22 @@ export default function NewProductPage() {
       childCategory: '',
     }));
   }
+
+  const isGirlDress = useMemo(
+    () =>
+      form.mainCategory.trim().toLowerCase() ===
+      'girl dress',
+    [form.mainCategory],
+  );
+
+  const availableSizeList = useMemo(
+    () =>
+      form.availableSizes
+        .split(/[,\n]/)
+        .map((value) => value.trim())
+        .filter(Boolean),
+    [form.availableSizes],
+  );
 
   const finalPrice = useMemo(() => {
     return money(form.sellingPrice);
@@ -474,6 +492,15 @@ export default function NewProductPage() {
       color: first('color') || prev.color,
       secondaryColor: first('secondary_color') || prev.secondaryColor,
       size: first('size') || prev.size,
+      availableSizes:
+        first('available_sizes', 'sizes') ||
+        prev.availableSizes,
+      dressType:
+        first(
+          'dress_type',
+          'garment_type',
+          'product_type',
+        ) || prev.dressType,
       material: first('material', 'fabric') || prev.material,
       pattern: first('pattern', 'style') || prev.pattern,
       gender: first('gender', 'audience') || prev.gender,
@@ -510,7 +537,7 @@ export default function NewProductPage() {
       body.append('uid', auth?.currentUser?.uid || 'web_admin');
       body.append(
         'instruction',
-        'Identify this retail product and return strict JSON with productDetails containing title, brand, main_category, sub_category, child_category, color, secondary_color, size, material, fabric, pattern, style, fit, gender, audience, occasion, season, sku, product_code, manufacturer, country_of_origin, weight, description, highlights, features, tags, keywords, search_tags, mrp, selling_price, offer_price, discount_percent.',
+        'Identify this retail product and return strict JSON with productDetails containing title, brand, main_category, sub_category, child_category, color, secondary_color, size, available_sizes, dress_type, garment_type, material, fabric, pattern, style, fit, gender, audience, occasion, season, sku, product_code, manufacturer, country_of_origin, weight, description, highlights, features, tags, keywords, search_tags, mrp, selling_price, offer_price, discount_percent.',
       );
 
       const response = await fetch(
@@ -565,6 +592,9 @@ export default function NewProductPage() {
     if (!form.title.trim()) return setMessage('Product name is required.');
     if (!form.mainCategory.trim()) return setMessage('Main category is required.');
     if (!form.subCategory.trim()) return setMessage('Sub category is required.');
+    if (isGirlDress && !availableSizeList.length) {
+      return setMessage('Enter at least one available dress size.');
+    }
     if (finalPrice <= 0) return setMessage('Selling price is required.');
 
     const slotError = validateSlots();
@@ -605,6 +635,14 @@ export default function NewProductPage() {
       const purchaseCost = money(form.purchaseCost);
       const tagList = form.tags.split(/[,\n]/).map((item) => item.trim().toLowerCase()).filter(Boolean);
 
+      const savedAgeGroup = isGirlDress
+        ? form.subCategory.trim()
+        : form.ageGroup.trim();
+
+      const savedSize = isGirlDress
+        ? availableSizeList.join(', ')
+        : form.size.trim();
+
       await addDoc(collection(db, 'BusinessProducts'), {
         owner_uid: user.uid,
         seller_type: 'spotc',
@@ -623,20 +661,40 @@ export default function NewProductPage() {
         tags: tagList,
         keywords: tagList,
         search_tags: tagList,
-        search_text: [form.title, form.brand, form.mainCategory, form.subCategory, form.childCategory, form.color, form.material, form.gender, ...tagList]
+        search_text: [
+          form.title,
+          form.brand,
+          form.mainCategory,
+          form.subCategory,
+          form.childCategory,
+          form.dressType,
+          form.availableSizes,
+          form.color,
+          form.material,
+          form.gender,
+          ...tagList,
+        ]
           .filter(Boolean)
           .join(' ')
           .toLowerCase(),
         color: form.color.trim(),
         secondary_color: form.secondaryColor.trim(),
-        size: form.size.trim(),
+        size: savedSize,
+        available_sizes: isGirlDress
+          ? availableSizeList
+          : form.size.trim()
+            ? [form.size.trim()]
+            : [],
+        dress_type: isGirlDress
+          ? form.dressType.trim()
+          : '',
         material: form.material.trim(),
         fabric: form.material.trim(),
         pattern: form.pattern.trim(),
         style: form.pattern.trim(),
         gender: form.gender.trim(),
         audience: form.gender.trim(),
-        age_group: form.ageGroup.trim(),
+        age_group: savedAgeGroup,
         purchase_cost: purchaseCost,
         price: finalPrice,
         selling_price: sellingPrice || finalPrice,
@@ -834,12 +892,74 @@ export default function NewProductPage() {
           />
           <Field label="Colour" value={form.color} onChange={(v) => updateField('color', v)} />
           <Field label="Second Colour" value={form.secondaryColor} onChange={(v) => updateField('secondaryColor', v)} />
-          <Field label="Size" value={form.size} onChange={(v) => updateField('size', v)} />
+
+          {isGirlDress ? (
+            <>
+              <div>
+                <label style={labelStyle}>Dress Type</label>
+                <select
+                  value={form.dressType}
+                  onChange={(event) =>
+                    updateField(
+                      'dressType',
+                      event.target.value,
+                    )
+                  }
+                  style={inputStyle}
+                >
+                  <option value="">Select dress type</option>
+                  <option value="Frock">Frock</option>
+                  <option value="Party Dress">Party Dress</option>
+                  <option value="Gown">Gown</option>
+                  <option value="Top & Skirt Set">Top & Skirt Set</option>
+                  <option value="Lehenga">Lehenga</option>
+                  <option value="Kurti Set">Kurti Set</option>
+                  <option value="Casual Dress">Casual Dress</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <Field
+                label="Available Sizes"
+                value={form.availableSizes}
+                onChange={(v) =>
+                  updateField('availableSizes', v)
+                }
+                placeholder="Example: 18, 20, 22"
+              />
+            </>
+          ) : (
+            <Field
+              label="Size"
+              value={form.size}
+              onChange={(v) =>
+                updateField('size', v)
+              }
+            />
+          )}
+
           <Field label="Material / Fabric" value={form.material} onChange={(v) => updateField('material', v)} />
           <Field label="Pattern / Style" value={form.pattern} onChange={(v) => updateField('pattern', v)} />
           <Field label="Gender / Audience" value={form.gender} onChange={(v) => updateField('gender', v)} />
-          <Field label="Age Group" value={form.ageGroup} onChange={(v) => updateField('ageGroup', v)} />
         </div>
+
+        {isGirlDress && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: '10px 12px',
+              border: '1px solid #d8eadf',
+              borderRadius: 10,
+              background: '#f3fbf6',
+              color: '#27643f',
+              fontSize: 12,
+              fontWeight: 700,
+            }}
+          >
+            Age Group is taken automatically from Sub Category.
+            Enter only the actual dress sizes available for this design.
+          </div>
+        )}
 
         <div style={{ marginTop: 14 }}><label style={labelStyle}>Description</label><textarea value={form.description} onChange={(e) => updateField('description', e.target.value)} rows={5} style={{ ...inputStyle, resize: 'vertical' }} /></div>
         <div style={{ marginTop: 14 }}><label style={labelStyle}>Highlights / Features</label><textarea value={form.highlights} onChange={(e) => updateField('highlights', e.target.value)} rows={4} style={{ ...inputStyle, resize: 'vertical' }} /></div>
