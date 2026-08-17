@@ -133,6 +133,9 @@ export default function NewProductPage() {
     size: '',
     availableSizes: '',
     dressType: '',
+    dressLength: '',
+    chestSize: '',
+    waistSize: '',
     material: '',
     pattern: '',
     gender: '',
@@ -501,6 +504,24 @@ export default function NewProductPage() {
           'garment_type',
           'product_type',
         ) || prev.dressType,
+      dressLength:
+        first(
+          'dress_length',
+          'garment_length',
+          'length',
+        ) || prev.dressLength,
+      chestSize:
+        first(
+          'chest_size',
+          'chest',
+          'bust_size',
+          'bust',
+        ) || prev.chestSize,
+      waistSize:
+        first(
+          'waist_size',
+          'waist',
+        ) || prev.waistSize,
       material: first('material', 'fabric') || prev.material,
       pattern: first('pattern', 'style') || prev.pattern,
       gender: first('gender', 'audience') || prev.gender,
@@ -537,7 +558,7 @@ export default function NewProductPage() {
       body.append('uid', auth?.currentUser?.uid || 'web_admin');
       body.append(
         'instruction',
-        'Identify this retail product and return strict JSON with productDetails containing title, brand, main_category, sub_category, child_category, color, secondary_color, size, available_sizes, dress_type, garment_type, material, fabric, pattern, style, fit, gender, audience, occasion, season, sku, product_code, manufacturer, country_of_origin, weight, description, highlights, features, tags, keywords, search_tags, mrp, selling_price, offer_price, discount_percent.',
+        'Identify this retail product and return strict JSON with productDetails containing title, brand, main_category, sub_category, child_category, color, secondary_color, size, available_sizes, dress_type, garment_type, dress_length, garment_length, chest_size, chest, waist_size, waist, material, fabric, pattern, style, fit, gender, audience, occasion, season, sku, product_code, manufacturer, country_of_origin, weight, description, highlights, features, tags, keywords, search_tags, mrp, selling_price, offer_price, discount_percent.',
       );
 
       const response = await fetch(
@@ -669,6 +690,9 @@ export default function NewProductPage() {
           form.childCategory,
           form.dressType,
           form.availableSizes,
+          form.dressLength,
+          form.chestSize,
+          form.waistSize,
           form.color,
           form.material,
           form.gender,
@@ -687,6 +711,15 @@ export default function NewProductPage() {
             : [],
         dress_type: isGirlDress
           ? form.dressType.trim()
+          : '',
+        dress_length: isGirlDress
+          ? form.dressLength.trim()
+          : '',
+        chest_size: isGirlDress
+          ? form.chestSize.trim()
+          : '',
+        waist_size: isGirlDress
+          ? form.waistSize.trim()
           : '',
         material: form.material.trim(),
         fabric: form.material.trim(),
@@ -927,6 +960,33 @@ export default function NewProductPage() {
                 }
                 placeholder="Example: 18, 20, 22"
               />
+
+              <Field
+                label="Dress Length"
+                value={form.dressLength}
+                onChange={(v) =>
+                  updateField('dressLength', v)
+                }
+                placeholder="Example: 21 inch"
+              />
+
+              <Field
+                label="Chest"
+                value={form.chestSize}
+                onChange={(v) =>
+                  updateField('chestSize', v)
+                }
+                placeholder="Example: 24 inch"
+              />
+
+              <Field
+                label="Waist"
+                value={form.waistSize}
+                onChange={(v) =>
+                  updateField('waistSize', v)
+                }
+                placeholder="Example: 22 inch"
+              />
             </>
           ) : (
             <Field
@@ -957,7 +1017,7 @@ export default function NewProductPage() {
             }}
           >
             Age Group is taken automatically from Sub Category.
-            Enter only the actual dress sizes available for this design.
+            Enter the actual available sizes and garment measurements for this design.
           </div>
         )}
 
