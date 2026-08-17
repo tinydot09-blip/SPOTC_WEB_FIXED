@@ -56,14 +56,25 @@ const SHOP_MAIN_CATEGORIES = [
 type ShopMainCategory =
   (typeof SHOP_MAIN_CATEGORIES)[number];
 
-const shopMainCategoryOf = (
+const GIRL_DRESS_AGE_GROUPS = [
+  'All',
+  '0-1 Years',
+  '1-2 Years',
+  '2-3 Years',
+  '3-5 Years',
+  '6-8 Years',
+  '9-12 Years',
+] as const;
+
+const normalizedProductText = (
   product: BusinessProduct,
-): ShopMainCategory => {
-  const combined = [
+): string =>
+  [
     product.main_category,
     product.category,
     product.sub_category,
     product.child_category,
+    product.age_group,
     product.title,
     product.product_name,
     product.search_text,
@@ -76,35 +87,222 @@ const shopMainCategoryOf = (
     .join(' ')
     .toLowerCase();
 
+const shopMainCategoryOf = (
+  product: BusinessProduct,
+): ShopMainCategory => {
+  const main = textValue(
+    product.main_category || '',
+  ).toLowerCase();
+
+  const category = textValue(
+    product.category || '',
+  ).toLowerCase();
+
+  const subCategory = textValue(
+    product.sub_category || '',
+  ).toLowerCase();
+
+  const childCategory = textValue(
+    product.child_category || '',
+  ).toLowerCase();
+
+  const combined =
+    normalizedProductText(product);
+
+  /*
+   * IMPORTANT CATEGORY PRIORITY
+   *
+   * 1. Explicit toy data wins first.
+   * This prevents Fashion Dolls / dolls wearing gowns
+   * from appearing under Girl Dress.
+   */
+  if (
+    main === 'toys' ||
+    main === 'toy' ||
+    category === 'toys' ||
+    category === 'toy' ||
+    subCategory.includes('doll') ||
+    childCategory.includes('doll') ||
+    combined.includes('fashion doll') ||
+    combined.includes('barbie') ||
+    combined.includes('toy gun') ||
+    combined.includes('water gun') ||
+    combined.includes('soft bullet') ||
+    combined.includes('drawing board') ||
+    combined.includes('magnetic board') ||
+    combined.includes('fidget') ||
+    combined.includes('balloon') ||
+    combined.includes('toy car') ||
+    combined.includes('play ball') ||
+    combined.includes('puzzle') ||
+    combined.includes('slime') ||
+    combined.includes('piggy bank') ||
+    combined.includes('activity book')
+  ) {
+    return 'Toys';
+  }
+
+  /*
+   * 2. Earrings.
+   */
   if (
     combined.includes('earring') ||
     combined.includes('ear ring') ||
     combined.includes('ear stud') ||
     combined.includes('stud earring') ||
-    combined.includes('jhumka')
+    combined.includes('jhumka') ||
+    combined.includes('jhumki')
   ) {
     return 'Earrings';
   }
 
+  /*
+   * 3. Girl Dress.
+   *
+   * We deliberately check this AFTER Toys, so a doll
+   * whose title contains "dress" or "gown" stays a toy.
+   */
   if (
+    main.includes('fashion') ||
+    main.includes('dress') ||
+    category.includes('dress') ||
+    subCategory.includes('dress') ||
+    childCategory.includes('dress') ||
     combined.includes('girl dress') ||
     combined.includes('girls dress') ||
     combined.includes('girls wear') ||
     combined.includes('girl wear') ||
-    combined.includes('frock') ||
-    combined.includes('gown') ||
     combined.includes('kids dress') ||
-    combined.includes('kid dress')
+    combined.includes('kid dress') ||
+    combined.includes('frock') ||
+    combined.includes('kurti') ||
+    combined.includes('lehenga') ||
+    combined.includes('salwar') ||
+    combined.includes('top set') ||
+    combined.includes('top & skirt') ||
+    combined.includes('top and skirt') ||
+    combined.includes('party wear')
   ) {
     return 'Girl Dress';
   }
 
+  /*
+   * Current SPOTC shop has only three main groups.
+   * Unknown items stay under Toys until they are
+   * explicitly classified in Firestore/admin.
+   */
   return 'Toys';
+};
+
+const extractNumbers = (value: string): number[] =>
+  (value.match(/\d+(?:\.\d+)?/g) || [])
+    .map(Number)
+    .filter((value) => Number.isFinite(value));
+
+const girlDressAgeBandOf = (
+  product: BusinessProduct,
+): string => {
+  const ageText = [
+    product.age_group,
+    product.age,
+    product.size,
+    product.title,
+    product.product_name,
+  ]
+    .map(textValue)
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  if (!ageText) return 'Other Ages';
+
+  /*
+   * Handle common month-based baby sizes first.
+   */
+  const monthMatch = ageText.match(
+    /(\d+)\s*(?:-|to)\s*(\d+)\s*month/,
+  );
+
+  if (monthMatch) {
+    const maxMonths = Number(monthMatch[2]);
+
+    if (maxMonths <= 12) return '0-1 Years';
+    if (maxMonths <= 24) return '1-2 Years';
+    if (maxMonths <= 36) return '2-3 Years';
+  }
+
+  if (
+    ageText.includes('newborn') ||
+    ageText.includes('0-3 month') ||
+    ageText.includes('0-6 month') ||
+    ageText.includes('0-12 month') ||
+    ageText.includes('6-12 month')
+  ) {
+    return '0-1 Years';
+  }
+
+  /*
+   * Read year ranges such as:
+   * 1-2 Years, 3 to 5 Years, 6-8Y, 9/10 Years.
+   */
+  const numbers = extractNumbers(ageText);
+
+  if (!numbers.length) {
+    return 'Other Ages';
+  }
+
+  let minAge = numbers[0];
+  let maxAge =
+    numbers.length > 1
+      ? numbers[1]
+      : numbers[0];
+
+  /*
+   * For values like "2+ Years", treat the starting
+   * age as the band selector.
+   */
+  if (ageText.includes('+')) {
+    maxAge = minAge;
+  }
+
+  const representativeAge =
+    (minAge + maxAge) / 2;
+
+  if (representativeAge < 1) {
+    return '0-1 Years';
+  }
+
+  if (representativeAge < 2) {
+    return '1-2 Years';
+  }
+
+  if (representativeAge < 3) {
+    return '2-3 Years';
+  }
+
+  if (representativeAge <= 5) {
+    return '3-5 Years';
+  }
+
+  if (representativeAge <= 8) {
+    return '6-8 Years';
+  }
+
+  if (representativeAge <= 12) {
+    return '9-12 Years';
+  }
+
+  return 'Other Ages';
 };
 
 const shopSubCategoryOf = (
   product: BusinessProduct,
+  mainCategory: ShopMainCategory,
 ): string => {
+  if (mainCategory === 'Girl Dress') {
+    return girlDressAgeBandOf(product);
+  }
+
   const sub = textValue(
     product.sub_category ||
       product.child_category ||
@@ -113,9 +311,7 @@ const shopSubCategoryOf = (
       '',
   );
 
-  if (sub) return sub;
-
-  return 'Other';
+  return sub || 'Other';
 };
 
 const imageOf = (product: BusinessProduct): string =>
@@ -338,17 +534,33 @@ export function ProductGrid({
   );
 
   const subCategories = useMemo(() => {
+    /*
+     * Girl Dress always uses fixed age bands.
+     * This keeps the navigation consistent even when
+     * a particular age group temporarily has no stock.
+     */
+    if (mainCategory === 'Girl Dress') {
+      return [...GIRL_DRESS_AGE_GROUPS];
+    }
+
     const unique = new Map<string, string>();
 
     (items || [])
       .filter(
         (product) =>
-          shopMainCategoryOf(product) === mainCategory,
+          shopMainCategoryOf(product) ===
+          mainCategory,
       )
-      .map(shopSubCategoryOf)
+      .map((product) =>
+        shopSubCategoryOf(
+          product,
+          mainCategory,
+        ),
+      )
       .filter(Boolean)
       .forEach((value) => {
         const key = value.toLowerCase();
+
         if (!unique.has(key)) {
           unique.set(key, value);
         }
@@ -356,8 +568,8 @@ export function ProductGrid({
 
     return [
       'All',
-      ...Array.from(unique.values()).sort((a, b) =>
-        a.localeCompare(b),
+      ...Array.from(unique.values()).sort(
+        (a, b) => a.localeCompare(b),
       ),
     ];
   }, [items, mainCategory]);
@@ -398,7 +610,10 @@ export function ProductGrid({
           shopMainCategoryOf(product);
 
         const productSubCategory =
-          shopSubCategoryOf(product);
+          shopSubCategoryOf(
+            product,
+            productMainCategory,
+          );
 
         const matchesSearch =
           !searchQuery ||
@@ -1578,7 +1793,7 @@ export function ProductGrid({
           /* =====================================================
              SHOP CATEGORY NAVIGATION
              Main categories: Toys / Earrings / Girl Dress
-             Row 2: every subcategory for the selected main category
+             Girl Dress row: fixed age groups from 0-12 Years
           ===================================================== */
 
           .spotc-shop-category-toolbar {
