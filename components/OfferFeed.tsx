@@ -95,6 +95,63 @@ function referenceId(value: unknown): string {
   return "";
 }
 
+function offerProductId(item: BusinessListing): string {
+  const raw = item as BusinessListing & Record<string, unknown>;
+
+  const directCandidates = [
+    raw.product_id,
+    raw.linked_product_id,
+    raw.primary_product_id,
+    raw.target_product_id,
+    raw.business_product_id,
+    raw.product_ref,
+    raw.linked_product_ref,
+    raw.primary_product_ref,
+    raw.business_product_ref,
+    raw.image1_product_id,
+    raw.product1_id,
+    raw.image1_product_ref,
+    raw.product1_ref,
+  ];
+
+  for (const candidate of directCandidates) {
+    const id = referenceId(candidate);
+    if (id) return id;
+  }
+
+  const linkedIds = Array.isArray(raw.linked_product_ids)
+    ? raw.linked_product_ids
+    : Array.isArray(raw.product_ids)
+      ? raw.product_ids
+      : [];
+
+  for (const candidate of linkedIds) {
+    const id = referenceId(candidate);
+    if (id) return id;
+  }
+
+  const offerProducts = Array.isArray(raw.offer_products)
+    ? raw.offer_products
+    : [];
+
+  for (const entry of offerProducts) {
+    if (!entry || typeof entry !== "object") continue;
+
+    const record = entry as Record<string, unknown>;
+
+    const id =
+      referenceId(record.product_id) ||
+      referenceId(record.productId) ||
+      referenceId(record.id) ||
+      referenceId(record.product_ref) ||
+      referenceId(record.ref);
+
+    if (id) return id;
+  }
+
+  return "";
+}
+
 function embeddedMainProduct(item: BusinessListing): OfferProduct | null {
   const raw = item as BusinessListing & Record<string, unknown>;
 
@@ -555,21 +612,69 @@ function OfferCard({
 
   const offerId = text(item.id).trim();
 
+  const directProductId = useMemo(
+    () => offerProductId(item),
+    [item],
+  );
+
   const product = useMemo(() => {
-    return (
+    const resolved =
       linkedMainProduct(item, allProducts) ??
       embeddedOfferProduct(item) ??
       embeddedMainProduct(item) ??
-      listingFallbackProduct(item)
-    );
-  }, [allProducts, item]);
+      listingFallbackProduct(item);
 
-  const productHref = product?.productId
-    ? `/product/${product.productId}`
+    if (resolved?.productId) {
+      return resolved;
+    }
+
+    if (resolved && directProductId) {
+      return {
+        ...resolved,
+        productId: directProductId,
+      };
+    }
+
+    if (directProductId) {
+      const exactProduct = allProducts.find(
+        (candidate) => text(candidate.id).trim() === directProductId,
+      );
+
+      if (exactProduct) {
+        const raw = exactProduct as BusinessProduct & Record<string, unknown>;
+        const price = productSellingPrice(exactProduct);
+        const oldPrice = productOldPrice(exactProduct);
+        const calculatedDiscount =
+          oldPrice > price && price > 0
+            ? Math.round(((oldPrice - price) / oldPrice) * 100)
+            : 0;
+
+        return {
+          title:
+            text(raw.title || raw.product_name || raw.product_title).trim() ||
+            text(item.offer_title || item.offer_text || item.caption).trim() ||
+            "Product",
+          price,
+          oldPrice,
+          discount: calculatedDiscount
+            ? `${calculatedDiscount}% OFF`
+            : "",
+          productId: directProductId,
+        };
+      }
+    }
+
+    return resolved;
+  }, [allProducts, directProductId, item]);
+
+  const resolvedProductId = product?.productId || directProductId;
+
+  const productHref = resolvedProductId
+    ? `/product/${resolvedProductId}`
     : "/shop";
 
-  const buyHref = product?.productId
-    ? `/product/${product.productId}`
+  const buyHref = resolvedProductId
+    ? `/product/${resolvedProductId}`
     : "/shop";
 
   const productTitle =
@@ -654,7 +759,7 @@ function OfferCard({
         business_offer_ref: offerRef,
         item_ref: offerRef,
 
-        product_id: product?.productId || "",
+        product_id: resolvedProductId || "",
         product_title: productTitle,
         title: productTitle,
         offer_title: productTitle,
