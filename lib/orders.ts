@@ -1,4 +1,5 @@
 import {
+  GeoPoint,
   doc,
   getDoc,
   serverTimestamp,
@@ -13,21 +14,6 @@ import { formatAddress } from './addresses';
 import type { BusinessCartGroup } from './delivery';
 import type { RewardEstimate } from './rewards';
 
-/*
- * ============================================================
- * SPOTC OWN INVENTORY
- * ============================================================
- *
- * For now every order is treated as a SPOTC-owned inventory
- * order.
- *
- * We are NOT resolving BusinessListings.
- *
- * Later, if partner shops are enabled again, seller_type can
- * be expanded to support "business".
- */
-export const SPOTC_SELLER_TYPE = 'spotc' as const;
-
 export type CreatedOrder = {
   documentId: string;
   orderNumber: string;
@@ -35,7 +21,33 @@ export type CreatedOrder = {
   businessName: string;
 };
 
-const num = (value: unknown): number => {
+/*
+ * ============================================================
+ * SPOTC OWN INVENTORY SELLER
+ * ============================================================
+ *
+ * For now all products/orders belong to SPOTC.
+ * We do NOT resolve BusinessListings.
+ */
+const SPOTC_SELLER = {
+  sellerType: 'spotc',
+  businessId: 'SPOTC',
+  businessName: 'SPOTC Shop',
+
+  address:
+    '#41-1 Kembe Gowder Colony 1st Street, Near EB colony Bus Stop, Karamadai, Coimbatore 641 104.',
+
+  phone: '6383586052',
+
+  whatsapp: '6383586052',
+
+  latitude: 11.2570027,
+  longitude: 76.9541443,
+} as const;
+
+const num = (
+  value: unknown,
+): number => {
   const parsed = Number(value);
 
   return Number.isFinite(parsed)
@@ -43,7 +55,9 @@ const num = (value: unknown): number => {
     : 0;
 };
 
-const text = (value: unknown): string =>
+const text = (
+  value: unknown,
+): string =>
   value == null
     ? ''
     : String(value).trim();
@@ -52,9 +66,8 @@ const text = (value: unknown): string =>
  * ============================================================
  * ORDER ITEM
  * ============================================================
- *
- * Every current product is SPOTC inventory.
  */
+
 const orderItem = (
   item: CartItem,
 ) => {
@@ -63,43 +76,57 @@ const orderItem = (
     num(item.qty) || 1,
   );
 
-  const price = num(item.price);
+  const price =
+    num(item.price);
 
   return {
-    id: text(item.id),
+    id:
+      text(item.id),
 
-    product_id: text(item.id),
+    product_id:
+      text(item.id),
 
-    title: text(item.title),
+    title:
+      text(item.title),
 
-    image: text(item.image),
+    image:
+      text(item.image),
 
     price,
 
     quantity,
 
-    qty: quantity,
+    qty:
+      quantity,
 
     subtotal:
       price * quantity,
 
-    size: text(item.size),
+    size:
+      text(item.size),
 
-    color: text(item.color),
+    color:
+      text(item.color),
 
     /*
-     * IMPORTANT:
-     * Current inventory belongs to SPOTC.
+     * Current products are SPOTC-owned.
      */
     seller_type:
-      SPOTC_SELLER_TYPE,
+      SPOTC_SELLER.sellerType,
 
-    business_id: 'SPOTC',
+    business_id:
+      SPOTC_SELLER.businessId,
 
     business_name:
-      'SPOTC Shop',
+      SPOTC_SELLER.businessName,
   };
 };
+
+/*
+ * ============================================================
+ * CREATE ORDER
+ * ============================================================
+ */
 
 export async function createBusinessOrder({
   db,
@@ -116,12 +143,14 @@ export async function createBusinessOrder({
   discount: number;
   rewards: RewardEstimate;
 }): Promise<CreatedOrder> {
-  const now = Date.now();
+  const now =
+    Date.now();
 
-  const suffix = Math.random()
-    .toString(36)
-    .slice(2, 6)
-    .toUpperCase();
+  const suffix =
+    Math.random()
+      .toString(36)
+      .slice(2, 6)
+      .toUpperCase();
 
   const orderNumber =
     `SPOTC-${String(now).slice(-8)}-${suffix}`;
@@ -131,28 +160,30 @@ export async function createBusinessOrder({
 
   /*
    * ==========================================================
-   * CURRENT SELLER
+   * SPOTC SELLER
    * ==========================================================
-   *
-   * Do NOT use group.businessId.
-   * Do NOT look up BusinessListings.
-   *
-   * All present orders are SPOTC inventory.
    */
+
   const sellerType =
-    SPOTC_SELLER_TYPE;
+    SPOTC_SELLER.sellerType;
 
   const businessId =
-    'SPOTC';
+    SPOTC_SELLER.businessId;
 
   const businessName =
-    'SPOTC Shop';
+    SPOTC_SELLER.businessName;
 
   /*
-   * There is no BusinessListings reference for SPOTC's
-   * own inventory.
+   * SPOTC own inventory does not use BusinessListings.
    */
-  const businessRef = null;
+  const businessRef =
+    null;
+
+  /*
+   * ==========================================================
+   * BILL
+   * ==========================================================
+   */
 
   const subtotal =
     num(group.subtotal);
@@ -227,6 +258,12 @@ export async function createBusinessOrder({
   const formattedDeliveryAddress =
     formatAddress(address);
 
+  /*
+   * ==========================================================
+   * FIRESTORE ORDER
+   * ==========================================================
+   */
+
   await setDoc(
     doc(
       db,
@@ -235,20 +272,14 @@ export async function createBusinessOrder({
     ),
     {
       /*
-       * ======================================================
        * ORDER
-       * ======================================================
        */
-
       order_number:
         orderNumber,
 
       /*
-       * ======================================================
        * CUSTOMER
-       * ======================================================
        */
-
       user_uid:
         user.uid,
 
@@ -273,14 +304,8 @@ export async function createBusinessOrder({
 
       /*
        * ======================================================
-       * SELLER
+       * SELLER — SPOTC OWN INVENTORY
        * ======================================================
-       *
-       * CURRENT MODEL:
-       *
-       * seller_type = spotc
-       *
-       * No local-shop BusinessListings dependency.
        */
 
       seller_type:
@@ -295,28 +320,26 @@ export async function createBusinessOrder({
       business_name:
         businessName,
 
-      /*
-       * Keep these fields available in the order schema.
-       *
-       * We will insert SPOTC's own address / phone /
-       * WhatsApp / location when those details are finalized.
-       *
-       * They are deliberately NOT copied from another shop.
-       */
+      business_logo:
+        '',
 
-      business_logo: '',
+      business_address:
+        SPOTC_SELLER.address,
 
-      business_address: '',
+      business_phone:
+        SPOTC_SELLER.phone,
 
-      business_phone: '',
-
-      business_whatsapp: '',
+      business_whatsapp:
+        SPOTC_SELLER.whatsapp,
 
       business_category:
         'SPOTC Inventory',
 
       business_location:
-        null,
+        new GeoPoint(
+          SPOTC_SELLER.latitude,
+          SPOTC_SELLER.longitude,
+        ),
 
       business_verified:
         true,
@@ -403,7 +426,7 @@ export async function createBusinessOrder({
 
       /*
        * ======================================================
-       * ITEMS
+       * PRODUCTS
        * ======================================================
        */
 
@@ -414,7 +437,7 @@ export async function createBusinessOrder({
 
       /*
        * ======================================================
-       * BILL
+       * AMOUNTS
        * ======================================================
        */
 
@@ -495,6 +518,10 @@ export async function createBusinessOrder({
       coupon_count_pending:
         couponCount,
 
+      /*
+       * Must never be undefined because Firestore rejects
+       * undefined field values.
+       */
       coupon_value_each:
         couponValueEach,
 
@@ -525,10 +552,15 @@ export async function createBusinessOrder({
 
     total,
 
-    businessName:
-      businessName,
+    businessName,
   };
 }
+
+/*
+ * ============================================================
+ * READ ORDER
+ * ============================================================
+ */
 
 export async function readOrderById(
   db: Firestore,
