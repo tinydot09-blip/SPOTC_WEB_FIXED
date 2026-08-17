@@ -26,6 +26,36 @@ type Coordinates = {
   longitude: number;
 };
 
+const DELIVERY_CACHE_KEY = 'spotc_delivery_location_v1';
+
+type CachedDeliveryLocation = {
+  latitude: number;
+  longitude: number;
+  savedAt: number;
+};
+
+const readCachedLocation = (): CachedDeliveryLocation | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(DELIVERY_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedDeliveryLocation;
+    const latitude = Number(parsed.latitude);
+    const longitude = Number(parsed.longitude);
+    const savedAt = Number(parsed.savedAt);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !Number.isFinite(savedAt)) return null;
+    if (Date.now() - savedAt > 5 * 60 * 1000) return null;
+    return { latitude, longitude, savedAt };
+  } catch { return null; }
+};
+
+const writeCachedLocation = (coordinates: Coordinates) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(DELIVERY_CACHE_KEY, JSON.stringify({ ...coordinates, savedAt: Date.now() }));
+  } catch {}
+};
+
 const toRadians = (value: number) =>
   (value * Math.PI) / 180;
 
@@ -98,6 +128,7 @@ export function useDeliveryAvailability() {
       );
 
       hasValidLocationRef.current = true;
+      writeCachedLocation(customer);
 
       setCoordinates(customer);
       setDistance(calculatedDistance);
@@ -126,34 +157,20 @@ export function useDeliveryAvailability() {
 
   const handleLocationError = useCallback(
     (error: GeolocationPositionError) => {
-      console.warn(
-        '[SPOTC DELIVERY] error',
-        error.code,
-        error.message,
-      );
+      console.warn('[SPOTC DELIVERY] error', error.code, error.message);
 
-      if (
-        error.code ===
-        error.PERMISSION_DENIED
-      ) {
-        hasValidLocationRef.current = false;
-        setCoordinates(null);
-        setDistance(null);
-        setStatus('permission_denied');
-        return;
-      }
-
-      /*
-       * IMPORTANT:
-       * A timeout / temporary GPS error must not erase
-       * a previously confirmed inside/outside result.
-       */
       if (hasValidLocationRef.current) {
         return;
       }
 
       setCoordinates(null);
       setDistance(null);
+
+      if (error.code === error.PERMISSION_DENIED) {
+        setStatus('permission_denied');
+        return;
+      }
+
       setStatus('unavailable');
     },
     [],
@@ -178,10 +195,7 @@ export function useDeliveryAvailability() {
        * Do not make an already-confirmed outside banner
        * disappear during every automatic retry.
        */
-      if (
-        showChecking ||
-        !hasValidLocationRef.current
-      ) {
+      if (!hasValidLocationRef.current && showChecking) {
         setStatus('checking');
       }
 
@@ -205,6 +219,30 @@ export function useDeliveryAvailability() {
       handleLocationError,
     ],
   );
+
+  useEffect(() => {
+    const cached = readCachedLocation();
+    if (!cached) return;
+
+    const customer: Coordinates = {
+      latitude: cached.latitude,
+      longitude: cached.longitude,
+    };
+
+    const calculatedDistance = distanceKm(customer, {
+      latitude: SPOTC_DELIVERY_CENTER.latitude,
+      longitude: SPOTC_DELIVERY_CENTER.longitude,
+    });
+
+    hasValidLocationRef.current = true;
+    setCoordinates(customer);
+    setDistance(calculatedDistance);
+    setStatus(
+      calculatedDistance <= SPOTC_DELIVERY_CENTER.radiusKm
+        ? 'available'
+        : 'outside',
+    );
+  }, []);
 
   /*
    * Initial location check + continuous GPS watch.
@@ -298,15 +336,11 @@ export function useDeliveryAvailability() {
               permissionStatus.state ===
               'denied'
             ) {
-              hasValidLocationRef.current =
-                false;
-
-              setCoordinates(null);
-              setDistance(null);
-              setStatus(
-                'permission_denied',
-              );
-
+              if (!hasValidLocationRef.current) {
+                setCoordinates(null);
+                setDistance(null);
+                setStatus('permission_denied');
+              }
               return;
             }
 
