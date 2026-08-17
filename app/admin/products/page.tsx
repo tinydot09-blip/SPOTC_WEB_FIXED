@@ -39,7 +39,16 @@ type EditForm = {
   subCategory: string;
   childCategory: string;
   color: string;
+  secondaryColor: string;
   size: string;
+  availableSizes: string;
+  dressType: string;
+  dressLength: string;
+  chestSize: string;
+  waistSize: string;
+  material: string;
+  pattern: string;
+  gender: string;
   description: string;
   purchaseCost: string;
   mrp: string;
@@ -190,6 +199,13 @@ function cleanText(value: unknown): string {
   return String(value ?? '').trim();
 }
 
+function commaList(value: string): string[] {
+  return value
+    .split(/[,\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function extensionFor(file: File): string {
   const fromName = file.name.split('.').pop()?.toLowerCase().trim();
 
@@ -291,7 +307,18 @@ function editFormFromProduct(data: DocumentData): EditForm {
     subCategory: String(data.sub_category ?? ''),
     childCategory: String(data.child_category ?? ''),
     color: String(data.color ?? ''),
+    secondaryColor: String(data.secondary_color ?? ''),
     size: String(data.size ?? ''),
+    availableSizes: Array.isArray(data.available_sizes)
+      ? data.available_sizes.map((value: unknown) => String(value).trim()).filter(Boolean).join(', ')
+      : String(data.available_sizes ?? data.size ?? ''),
+    dressType: String(data.dress_type ?? ''),
+    dressLength: String(data.dress_length ?? data.garment_length ?? ''),
+    chestSize: String(data.chest_size ?? data.chest ?? data.bust_size ?? ''),
+    waistSize: String(data.waist_size ?? data.waist ?? ''),
+    material: String(data.material ?? data.fabric ?? ''),
+    pattern: String(data.pattern ?? data.style ?? ''),
+    gender: String(data.gender ?? data.audience ?? ''),
     description: String(data.description ?? data.ai_description ?? ''),
     purchaseCost: String(data.purchase_cost ?? ''),
     mrp: String(data.mrp ?? data.old_price ?? ''),
@@ -331,6 +358,9 @@ export default function AdminProductsPage() {
   const [editing, setEditing] = useState<ProductRow | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+
+  const isEditingGirlDress =
+    editForm?.mainCategory.trim().toLowerCase() === 'girl dress';
 
   const editMediaInputRef = useRef<HTMLInputElement | null>(null);
   const [editMediaTarget, setEditMediaTarget] = useState<SlotKey>('ai_main');
@@ -447,7 +477,16 @@ export default function AdminProductsPage() {
           data.sub_category,
           data.child_category,
           data.color,
+          data.secondary_color,
           data.size,
+          data.available_sizes,
+          data.dress_type,
+          data.dress_length,
+          data.chest_size,
+          data.waist_size,
+          data.material,
+          data.pattern,
+          data.gender,
           data.rack,
           data.box,
           data.slot,
@@ -739,6 +778,14 @@ export default function AdminProductsPage() {
       return;
     }
 
+    if (
+      editForm.mainCategory.trim().toLowerCase() === 'girl dress' &&
+      commaList(editForm.availableSizes).length === 0
+    ) {
+      setMessage('Enter at least one available dress size.');
+      return;
+    }
+
     setSavingEdit(true);
     setEditUploadStatus('');
 
@@ -860,6 +907,19 @@ export default function AdminProductsPage() {
             )}% OFF`
           : '';
 
+      const editingGirlDress =
+        editForm.mainCategory.trim().toLowerCase() === 'girl dress';
+
+      const availableSizes = editingGirlDress
+        ? commaList(editForm.availableSizes)
+        : editForm.size.trim()
+          ? [editForm.size.trim()]
+          : [];
+
+      const savedSize = editingGirlDress
+        ? availableSizes.join(', ')
+        : editForm.size.trim();
+
       const payload = {
         title: editForm.title.trim(),
         product_name: editForm.title.trim(),
@@ -869,7 +929,22 @@ export default function AdminProductsPage() {
         sub_category: editForm.subCategory.trim(),
         child_category: editForm.childCategory.trim(),
         color: editForm.color.trim(),
-        size: editForm.size.trim(),
+        secondary_color: editForm.secondaryColor.trim(),
+        size: savedSize,
+        available_sizes: availableSizes,
+        dress_type: editingGirlDress ? editForm.dressType.trim() : '',
+        dress_length: editingGirlDress ? editForm.dressLength.trim() : '',
+        chest_size: editingGirlDress ? editForm.chestSize.trim() : '',
+        waist_size: editingGirlDress ? editForm.waistSize.trim() : '',
+        material: editForm.material.trim(),
+        fabric: editForm.material.trim(),
+        pattern: editForm.pattern.trim(),
+        style: editForm.pattern.trim(),
+        gender: editForm.gender.trim(),
+        audience: editForm.gender.trim(),
+        age_group: editingGirlDress
+          ? editForm.subCategory.trim()
+          : cleanText(editing.data.age_group),
         description: editForm.description.trim(),
         ai_description: editForm.description.trim(),
         purchase_cost: purchaseCost,
@@ -1519,16 +1594,161 @@ export default function AdminProductsPage() {
 
               <EditSection title="Basic Details">
                 <div style={editGrid3}>
-                  <EditField label="Product Name" value={editForm.title} onChange={(value) => updateEditField('title', value)} />
-                  <EditField label="Brand" value={editForm.brand} onChange={(value) => updateEditField('brand', value)} />
-                  <EditField label="Main Category" value={editForm.mainCategory} onChange={(value) => updateEditField('mainCategory', value)} />
-                  <EditField label="Sub Category" value={editForm.subCategory} onChange={(value) => updateEditField('subCategory', value)} />
-                  <EditField label="Child Category" value={editForm.childCategory} onChange={(value) => updateEditField('childCategory', value)} />
-                  <EditField label="Colour" value={editForm.color} onChange={(value) => updateEditField('color', value)} />
-                  <EditField label="Size" value={editForm.size} onChange={(value) => updateEditField('size', value)} />
+                  <EditField
+                    label="Product Name"
+                    value={editForm.title}
+                    onChange={(value) => updateEditField('title', value)}
+                  />
+
+                  <EditField
+                    label="Brand"
+                    value={editForm.brand}
+                    onChange={(value) => updateEditField('brand', value)}
+                  />
+
+                  <EditField
+                    label="Main Category"
+                    value={editForm.mainCategory}
+                    onChange={(value) => updateEditField('mainCategory', value)}
+                  />
+
+                  <EditField
+                    label="Sub Category / Age Group"
+                    value={editForm.subCategory}
+                    onChange={(value) => updateEditField('subCategory', value)}
+                  />
+
+                  <EditField
+                    label="Child Category"
+                    value={editForm.childCategory}
+                    onChange={(value) => updateEditField('childCategory', value)}
+                  />
+
+                  <EditField
+                    label="Colour"
+                    value={editForm.color}
+                    onChange={(value) => updateEditField('color', value)}
+                  />
+
+                  <EditField
+                    label="Second Colour"
+                    value={editForm.secondaryColor}
+                    onChange={(value) => updateEditField('secondaryColor', value)}
+                  />
+
+                  {isEditingGirlDress ? (
+                    <>
+                      <label>
+                        <span style={modalLabel}>Dress Type</span>
+                        <select
+                          value={editForm.dressType}
+                          onChange={(event) =>
+                            updateEditField('dressType', event.target.value)
+                          }
+                          style={modalInput}
+                        >
+                          <option value="">Select dress type</option>
+                          <option value="Frock">Frock</option>
+                          <option value="Party Dress">Party Dress</option>
+                          <option value="Gown">Gown</option>
+                          <option value="Top & Skirt Set">Top & Skirt Set</option>
+                          <option value="Lehenga">Lehenga</option>
+                          <option value="Kurti Set">Kurti Set</option>
+                          <option value="Casual Dress">Casual Dress</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </label>
+
+                      <EditField
+                        label="Available Sizes"
+                        value={editForm.availableSizes}
+                        onChange={(value) =>
+                          updateEditField('availableSizes', value)
+                        }
+                        placeholder="Example: 18, 20, 22"
+                      />
+
+                      <EditField
+                        label="Dress Length"
+                        value={editForm.dressLength}
+                        onChange={(value) =>
+                          updateEditField('dressLength', value)
+                        }
+                        placeholder="Example: 21 inch"
+                      />
+
+                      <EditField
+                        label="Chest"
+                        value={editForm.chestSize}
+                        onChange={(value) =>
+                          updateEditField('chestSize', value)
+                        }
+                        placeholder="Example: 24 inch"
+                      />
+
+                      <EditField
+                        label="Waist"
+                        value={editForm.waistSize}
+                        onChange={(value) =>
+                          updateEditField('waistSize', value)
+                        }
+                        placeholder="Example: 22 inch"
+                      />
+                    </>
+                  ) : (
+                    <EditField
+                      label="Size"
+                      value={editForm.size}
+                      onChange={(value) => updateEditField('size', value)}
+                    />
+                  )}
+
+                  <EditField
+                    label="Material / Fabric"
+                    value={editForm.material}
+                    onChange={(value) => updateEditField('material', value)}
+                  />
+
+                  <EditField
+                    label="Pattern / Style"
+                    value={editForm.pattern}
+                    onChange={(value) => updateEditField('pattern', value)}
+                  />
+
+                  <EditField
+                    label="Gender / Audience"
+                    value={editForm.gender}
+                    onChange={(value) => updateEditField('gender', value)}
+                  />
                 </div>
+
+                {isEditingGirlDress && (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      marginBottom: 14,
+                      padding: '10px 12px',
+                      border: '1px solid #d8eadf',
+                      borderRadius: 10,
+                      background: '#f3fbf6',
+                      color: '#27643f',
+                      fontSize: 12,
+                    }}
+                  >
+                    Age Group is taken from Sub Category. Enter the actual dress
+                    sizes and measurements for this design.
+                  </div>
+                )}
+
                 <label style={modalLabel}>Description</label>
-                <textarea value={editForm.description} onChange={(event) => updateEditField('description', event.target.value)} rows={4} style={{ ...modalInput, resize: 'vertical' }} />
+                <textarea
+                  value={editForm.description}
+                  onChange={(event) =>
+                    updateEditField('description', event.target.value)
+                  }
+                  rows={4}
+                  style={{ ...modalInput, resize: 'vertical' }}
+                />
               </EditSection>
 
               <EditSection title="Pricing">
@@ -1714,11 +1934,29 @@ function EditSection({ title, children }: { title: string; children: React.React
   return <section style={editSection}><h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 400 }}>{title}</h3>{children}</section>;
 }
 
-function EditField({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
+function EditField({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  placeholder = '',
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  placeholder?: string;
+}) {
   return (
     <label>
       <span style={modalLabel}>{label}</span>
-      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} style={modalInput} />
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+        style={modalInput}
+      />
     </label>
   );
 }
