@@ -69,15 +69,20 @@ export function useDeliveryAvailability() {
   const [distance, setDistance] =
     useState<number | null>(null);
 
-  const retryTimerRef =
-    useRef<number | null>(null);
+  const [coordinates, setCoordinates] =
+    useState<Coordinates | null>(null);
+
+  const hasValidLocationRef = useRef(false);
 
   const watchIdRef =
     useRef<number | null>(null);
 
+  const retryTimerRef =
+    useRef<number | null>(null);
+
   const updateFromPosition = useCallback(
     (position: GeolocationPosition) => {
-      const customer = {
+      const customer: Coordinates = {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
       };
@@ -92,61 +97,118 @@ export function useDeliveryAvailability() {
         },
       );
 
+      hasValidLocationRef.current = true;
+
+      setCoordinates(customer);
       setDistance(calculatedDistance);
 
-      setStatus(
+      const nextStatus: DeliveryAvailabilityStatus =
         calculatedDistance <=
-          SPOTC_DELIVERY_CENTER.radiusKm
+        SPOTC_DELIVERY_CENTER.radiusKm
           ? 'available'
-          : 'outside',
-      );
+          : 'outside';
+
+      setStatus(nextStatus);
+
+      console.log('[SPOTC DELIVERY]', {
+        latitude: customer.latitude,
+        longitude: customer.longitude,
+        accuracyMeters: position.coords.accuracy,
+        distanceKm:
+          Number(calculatedDistance.toFixed(2)),
+        radiusKm:
+          SPOTC_DELIVERY_CENTER.radiusKm,
+        status: nextStatus,
+      });
     },
     [],
   );
 
   const handleLocationError = useCallback(
     (error: GeolocationPositionError) => {
-      setDistance(null);
+      console.warn(
+        '[SPOTC DELIVERY] error',
+        error.code,
+        error.message,
+      );
 
       if (
         error.code ===
         error.PERMISSION_DENIED
       ) {
+        hasValidLocationRef.current = false;
+        setCoordinates(null);
+        setDistance(null);
         setStatus('permission_denied');
         return;
       }
 
+      /*
+       * IMPORTANT:
+       * A timeout / temporary GPS error must not erase
+       * a previously confirmed inside/outside result.
+       */
+      if (hasValidLocationRef.current) {
+        return;
+      }
+
+      setCoordinates(null);
+      setDistance(null);
       setStatus('unavailable');
     },
     [],
   );
 
-  const requestLocation = useCallback(() => {
-    if (
-      typeof navigator === 'undefined' ||
-      !navigator.geolocation
-    ) {
-      setStatus('unavailable');
-      setDistance(null);
-      return;
-    }
+  const requestLocation = useCallback(
+    (showChecking = false) => {
+      if (
+        typeof navigator === 'undefined' ||
+        !navigator.geolocation
+      ) {
+        if (!hasValidLocationRef.current) {
+          setStatus('unavailable');
+          setDistance(null);
+          setCoordinates(null);
+        }
 
-    setStatus('checking');
+        return;
+      }
 
-    navigator.geolocation.getCurrentPosition(
+      /*
+       * Do not make an already-confirmed outside banner
+       * disappear during every automatic retry.
+       */
+      if (
+        showChecking ||
+        !hasValidLocationRef.current
+      ) {
+        setStatus('checking');
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        updateFromPosition,
+        handleLocationError,
+        {
+          enableHighAccuracy: true,
+
+          /*
+           * Always request a fresh location.
+           */
+          maximumAge: 0,
+
+          timeout: 15000,
+        },
+      );
+    },
+    [
       updateFromPosition,
       handleLocationError,
-      {
-        enableHighAccuracy: true,
-        timeout: 12000,
-        maximumAge: 15_000,
-      },
-    );
-  }, [
-    updateFromPosition,
-    handleLocationError,
-  ]);
+    ],
+  );
 
+  /*
+   * Initial location check + continuous GPS watch.
+   */
   useEffect(() => {
     if (
       typeof navigator === 'undefined' ||
@@ -156,25 +218,16 @@ export function useDeliveryAvailability() {
       return;
     }
 
-    requestLocation();
+    requestLocation(true);
 
-    /*
-     * Watch the device location.
-     *
-     * Important for Android:
-     * if Location was OFF when SPOTC opened,
-     * then the user turns it ON later,
-     * watchPosition will receive a position
-     * and immediately recalculate the 5 km rule.
-     */
     watchIdRef.current =
       navigator.geolocation.watchPosition(
         updateFromPosition,
         handleLocationError,
         {
           enableHighAccuracy: true,
-          maximumAge: 10_000,
-          timeout: 20_000,
+          maximumAge: 0,
+          timeout: 30000,
         },
       );
 
@@ -195,61 +248,169 @@ export function useDeliveryAvailability() {
     handleLocationError,
   ]);
 
+  /*
+   * Detect Chrome site-permission changes.
+   *
+   * Example:
+   * Blocked → user changes to Allow → SPOTC rechecks.
+   */
   useEffect(() => {
-    /*
-     * When the browser/tab becomes active again,
-     * retry the location check.
-     *
-     * This handles:
-     * 1. user opens Android quick settings,
-     * 2. turns Location ON,
-     * 3. returns to Chrome / SPOTC.
-     */
-    const retryWhenVisible = () => {
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.permissions?.query
+    ) {
+      return;
+    }
+
+    let permissionStatus:
+      | PermissionStatus
+      | null = null;
+
+    let cancelled = false;
+
+    const setupPermissionWatcher =
+      async () => {
+        try {
+          permissionStatus =
+            await navigator.permissions.query({
+              name: 'geolocation' as PermissionName,
+            });
+
+          if (cancelled) return;
+
+          const applyPermissionState = () => {
+            if (!permissionStatus) return;
+
+            console.log(
+              '[SPOTC DELIVERY] permission',
+              permissionStatus.state,
+            );
+
+            if (
+              permissionStatus.state ===
+              'granted'
+            ) {
+              requestLocation(true);
+              return;
+            }
+
+            if (
+              permissionStatus.state ===
+              'denied'
+            ) {
+              hasValidLocationRef.current =
+                false;
+
+              setCoordinates(null);
+              setDistance(null);
+              setStatus(
+                'permission_denied',
+              );
+
+              return;
+            }
+
+            /*
+             * state === prompt
+             */
+            if (
+              permissionStatus.state ===
+              'prompt'
+            ) {
+              requestLocation(true);
+            }
+          };
+
+          permissionStatus.addEventListener(
+            'change',
+            applyPermissionState,
+          );
+
+          applyPermissionState();
+        } catch (error) {
+          console.warn(
+            '[SPOTC DELIVERY] Permissions API unavailable',
+            error,
+          );
+        }
+      };
+
+    void setupPermissionWatcher();
+
+    return () => {
+      cancelled = true;
+
+      /*
+       * No harm if listener remains briefly during unmount;
+       * PermissionStatus is discarded with component.
+       */
+      permissionStatus = null;
+    };
+  }, [requestLocation]);
+
+  /*
+   * Android:
+   *
+   * User turns Location OFF/ON from quick settings
+   * and returns to Chrome.
+   *
+   * Immediately retry when page becomes visible/focused.
+   */
+  useEffect(() => {
+    const retry = () => {
+      requestLocation(false);
+    };
+
+    const onVisibilityChange = () => {
       if (
         document.visibilityState ===
         'visible'
       ) {
-        requestLocation();
+        retry();
       }
-    };
-
-    const retryWhenFocused = () => {
-      requestLocation();
     };
 
     document.addEventListener(
       'visibilitychange',
-      retryWhenVisible,
+      onVisibilityChange,
     );
 
     window.addEventListener(
       'focus',
-      retryWhenFocused,
+      retry,
+    );
+
+    window.addEventListener(
+      'pageshow',
+      retry,
     );
 
     return () => {
       document.removeEventListener(
         'visibilitychange',
-        retryWhenVisible,
+        onVisibilityChange,
       );
 
       window.removeEventListener(
         'focus',
-        retryWhenFocused,
+        retry,
+      );
+
+      window.removeEventListener(
+        'pageshow',
+        retry,
       );
     };
   }, [requestLocation]);
 
+  /*
+   * If Android Location service was OFF,
+   * retry every 5 seconds until GPS works.
+   *
+   * Do not repeatedly retry when browser permission
+   * is explicitly denied.
+   */
   useEffect(() => {
-    /*
-     * Extra recovery for mobile browsers.
-     *
-     * If Android Location was unavailable,
-     * silently retry every 8 seconds.
-     * Do NOT repeatedly retry a denied
-     * browser permission.
-     */
     if (
       status !== 'unavailable'
     ) {
@@ -268,8 +429,8 @@ export function useDeliveryAvailability() {
 
     retryTimerRef.current =
       window.setInterval(() => {
-        requestLocation();
-      }, 8000);
+        requestLocation(false);
+      }, 5000);
 
     return () => {
       if (
@@ -303,7 +464,7 @@ export function useDeliveryAvailability() {
       status === 'permission_denied'
     ) {
       return (
-        'Location access is blocked. ' +
+        'Allow location access to check delivery availability. ' +
         'You can continue browsing SPOTC.'
       );
     }
@@ -312,7 +473,7 @@ export function useDeliveryAvailability() {
       status === 'unavailable'
     ) {
       return (
-        'We could not check your current delivery area. ' +
+        'Turn on device location to check delivery availability. ' +
         'You can continue browsing SPOTC.'
       );
     }
@@ -322,10 +483,18 @@ export function useDeliveryAvailability() {
 
   return {
     status,
+
     distanceKm: distance,
+
+    coordinates,
+
     canPurchase,
+
     message,
-    requestLocation,
+
+    requestLocation: () =>
+      requestLocation(true),
+
     radiusKm:
       SPOTC_DELIVERY_CENTER.radiusKm,
   };
