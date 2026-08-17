@@ -399,37 +399,50 @@ if (!signedInUser) {
 
   return (
     <div
-      className={[
+      className={
         pathname.startsWith('/shop') || pathname.startsWith('/product/')
           ? 'spotc-app-shell spotc-app-shell-shop'
-          : 'spotc-app-shell',
-        showDeliveryBanner ? 'spotc-app-shell-with-delivery-banner' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
+          : 'spotc-app-shell'
+      }
     >
       {showDeliveryBanner && (
-        <section
-          className="spotc-global-delivery-banner"
-          role="status"
-          aria-live="polite"
+        <div
+          className="spotc-delivery-popup-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="spotc-delivery-popup-title"
         >
-          <div className="spotc-global-delivery-banner__copy">
-            <strong>SPOTC is coming to your area shortly</strong>
-            <span>
-              Browse all products now. Ordering will be available when SPOTC launches in your area.
-            </span>
-          </div>
+          <div className="spotc-delivery-popup">
+            <button
+              type="button"
+              className="spotc-delivery-popup-close"
+              aria-label="Close"
+              onClick={() => setDeliveryBannerClosed(true)}
+            >
+              <X size={20} aria-hidden="true" />
+            </button>
 
-          <button
-            type="button"
-            className="spotc-global-delivery-banner__close"
-            aria-label="Close delivery area message"
-            onClick={() => setDeliveryBannerClosed(true)}
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </section>
+            <div className="spotc-delivery-popup-icon">
+              <ShoppingBag size={24} aria-hidden="true" />
+            </div>
+
+            <strong id="spotc-delivery-popup-title">
+              Delivery not available here yet
+            </strong>
+
+            <p>
+              You can browse products. Ordering is available within 5 km only.
+            </p>
+
+            <button
+              type="button"
+              className="spotc-delivery-popup-continue"
+              onClick={() => setDeliveryBannerClosed(true)}
+            >
+              Continue Browsing
+            </button>
+          </div>
+        </div>
       )}
 
       <header className="spotc-site-header">
@@ -792,66 +805,115 @@ if (!signedInUser) {
         }
 
 
-        .spotc-global-delivery-banner {
+        .spotc-delivery-popup-overlay {
           position: fixed;
-          top: 0;
-          right: 0;
-          left: 0;
-          z-index: 12000;
-          min-height: 48px;
-          padding: 9px 54px 9px 18px;
+          inset: 0;
+          z-index: 99999;
           display: flex;
           align-items: center;
           justify-content: center;
-          box-sizing: border-box;
-          color: #ffffff;
-          background: #4b1715;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+          padding: 20px;
+          background: rgba(0, 0, 0, 0.52);
+          backdrop-filter: blur(2px);
+          -webkit-backdrop-filter: blur(2px);
         }
 
-        .spotc-global-delivery-banner__copy {
-          width: min(100%, 1100px);
-          display: flex;
-          align-items: baseline;
-          justify-content: center;
-          flex-wrap: wrap;
-          gap: 4px 9px;
+        .spotc-delivery-popup {
+          position: relative;
+          width: 100%;
+          max-width: 390px;
+          padding: 28px 24px 22px;
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          border-radius: 20px;
+          background: #ffffff;
           text-align: center;
+          box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
         }
 
-        .spotc-global-delivery-banner__copy strong {
-          color: #ffffff;
-          font-size: 13px;
-          font-weight: 800;
-          line-height: 1.35;
-        }
-
-        .spotc-global-delivery-banner__copy span {
-          color: rgba(255, 255, 255, 0.88);
-          font-size: 12px;
-          font-weight: 500;
-          line-height: 1.4;
-        }
-
-        .spotc-global-delivery-banner__close {
+        .spotc-delivery-popup-close {
           position: absolute;
-          top: 50%;
-          right: 14px;
-          width: 32px;
-          height: 32px;
-          transform: translateY(-50%);
+          top: 12px;
+          right: 12px;
+          width: 34px;
+          height: 34px;
+          padding: 0;
           display: grid;
           place-items: center;
-          border: 1px solid rgba(255, 255, 255, 0.22);
-          border-radius: 999px;
-          color: #ffffff;
-          background: rgba(255, 255, 255, 0.08);
+          border: 0;
+          border-radius: 50%;
+          color: #4a4540;
+          background: #f2eee8;
           cursor: pointer;
         }
 
-        .spotc-app-shell-with-delivery-banner .spotc-site-header {
-          top: 48px !important;
+        .spotc-delivery-popup-icon {
+          width: 52px;
+          height: 52px;
+          margin: 0 auto 16px;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
+          color: #ffffff;
+          background: #4b1715;
+        }
+
+        .spotc-delivery-popup strong {
+          display: block;
+          padding: 0 20px;
+          color: #1d1b18;
+          font-size: 20px;
+          font-weight: 800;
+          line-height: 1.25;
+        }
+
+        .spotc-delivery-popup p {
+          margin: 10px 0 20px;
+          color: #68615a;
+          font-size: 14px;
+          font-weight: 500;
+          line-height: 1.5;
+        }
+
+        .spotc-delivery-popup-continue {
+          width: 100%;
+          min-height: 46px;
+          padding: 0 16px;
+          border: 0;
+          border-radius: 12px;
+          color: #ffffff;
+          background: #4b1715;
+          font-family: inherit;
+          font-size: 15px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .spotc-delivery-popup-continue:hover {
+          background: #5a1b18;
+        }
+
+        .spotc-delivery-popup-continue:active {
+          transform: scale(0.98);
+        }
+
+        @media (max-width: 700px) {
+          .spotc-delivery-popup-overlay {
+            padding: 18px;
+          }
+
+          .spotc-delivery-popup {
+            max-width: 340px;
+            padding: 26px 20px 20px;
+            border-radius: 18px;
+          }
+
+          .spotc-delivery-popup strong {
+            font-size: 18px;
+          }
+
+          .spotc-delivery-popup p {
+            font-size: 13px;
+          }
         }
 
         /* Shop uses a normal content-height shell so the footer starts
@@ -1404,9 +1466,6 @@ if (!signedInUser) {
             padding-top: 72px;
           }
 
-          .spotc-app-shell-with-delivery-banner .spotc-site-content {
-            padding-top: 120px;
-          }
         }
 
         .spotc-mobile-navigation {
@@ -1465,9 +1524,6 @@ if (!signedInUser) {
             height: 30px;
           }
 
-          .spotc-app-shell-with-delivery-banner .spotc-site-header {
-            top: 58px !important;
-          }
 
           .spotc-header-inner {
             width: calc(
@@ -1546,9 +1602,6 @@ if (!signedInUser) {
             padding-bottom: 0;
           }
 
-          .spotc-app-shell-with-delivery-banner .spotc-site-content {
-            padding-top: 58px;
-          }
 
           /* Shop mobile: reserve space above the fixed bottom navigation. */
 .spotc-app-shell:has(.shop-page)
@@ -1616,11 +1669,6 @@ if (!signedInUser) {
   left: 0;
 }
 
-
-.spotc-app-shell-with-delivery-banner
-.spotc-mobile-navigation-top {
-  top: 120px;
-}
 
 .spotc-mobile-navigation-bottom {
   top: auto;
