@@ -66,6 +66,16 @@ const GIRL_DRESS_AGE_GROUPS = [
   '9-12 Years',
 ] as const;
 
+/*
+ * Only products that genuinely belong to one of the three current
+ * Shop main categories are shown in this grid.
+ *
+ * IMPORTANT:
+ * We do NOT force unknown/fancy/accessory items into Toys or Girl Dress.
+ * This prevents future products such as headbands, bangles, chains,
+ * keychains, clips, pottu, watches, sunglasses, etc. from appearing
+ * under the wrong main category.
+ */
 const normalizedProductText = (
   product: BusinessProduct,
 ): string =>
@@ -74,12 +84,21 @@ const normalizedProductText = (
     product.category,
     product.sub_category,
     product.child_category,
-    product.age_group,
     product.title,
     product.product_name,
+    product.brand,
+    product.age_group,
+    product.gender,
+    product.audience,
     product.search_text,
     Array.isArray(product.tags)
       ? product.tags.join(' ')
+      : '',
+    Array.isArray(product.search_tags)
+      ? product.search_tags.join(' ')
+      : '',
+    Array.isArray(product.keywords)
+      ? product.keywords.join(' ')
       : '',
   ]
     .map(textValue)
@@ -87,9 +106,9 @@ const normalizedProductText = (
     .join(' ')
     .toLowerCase();
 
-const shopMainCategoryOf = (
+const isExplicitToyProduct = (
   product: BusinessProduct,
-): ShopMainCategory => {
+): boolean => {
   const main = textValue(
     product.main_category || '',
   ).toLowerCase();
@@ -98,11 +117,11 @@ const shopMainCategoryOf = (
     product.category || '',
   ).toLowerCase();
 
-  const subCategory = textValue(
+  const sub = textValue(
     product.sub_category || '',
   ).toLowerCase();
 
-  const childCategory = textValue(
+  const child = textValue(
     product.child_category || '',
   ).toLowerCase();
 
@@ -110,145 +129,339 @@ const shopMainCategoryOf = (
     normalizedProductText(product);
 
   /*
-   * IMPORTANT CATEGORY PRIORITY
-   *
-   * 1. Explicit toy data wins first.
-   * This prevents Fashion Dolls / dolls wearing gowns
-   * from appearing under Girl Dress.
+   * Firestore classification wins first.
    */
   if (
     main === 'toys' ||
     main === 'toy' ||
     category === 'toys' ||
-    category === 'toy' ||
-    subCategory.includes('doll') ||
-    childCategory.includes('doll') ||
+    category === 'toy'
+  ) {
+    return true;
+  }
+
+  /*
+   * Strong toy category/title fallbacks for older products.
+   */
+  return (
+    sub.includes('toy') ||
+    child.includes('toy') ||
+    sub.includes('doll') ||
+    child.includes('doll') ||
     combined.includes('fashion doll') ||
+    combined.includes('baby doll') ||
     combined.includes('barbie') ||
     combined.includes('toy gun') ||
     combined.includes('water gun') ||
     combined.includes('soft bullet') ||
+    combined.includes('toy car') ||
+    combined.includes('toy vehicle') ||
+    combined.includes('play ball') ||
+    combined.includes('plastic ball') ||
     combined.includes('drawing board') ||
     combined.includes('magnetic board') ||
-    combined.includes('fidget') ||
-    combined.includes('balloon') ||
-    combined.includes('toy car') ||
-    combined.includes('play ball') ||
-    combined.includes('puzzle') ||
-    combined.includes('slime') ||
-    combined.includes('piggy bank') ||
-    combined.includes('activity book')
+    combined.includes('magic slate') ||
+    combined.includes('fidget toy') ||
+    combined.includes('spinner toy') ||
+    combined.includes('puzzle toy') ||
+    combined.includes('slime toy') ||
+    combined.includes('sand toy') ||
+    combined.includes('beach toy') ||
+    combined.includes('animal figure') ||
+    combined.includes('animal figurine') ||
+    combined.includes('building block') ||
+    combined.includes('blocks toy') ||
+    combined.includes('pretend play') ||
+    combined.includes('educational toy')
+  );
+};
+
+const isEarringProduct = (
+  product: BusinessProduct,
+): boolean => {
+  const main = textValue(
+    product.main_category || '',
+  ).toLowerCase();
+
+  const category = textValue(
+    product.category || '',
+  ).toLowerCase();
+
+  const sub = textValue(
+    product.sub_category || '',
+  ).toLowerCase();
+
+  const child = textValue(
+    product.child_category || '',
+  ).toLowerCase();
+
+  const combined =
+    normalizedProductText(product);
+
+  if (
+    main === 'earrings' ||
+    main === 'earring' ||
+    category === 'earrings' ||
+    category === 'earring' ||
+    sub === 'earrings' ||
+    sub === 'earring' ||
+    child === 'earrings' ||
+    child === 'earring'
   ) {
-    return 'Toys';
+    return true;
   }
 
-  /*
-   * 2. Earrings.
-   */
-  if (
+  return (
     combined.includes('earring') ||
     combined.includes('ear ring') ||
     combined.includes('ear stud') ||
     combined.includes('stud earring') ||
+    combined.includes('drop earring') ||
+    combined.includes('hoop earring') ||
     combined.includes('jhumka') ||
     combined.includes('jhumki')
+  );
+};
+
+const isGirlDressProduct = (
+  product: BusinessProduct,
+): boolean => {
+  const main = textValue(
+    product.main_category || '',
+  ).toLowerCase();
+
+  const category = textValue(
+    product.category || '',
+  ).toLowerCase();
+
+  const sub = textValue(
+    product.sub_category || '',
+  ).toLowerCase();
+
+  const child = textValue(
+    product.child_category || '',
+  ).toLowerCase();
+
+  const combined =
+    normalizedProductText(product);
+
+  /*
+   * Explicit toy/fancy accessory guards must run before clothing logic.
+   */
+  if (isExplicitToyProduct(product)) {
+    return false;
+  }
+
+  const accessoryWords = [
+    'headband',
+    'hair band',
+    'hairband',
+    'hair clip',
+    'hairclip',
+    'hair pin',
+    'hairpin',
+    'scrunchie',
+    'bangle',
+    'bracelet',
+    'necklace',
+    'chain',
+    'keychain',
+    'key chain',
+    'pottu',
+    'bindi',
+    'sunglass',
+    'sunglasses',
+    'eyeglass',
+    'watch',
+    'wallet',
+    'handbag',
+    'purse',
+    'crown',
+    'tiara',
+    'costume accessory',
+    'costume prop',
+    'horns headband',
+  ];
+
+  if (
+    accessoryWords.some((word) =>
+      combined.includes(word),
+    )
   ) {
+    return false;
+  }
+
+  /*
+   * Explicit Firestore dress classification.
+   */
+  if (
+    main === 'girl dress' ||
+    main === 'girls dress' ||
+    main === 'girls wear' ||
+    main === 'kids wear' ||
+    category === 'girl dress' ||
+    category === 'girls dress' ||
+    sub === 'girl dress' ||
+    sub === 'girls dress' ||
+    child === 'girl dress' ||
+    child === 'girls dress'
+  ) {
+    return true;
+  }
+
+  /*
+   * Strong clothing terms only.
+   * Avoid broad words such as "party", "costume", "fashion", or "gown"
+   * on their own because toys/accessories can contain those words.
+   */
+  return (
+    combined.includes('girls frock') ||
+    combined.includes('girl frock') ||
+    combined.includes('kids frock') ||
+    combined.includes('baby frock') ||
+    combined.includes('girls kurti') ||
+    combined.includes('girl kurti') ||
+    combined.includes('girls lehenga') ||
+    combined.includes('girl lehenga') ||
+    combined.includes('girls salwar') ||
+    combined.includes('girl salwar') ||
+    combined.includes('girls top and skirt') ||
+    combined.includes('girl top and skirt') ||
+    combined.includes('girls top & skirt') ||
+    combined.includes('girl top & skirt') ||
+    combined.includes('girls clothing set') ||
+    combined.includes('girl clothing set') ||
+    combined.includes('girls dress') ||
+    combined.includes('girl dress')
+  );
+};
+
+const shopMainCategoryOf = (
+  product: BusinessProduct,
+): ShopMainCategory | null => {
+  /*
+   * Priority is deliberate:
+   * Toys first prevents dolls wearing dresses/gowns becoming clothing.
+   * Earrings next.
+   * Girl Dress next.
+   * Anything else stays unclassified instead of being shown wrongly.
+   */
+  if (isExplicitToyProduct(product)) {
+    return 'Toys';
+  }
+
+  if (isEarringProduct(product)) {
     return 'Earrings';
   }
 
-  /*
-   * 3. Girl Dress.
-   *
-   * We deliberately check this AFTER Toys, so a doll
-   * whose title contains "dress" or "gown" stays a toy.
-   */
-  if (
-    main.includes('fashion') ||
-    main.includes('dress') ||
-    category.includes('dress') ||
-    subCategory.includes('dress') ||
-    childCategory.includes('dress') ||
-    combined.includes('girl dress') ||
-    combined.includes('girls dress') ||
-    combined.includes('girls wear') ||
-    combined.includes('girl wear') ||
-    combined.includes('kids dress') ||
-    combined.includes('kid dress') ||
-    combined.includes('frock') ||
-    combined.includes('kurti') ||
-    combined.includes('lehenga') ||
-    combined.includes('salwar') ||
-    combined.includes('top set') ||
-    combined.includes('top & skirt') ||
-    combined.includes('top and skirt') ||
-    combined.includes('party wear')
-  ) {
+  if (isGirlDressProduct(product)) {
     return 'Girl Dress';
   }
 
-  /*
-   * Current SPOTC shop has only three main groups.
-   * Unknown items stay under Toys until they are
-   * explicitly classified in Firestore/admin.
-   */
-  return 'Toys';
+  return null;
 };
 
-const extractNumbers = (value: string): number[] =>
+const extractNumbers = (
+  value: string,
+): number[] =>
   (value.match(/\d+(?:\.\d+)?/g) || [])
     .map(Number)
-    .filter((value) => Number.isFinite(value));
+    .filter((value) =>
+      Number.isFinite(value),
+    );
 
-const girlDressAgeBandOf = (
-  product: BusinessProduct,
-): string => {
-  const ageText = [
-    product.age_group,
-    product.age,
-    product.size,
-    product.title,
-    product.product_name,
-  ]
-    .map(textValue)
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
+const normalizeGirlDressAgeBand = (
+  value: string,
+): string | null => {
+  const raw = value
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 
-  if (!ageText) return 'Other Ages';
+  if (!raw) return null;
 
   /*
-   * Handle common month-based baby sizes first.
+   * Exact/current admin-style values.
    */
-  const monthMatch = ageText.match(
-    /(\d+)\s*(?:-|to)\s*(\d+)\s*month/,
-  );
-
-  if (monthMatch) {
-    const maxMonths = Number(monthMatch[2]);
-
-    if (maxMonths <= 12) return '0-1 Years';
-    if (maxMonths <= 24) return '1-2 Years';
-    if (maxMonths <= 36) return '2-3 Years';
+  if (
+    /(^|\D)0\s*(?:-|to)\s*1\s*(?:year|years|yr|yrs)/.test(raw)
+  ) {
+    return '0-1 Years';
   }
 
   if (
-    ageText.includes('newborn') ||
-    ageText.includes('0-3 month') ||
-    ageText.includes('0-6 month') ||
-    ageText.includes('0-12 month') ||
-    ageText.includes('6-12 month')
+    /(^|\D)1\s*(?:-|to)\s*2\s*(?:year|years|yr|yrs)/.test(raw)
+  ) {
+    return '1-2 Years';
+  }
+
+  if (
+    /(^|\D)2\s*(?:-|to)\s*3\s*(?:year|years|yr|yrs)/.test(raw)
+  ) {
+    return '2-3 Years';
+  }
+
+  if (
+    /(^|\D)3\s*(?:-|to)\s*5\s*(?:year|years|yr|yrs)/.test(raw)
+  ) {
+    return '3-5 Years';
+  }
+
+  if (
+    /(^|\D)6\s*(?:-|to)\s*8\s*(?:year|years|yr|yrs)/.test(raw)
+  ) {
+    return '6-8 Years';
+  }
+
+  if (
+    /(^|\D)9\s*(?:-|to)\s*12\s*(?:year|years|yr|yrs)/.test(raw)
+  ) {
+    return '9-12 Years';
+  }
+
+  /*
+   * Month-based baby sizes.
+   */
+  const monthRange = raw.match(
+    /(\d+)\s*(?:-|to)\s*(\d+)\s*(?:month|months|mo|mos)/,
+  );
+
+  if (monthRange) {
+    const minMonths =
+      Number(monthRange[1]);
+    const maxMonths =
+      Number(monthRange[2]);
+    const middleMonths =
+      (minMonths + maxMonths) / 2;
+
+    if (middleMonths < 12) {
+      return '0-1 Years';
+    }
+
+    if (middleMonths < 24) {
+      return '1-2 Years';
+    }
+
+    if (middleMonths < 36) {
+      return '2-3 Years';
+    }
+  }
+
+  if (
+    raw.includes('newborn') ||
+    raw.includes('infant')
   ) {
     return '0-1 Years';
   }
 
   /*
-   * Read year ranges such as:
-   * 1-2 Years, 3 to 5 Years, 6-8Y, 9/10 Years.
+   * Generic year ranges / single ages / values like "2+ Years".
    */
-  const numbers = extractNumbers(ageText);
+  const numbers =
+    extractNumbers(raw);
 
   if (!numbers.length) {
-    return 'Other Ages';
+    return null;
   }
 
   let minAge = numbers[0];
@@ -257,39 +470,70 @@ const girlDressAgeBandOf = (
       ? numbers[1]
       : numbers[0];
 
-  /*
-   * For values like "2+ Years", treat the starting
-   * age as the band selector.
-   */
-  if (ageText.includes('+')) {
+  if (
+    raw.includes('month') ||
+    raw.includes(' mo')
+  ) {
+    minAge /= 12;
+    maxAge /= 12;
+  }
+
+  if (raw.includes('+')) {
     maxAge = minAge;
   }
 
-  const representativeAge =
+  const age =
     (minAge + maxAge) / 2;
 
-  if (representativeAge < 1) {
+  if (age < 1) {
     return '0-1 Years';
   }
 
-  if (representativeAge < 2) {
+  if (age < 2) {
     return '1-2 Years';
   }
 
-  if (representativeAge < 3) {
+  if (age < 3) {
     return '2-3 Years';
   }
 
-  if (representativeAge <= 5) {
+  if (age <= 5) {
     return '3-5 Years';
   }
 
-  if (representativeAge <= 8) {
+  if (age <= 8) {
     return '6-8 Years';
   }
 
-  if (representativeAge <= 12) {
+  if (age <= 12) {
     return '9-12 Years';
+  }
+
+  return null;
+};
+
+const girlDressAgeBandOf = (
+  product: BusinessProduct,
+): string => {
+  /*
+   * Prefer the dedicated Firestore age_group first.
+   * Then use size, title and product name only as fallbacks.
+   */
+  const candidates = [
+    product.age_group,
+    product.age,
+    product.size,
+    product.title,
+    product.product_name,
+  ];
+
+  for (const candidate of candidates) {
+    const band =
+      normalizeGirlDressAgeBand(
+        textValue(candidate),
+      );
+
+    if (band) return band;
   }
 
   return 'Other Ages';
@@ -534,16 +778,25 @@ export function ProductGrid({
   );
 
   const subCategories = useMemo(() => {
-    /*
-     * Girl Dress always uses fixed age bands.
-     * This keeps the navigation consistent even when
-     * a particular age group temporarily has no stock.
-     */
     if (mainCategory === 'Girl Dress') {
-      return [...GIRL_DRESS_AGE_GROUPS];
+      const hasOtherAges = (items || []).some(
+        (product) =>
+          shopMainCategoryOf(product) ===
+            'Girl Dress' &&
+          girlDressAgeBandOf(product) ===
+            'Other Ages',
+      );
+
+      return hasOtherAges
+        ? [
+            ...GIRL_DRESS_AGE_GROUPS,
+            'Other Ages',
+          ]
+        : [...GIRL_DRESS_AGE_GROUPS];
     }
 
-    const unique = new Map<string, string>();
+    const unique =
+      new Map<string, string>();
 
     (items || [])
       .filter(
@@ -559,7 +812,8 @@ export function ProductGrid({
       )
       .filter(Boolean)
       .forEach((value) => {
-        const key = value.toLowerCase();
+        const key =
+          value.toLowerCase();
 
         if (!unique.has(key)) {
           unique.set(key, value);
@@ -568,8 +822,10 @@ export function ProductGrid({
 
     return [
       'All',
-      ...Array.from(unique.values()).sort(
-        (a, b) => a.localeCompare(b),
+      ...Array.from(
+        unique.values(),
+      ).sort((a, b) =>
+        a.localeCompare(b),
       ),
     ];
   }, [items, mainCategory]);
@@ -609,6 +865,14 @@ export function ProductGrid({
         const productMainCategory =
           shopMainCategoryOf(product);
 
+        /*
+         * Do not force products from other categories
+         * into the current three Shop tabs.
+         */
+        if (!productMainCategory) {
+          return false;
+        }
+
         const productSubCategory =
           shopSubCategoryOf(
             product,
@@ -620,12 +884,13 @@ export function ProductGrid({
           searchableText.includes(searchQuery);
 
         const matchesMainCategory =
-          !mainCategory ||
-          productMainCategory === mainCategory;
+          productMainCategory ===
+          mainCategory;
 
         const matchesSubCategory =
           subCategory === 'All' ||
-          productSubCategory === subCategory;
+          productSubCategory ===
+            subCategory;
 
         return (
           matchesSearch &&
