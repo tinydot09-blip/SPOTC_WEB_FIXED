@@ -29,7 +29,7 @@ import { requireGoogleLogin } from "@/lib/auth";
 import type { BusinessListing, BusinessProduct } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
 import { num, text } from "@/lib/utils";
-import { useDeliveryAvailability } from "@/lib/delivery";
+import { useDeliveryAvailability } from "@/lib/delivery-radius";
 
 type OfferProduct = {
   title: string;

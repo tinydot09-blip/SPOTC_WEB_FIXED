@@ -36,7 +36,7 @@ import {
 import { requireGoogleLogin } from '@/lib/auth';
 import type { BusinessProduct } from '@/lib/types';
 import { EmptyState } from './EmptyState';
-import { useDeliveryAvailability } from '@/lib/delivery';
+import { useDeliveryAvailability } from '@/lib/delivery-radius';
 
 const numberValue = (value: unknown): number => {
   const parsed = Number(value);
