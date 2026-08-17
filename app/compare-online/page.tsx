@@ -19,6 +19,7 @@ import {
   Truck,
 } from 'lucide-react';
 import { collection, DocumentData, getDocs } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 import { addProduct } from '@/lib/cart';
 import { db, firebaseReady } from '@/lib/firebase';
@@ -244,7 +245,8 @@ function CompareOnlinePageContent() {
           return;
         }
 
-        const nestedSnapshot = await getDocs(
+        // 1) First use cached comparison results already saved for this product.
+        let nestedSnapshot = await getDocs(
           collection(db, 'BusinessProducts', productId, 'OnlineProducts'),
         );
 
@@ -252,6 +254,44 @@ function CompareOnlinePageContent() {
           normalizeOnlineProduct(document.id, document.data()),
         );
 
+        // 2) No cached results: run the existing Firebase callable that uses
+        //    SerpApi Google Lens, saves matching products to
+        //    BusinessProducts/{productId}/OnlineProducts, then read them back.
+        if (!items.length) {
+          try {
+            const functions = getFunctions(undefined, 'asia-south1');
+            const generateProductComparison = httpsCallable<
+              { productId: string },
+              {
+                ok?: boolean;
+                status?: string;
+                count?: number;
+                source?: string;
+              }
+            >(functions, 'generateProductComparison');
+
+            await generateProductComparison({ productId });
+
+            if (cancelled) return;
+
+            nestedSnapshot = await getDocs(
+              collection(db, 'BusinessProducts', productId, 'OnlineProducts'),
+            );
+
+            items = nestedSnapshot.docs.map((document) =>
+              normalizeOnlineProduct(document.id, document.data()),
+            );
+          } catch (comparisonError) {
+            // Keep the page usable even when the live comparison service fails.
+            // We still try the older root-level OnlineProducts cache below.
+            console.error(
+              'Generating live online comparison failed:',
+              comparisonError,
+            );
+          }
+        }
+
+        // 3) Backward-compatible fallback for older root-level comparison data.
         if (!items.length) {
           const rootSnapshot = await getDocs(collection(db, 'OnlineProducts'));
           items = rootSnapshot.docs.map((document) =>
@@ -275,9 +315,8 @@ function CompareOnlinePageContent() {
               similarityScore(titleOf(selected), item.title),
           }))
           .filter((item) => {
-            // If this online item is directly linked to the selected SPOTC product,
-            // always keep it. For fallback root-level items, allow a broader
-            // title similarity so useful references are not hidden.
+            // Directly generated/nested results should always be kept.
+            // Older root-level records need at least a small title match.
             if (exactMatches.length > 0) return true;
             return item.matchScore >= 20;
           })
