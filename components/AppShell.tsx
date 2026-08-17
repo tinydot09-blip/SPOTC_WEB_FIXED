@@ -39,6 +39,7 @@ import {
   requireGoogleLogin,
   type SpotcUserProfile,
 } from '@/lib/auth';
+import { useDeliveryAvailability } from '@/lib/delivery-radius';
 
 const navigation = [
   {
@@ -79,6 +80,8 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const delivery = useDeliveryAvailability();
+  const [deliveryBannerClosed, setDeliveryBannerClosed] = useState(false);
 
   const [firebaseUser, setFirebaseUser] =
     useState<User | null>(null);
@@ -113,6 +116,11 @@ export function AppShell({
   const mobileNavAtTop =
     pathname.startsWith('/offers') ||
     pathname.startsWith('/spots');
+
+  const showDeliveryBanner =
+    (pathname.startsWith('/offers') || pathname.startsWith('/shop')) &&
+    delivery.status === 'outside' &&
+    !deliveryBannerClosed;
 
   const profileCompletion = useMemo(
     () => getProfileCompletionPercentage(spotcProfile),
@@ -250,6 +258,7 @@ export function AppShell({
   useEffect(() => {
     setSearchValue('');
     setMenuOpen(false);
+    setDeliveryBannerClosed(false);
 
     window.dispatchEvent(
       new CustomEvent(
@@ -390,12 +399,39 @@ if (!signedInUser) {
 
   return (
     <div
-      className={
+      className={[
         pathname.startsWith('/shop') || pathname.startsWith('/product/')
           ? 'spotc-app-shell spotc-app-shell-shop'
-          : 'spotc-app-shell'
-      }
+          : 'spotc-app-shell',
+        showDeliveryBanner ? 'spotc-app-shell-with-delivery-banner' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
+      {showDeliveryBanner && (
+        <section
+          className="spotc-global-delivery-banner"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="spotc-global-delivery-banner__copy">
+            <strong>SPOTC is coming to your area shortly</strong>
+            <span>
+              Browse all products now. Ordering will be available when SPOTC launches in your area.
+            </span>
+          </div>
+
+          <button
+            type="button"
+            className="spotc-global-delivery-banner__close"
+            aria-label="Close delivery area message"
+            onClick={() => setDeliveryBannerClosed(true)}
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </section>
+      )}
+
       <header className="spotc-site-header">
         <div className="spotc-header-inner">
           <Link
@@ -753,6 +789,69 @@ if (!signedInUser) {
           height: auto;
           overflow: visible;
           background: #f8f6f1;
+        }
+
+
+        .spotc-global-delivery-banner {
+          position: fixed;
+          top: 0;
+          right: 0;
+          left: 0;
+          z-index: 12000;
+          min-height: 48px;
+          padding: 9px 54px 9px 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-sizing: border-box;
+          color: #ffffff;
+          background: #4b1715;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+        }
+
+        .spotc-global-delivery-banner__copy {
+          width: min(100%, 1100px);
+          display: flex;
+          align-items: baseline;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 4px 9px;
+          text-align: center;
+        }
+
+        .spotc-global-delivery-banner__copy strong {
+          color: #ffffff;
+          font-size: 13px;
+          font-weight: 800;
+          line-height: 1.35;
+        }
+
+        .spotc-global-delivery-banner__copy span {
+          color: rgba(255, 255, 255, 0.88);
+          font-size: 12px;
+          font-weight: 500;
+          line-height: 1.4;
+        }
+
+        .spotc-global-delivery-banner__close {
+          position: absolute;
+          top: 50%;
+          right: 14px;
+          width: 32px;
+          height: 32px;
+          transform: translateY(-50%);
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(255, 255, 255, 0.22);
+          border-radius: 999px;
+          color: #ffffff;
+          background: rgba(255, 255, 255, 0.08);
+          cursor: pointer;
+        }
+
+        .spotc-app-shell-with-delivery-banner .spotc-site-header {
+          top: 48px !important;
         }
 
         /* Shop uses a normal content-height shell so the footer starts
@@ -1304,6 +1403,10 @@ if (!signedInUser) {
           .spotc-site-content {
             padding-top: 72px;
           }
+
+          .spotc-app-shell-with-delivery-banner .spotc-site-content {
+            padding-top: 120px;
+          }
         }
 
         .spotc-mobile-navigation {
@@ -1334,6 +1437,36 @@ if (!signedInUser) {
         ) {
           .spotc-site-header {
             height: 62px;
+          }
+
+          .spotc-global-delivery-banner {
+            min-height: 58px;
+            padding: 8px 46px 8px 12px;
+          }
+
+          .spotc-global-delivery-banner__copy {
+            display: grid;
+            gap: 2px;
+            justify-items: start;
+            text-align: left;
+          }
+
+          .spotc-global-delivery-banner__copy strong {
+            font-size: 12px;
+          }
+
+          .spotc-global-delivery-banner__copy span {
+            font-size: 10.5px;
+          }
+
+          .spotc-global-delivery-banner__close {
+            right: 9px;
+            width: 30px;
+            height: 30px;
+          }
+
+          .spotc-app-shell-with-delivery-banner .spotc-site-header {
+            top: 58px !important;
           }
 
           .spotc-header-inner {
@@ -1413,6 +1546,10 @@ if (!signedInUser) {
             padding-bottom: 0;
           }
 
+          .spotc-app-shell-with-delivery-banner .spotc-site-content {
+            padding-top: 58px;
+          }
+
           /* Shop mobile: reserve space above the fixed bottom navigation. */
 .spotc-app-shell:has(.shop-page)
 .spotc-site-content {
@@ -1477,6 +1614,12 @@ if (!signedInUser) {
   right: 0;
   bottom: auto;
   left: 0;
+}
+
+
+.spotc-app-shell-with-delivery-banner
+.spotc-mobile-navigation-top {
+  top: 120px;
 }
 
 .spotc-mobile-navigation-bottom {
