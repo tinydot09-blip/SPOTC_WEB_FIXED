@@ -196,6 +196,34 @@ const similarityScore = (source: string, candidate: string): number => {
 const money = (value: number): string =>
   `₹${Math.round(value).toLocaleString('en-IN')}`;
 
+
+const productPriceDetails = (product: BusinessProduct) => {
+  const source = product as BusinessProduct & Record<string, unknown>;
+
+  const offerPrice =
+    numberOf(source.offer_price) ||
+    numberOf(source.offerPrice) ||
+    numberOf(source.selling_price) ||
+    numberOf(source.sellingPrice) ||
+    numberOf(source.price) ||
+    priceOf(product);
+
+  const mrp =
+    numberOf(source.mrp) ||
+    numberOf(source.old_price) ||
+    numberOf(source.oldPrice) ||
+    oldPriceOf(product);
+
+  const safeMrp = mrp > offerPrice ? mrp : 0;
+  const saving = safeMrp > 0 ? safeMrp - offerPrice : 0;
+
+  return {
+    price: offerPrice,
+    mrp: safeMrp,
+    saving,
+  };
+};
+
 const platformClass = (platform: string): string => {
   const value = platform.toLowerCase();
   if (value.includes('amazon')) return 'amazon';
@@ -419,15 +447,10 @@ function CompareOnlinePageContent() {
   }
 
   const selectedImage = imageOf(product);
-  const selectedPrice = priceOf(product);
-  const selectedOldPrice = oldPriceOf(product);
-
-  const purchaseRewardPoints = Math.max(1, Math.round(selectedPrice / 50));
-  const nearbyShopBonusPoints = 5;
-  const couponCount = 3;
-  const couponValueEach = 100;
-  const couponTotalValue = couponCount * couponValueEach;
-  const totalRewardPoints = purchaseRewardPoints + nearbyShopBonusPoints;
+  const selectedPriceDetails = productPriceDetails(product);
+  const selectedPrice = selectedPriceDetails.price;
+  const selectedOldPrice = selectedPriceDetails.mrp;
+  const selectedSaving = selectedPriceDetails.saving;
 
   const pricedOnlineProducts = onlineProducts.filter((item) => item.price > 0);
   const typicalOnlinePrice = pricedOnlineProducts.length
@@ -493,16 +516,25 @@ function CompareOnlinePageContent() {
                 <h2>{selectedTitle}</h2>
 
                 <div className="selected-price">
-                  <strong>{money(selectedPrice)}</strong>
+                  <div className="offer-price-wrap">
+                    <span className="offer-label">Offer price</span>
+                    <strong>{money(selectedPrice)}</strong>
+                  </div>
+
                   {selectedOldPrice > selectedPrice && selectedOldPrice > 0 && (
-                    <del>{money(selectedOldPrice)}</del>
+                    <div className="mrp-save-wrap">
+                      <span>MRP <del>{money(selectedOldPrice)}</del></span>
+                      {selectedSaving > 0 && (
+                        <b>Save {money(selectedSaving)}</b>
+                      )}
+                    </div>
                   )}
                 </div>
 
                 <div className="benefits">
                   <span><Truck size={14} />15 min delivery</span>
-                  <span><ShieldCheck size={14} />COD</span>
-                  <span><Gift size={14} />Rewards</span>
+                  <span><ShieldCheck size={14} />Cash on delivery</span>
+                  <span><Gift size={14} />1 FREE gift</span>
                 </div>
               </div>
             </div>
@@ -535,56 +567,49 @@ function CompareOnlinePageContent() {
           </aside>
         </section>
 
-        <section className="reward-section">
-          <div className="reward-heading">
-            <div>
-              <span>YOUR SPOTC PURCHASE BENEFITS</span>
-              <h2>More value from one purchase</h2>
+        <section className="value-section">
+          <div className="value-heading">
+            <div className="summary-title">
+              <Sparkles size={20} />
+              <div>
+                <span>SPOTC VS TYPICAL ONLINE</span>
+                <h2>The complete value comparison</h2>
+                <p>Price, delivery and purchase benefits in one place.</p>
+              </div>
             </div>
 
-            <div className="reward-total">
-              <strong>{totalRewardPoints} points</strong>
-              <span>+ coupons worth {money(couponTotalValue)}</span>
-            </div>
+            {selectedSaving > 0 && (
+              <div className="value-save">
+                <strong>Save {money(selectedSaving)}</strong>
+                <span>against MRP</span>
+              </div>
+            )}
           </div>
 
-          <div className="reward-grid">
-            <article className="reward-card">
+          <div className="current-benefits">
+            <article className="current-benefit-card">
+              <div className="reward-icon"><Truck size={22} /></div>
+              <div>
+                <h3>15 min delivery</h3>
+                <p>Fast local delivery for eligible nearby orders.</p>
+              </div>
+            </article>
+
+            <article className="current-benefit-card">
+              <div className="reward-icon"><ShieldCheck size={22} /></div>
+              <div>
+                <h3>Cash on delivery</h3>
+                <p>Pay when your order reaches you.</p>
+              </div>
+            </article>
+
+            <article className="current-benefit-card">
               <div className="reward-icon"><Gift size={22} /></div>
               <div>
-                <strong>{purchaseRewardPoints}</strong>
-                <h3>Purchase reward points</h3>
-                <p>Earned automatically when you buy this product.</p>
+                <h3>1 FREE gift</h3>
+                <p>Choose one eligible free gift with this purchase.</p>
               </div>
             </article>
-
-            <article className="reward-card">
-              <div className="reward-icon"><MapPin size={22} /></div>
-              <div>
-                <strong>+{nearbyShopBonusPoints}</strong>
-                <h3>Nearby-shop bonus points</h3>
-                <p>Automatically included from 3 nearby SPOTC partner shops.</p>
-              </div>
-            </article>
-
-            <article className="reward-card">
-              <div className="reward-icon"><TicketPercent size={22} /></div>
-              <div>
-                <strong>{couponCount}</strong>
-                <h3>Local shop coupons</h3>
-                <p>Three coupons worth {money(couponValueEach)} each.</p>
-              </div>
-            </article>
-          </div>
-        </section>
-
-        <section className="comparison-summary">
-          <div className="summary-title">
-            <Sparkles size={20} />
-            <div>
-              <span>SPOTC VS TYPICAL ONLINE</span>
-              <h2>The complete value comparison</h2>
-            </div>
           </div>
 
           <div className="summary-table">
@@ -592,8 +617,19 @@ function CompareOnlinePageContent() {
               <span>Benefit</span><span>SPOTC</span><span>Typical online</span>
             </div>
             <div className="summary-row">
-              <span>Price</span><strong>{money(selectedPrice)}</strong>
+              <span>Price</span>
+              <strong>
+                {money(selectedPrice)}
+                {selectedOldPrice > selectedPrice && selectedOldPrice > 0
+                  ? ` (MRP ${money(selectedOldPrice)})`
+                  : ''}
+              </strong>
               <span>{typicalOnlinePrice > 0 ? money(typicalOnlinePrice) : 'Varies'}</span>
+            </div>
+            <div className="summary-row">
+              <span>Saving</span>
+              <strong>{selectedSaving > 0 ? money(selectedSaving) : '—'}</strong>
+              <span>Depends on listing</span>
             </div>
             <div className="summary-row">
               <span>Delivery</span><strong>About 15 minutes</strong><span>Usually 2–5 days</span>
@@ -602,10 +638,10 @@ function CompareOnlinePageContent() {
               <span>Cash on delivery</span><strong>Available</strong><span>Depends on seller</span>
             </div>
             <div className="summary-row">
-              <span>Rewards</span><strong>{totalRewardPoints} points + {couponCount} coupons</strong><span>Usually none</span>
+              <span>FREE gift</span><strong>1 eligible gift</strong><span>Usually not included</span>
             </div>
             <div className="summary-row">
-              <span>Local support</span><strong>Direct nearby-shop support</strong><span>Platform or courier process</span>
+              <span>Local support</span><strong>Nearby SPOTC support</strong><span>Platform or courier process</span>
             </div>
           </div>
         </section>
@@ -679,7 +715,10 @@ function CompareOnlinePageContent() {
         <div className="mobile-buy-bar">
           <div>
             <strong>{money(selectedPrice)}</strong>
-            <span>Earn {totalRewardPoints} points + 3 coupons</span>
+            <span>
+              {selectedSaving > 0 ? `Save ${money(selectedSaving)} • ` : ''}
+              15 min delivery • FREE gift
+            </span>
           </div>
           <button type="button" onClick={handleAddToCart}>
             <ShoppingBag size={17} />{added ? 'Added' : 'Add to Cart'}
@@ -733,14 +772,14 @@ const styles = `
     box-shadow: 0 10px 28px rgba(69,48,31,.06);
   }
   .page-header > div:nth-child(2) { text-align: center; }
-  .page-header span,.selected-label,.reward-heading span,.summary-title span,.section-heading span,.recommendation-head span { color:#d96f12; font-size:10px; font-weight:600; letter-spacing:.11em; }
+  .page-header span,.selected-label,.summary-title span,.section-heading span,.recommendation-head span { color:#d96f12; font-size:10px; font-weight:600; letter-spacing:.11em; }
   .page-header h1 { margin:3px 0 2px; color:#211d19; font-size:25px; font-weight:600; letter-spacing:-.03em; }
   .page-header p { margin:0; color:#7b7168; font-size:13px; }
   .back-button { width:44px; height:44px; display:grid; place-items:center; border:1px solid #e2d8cd; border-radius:14px; color:#302a25; background:#fff; cursor:pointer; }
   .header-spacer { width:44px; }
 
   .decision-grid { margin-top:20px; display:grid; grid-template-columns:minmax(0,1.45fr) minmax(320px,.55fr); gap:20px; }
-  .selected-card,.recommendation-card,.reward-section,.comparison-summary,.results-section { border:1px solid #eadfd3; border-radius:22px; background:rgba(255,255,255,.96); box-shadow:0 14px 38px rgba(75,50,28,.07); }
+  .selected-card,.recommendation-card,.value-section,.results-section { border:1px solid #eadfd3; border-radius:22px; background:rgba(255,255,255,.96); box-shadow:0 14px 38px rgba(75,50,28,.07); }
   .selected-card { padding:20px; }
   .selected-label { margin-bottom:14px; display:flex; align-items:center; gap:7px; }
   .selected-content { display:grid; grid-template-columns:138px minmax(0,1fr); gap:20px; align-items:center; }
@@ -766,19 +805,26 @@ const styles = `
   .primary-cta { width:100%; margin-top:18px; padding:12px 14px; display:flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:13px; color:#b95105; background:#fff; cursor:pointer; font-weight:600; }
   .secondary-cta { margin-top:11px; display:block; color:rgba(255,255,255,.9); text-align:center; text-decoration:none; font-size:12px; }
 
-  .reward-section,.comparison-summary,.results-section { margin-top:20px; padding:24px; }
-  .reward-heading,.section-heading { margin-bottom:19px; display:flex; align-items:flex-end; justify-content:space-between; gap:18px; }
-  .reward-heading h2,.summary-title h2,.section-heading h2 { margin:4px 0 0; color:#211d19; font-size:23px; font-weight:600; letter-spacing:-.03em; }
-  .reward-total { padding:10px 13px; border-radius:15px; background:#fff1e3; text-align:right; }
-  .reward-total strong,.reward-total span { display:block; }
-  .reward-total strong { color:#d96f12; font-size:17px; font-weight:600; }
-  .reward-total span { margin-top:2px; color:#8e6541; font-size:10px; }
-  .reward-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
-  .reward-card { padding:17px; display:grid; grid-template-columns:46px 1fr; gap:12px; border:1px solid #eee4db; border-radius:17px; background:#fcfaf7; }
+  .value-section,.results-section { margin-top:20px; padding:24px; }
+  .section-heading { margin-bottom:19px; display:flex; align-items:flex-end; justify-content:space-between; gap:18px; }
+  .summary-title h2,.section-heading h2 { margin:4px 0 0; color:#211d19; font-size:23px; font-weight:600; letter-spacing:-.03em; }
+  .offer-price-wrap { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .offer-label { padding:4px 7px; border-radius:999px; color:#b45309; background:#fff1df; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+  .mrp-save-wrap { margin-top:5px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; color:#8f857c; font-size:12px; }
+  .mrp-save-wrap b { color:#15803d; font-weight:700; }
+
+  .value-heading { margin-bottom:18px; display:flex; align-items:flex-end; justify-content:space-between; gap:18px; }
+  .value-heading p { margin:5px 0 0; color:#7e746b; font-size:12px; }
+  .value-save { padding:10px 13px; border-radius:15px; background:#fff1e3; text-align:right; }
+  .value-save strong,.value-save span { display:block; }
+  .value-save strong { color:#d96f12; font-size:17px; font-weight:700; }
+  .value-save span { margin-top:2px; color:#8e6541; font-size:10px; }
+
+  .current-benefits { margin-bottom:18px; display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .current-benefit-card { padding:16px; display:grid; grid-template-columns:46px 1fr; gap:12px; align-items:center; border:1px solid #eee4db; border-radius:17px; background:#fcfaf7; }
   .reward-icon { width:46px; height:46px; display:grid; place-items:center; border-radius:14px; color:#d96f12; background:#fff0e1; }
-  .reward-card strong { color:#e66e00; font-size:25px; font-weight:600; }
-  .reward-card h3 { margin:2px 0 4px; font-size:14px; font-weight:500; }
-  .reward-card p { margin:0; color:#80756b; font-size:11px; line-height:1.45; }
+  .current-benefit-card h3 { margin:0 0 4px; font-size:14px; font-weight:600; }
+  .current-benefit-card p { margin:0; color:#80756b; font-size:11px; line-height:1.45; }
 
   .summary-title { display:flex; align-items:center; gap:10px; }
   .summary-title > :global(svg) { color:#d96f12; }
@@ -828,7 +874,7 @@ const styles = `
 
   @media (max-width:1050px) {
     .decision-grid { grid-template-columns:1fr; }
-    .reward-grid { grid-template-columns:1fr; }
+    .current-benefits { grid-template-columns:1fr; }
     .online-grid { grid-template-columns:repeat(2,1fr); }
   }
 
@@ -838,15 +884,15 @@ const styles = `
     .page-header h1 { font-size:20px; }
     .page-header p,.page-header span { display:none; }
     .back-button,.header-spacer { width:38px; height:38px; }
-    .selected-card,.recommendation-card,.reward-section,.comparison-summary,.results-section { border-radius:18px; padding:16px; }
+    .selected-card,.recommendation-card,.value-section,.results-section { border-radius:18px; padding:16px; }
     .selected-content { grid-template-columns:94px 1fr; gap:13px; }
     .selected-image { width:94px; height:94px; }
     .selected-info h2 { font-size:15px; }
     .selected-price strong { font-size:23px; }
     .benefits span { padding:5px 7px; font-size:10px; }
-    .reward-heading,.section-heading { align-items:center; }
-    .reward-heading h2,.summary-title h2,.section-heading h2 { font-size:19px; }
-    .reward-total { display:none; }
+    .value-heading,.section-heading { align-items:center; }
+    .summary-title h2,.section-heading h2 { font-size:19px; }
+    .value-save { display:none; }
     .summary-table { overflow-x:auto; }
     .summary-row { min-width:560px; }
     .online-grid { grid-template-columns:1fr; }
