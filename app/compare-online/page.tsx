@@ -206,6 +206,52 @@ const platformClass = (platform: string): string => {
   return 'default';
 };
 
+const pickTopFourPlatforms = (items: OnlineProduct[]): OnlineProduct[] => {
+  const preferred = ['amazon', 'flipkart', 'meesho', 'firstcry'];
+  const picked: OnlineProduct[] = [];
+  const usedPlatforms = new Set<string>();
+
+  const platformKey = (platform: string): string => {
+    const value = platform.toLowerCase();
+    if (value.includes('amazon')) return 'amazon';
+    if (value.includes('flipkart')) return 'flipkart';
+    if (value.includes('meesho')) return 'meesho';
+    if (value.includes('firstcry')) return 'firstcry';
+    if (value.includes('myntra')) return 'myntra';
+    if (value.includes('ajio')) return 'ajio';
+    if (value.includes('nykaa')) return 'nykaa';
+    if (value.includes('tatacliq') || value.includes('tata cliq')) return 'tatacliq';
+    return value || 'online';
+  };
+
+  for (const preferredPlatform of preferred) {
+    const match = items.find(
+      (item) =>
+        platformKey(item.platform) === preferredPlatform &&
+        !usedPlatforms.has(preferredPlatform),
+    );
+
+    if (match) {
+      picked.push(match);
+      usedPlatforms.add(preferredPlatform);
+    }
+  }
+
+  // If one of the preferred platforms is missing, fill the remaining slot(s)
+  // with the best result from another marketplace, while keeping one card per platform.
+  for (const item of items) {
+    if (picked.length >= 4) break;
+
+    const key = platformKey(item.platform);
+    if (usedPlatforms.has(key)) continue;
+
+    picked.push(item);
+    usedPlatforms.add(key);
+  }
+
+  return picked.slice(0, 4);
+};
+
 function CompareOnlinePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -324,10 +370,9 @@ function CompareOnlinePageContent() {
             if (a.productId === productId && b.productId !== productId) return -1;
             if (b.productId === productId && a.productId !== productId) return 1;
             return b.matchScore - a.matchScore;
-          })
-          .slice(0, 8);
+          });
 
-        setOnlineProducts(ranked);
+        setOnlineProducts(pickTopFourPlatforms(ranked));
       } catch (reason) {
         console.error('Compare Online load failed:', reason);
         if (!cancelled) {
