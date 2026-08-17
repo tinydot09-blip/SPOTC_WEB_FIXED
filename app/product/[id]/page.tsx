@@ -732,13 +732,20 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
           record.product_sizes,
           record.size,
         );
-        const loadedColors = stringList(
-          record.colors,
+        const loadedSelectableColors = stringList(
           record.available_colors,
           record.color_options,
           record.product_colors,
-          record.color,
+          record.colors,
         );
+
+        const loadedStock = numberValue(
+          record.stock_qty ?? record.stock_quantity,
+        );
+
+        const shouldSelectColour =
+          loadedStock !== 1 &&
+          loadedSelectableColors.length > 1;
 
         const firstMedia = loadedMedia[0];
         const firstImage =
@@ -751,7 +758,11 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
           firstMedia?.type === 'image' ? firstMedia.url : firstImage,
         );
         setSize(loadedSizes[0] || '');
-        setColor(loadedColors[0] || '');
+        setColor(
+          shouldSelectColour
+            ? loadedSelectableColors[0] || ''
+            : '',
+        );
 
         const currentUser = auth?.currentUser;
 
@@ -902,15 +913,23 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
         : [],
     [record],
   );
-  const colors = useMemo(
+  /*
+   * COLOUR VARIANTS
+   * ----------------
+   * `record.color` is descriptive product information generated/saved by
+   * the admin (for example: "Multi-color (Orange), Black, White, Brown").
+   * It must NOT automatically become customer-selectable colour buttons.
+   *
+   * Only explicit variant fields can create colour choices.
+   */
+  const selectableColors = useMemo(
     () =>
       record
         ? stringList(
-            record.colors,
             record.available_colors,
             record.color_options,
             record.product_colors,
-            record.color,
+            record.colors,
           )
         : [],
     [record],
@@ -1006,6 +1025,16 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     explicitInStock !== false && (!hasStockField || rawStock === null || rawStock > 0);
   const stockQuantity = rawStock !== null && rawStock > 0 ? Math.floor(rawStock) : null;
   const maximumQuantity = stockQuantity !== null ? Math.min(99, stockQuantity) : 99;
+
+  /*
+   * Show a Colour selector only when the customer genuinely has a choice:
+   * - never for a single remaining piece;
+   * - never for descriptive "multicolour/assorted" product colour text;
+   * - only when 2+ explicit colour variants are stored.
+   */
+  const showColorSelector =
+    stockQuantity !== 1 &&
+    selectableColors.length > 1;
 
   const verified =
     record.isVerified === true ||
@@ -1153,7 +1182,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
         discount: discount > 0 ? `${discount}% OFF` : '',
 
         selected_size: size || null,
-        selected_color: color || null,
+        selected_color: showColorSelector ? color || null : null,
         isActive: record.isActive !== false,
         is_active: record.isActive !== false,
         is_in_stock: inStock,
@@ -1231,7 +1260,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
       return false;
     }
 
-    if (colors.length > 0 && !color) {
+    if (showColorSelector && !color) {
       alert('Select a colour');
       return false;
     }
@@ -1256,7 +1285,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     if (!validatePurchaseOptions()) return;
 
     saveSelectedGiftsForCart();
-    addProduct(product, { size, color, qty });
+    addProduct(product, { size, color: showColorSelector ? color : '', qty });
     alert('1 product added to cart');
   };
 
@@ -1264,7 +1293,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     if (!validatePurchaseOptions()) return;
 
     saveSelectedGiftsForCart();
-    addProduct(product, { size, color, qty });
+    addProduct(product, { size, color: showColorSelector ? color : '', qty });
     router.push('/cart');
   };
 
@@ -1325,7 +1354,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
         product_image: tryOnResult,
         tryon_image: tryOnResult,
         selected_size: size || null,
-        selected_color: color || null,
+        selected_color: showColorSelector ? color || null : null,
         updated_at: serverTimestamp(),
       },
       { merge: true },
@@ -1350,7 +1379,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
           tryon_image: tryOnResult || null,
           product_price: price,
           selected_size: size || null,
-          selected_color: color || null,
+          selected_color: showColorSelector ? color || null : null,
           question: 'Should I buy this?',
           share_code: shareCode,
           status: 'active',
@@ -1860,7 +1889,12 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
           <p>{description || 'Contact the business for additional product details.'}</p>
           <dl>
             <div><dt>Brand</dt><dd>{text(record.brand) || '—'}</dd></div>
-            <div><dt>Colour</dt><dd>{colors.length ? colors.join(', ') : '—'}</dd></div>
+            {showColorSelector && (
+              <div>
+                <dt>Colour</dt>
+                <dd>{selectableColors.join(', ')}</dd>
+              </div>
+            )}
             <div><dt>Size</dt><dd>{sizes.length ? sizes.join(', ') : '—'}</dd></div>
             <div><dt>Variant</dt><dd>{text(record.variant) || '—'}</dd></div>
             <div>
@@ -2179,16 +2213,42 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
             </div>
           )}
 
-          {colors.length > 0 && (
+          {showColorSelector && (
             <div className="pd-option">
               <label>Colour</label>
               <div>
-                {colors.map((option) => (
-                  <button type="button" className={color === option ? 'active' : ''} onClick={() => setColor(option)} key={option}>{option}</button>
+                {selectableColors.map((option) => (
+                  <button
+                    type="button"
+                    className={color === option ? 'active' : ''}
+                    onClick={() => setColor(option)}
+                    key={option}
+                  >
+                    {option}
+                  </button>
                 ))}
               </div>
             </div>
           )}
+
+          <div className="pd-purchase-benefits" aria-label="Purchase benefits">
+            <span>
+              <Clock3 aria-hidden="true" />
+              15 mins delivery
+            </span>
+
+            {codAvailable && (
+              <span>
+                <PackageCheck aria-hidden="true" />
+                Cash on Delivery
+              </span>
+            )}
+
+            <span>
+              <CheckCircle2 aria-hidden="true" />
+              Ready stock
+            </span>
+          </div>
 
           {freeGiftCount > 0 && (
             <>
@@ -3952,6 +4012,51 @@ width:200px;
 
           .pd-price strong {
             font-size: 34px !important;
+          }
+        }
+
+        /* PRODUCT DETAIL — COMPACT PURCHASE BENEFITS */
+        .pd-purchase-benefits {
+          margin-top: 18px;
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .pd-purchase-benefits > span {
+          min-height: 34px;
+          padding: 0 11px;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          border: 1px solid #dce9df;
+          border-radius: 999px;
+          color: #17683a;
+          background: #f3faf5;
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1;
+          white-space: nowrap;
+        }
+
+        .pd-purchase-benefits svg {
+          width: 15px;
+          height: 15px;
+          flex: 0 0 15px;
+          stroke-width: 2;
+        }
+
+        @media (max-width: 620px) {
+          .pd-purchase-benefits {
+            margin-top: 14px;
+            gap: 6px;
+          }
+
+          .pd-purchase-benefits > span {
+            min-height: 31px;
+            padding: 0 9px;
+            font-size: 11px;
           }
         }
 
