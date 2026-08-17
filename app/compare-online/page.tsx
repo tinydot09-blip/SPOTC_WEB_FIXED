@@ -262,23 +262,31 @@ function CompareOnlinePageContent() {
         if (cancelled) return;
 
         const usable = items.filter((item) => item.title && item.url);
+
         const exactMatches = usable.filter(
           (item) => item.productId === productId,
         );
-        const source = exactMatches.length > 0 ? exactMatches : usable;
 
-        const ranked = source
+        const ranked = (exactMatches.length > 0 ? exactMatches : usable)
           .map((item) => ({
             ...item,
             matchScore:
               item.matchScore ||
               similarityScore(titleOf(selected), item.title),
           }))
-          .filter(
-            (item) => exactMatches.length > 0 || item.matchScore >= 55,
-          )
-          .sort((a, b) => b.matchScore - a.matchScore)
-          .slice(0, 4);
+          .filter((item) => {
+            // If this online item is directly linked to the selected SPOTC product,
+            // always keep it. For fallback root-level items, allow a broader
+            // title similarity so useful references are not hidden.
+            if (exactMatches.length > 0) return true;
+            return item.matchScore >= 20;
+          })
+          .sort((a, b) => {
+            if (a.productId === productId && b.productId !== productId) return -1;
+            if (b.productId === productId && a.productId !== productId) return 1;
+            return b.matchScore - a.matchScore;
+          })
+          .slice(0, 8);
 
         setOnlineProducts(ranked);
       } catch (reason) {
