@@ -13,6 +13,21 @@ import { formatAddress } from './addresses';
 import type { BusinessCartGroup } from './delivery';
 import type { RewardEstimate } from './rewards';
 
+/*
+ * ============================================================
+ * SPOTC OWN INVENTORY
+ * ============================================================
+ *
+ * For now every order is treated as a SPOTC-owned inventory
+ * order.
+ *
+ * We are NOT resolving BusinessListings.
+ *
+ * Later, if partner shops are enabled again, seller_type can
+ * be expanded to support "business".
+ */
+export const SPOTC_SELLER_TYPE = 'spotc' as const;
+
 export type CreatedOrder = {
   documentId: string;
   orderNumber: string;
@@ -22,48 +37,69 @@ export type CreatedOrder = {
 
 const num = (value: unknown): number => {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0;
 };
 
 const text = (value: unknown): string =>
-  value == null ? '' : String(value);
+  value == null
+    ? ''
+    : String(value).trim();
 
-const orderItem = (item: CartItem) => ({
-  id: text(item.id),
-  product_id: text(item.id),
-  title: text(item.title),
-  image: text(item.image),
-  price: num(item.price),
-  quantity: Math.max(1, num(item.qty) || 1),
-  qty: Math.max(1, num(item.qty) || 1),
-  subtotal:
-    num(item.price) *
-    Math.max(1, num(item.qty) || 1),
-  size: text(item.size),
-  color: text(item.color),
-  business_id: text(item.businessId),
-  business_name:
-    text(item.businessName) || 'SPOTC Shop',
-});
+/*
+ * ============================================================
+ * ORDER ITEM
+ * ============================================================
+ *
+ * Every current product is SPOTC inventory.
+ */
+const orderItem = (
+  item: CartItem,
+) => {
+  const quantity = Math.max(
+    1,
+    num(item.qty) || 1,
+  );
 
-async function businessData(
-  db: Firestore,
-  id: string,
-): Promise<Record<string, unknown>> {
-  if (!id) return {};
+  const price = num(item.price);
 
-  try {
-    const snapshot = await getDoc(
-      doc(db, 'BusinessListings', id),
-    );
+  return {
+    id: text(item.id),
 
-    return snapshot.exists()
-      ? snapshot.data()
-      : {};
-  } catch {
-    return {};
-  }
-}
+    product_id: text(item.id),
+
+    title: text(item.title),
+
+    image: text(item.image),
+
+    price,
+
+    quantity,
+
+    qty: quantity,
+
+    subtotal:
+      price * quantity,
+
+    size: text(item.size),
+
+    color: text(item.color),
+
+    /*
+     * IMPORTANT:
+     * Current inventory belongs to SPOTC.
+     */
+    seller_type:
+      SPOTC_SELLER_TYPE,
+
+    business_id: 'SPOTC',
+
+    business_name:
+      'SPOTC Shop',
+  };
+};
 
 export async function createBusinessOrder({
   db,
@@ -93,26 +129,39 @@ export async function createBusinessOrder({
   const documentId =
     `${user.uid}_${now}_${suffix}`;
 
+  /*
+   * ==========================================================
+   * CURRENT SELLER
+   * ==========================================================
+   *
+   * Do NOT use group.businessId.
+   * Do NOT look up BusinessListings.
+   *
+   * All present orders are SPOTC inventory.
+   */
+  const sellerType =
+    SPOTC_SELLER_TYPE;
+
   const businessId =
-    text(group.businessId) || 'SPOTC';
+    'SPOTC';
 
-  const business = await businessData(
-    db,
-    businessId,
-  );
+  const businessName =
+    'SPOTC Shop';
 
-  const businessRef =
-    businessId === 'SPOTC'
-      ? null
-      : doc(
-          db,
-          'BusinessListings',
-          businessId,
-        );
+  /*
+   * There is no BusinessListings reference for SPOTC's
+   * own inventory.
+   */
+  const businessRef = null;
 
-  const subtotal = num(group.subtotal);
-  const delivery = num(group.delivery);
-  const safeDiscount = num(discount);
+  const subtotal =
+    num(group.subtotal);
+
+  const delivery =
+    num(group.delivery);
+
+  const safeDiscount =
+    num(discount);
 
   const total =
     subtotal +
@@ -120,22 +169,30 @@ export async function createBusinessOrder({
     safeDiscount;
 
   /*
-   * IMPORTANT:
-   * Firestore rejects any field whose value is undefined.
-   * Every optional reward/address/business value below is converted
-   * to a safe number, string, null, or boolean before setDoc().
+   * ==========================================================
+   * REWARDS
+   * ==========================================================
    */
+
   const purchasePoints =
-    num(rewards?.purchasePoints);
+    num(
+      rewards?.purchasePoints,
+    );
 
   const nearbyBonusPoints =
-    num(rewards?.nearbyBonusPoints);
+    num(
+      rewards?.nearbyBonusPoints,
+    );
 
   const totalPoints =
-    num(rewards?.totalPoints);
+    num(
+      rewards?.totalPoints,
+    );
 
   const couponCount =
-    num(rewards?.couponCount);
+    num(
+      rewards?.couponCount,
+    );
 
   const couponValueEach =
     num(
@@ -155,110 +212,230 @@ export async function createBusinessOrder({
       )?.status,
     );
 
-  const fullName = text(address.fullName);
-  const phone = text(address.phone);
+  /*
+   * ==========================================================
+   * CUSTOMER
+   * ==========================================================
+   */
+
+  const fullName =
+    text(address.fullName);
+
+  const phone =
+    text(address.phone);
+
+  const formattedDeliveryAddress =
+    formatAddress(address);
 
   await setDoc(
-    doc(db, 'Orders', documentId),
+    doc(
+      db,
+      'Orders',
+      documentId,
+    ),
     {
-      order_number: orderNumber,
+      /*
+       * ======================================================
+       * ORDER
+       * ======================================================
+       */
 
-      user_uid: user.uid,
-      user_ref: doc(db, 'Users', user.uid),
+      order_number:
+        orderNumber,
 
-      customer_uid: user.uid,
-      customer_name: fullName,
-      customer_phone: phone,
-      customer_email: text(user.email),
+      /*
+       * ======================================================
+       * CUSTOMER
+       * ======================================================
+       */
 
-      business_id: businessId,
-      business_ref: businessRef,
+      user_uid:
+        user.uid,
+
+      user_ref:
+        doc(
+          db,
+          'Users',
+          user.uid,
+        ),
+
+      customer_uid:
+        user.uid,
+
+      customer_name:
+        fullName,
+
+      customer_phone:
+        phone,
+
+      customer_email:
+        text(user.email),
+
+      /*
+       * ======================================================
+       * SELLER
+       * ======================================================
+       *
+       * CURRENT MODEL:
+       *
+       * seller_type = spotc
+       *
+       * No local-shop BusinessListings dependency.
+       */
+
+      seller_type:
+        sellerType,
+
+      business_id:
+        businessId,
+
+      business_ref:
+        businessRef,
+
       business_name:
-        text(
-          business.business_name ??
-            business.shop_name ??
-            group.businessName,
-        ) || 'SPOTC Shop',
+        businessName,
 
-      business_logo: text(
-        business.logo_url ??
-          business.business_logo_url,
-      ),
+      /*
+       * Keep these fields available in the order schema.
+       *
+       * We will insert SPOTC's own address / phone /
+       * WhatsApp / location when those details are finalized.
+       *
+       * They are deliberately NOT copied from another shop.
+       */
 
-      business_address: text(
-        business.address ??
-          business.business_address,
-      ),
+      business_logo: '',
 
-      business_phone: text(
-        business.phone ??
-          business.business_phone,
-      ),
+      business_address: '',
 
-      business_whatsapp: text(
-        business.whatsapp ??
-          business.business_whatsapp,
-      ),
+      business_phone: '',
 
-      business_category: text(
-        business.category,
-      ),
+      business_whatsapp: '',
+
+      business_category:
+        'SPOTC Inventory',
 
       business_location:
-        business.business_location ??
-        business.location ??
         null,
 
       business_verified:
-        business.isVerified === true ||
-        business.is_verified === true,
+        true,
+
+      /*
+       * ======================================================
+       * DELIVERY ADDRESS
+       * ======================================================
+       */
 
       address_ref:
         address.ref ?? null,
 
       address: {
-        full_name: fullName,
+        full_name:
+          fullName,
+
         phone,
+
         address_type:
-          text(address.addressType),
+          text(
+            address.addressType,
+          ),
+
         house_no:
-          text(address.houseNo),
+          text(
+            address.houseNo,
+          ),
+
         street:
-          text(address.street),
+          text(
+            address.street,
+          ),
+
         landmark:
-          text(address.landmark),
+          text(
+            address.landmark,
+          ),
+
         area:
-          text(address.area),
+          text(
+            address.area,
+          ),
+
         city:
-          text(address.city),
+          text(
+            address.city,
+          ),
+
         pincode:
-          text(address.pincode),
+          text(
+            address.pincode,
+          ),
+
         state:
-          text(address.state),
+          text(
+            address.state,
+          ),
+
         country:
-          text(address.country),
+          text(
+            address.country,
+          ),
+
         delivery_note:
-          text(address.deliveryNote),
+          text(
+            address.deliveryNote,
+          ),
+
         latitude:
-          address.latitude ?? null,
+          address.latitude ??
+          null,
+
         longitude:
-          address.longitude ?? null,
+          address.longitude ??
+          null,
       },
 
       delivery_address:
-        formatAddress(address),
+        formattedDeliveryAddress,
 
       address_text:
-        formatAddress(address),
+        formattedDeliveryAddress,
+
+      /*
+       * ======================================================
+       * ITEMS
+       * ======================================================
+       */
 
       items:
-        group.items.map(orderItem),
+        group.items.map(
+          orderItem,
+        ),
+
+      /*
+       * ======================================================
+       * BILL
+       * ======================================================
+       */
 
       subtotal,
-      delivery_charge: delivery,
-      platform_fee: 0,
-      discount: safeDiscount,
+
+      delivery_charge:
+        delivery,
+
+      platform_fee:
+        0,
+
+      discount:
+        safeDiscount,
+
       total,
+
+      /*
+       * ======================================================
+       * DISCOUNT
+       * ======================================================
+       */
 
       welcome_discount_applied:
         safeDiscount > 0,
@@ -270,16 +447,41 @@ export async function createBusinessOrder({
 
       applied_coupon_title:
         safeDiscount > 0
-          ? 'First order from this shop'
+          ? 'First order discount'
           : '',
 
-      payment_method: 'COD',
-      payment_status: 'pending',
+      /*
+       * ======================================================
+       * PAYMENT
+       * ======================================================
+       */
 
-      order_status: 'placed',
-      status: 'placed',
+      payment_method:
+        'COD',
 
-      estimated_delivery: '15–45 mins',
+      payment_status:
+        'pending',
+
+      /*
+       * ======================================================
+       * ORDER STATUS
+       * ======================================================
+       */
+
+      order_status:
+        'placed',
+
+      status:
+        'placed',
+
+      estimated_delivery:
+        '15–45 mins',
+
+      /*
+       * ======================================================
+       * REWARDS
+       * ======================================================
+       */
 
       purchase_reward_points:
         purchasePoints,
@@ -293,18 +495,20 @@ export async function createBusinessOrder({
       coupon_count_pending:
         couponCount,
 
-      /*
-       * FIX:
-       * Previously this could be undefined and Firestore rejected
-       * the whole Orders document.
-       */
       coupon_value_each:
         couponValueEach,
 
       rewards_status:
         rewardsStatus,
 
-      rewards_unlocked: false,
+      rewards_unlocked:
+        false,
+
+      /*
+       * ======================================================
+       * TIMESTAMPS
+       * ======================================================
+       */
 
       created_at:
         serverTimestamp(),
@@ -316,11 +520,13 @@ export async function createBusinessOrder({
 
   return {
     documentId,
+
     orderNumber,
+
     total,
+
     businessName:
-      text(group.businessName) ||
-      'SPOTC Shop',
+      businessName,
   };
 }
 
@@ -328,13 +534,20 @@ export async function readOrderById(
   db: Firestore,
   id: string,
 ) {
-  const snapshot = await getDoc(
-    doc(db, 'Orders', id),
-  );
+  const snapshot =
+    await getDoc(
+      doc(
+        db,
+        'Orders',
+        id,
+      ),
+    );
 
   return snapshot.exists()
     ? {
-        id: snapshot.id,
+        id:
+          snapshot.id,
+
         ...snapshot.data(),
       }
     : null;
