@@ -2334,18 +2334,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
             {oldPrice > price && <del>₹{Math.round(oldPrice)}</del>}
             {oldPrice > price && <em>Save ₹{Math.round(oldPrice - price)}</em>}
           </div>
-{sizes.length > 0 && (
-            <div className="pd-option">
-              <label>Size</label>
-              <div>
-                {sizes.map((option) => (
-                  <button type="button" className={size === option ? 'active' : ''} onClick={() => setSize(option)} key={option}>{option}</button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {showColorSelector && (
+{showColorSelector && (
             <div className="pd-option">
               <label>Colour</label>
               <div>
@@ -6354,7 +6343,7 @@ width:200px;
   margin-bottom:3px;
   color:#a76612;
   font-size:10px;
-  font-weight:900;
+  font-weight:500;
   letter-spacing:.12em;
 }
 
@@ -6362,6 +6351,7 @@ width:200px;
   margin:0;
   color:#17120d;
   font-size:18px;
+  font-weight:500;
   line-height:1.2;
 }
 
@@ -6384,7 +6374,7 @@ width:200px;
   margin:0 0 3px;
   color:#8c7661;
   font-size:10px;
-  font-weight:900;
+  font-weight:500;
   letter-spacing:.05em;
   text-transform:uppercase;
 }
@@ -6393,7 +6383,7 @@ width:200px;
   margin:0;
   color:#17120d;
   font-size:13px;
-  font-weight:850;
+  font-weight:400;
   line-height:1.35;
   overflow-wrap:anywhere;
 }
