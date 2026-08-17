@@ -587,13 +587,14 @@ function OfferCard({
   item,
   index,
   allProducts,
+  delivery,
 }: {
   item: BusinessListing;
   index: number;
   allProducts: BusinessProduct[];
+  delivery: ReturnType<typeof useDeliveryAvailability>;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const delivery = useDeliveryAvailability();
 
   const [user, setUser] = useState<User | null>(
     auth?.currentUser && !auth.currentUser.isAnonymous
@@ -1686,6 +1687,7 @@ export function OfferFeed() {
             item={item}
             index={index}
             allProducts={allProducts}
+            delivery={delivery}
             key={item.id}
           />
         ))}
@@ -1700,11 +1702,13 @@ export function OfferFeed() {
 
       <style jsx global>{`
         .offers-page .spotc-outside-area-bar {
-          position: sticky;
-          top: 0;
-          z-index: 120;
-          width: min(100%, 560px);
-          margin: 0 auto;
+          position: fixed;
+          top: 74px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 9999;
+          width: min(calc(100% - 24px), 560px);
+          margin: 0;
           padding: 10px 14px;
           display: flex;
           align-items: center;
@@ -1712,10 +1716,11 @@ export function OfferFeed() {
           flex-wrap: wrap;
           gap: 4px 8px;
           box-sizing: border-box;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+          border: 1px solid rgba(255, 255, 255, 0.14);
+          border-radius: 0 0 12px 12px;
           color: #ffffff;
           background: #6f1d1b;
-          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
           text-align: center;
           font-size: 12px;
           line-height: 1.35;
@@ -1733,8 +1738,10 @@ export function OfferFeed() {
 
         @media (max-width: 760px) {
           .offers-page .spotc-outside-area-bar {
-            width: 100%;
+            top: 58px;
+            width: calc(100% - 12px);
             padding: 9px 12px;
+            border-radius: 0 0 10px 10px;
             font-size: 11px;
           }
 
