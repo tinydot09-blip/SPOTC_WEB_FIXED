@@ -231,53 +231,40 @@ const platformClass = (platform: string): string => {
   if (value.includes('myntra')) return 'myntra';
   if (value.includes('ajio')) return 'ajio';
   if (value.includes('firstcry')) return 'firstcry';
+  if (value.includes('meesho')) return 'meesho';
   return 'default';
 };
 
-const pickTopFourPlatforms = (items: OnlineProduct[]): OnlineProduct[] => {
-  const preferred = ['amazon', 'flipkart', 'meesho', 'firstcry'];
+const pickRetailPlatforms = (items: OnlineProduct[]): OnlineProduct[] => {
+  const preferred = ['amazon', 'flipkart', 'meesho'];
   const picked: OnlineProduct[] = [];
-  const usedPlatforms = new Set<string>();
 
   const platformKey = (platform: string): string => {
     const value = platform.toLowerCase();
+
     if (value.includes('amazon')) return 'amazon';
     if (value.includes('flipkart')) return 'flipkart';
     if (value.includes('meesho')) return 'meesho';
-    if (value.includes('firstcry')) return 'firstcry';
-    if (value.includes('myntra')) return 'myntra';
-    if (value.includes('ajio')) return 'ajio';
-    if (value.includes('nykaa')) return 'nykaa';
-    if (value.includes('tatacliq') || value.includes('tata cliq')) return 'tatacliq';
-    return value || 'online';
+
+    return '';
   };
 
   for (const preferredPlatform of preferred) {
-    const match = items.find(
-      (item) =>
-        platformKey(item.platform) === preferredPlatform &&
-        !usedPlatforms.has(preferredPlatform),
-    );
+    const bestMatch = items
+      .filter(
+        (item) =>
+          platformKey(item.platform) === preferredPlatform &&
+          item.title &&
+          item.url,
+      )
+      .sort((a, b) => b.matchScore - a.matchScore)[0];
 
-    if (match) {
-      picked.push(match);
-      usedPlatforms.add(preferredPlatform);
+    if (bestMatch) {
+      picked.push(bestMatch);
     }
   }
 
-  // If one of the preferred platforms is missing, fill the remaining slot(s)
-  // with the best result from another marketplace, while keeping one card per platform.
-  for (const item of items) {
-    if (picked.length >= 4) break;
-
-    const key = platformKey(item.platform);
-    if (usedPlatforms.has(key)) continue;
-
-    picked.push(item);
-    usedPlatforms.add(key);
-  }
-
-  return picked.slice(0, 4);
+  return picked;
 };
 
 function CompareOnlinePageContent() {
@@ -400,7 +387,7 @@ function CompareOnlinePageContent() {
             return b.matchScore - a.matchScore;
           });
 
-        setOnlineProducts(pickTopFourPlatforms(ranked));
+        setOnlineProducts(pickRetailPlatforms(ranked));
       } catch (reason) {
         console.error('Compare Online load failed:', reason);
         if (!cancelled) {
@@ -659,7 +646,12 @@ function CompareOnlinePageContent() {
           </div>
 
           {onlineProducts.length ? (
-            <div className="online-grid">
+            <div
+              className={`online-grid online-grid-${Math.min(
+                onlineProducts.length,
+                3,
+              )}`}
+            >
               {onlineProducts.map((item) => {
                 const hasPrice = item.price > 0;
                 const difference = hasPrice ? item.price - selectedPrice : 0;
@@ -837,7 +829,14 @@ const styles = `
   .section-heading p { margin:4px 0 0; color:#7e746b; font-size:13px; }
   .result-count { min-width:78px; padding:10px 12px; border-radius:15px; color:#e66e00; background:#fff2e5; text-align:center; font-size:21px; font-weight:600; }
   .result-count span { display:block; margin-top:1px; color:#9c6b42; font-size:10px; }
-  .online-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:15px; }
+  .online-grid {
+    display:grid;
+    gap:18px;
+    width:100%;
+  }
+  .online-grid-1 { grid-template-columns:minmax(0,1fr); }
+  .online-grid-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .online-grid-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .online-card { overflow:hidden; border:1px solid #ece3da; border-radius:18px; background:#fff; box-shadow:0 8px 22px rgba(75,50,28,.05); }
   .online-image { position:relative; width:100%; height:210px; overflow:hidden; display:grid; place-items:center; color:#a69a90; background:#f7f4ef; }
   .online-image img { padding:10px; }
@@ -846,6 +845,9 @@ const styles = `
   .platform-badge { display:inline-flex; padding:5px 8px; border-radius:999px; font-size:10px; font-weight:500; text-transform:uppercase; }
   .platform-badge.amazon { color:#6f4300; background:#fff0cf; }
   .platform-badge.flipkart { color:#174f9d; background:#e7f0ff; }
+  .platform-badge.default { color:#5d5148; background:#eee9e4; }
+  .platform-badge.meessho,
+  .platform-badge.meesho { color:#8a1d64; background:#fde7f5; }
   .platform-badge.myntra { color:#b21d5c; background:#ffe6f1; }
   .platform-badge.ajio { color:#5f4b00; background:#f5efce; }
   .platform-badge.firstcry { color:#176c6f; background:#dcf5f4; }
@@ -875,7 +877,7 @@ const styles = `
   @media (max-width:1050px) {
     .decision-grid { grid-template-columns:1fr; }
     .current-benefits { grid-template-columns:1fr; }
-    .online-grid { grid-template-columns:repeat(2,1fr); }
+    .online-grid-3 { grid-template-columns:repeat(2,minmax(0,1fr)); }
   }
 
   @media (max-width:680px) {
@@ -895,7 +897,9 @@ const styles = `
     .value-save { display:none; }
     .summary-table { overflow-x:auto; }
     .summary-row { min-width:560px; }
-    .online-grid { grid-template-columns:1fr; }
+    .online-grid-1,
+    .online-grid-2,
+    .online-grid-3 { grid-template-columns:1fr; }
     .online-card { display:grid; grid-template-columns:112px 1fr; }
     .online-image { height:100%; min-height:165px; }
     .mobile-buy-bar { position:fixed; right:0; bottom:0; left:0; z-index:100; padding:11px 14px; display:flex; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid #e4d9ce; background:rgba(255,255,255,.96); backdrop-filter:blur(12px); box-shadow:0 -8px 28px rgba(55,37,23,.1); }
