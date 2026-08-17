@@ -21,6 +21,7 @@ import {
   ShoppingBag,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 
 import { getOffers, getProducts } from "@/lib/data";
@@ -1352,6 +1353,7 @@ function OfferCard({
 
 export function OfferFeed() {
   const delivery = useDeliveryAvailability();
+  const [outsideNoticeClosed, setOutsideNoticeClosed] = useState(false);
   const [items, setItems] = useState<BusinessListing[] | null>(null);
   const feedRef = useRef<HTMLElement>(null);
   const [allProducts, setAllProducts] = useState<BusinessProduct[]>([]);
@@ -1672,12 +1674,27 @@ export function OfferFeed() {
 
   return (
     <>
-      {delivery.status === "outside" && (
-        <div className="spotc-outside-area-bar" role="status">
-          <strong>SPOTC is coming to your area shortly.</strong>
-          <span>
-            You can browse all products now. Ordering will be available when SPOTC launches in your area.
-          </span>
+      {delivery.status === "outside" && !outsideNoticeClosed && (
+        <div
+          className="spotc-area-top-overlay"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="spotc-area-top-overlay__copy">
+            <strong>SPOTC is coming to your area shortly</strong>
+            <span>
+              Browse all products now. Ordering will be available when SPOTC launches in your area.
+            </span>
+          </div>
+
+          <button
+            type="button"
+            className="spotc-area-top-overlay__close"
+            aria-label="Close area availability message"
+            onClick={() => setOutsideNoticeClosed(true)}
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
         </div>
       )}
 
@@ -1701,52 +1718,89 @@ export function OfferFeed() {
       )}
 
       <style jsx global>{`
-        .offers-page .spotc-outside-area-bar {
+        .offers-page .spotc-area-top-overlay {
           position: fixed;
-          top: 74px;
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 9999;
-          width: min(calc(100% - 24px), 560px);
-          margin: 0;
-          padding: 10px 14px;
+          top: 0;
+          left: 0;
+          right: 0;
+          z-index: 100000;
+          min-height: 58px;
+          padding: 10px 54px 10px 18px;
           display: flex;
           align-items: center;
           justify-content: center;
-          flex-wrap: wrap;
-          gap: 4px 8px;
           box-sizing: border-box;
-          border: 1px solid rgba(255, 255, 255, 0.14);
-          border-radius: 0 0 12px 12px;
           color: #ffffff;
-          background: #6f1d1b;
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+          background: #4b1715;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+        }
+
+        .offers-page .spotc-area-top-overlay__copy {
+          width: min(100%, 980px);
+          display: flex;
+          align-items: baseline;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 4px 9px;
           text-align: center;
-          font-size: 12px;
+        }
+
+        .offers-page .spotc-area-top-overlay__copy strong {
+          color: #ffffff;
+          font-size: 13px;
+          font-weight: 800;
           line-height: 1.35;
         }
 
-        .offers-page .spotc-outside-area-bar strong {
+        .offers-page .spotc-area-top-overlay__copy span {
+          color: rgba(255, 255, 255, 0.88);
           font-size: 12px;
-          font-weight: 800;
+          font-weight: 500;
+          line-height: 1.4;
         }
 
-        .offers-page .spotc-outside-area-bar span {
-          color: rgba(255, 255, 255, 0.9);
-          font-weight: 500;
+        .offers-page .spotc-area-top-overlay__close {
+          position: absolute;
+          top: 50%;
+          right: 14px;
+          width: 34px;
+          height: 34px;
+          transform: translateY(-50%);
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(255, 255, 255, 0.22);
+          border-radius: 999px;
+          color: #ffffff;
+          background: rgba(255, 255, 255, 0.08);
+          cursor: pointer;
         }
 
         @media (max-width: 760px) {
-          .offers-page .spotc-outside-area-bar {
-            top: 58px;
-            width: calc(100% - 12px);
-            padding: 9px 12px;
-            border-radius: 0 0 10px 10px;
-            font-size: 11px;
+          .offers-page .spotc-area-top-overlay {
+            min-height: 64px;
+            padding: 9px 48px 9px 12px;
           }
 
-          .offers-page .spotc-outside-area-bar strong {
-            font-size: 11px;
+          .offers-page .spotc-area-top-overlay__copy {
+            display: grid;
+            gap: 2px;
+            justify-items: start;
+            text-align: left;
+          }
+
+          .offers-page .spotc-area-top-overlay__copy strong {
+            font-size: 12px;
+          }
+
+          .offers-page .spotc-area-top-overlay__copy span {
+            font-size: 10.5px;
+          }
+
+          .offers-page .spotc-area-top-overlay__close {
+            right: 10px;
+            width: 32px;
+            height: 32px;
           }
         }
       `}</style>

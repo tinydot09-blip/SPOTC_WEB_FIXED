@@ -9,6 +9,7 @@ import {
   Search,
   ShoppingBag,
   SlidersHorizontal,
+  X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -138,6 +139,7 @@ export function ProductGrid({
 }: ProductGridProps) {
   const router = useRouter();
   const delivery = useDeliveryAvailability();
+  const [outsideNoticeClosed, setOutsideNoticeClosed] = useState(false);
 
   const [items, setItems] =
     useState<BusinessProduct[] | null>(null);
@@ -651,22 +653,27 @@ export function ProductGrid({
 
   return (
     <>
-      {!delivery.canPurchase && delivery.status !== 'checking' && (
-        <section className="spotc-delivery-notice" role="status">
-          <div>
-            <strong>
-              {delivery.status === 'outside'
-                ? 'SPOTC is coming to your area shortly'
-                : 'Check delivery availability'}
-            </strong>
-            <span>{delivery.message}</span>
+      {delivery.status === 'outside' && !outsideNoticeClosed && (
+        <section
+          className="spotc-area-top-overlay"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="spotc-area-top-overlay__copy">
+            <strong>SPOTC is coming to your area shortly</strong>
+            <span>
+              Browse all products now. Ordering will be available when SPOTC launches in your area.
+            </span>
           </div>
 
-          {delivery.status !== 'outside' && (
-            <button type="button" onClick={delivery.requestLocation}>
-              Check location
-            </button>
-          )}
+          <button
+            type="button"
+            className="spotc-area-top-overlay__close"
+            aria-label="Close area availability message"
+            onClick={() => setOutsideNoticeClosed(true)}
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
         </section>
       )}
 
@@ -969,49 +976,62 @@ export function ProductGrid({
       )}
 
       <style jsx global>{`
-        .spotc-delivery-notice {
-          width: 100%;
-          margin: 0 0 16px;
-          padding: 14px 16px;
+        .spotc-area-top-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          z-index: 100000;
+          min-height: 58px;
+          padding: 10px 54px 10px 18px;
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          gap: 14px;
-          border: 1px solid #f3d39a;
-          border-radius: 14px;
-          background: #fff8e8;
+          justify-content: center;
           box-sizing: border-box;
+          color: #ffffff;
+          background: #4b1715;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
         }
 
-        .spotc-delivery-notice > div {
-          min-width: 0;
-          display: grid;
-          gap: 3px;
+        .spotc-area-top-overlay__copy {
+          width: min(100%, 980px);
+          display: flex;
+          align-items: baseline;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 4px 9px;
+          text-align: center;
         }
 
-        .spotc-delivery-notice strong {
-          color: #2b2115;
-          font-size: 14px;
-          font-weight: 700;
+        .spotc-area-top-overlay__copy strong {
+          color: #ffffff;
+          font-size: 13px;
+          font-weight: 800;
+          line-height: 1.35;
         }
 
-        .spotc-delivery-notice span {
-          color: #705f4b;
+        .spotc-area-top-overlay__copy span {
+          color: rgba(255, 255, 255, 0.88);
           font-size: 12px;
-          line-height: 1.45;
+          font-weight: 500;
+          line-height: 1.4;
         }
 
-        .spotc-delivery-notice button {
-          flex: 0 0 auto;
-          min-height: 36px;
-          padding: 0 13px;
-          border: 0;
+        .spotc-area-top-overlay__close {
+          position: absolute;
+          top: 50%;
+          right: 14px;
+          width: 34px;
+          height: 34px;
+          transform: translateY(-50%);
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(255, 255, 255, 0.22);
           border-radius: 999px;
           color: #ffffff;
-          background: #171717;
+          background: rgba(255, 255, 255, 0.08);
           cursor: pointer;
-          font-size: 12px;
-          font-weight: 700;
         }
 
         .product-add-button:disabled {
@@ -1020,9 +1040,30 @@ export function ProductGrid({
         }
 
         @media (max-width: 700px) {
-          .spotc-delivery-notice {
-            align-items: flex-start;
-            flex-direction: column;
+          .spotc-area-top-overlay {
+            min-height: 64px;
+            padding: 9px 48px 9px 12px;
+          }
+
+          .spotc-area-top-overlay__copy {
+            display: grid;
+            gap: 2px;
+            justify-items: start;
+            text-align: left;
+          }
+
+          .spotc-area-top-overlay__copy strong {
+            font-size: 12px;
+          }
+
+          .spotc-area-top-overlay__copy span {
+            font-size: 10.5px;
+          }
+
+          .spotc-area-top-overlay__close {
+            right: 10px;
+            width: 32px;
+            height: 32px;
           }
         }
 
