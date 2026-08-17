@@ -36,6 +36,7 @@ import {
 import { requireGoogleLogin } from '@/lib/auth';
 import type { BusinessProduct } from '@/lib/types';
 import { EmptyState } from './EmptyState';
+import { useDeliveryAvailability } from '@/lib/delivery-radius';
 
 const numberValue = (value: unknown): number => {
   const parsed = Number(value);
@@ -136,6 +137,7 @@ export function ProductGrid({
   hideBusinessName = false,
 }: ProductGridProps) {
   const router = useRouter();
+  const delivery = useDeliveryAvailability();
 
   const [items, setItems] =
     useState<BusinessProduct[] | null>(null);
@@ -649,6 +651,25 @@ export function ProductGrid({
 
   return (
     <>
+      {!delivery.canPurchase && delivery.status !== 'checking' && (
+        <section className="spotc-delivery-notice" role="status">
+          <div>
+            <strong>
+              {delivery.status === 'outside'
+                ? 'SPOTC is coming to your area shortly'
+                : 'Check delivery availability'}
+            </strong>
+            <span>{delivery.message}</span>
+          </div>
+
+          {delivery.status !== 'outside' && (
+            <button type="button" onClick={delivery.requestLocation}>
+              Check location
+            </button>
+          )}
+        </section>
+      )}
+
       <section className="shop-toolbar">
         <div className="shop-search">
           <Search size={19} />
@@ -901,14 +922,37 @@ export function ProductGrid({
                   <button
                     type="button"
                     className="product-add-button"
+                    disabled={!delivery.canPurchase}
+                    aria-disabled={!delivery.canPurchase}
+                    title={
+                      delivery.canPurchase
+                        ? 'Add to cart'
+                        : delivery.status === 'outside'
+                          ? 'Ordering will be available in your area shortly'
+                          : 'Enable location to check delivery availability'
+                    }
                     onClick={() => {
+                      if (!delivery.canPurchase) {
+                        if (delivery.status === 'outside') {
+                          alert(
+                            'SPOTC is coming to your area shortly. You can browse all products now, but ordering is not available yet.',
+                          );
+                        } else {
+                          alert(
+                            'Please enable location so SPOTC can check delivery availability.',
+                          );
+                          delivery.requestLocation();
+                        }
+                        return;
+                      }
+
                       addProduct(item);
                       alert('1 product added');
                     }}
                   >
                     <ShoppingBag size={16} />
 
-                    <span>Add</span>
+                    <span>{delivery.canPurchase ? 'Add' : 'Browse'}</span>
                   </button>
                 </div>
               </div>
@@ -925,6 +969,63 @@ export function ProductGrid({
       )}
 
       <style jsx global>{`
+        .spotc-delivery-notice {
+          width: 100%;
+          margin: 0 0 16px;
+          padding: 14px 16px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 14px;
+          border: 1px solid #f3d39a;
+          border-radius: 14px;
+          background: #fff8e8;
+          box-sizing: border-box;
+        }
+
+        .spotc-delivery-notice > div {
+          min-width: 0;
+          display: grid;
+          gap: 3px;
+        }
+
+        .spotc-delivery-notice strong {
+          color: #2b2115;
+          font-size: 14px;
+          font-weight: 700;
+        }
+
+        .spotc-delivery-notice span {
+          color: #705f4b;
+          font-size: 12px;
+          line-height: 1.45;
+        }
+
+        .spotc-delivery-notice button {
+          flex: 0 0 auto;
+          min-height: 36px;
+          padding: 0 13px;
+          border: 0;
+          border-radius: 999px;
+          color: #ffffff;
+          background: #171717;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .product-add-button:disabled {
+          opacity: 0.55 !important;
+          cursor: not-allowed !important;
+        }
+
+        @media (max-width: 700px) {
+          .spotc-delivery-notice {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+        }
+
         /*
          * SHOP PRODUCT CARD — DELIVERY + STOCK ROW
          * Matches the placement used on the Business product cards.

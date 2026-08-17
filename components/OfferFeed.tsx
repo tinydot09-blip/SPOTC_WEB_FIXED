@@ -29,6 +29,7 @@ import { requireGoogleLogin } from "@/lib/auth";
 import type { BusinessListing, BusinessProduct } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
 import { num, text } from "@/lib/utils";
+import { useDeliveryAvailability } from "@/lib/delivery-radius";
 
 type OfferProduct = {
   title: string;
@@ -592,6 +593,7 @@ function OfferCard({
   allProducts: BusinessProduct[];
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const delivery = useDeliveryAvailability();
 
   const [user, setUser] = useState<User | null>(
     auth?.currentUser && !auth.currentUser.isAnonymous
@@ -980,9 +982,38 @@ function OfferCard({
                 View Product
               </Link>
 
-              <Link className="spotc-buy-now" href={buyHref}>
-                Buy Now
-              </Link>
+              {delivery.canPurchase ? (
+                <Link className="spotc-buy-now" href={buyHref}>
+                  Buy Now
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className="spotc-buy-now spotc-buy-now-disabled"
+                  title={
+                    delivery.status === "outside"
+                      ? "Ordering will be available in your area shortly"
+                      : "Enable location to check delivery availability"
+                  }
+                  onClick={(event) => {
+                    event.stopPropagation();
+
+                    if (delivery.status === "outside") {
+                      window.alert(
+                        "SPOTC is coming to your area shortly. You can browse all products now, but ordering is not available yet.",
+                      );
+                      return;
+                    }
+
+                    window.alert(
+                      "Please enable location so SPOTC can check delivery availability.",
+                    );
+                    delivery.requestLocation();
+                  }}
+                >
+                  Buy Now
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1128,7 +1159,8 @@ function OfferCard({
           gap: 9px;
         }
 
-        .offers-page .spotc-product-cta-row > a {
+        .offers-page .spotc-product-cta-row > a,
+        .offers-page .spotc-product-cta-row > button {
           min-width: 0;
           height: 46px;
           padding: 0 14px;
@@ -1150,7 +1182,8 @@ function OfferCard({
             box-shadow 140ms ease;
         }
 
-        .offers-page .spotc-product-cta-row > a:active {
+        .offers-page .spotc-product-cta-row > a:active,
+        .offers-page .spotc-product-cta-row > button:active {
           transform: scale(0.985);
         }
 
@@ -1165,6 +1198,11 @@ function OfferCard({
           color: #241705;
           background: linear-gradient(180deg, #f7c45f 0%, #f4a91d 100%);
           box-shadow: none;
+        }
+
+        .offers-page .spotc-buy-now-disabled {
+          opacity: 0.62;
+          cursor: not-allowed;
         }
 
         .offers-page .offer-top-overlay {
@@ -1212,7 +1250,8 @@ function OfferCard({
         .offers-page .spotc-product-price,
         .offers-page .spotc-product-old-price,
         .offers-page .spotc-product-offer-meta,
-        .offers-page .spotc-product-cta-row > a {
+        .offers-page .spotc-product-cta-row > a,
+        .offers-page .spotc-product-cta-row > button {
           text-shadow: none;
         }
 
@@ -1282,7 +1321,8 @@ function OfferCard({
             gap: 8px;
           }
 
-          .offers-page .spotc-product-cta-row > a {
+          .offers-page .spotc-product-cta-row > a,
+        .offers-page .spotc-product-cta-row > button {
             height: 44px;
             padding: 0 10px;
             border-radius: 12px;
@@ -1304,7 +1344,8 @@ function OfferCard({
             font-size: 11px;
           }
 
-          .offers-page .spotc-product-cta-row > a {
+          .offers-page .spotc-product-cta-row > a,
+        .offers-page .spotc-product-cta-row > button {
             height: 42px;
             font-size: 12px;
           }
