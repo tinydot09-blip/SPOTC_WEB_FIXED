@@ -47,17 +47,29 @@ const textValue = (value: unknown): string =>
     ? value.trim()
     : String(value ?? '').trim();
 
-const shopMainCategoryOf = (product: BusinessProduct): string => {
-  const rawMain = textValue(
-    product.main_category || product.category || '',
-  );
+const SHOP_MAIN_CATEGORIES = [
+  'Toys',
+  'Earrings',
+  'Girl Dress',
+] as const;
 
+type ShopMainCategory =
+  (typeof SHOP_MAIN_CATEGORIES)[number];
+
+const shopMainCategoryOf = (
+  product: BusinessProduct,
+): ShopMainCategory => {
   const combined = [
     product.main_category,
     product.category,
     product.sub_category,
+    product.child_category,
     product.title,
     product.product_name,
+    product.search_text,
+    Array.isArray(product.tags)
+      ? product.tags.join(' ')
+      : '',
   ]
     .map(textValue)
     .filter(Boolean)
@@ -66,26 +78,45 @@ const shopMainCategoryOf = (product: BusinessProduct): string => {
 
   if (
     combined.includes('earring') ||
-    combined.includes('ear ring')
+    combined.includes('ear ring') ||
+    combined.includes('ear stud') ||
+    combined.includes('stud earring') ||
+    combined.includes('jhumka')
   ) {
     return 'Earrings';
   }
 
   if (
-    combined.includes('dress') ||
-    combined.includes('frock') ||
-    combined.includes('kids wear') ||
+    combined.includes('girl dress') ||
+    combined.includes('girls dress') ||
     combined.includes('girls wear') ||
-    combined.includes('boys wear')
+    combined.includes('girl wear') ||
+    combined.includes('frock') ||
+    combined.includes('gown') ||
+    combined.includes('kids dress') ||
+    combined.includes('kid dress')
   ) {
-    return 'Dress';
+    return 'Girl Dress';
   }
 
-  return rawMain || 'Other';
+  return 'Toys';
 };
 
-const shopSubCategoryOf = (product: BusinessProduct): string =>
-  textValue(product.sub_category || product.category || '');
+const shopSubCategoryOf = (
+  product: BusinessProduct,
+): string => {
+  const sub = textValue(
+    product.sub_category ||
+      product.child_category ||
+      product.category ||
+      product.main_category ||
+      '',
+  );
+
+  if (sub) return sub;
+
+  return 'Other';
+};
 
 const imageOf = (product: BusinessProduct): string =>
   product.product_thumbnail ||
@@ -185,7 +216,7 @@ export function ProductGrid({
 
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('Featured');
-  const [mainCategory, setMainCategory] = useState('Toys');
+  const [mainCategory, setMainCategory] = useState<ShopMainCategory>('Toys');
   const [subCategory, setSubCategory] = useState('All');
 
   const [user, setUser] =
@@ -301,63 +332,43 @@ export function ProductGrid({
     };
   }, []);
 
-  const mainCategories = useMemo(() => {
-    const values = (items || [])
-      .map(shopMainCategoryOf)
-      .filter(Boolean);
-
-    const unique = Array.from(new Set(values));
-
-    const preferredOrder = [
-      'Toys',
-      'Earrings',
-      'Dress',
-      'Stationery',
-      'Home & Party Supplies',
-      'Sports & Outdoors',
-      'Electronics',
-    ];
-
-    return [...unique].sort((a, b) => {
-      const aIndex = preferredOrder.indexOf(a);
-      const bIndex = preferredOrder.indexOf(b);
-
-      if (aIndex !== -1 || bIndex !== -1) {
-        if (aIndex === -1) return 1;
-        if (bIndex === -1) return -1;
-        return aIndex - bIndex;
-      }
-
-      return a.localeCompare(b);
-    });
-  }, [items]);
+  const mainCategories = useMemo(
+    () => [...SHOP_MAIN_CATEGORIES],
+    [],
+  );
 
   const subCategories = useMemo(() => {
-    const values = (items || [])
+    const unique = new Map<string, string>();
+
+    (items || [])
       .filter(
         (product) =>
           shopMainCategoryOf(product) === mainCategory,
       )
       .map(shopSubCategoryOf)
-      .filter(Boolean);
+      .filter(Boolean)
+      .forEach((value) => {
+        const key = value.toLowerCase();
+        if (!unique.has(key)) {
+          unique.set(key, value);
+        }
+      });
 
     return [
       'All',
-      ...Array.from(new Set(values)).sort((a, b) =>
+      ...Array.from(unique.values()).sort((a, b) =>
         a.localeCompare(b),
       ),
     ];
   }, [items, mainCategory]);
 
   useEffect(() => {
-    if (!mainCategories.length) return;
-
-    if (!mainCategories.includes(mainCategory)) {
-      setMainCategory(
-        mainCategories.includes('Toys')
-          ? 'Toys'
-          : mainCategories[0],
-      );
+    if (
+      !mainCategories.includes(
+        mainCategory as ShopMainCategory,
+      )
+    ) {
+      setMainCategory('Toys');
       setSubCategory('All');
     }
   }, [mainCategories, mainCategory]);
@@ -1566,21 +1577,20 @@ export function ProductGrid({
         }
           /* =====================================================
              SHOP CATEGORY NAVIGATION
-             Row 1: main categories + sort
-             Row 2: subcategories for the selected main category
+             Main categories: Toys / Earrings / Girl Dress
+             Row 2: every subcategory for the selected main category
           ===================================================== */
 
           .spotc-shop-category-toolbar {
             width: 100%;
             margin: 0 0 10px;
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
+            display: flex;
             align-items: center;
+            justify-content: space-between;
             gap: 14px;
           }
 
-          .spotc-main-category-strip,
-          .spotc-sub-category-strip {
+          .spotc-main-category-strip {
             min-width: 0;
             display: flex;
             align-items: center;
@@ -1599,18 +1609,21 @@ export function ProductGrid({
           .spotc-main-category-strip button,
           .spotc-sub-category-strip button {
             flex: 0 0 auto;
-            min-height: 40px;
-            padding: 0 18px;
             border: 1px solid #ded8cf;
             border-radius: 999px;
             color: #655f58;
             background: #ffffff;
             font: inherit;
-            font-size: 14px;
-            font-weight: 700;
             line-height: 1;
             white-space: nowrap;
             cursor: pointer;
+          }
+
+          .spotc-main-category-strip button {
+            min-height: 42px;
+            padding: 0 20px;
+            font-size: 14px;
+            font-weight: 750;
           }
 
           .spotc-main-category-strip button.active {
@@ -1619,10 +1632,25 @@ export function ProductGrid({
             background: #171717;
           }
 
+          .spotc-shop-sort-box {
+            width: auto !important;
+            min-width: 185px !important;
+            margin: 0 0 0 auto !important;
+            flex: 0 0 auto;
+          }
+
           .spotc-sub-category-strip {
             width: 100%;
+            min-width: 0;
             margin: 0 0 16px;
-            padding-bottom: 1px;
+            padding: 0 0 1px;
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
           }
 
           .spotc-sub-category-strip button {
@@ -1638,36 +1666,31 @@ export function ProductGrid({
             background: #fff5df;
           }
 
-          .spotc-shop-sort-box {
-            width: auto !important;
-            min-width: 185px !important;
-            margin: 0 !important;
-          }
-
           @media (max-width: 700px) {
             .spotc-shop-category-toolbar {
-              grid-template-columns: minmax(0, 1fr) auto;
               gap: 8px;
               margin-bottom: 8px;
             }
 
             .spotc-main-category-strip {
+              flex: 1 1 auto;
               gap: 7px;
             }
 
             .spotc-main-category-strip button {
               min-height: 36px;
-              padding: 0 13px;
+              padding: 0 12px;
               font-size: 12px;
             }
 
             .spotc-shop-sort-box {
-              min-width: 132px !important;
-              max-width: 145px !important;
+              width: 128px !important;
+              min-width: 128px !important;
+              max-width: 128px !important;
             }
 
             .spotc-shop-sort-box select {
-              font-size: 12px !important;
+              font-size: 11px !important;
             }
 
             .spotc-sub-category-strip {
@@ -1683,18 +1706,14 @@ export function ProductGrid({
           }
 
           @media (max-width: 420px) {
-            .spotc-shop-category-toolbar {
-              grid-template-columns: minmax(0, 1fr) 118px;
-            }
-
             .spotc-shop-sort-box {
-              width: 118px !important;
-              min-width: 118px !important;
-              max-width: 118px !important;
+              width: 112px !important;
+              min-width: 112px !important;
+              max-width: 112px !important;
             }
 
             .spotc-main-category-strip button {
-              padding: 0 11px;
+              padding: 0 10px;
             }
           }
 
