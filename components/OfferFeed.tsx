@@ -999,15 +999,9 @@ function OfferCard({
                     event.stopPropagation();
 
                     if (delivery.status === "outside") {
-                      window.alert(
-                        "SPOTC is coming to your area shortly. You can browse all products now, but ordering is not available yet.",
-                      );
                       return;
                     }
 
-                    window.alert(
-                      "Please enable location so SPOTC can check delivery availability.",
-                    );
                     delivery.requestLocation();
                   }}
                 >
@@ -1356,6 +1350,7 @@ function OfferCard({
 }
 
 export function OfferFeed() {
+  const delivery = useDeliveryAvailability();
   const [items, setItems] = useState<BusinessListing[] | null>(null);
   const feedRef = useRef<HTMLElement>(null);
   const [allProducts, setAllProducts] = useState<BusinessProduct[]>([]);
@@ -1676,6 +1671,15 @@ export function OfferFeed() {
 
   return (
     <>
+      {delivery.status === "outside" && (
+        <div className="spotc-outside-area-bar" role="status">
+          <strong>SPOTC is coming to your area shortly.</strong>
+          <span>
+            You can browse all products now. Ordering will be available when SPOTC launches in your area.
+          </span>
+        </div>
+      )}
+
       <section ref={feedRef} className="offer-feed" tabIndex={0}>
         {filtered.map((item, index) => (
           <OfferCard
@@ -1693,6 +1697,52 @@ export function OfferFeed() {
           body="Try another product or category."
         />
       )}
+
+      <style jsx global>{`
+        .offers-page .spotc-outside-area-bar {
+          position: sticky;
+          top: 0;
+          z-index: 120;
+          width: min(100%, 560px);
+          margin: 0 auto;
+          padding: 10px 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 4px 8px;
+          box-sizing: border-box;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+          color: #ffffff;
+          background: #6f1d1b;
+          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+          text-align: center;
+          font-size: 12px;
+          line-height: 1.35;
+        }
+
+        .offers-page .spotc-outside-area-bar strong {
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .offers-page .spotc-outside-area-bar span {
+          color: rgba(255, 255, 255, 0.9);
+          font-weight: 500;
+        }
+
+        @media (max-width: 760px) {
+          .offers-page .spotc-outside-area-bar {
+            width: 100%;
+            padding: 9px 12px;
+            font-size: 11px;
+          }
+
+          .offers-page .spotc-outside-area-bar strong {
+            font-size: 11px;
+          }
+        }
+      `}</style>
     </>
   );
 }
