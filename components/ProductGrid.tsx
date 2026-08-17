@@ -66,6 +66,16 @@ const GIRL_DRESS_AGE_GROUPS = [
   '9-12 Years',
 ] as const;
 
+const TOY_SUB_CATEGORIES = [
+  'All',
+  'Dolls & Pretend Play',
+  'Vehicles & Guns',
+  'Learning & Creative',
+  'Balls & Outdoor',
+  'Fun & Fidget',
+  'Other Toys',
+] as const;
+
 /*
  * Only products that genuinely belong to one of the three current
  * Shop main categories are shown in this grid.
@@ -539,12 +549,141 @@ const girlDressAgeBandOf = (
   return 'Other Ages';
 };
 
+const toySubCategoryOf = (
+  product: BusinessProduct,
+): string => {
+  const combined =
+    normalizedProductText(product);
+
+  /*
+   * 1. Dolls & Pretend Play
+   */
+  if (
+    combined.includes('doll') ||
+    combined.includes('barbie') ||
+    combined.includes('pretend play') ||
+    combined.includes('kitchen set') ||
+    combined.includes('doctor set') ||
+    combined.includes('makeup set') ||
+    combined.includes('beauty set') ||
+    combined.includes('role play') ||
+    combined.includes('tea set')
+  ) {
+    return 'Dolls & Pretend Play';
+  }
+
+  /*
+   * 2. Vehicles & Guns
+   */
+  if (
+    combined.includes('toy gun') ||
+    combined.includes('water gun') ||
+    combined.includes('soft bullet') ||
+    combined.includes('dart gun') ||
+    combined.includes('shooting') ||
+    combined.includes('pistol') ||
+    combined.includes('rifle') ||
+    combined.includes('toy car') ||
+    combined.includes('car toy') ||
+    combined.includes('vehicle') ||
+    combined.includes('truck') ||
+    combined.includes('bus toy') ||
+    combined.includes('bike toy') ||
+    combined.includes('motorcycle toy') ||
+    combined.includes('train toy') ||
+    combined.includes('airplane toy') ||
+    combined.includes('aeroplane toy') ||
+    combined.includes('helicopter toy') ||
+    combined.includes('construction vehicle')
+  ) {
+    return 'Vehicles & Guns';
+  }
+
+  /*
+   * 3. Learning & Creative
+   */
+  if (
+    combined.includes('activity book') ||
+    combined.includes('drawing') ||
+    combined.includes('drawing board') ||
+    combined.includes('magnetic board') ||
+    combined.includes('magic slate') ||
+    combined.includes('writing board') ||
+    combined.includes('colouring') ||
+    combined.includes('coloring') ||
+    combined.includes('sticker') ||
+    combined.includes('puzzle') ||
+    combined.includes('alphabet') ||
+    combined.includes('number learning') ||
+    combined.includes('learning toy') ||
+    combined.includes('educational toy') ||
+    combined.includes('building block') ||
+    combined.includes('blocks toy') ||
+    combined.includes('shape sorter') ||
+    combined.includes('flash card')
+  ) {
+    return 'Learning & Creative';
+  }
+
+  /*
+   * 4. Balls & Outdoor
+   */
+  if (
+    combined.includes('play ball') ||
+    combined.includes('plastic ball') ||
+    combined.includes('ball set') ||
+    combined.includes('balloon') ||
+    combined.includes('beach toy') ||
+    combined.includes('sand toy') ||
+    combined.includes('bucket shovel') ||
+    combined.includes('outdoor toy') ||
+    combined.includes('flying disc') ||
+    combined.includes('frisbee') ||
+    combined.includes('skipping rope') ||
+    combined.includes('bat ball')
+  ) {
+    return 'Balls & Outdoor';
+  }
+
+  /*
+   * 5. Fun & Fidget
+   */
+  if (
+    combined.includes('fidget') ||
+    combined.includes('spinner') ||
+    combined.includes('slime') ||
+    combined.includes('squishy') ||
+    combined.includes('pop it') ||
+    combined.includes('pop-it') ||
+    combined.includes('light-up') ||
+    combined.includes('light up') ||
+    combined.includes('musical toy') ||
+    combined.includes('sound toy') ||
+    combined.includes('wind up') ||
+    combined.includes('wind-up') ||
+    combined.includes('yo-yo') ||
+    combined.includes('yoyo')
+  ) {
+    return 'Fun & Fidget';
+  }
+
+  /*
+   * Everything that is genuinely classified as Toys
+   * but does not match the groups above stays here.
+   */
+  return 'Other Toys';
+};
+
 const shopSubCategoryOf = (
   product: BusinessProduct,
   mainCategory: ShopMainCategory,
 ): string => {
   if (mainCategory === 'Girl Dress') {
     return girlDressAgeBandOf(product);
+  }
+
+  if (mainCategory === 'Toys') {
+    return toySubCategoryOf(product);
   }
 
   const sub = textValue(
@@ -778,6 +917,16 @@ export function ProductGrid({
   );
 
   const subCategories = useMemo(() => {
+    /*
+     * Toys uses a small, fixed set of grouped categories.
+     */
+    if (mainCategory === 'Toys') {
+      return [...TOY_SUB_CATEGORIES];
+    }
+
+    /*
+     * Girl Dress uses fixed age bands.
+     */
     if (mainCategory === 'Girl Dress') {
       const hasOtherAges = (items || []).some(
         (product) =>
@@ -795,6 +944,9 @@ export function ProductGrid({
         : [...GIRL_DRESS_AGE_GROUPS];
     }
 
+    /*
+     * Earrings keeps the real Firestore subcategories.
+     */
     const unique =
       new Map<string, string>();
 
@@ -2058,7 +2210,8 @@ export function ProductGrid({
           /* =====================================================
              SHOP CATEGORY NAVIGATION
              Main categories: Toys / Earrings / Girl Dress
-             Girl Dress row: fixed age groups from 0-12 Years
+             Toys: grouped into 6 simple customer-facing categories
+             Girl Dress: fixed age groups from 0-12 Years
           ===================================================== */
 
           .spotc-shop-category-toolbar {
