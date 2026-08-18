@@ -133,9 +133,27 @@ export default function NewProductPage() {
     size: '',
     availableSizes: '',
     dressType: '',
+    setType: '1 Piece',
     dressLength: '',
     chestSize: '',
     waistSize: '',
+    shoulderSize: '',
+    sleeveLength: '',
+    topType: 'T-Shirt',
+    topChest: '',
+    topLength: '',
+    topShoulder: '',
+    topSleeve: '',
+    bottomType: 'Pant / Shorts',
+    bottomWaist: '',
+    bottomMaxWaist: '',
+    bottomHip: '',
+    bottomLength: '',
+    bottomInseam: '',
+    thirdPieceType: '',
+    thirdPieceChest: '',
+    thirdPieceWaist: '',
+    thirdPieceLength: '',
     material: '',
     pattern: '',
     gender: '',
@@ -982,6 +1000,24 @@ Return STRICT JSON in exactly this structure:
           form.dressLength,
           form.chestSize,
           form.waistSize,
+          form.shoulderSize,
+          form.sleeveLength,
+          form.setType,
+          form.topType,
+          form.topChest,
+          form.topLength,
+          form.topShoulder,
+          form.topSleeve,
+          form.bottomType,
+          form.bottomWaist,
+          form.bottomMaxWaist,
+          form.bottomHip,
+          form.bottomLength,
+          form.bottomInseam,
+          form.thirdPieceType,
+          form.thirdPieceChest,
+          form.thirdPieceWaist,
+          form.thirdPieceLength,
           form.color,
           form.material,
           form.gender,
@@ -1001,15 +1037,119 @@ Return STRICT JSON in exactly this structure:
         dress_type: isGirlDress
           ? form.dressType.trim()
           : '',
+        set_type: isGirlDress ? form.setType : '',
+        piece_count: isGirlDress
+          ? form.setType === '3 Piece'
+            ? 3
+            : form.setType === '2 Piece'
+              ? 2
+              : 1
+          : 0,
+
+        // Keep these legacy fields populated so existing product pages continue to work.
         dress_length: isGirlDress
-          ? form.dressLength.trim()
+          ? form.setType === '1 Piece'
+            ? form.dressLength.trim()
+            : form.topLength.trim()
           : '',
         chest_size: isGirlDress
-          ? form.chestSize.trim()
+          ? form.setType === '1 Piece'
+            ? form.chestSize.trim()
+            : form.topChest.trim()
           : '',
         waist_size: isGirlDress
-          ? form.waistSize.trim()
+          ? form.setType === '1 Piece'
+            ? form.waistSize.trim()
+            : form.bottomWaist.trim()
           : '',
+        shoulder_size: isGirlDress
+          ? form.setType === '1 Piece'
+            ? form.shoulderSize.trim()
+            : form.topShoulder.trim()
+          : '',
+        sleeve_length: isGirlDress
+          ? form.setType === '1 Piece'
+            ? form.sleeveLength.trim()
+            : form.topSleeve.trim()
+          : '',
+
+        // Structured measurements for 1-piece, 2-piece and 3-piece kidswear.
+        garment_measurements: isGirlDress
+          ? {
+              set_type: form.setType,
+              one_piece:
+                form.setType === '1 Piece'
+                  ? {
+                      type: form.dressType.trim(),
+                      chest: form.chestSize.trim(),
+                      waist: form.waistSize.trim(),
+                      length: form.dressLength.trim(),
+                      shoulder: form.shoulderSize.trim(),
+                      sleeve: form.sleeveLength.trim(),
+                    }
+                  : null,
+              top:
+                form.setType !== '1 Piece'
+                  ? {
+                      type: form.topType.trim(),
+                      chest: form.topChest.trim(),
+                      length: form.topLength.trim(),
+                      shoulder: form.topShoulder.trim(),
+                      sleeve: form.topSleeve.trim(),
+                    }
+                  : null,
+              bottom:
+                form.setType !== '1 Piece'
+                  ? {
+                      type: form.bottomType.trim(),
+                      waist: form.bottomWaist.trim(),
+                      max_waist: form.bottomMaxWaist.trim(),
+                      hip: form.bottomHip.trim(),
+                      length: form.bottomLength.trim(),
+                      inseam: form.bottomInseam.trim(),
+                    }
+                  : null,
+              third_piece:
+                form.setType === '3 Piece'
+                  ? {
+                      type: form.thirdPieceType.trim(),
+                      chest: form.thirdPieceChest.trim(),
+                      waist: form.thirdPieceWaist.trim(),
+                      length: form.thirdPieceLength.trim(),
+                    }
+                  : null,
+            }
+          : null,
+        top_measurements:
+          isGirlDress && form.setType !== '1 Piece'
+            ? {
+                type: form.topType.trim(),
+                chest: form.topChest.trim(),
+                length: form.topLength.trim(),
+                shoulder: form.topShoulder.trim(),
+                sleeve: form.topSleeve.trim(),
+              }
+            : null,
+        bottom_measurements:
+          isGirlDress && form.setType !== '1 Piece'
+            ? {
+                type: form.bottomType.trim(),
+                waist: form.bottomWaist.trim(),
+                max_waist: form.bottomMaxWaist.trim(),
+                hip: form.bottomHip.trim(),
+                length: form.bottomLength.trim(),
+                inseam: form.bottomInseam.trim(),
+              }
+            : null,
+        third_piece_measurements:
+          isGirlDress && form.setType === '3 Piece'
+            ? {
+                type: form.thirdPieceType.trim(),
+                chest: form.thirdPieceChest.trim(),
+                waist: form.thirdPieceWaist.trim(),
+                length: form.thirdPieceLength.trim(),
+              }
+            : null,
         material: form.material.trim(),
         fabric: form.material.trim(),
         pattern: form.pattern.trim(),
@@ -1250,32 +1390,133 @@ Return STRICT JSON in exactly this structure:
                 placeholder="Example: 18, 20, 22"
               />
 
-              <Field
-                label="Dress Length"
-                value={form.dressLength}
-                onChange={(v) =>
-                  updateField('dressLength', v)
-                }
-                placeholder="Example: 21 inch"
-              />
+              <div>
+                <label style={labelStyle}>Set Type</label>
+                <select
+                  value={form.setType}
+                  onChange={(event) =>
+                    updateField('setType', event.target.value)
+                  }
+                  style={inputStyle}
+                >
+                  <option value="1 Piece">1 Piece</option>
+                  <option value="2 Piece">2 Piece</option>
+                  <option value="3 Piece">3 Piece</option>
+                </select>
+              </div>
 
-              <Field
-                label="Chest"
-                value={form.chestSize}
-                onChange={(v) =>
-                  updateField('chestSize', v)
-                }
-                placeholder="Example: 24 inch"
-              />
+              {form.setType === '1 Piece' ? (
+                <>
+                  <Field
+                    label="Dress / Garment Length"
+                    value={form.dressLength}
+                    onChange={(v) => updateField('dressLength', v)}
+                    placeholder="Example: 21 inch"
+                  />
+                  <Field
+                    label="Chest"
+                    value={form.chestSize}
+                    onChange={(v) => updateField('chestSize', v)}
+                    placeholder="Example: 24 inch"
+                  />
+                  <Field
+                    label="Waist"
+                    value={form.waistSize}
+                    onChange={(v) => updateField('waistSize', v)}
+                    placeholder="Example: 22 inch"
+                  />
+                  <Field
+                    label="Shoulder"
+                    value={form.shoulderSize}
+                    onChange={(v) => updateField('shoulderSize', v)}
+                    placeholder="Example: 9 inch"
+                  />
+                  <Field
+                    label="Sleeve Length"
+                    value={form.sleeveLength}
+                    onChange={(v) => updateField('sleeveLength', v)}
+                    placeholder="Example: 5 inch or Sleeveless"
+                  />
+                </>
+              ) : (
+                <>
+                  <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+                    <div style={measurementTitle}>TOP / T-SHIRT MEASUREMENTS</div>
+                  </div>
 
-              <Field
-                label="Waist"
-                value={form.waistSize}
-                onChange={(v) =>
-                  updateField('waistSize', v)
-                }
-                placeholder="Example: 22 inch"
-              />
+                  <div>
+                    <label style={labelStyle}>Top Type</label>
+                    <select
+                      value={form.topType}
+                      onChange={(event) => updateField('topType', event.target.value)}
+                      style={inputStyle}
+                    >
+                      <option value="T-Shirt">T-Shirt</option>
+                      <option value="Shirt">Shirt</option>
+                      <option value="Top">Top</option>
+                      <option value="Kurti">Kurti</option>
+                      <option value="Blouse">Blouse</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <Field label="Top Chest" value={form.topChest} onChange={(v) => updateField('topChest', v)} placeholder="Example: 24 inch" />
+                  <Field label="Top Length" value={form.topLength} onChange={(v) => updateField('topLength', v)} placeholder="Example: 16 inch" />
+                  <Field label="Top Shoulder" value={form.topShoulder} onChange={(v) => updateField('topShoulder', v)} placeholder="Example: 9 inch" />
+                  <Field label="Top Sleeve Length" value={form.topSleeve} onChange={(v) => updateField('topSleeve', v)} placeholder="Example: 5 inch or Sleeveless" />
+
+                  <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+                    <div style={measurementTitle}>BOTTOM / PANT MEASUREMENTS</div>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Bottom Type</label>
+                    <select
+                      value={form.bottomType}
+                      onChange={(event) => updateField('bottomType', event.target.value)}
+                      style={inputStyle}
+                    >
+                      <option value="Pant / Shorts">Pant / Shorts</option>
+                      <option value="Pant">Pant</option>
+                      <option value="Shorts">Shorts</option>
+                      <option value="Skirt">Skirt</option>
+                      <option value="Leggings">Leggings</option>
+                      <option value="Dhoti">Dhoti</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <Field label="Bottom Waist" value={form.bottomWaist} onChange={(v) => updateField('bottomWaist', v)} placeholder="Example: 18 inch" />
+                  <Field label="Max Stretch Waist" value={form.bottomMaxWaist} onChange={(v) => updateField('bottomMaxWaist', v)} placeholder="Example: 22 inch" />
+                  <Field label="Hip" value={form.bottomHip} onChange={(v) => updateField('bottomHip', v)} placeholder="Example: 24 inch" />
+                  <Field label="Bottom Length" value={form.bottomLength} onChange={(v) => updateField('bottomLength', v)} placeholder="Example: 12 inch" />
+                  <Field label="Inseam" value={form.bottomInseam} onChange={(v) => updateField('bottomInseam', v)} placeholder="Example: 4 inch" />
+
+                  {form.setType === '3 Piece' && (
+                    <>
+                      <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+                        <div style={measurementTitle}>THIRD PIECE MEASUREMENTS</div>
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Third Piece Type</label>
+                        <select
+                          value={form.thirdPieceType}
+                          onChange={(event) => updateField('thirdPieceType', event.target.value)}
+                          style={inputStyle}
+                        >
+                          <option value="">Select third piece</option>
+                          <option value="Jacket">Jacket</option>
+                          <option value="Shrug">Shrug</option>
+                          <option value="Vest">Vest</option>
+                          <option value="Dupatta">Dupatta</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <Field label="Third Piece Chest" value={form.thirdPieceChest} onChange={(v) => updateField('thirdPieceChest', v)} placeholder="Optional" />
+                      <Field label="Third Piece Waist" value={form.thirdPieceWaist} onChange={(v) => updateField('thirdPieceWaist', v)} placeholder="Optional" />
+                      <Field label="Third Piece Length" value={form.thirdPieceLength} onChange={(v) => updateField('thirdPieceLength', v)} placeholder="Example: 14 inch" />
+                    </>
+                  )}
+                </>
+              )}
             </>
           ) : (
             <Field
@@ -1305,8 +1546,7 @@ Return STRICT JSON in exactly this structure:
               fontWeight: 700,
             }}
           >
-            Age Group is taken automatically from Sub Category.
-            Enter the actual available sizes and garment measurements for this design.
+            Age Group is taken automatically from Sub Category. Select 1 Piece, 2 Piece or 3 Piece and enter the actual garment measurements in inches. For 2/3 piece sets, enter Top and Bottom separately.
           </div>
         )}
 
@@ -1427,6 +1667,7 @@ const emptyMedia: React.CSSProperties = { border: '2px dashed #d8d8d8', borderRa
 const labelStyle: React.CSSProperties = { display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 900, color: '#555' };
 const inputStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '12px 13px', border: '1px solid #dcdcdc', borderRadius: 11, fontSize: 14, outline: 'none', background: '#fff' };
 const helpText: React.CSSProperties = { marginTop: -6, marginBottom: 16, color: '#777', fontSize: 13 };
+const measurementTitle: React.CSSProperties = { padding: '10px 12px', borderRadius: 10, background: '#f7f7f7', border: '1px solid #e6e6e6', fontSize: 12, fontWeight: 900, color: '#333', letterSpacing: 0.3 };
 const checkRow: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 9, fontWeight: 800, cursor: 'pointer' };
 const primaryButton: React.CSSProperties = { border: 0, background: '#111', color: '#fff', padding: '12px 16px', borderRadius: 11, fontWeight: 900, cursor: 'pointer' };
 const aiButton: React.CSSProperties = { border: 0, background: '#f2b774', color: '#111', padding: '12px 16px', borderRadius: 11, fontWeight: 900, cursor: 'pointer' };
