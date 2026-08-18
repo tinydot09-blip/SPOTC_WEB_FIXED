@@ -620,30 +620,55 @@ export default function NewProductPage() {
     const matchedMainNormalised =
       normalise(matchedMainCategory);
 
-    if (
-      matchedMainNormalised === 'earrings' &&
-      !matchedSubCategory
-    ) {
-      const earringSubCategory =
-        /\b(jhumka|jhumki)\b/.test(combinedProductText)
-          ? 'Jhumka'
-          : /\bstud\b/.test(combinedProductText)
-            ? 'Stud'
-            : /\bhoop\b/.test(combinedProductText)
-              ? 'Hoop'
-              : /\b(kid|kids|child|children|girl)\b/.test(
-                    combinedProductText,
-                  )
-                ? 'Kids'
-                : /\b(drop|dangle|dangling|chandelier)\b/.test(
-                      combinedProductText,
-                    )
-                  ? 'Drop'
-                  : 'Other Earrings';
+    if (matchedMainNormalised === 'earrings') {
+      const earringText = normalise(
+        [
+          rawSubCategory,
+          first('child_category'),
+          rawTitle,
+          first('style'),
+          first('pattern'),
+          first('description'),
+          first('highlights'),
+          first('features'),
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
 
-      matchedSubCategory =
-        findConfiguredSubCategory(earringSubCategory) ||
-        earringSubCategory;
+      let detectedEarringSubCategory = '';
+
+      if (/\b(jhumka|jhumki)\b/.test(earringText)) {
+        detectedEarringSubCategory = 'Jhumka';
+      } else if (/\bstud\b/.test(earringText)) {
+        detectedEarringSubCategory = 'Stud';
+      } else if (/\bhoop\b/.test(earringText)) {
+        detectedEarringSubCategory = 'Hoop';
+      } else if (
+        /\b(drop|dangle|dangling|chandelier|hanging|hook drop)\b/.test(
+          earringText,
+        )
+      ) {
+        detectedEarringSubCategory = 'Drop';
+      } else if (
+        /\b(kid|kids|child|children)\b/.test(earringText)
+      ) {
+        detectedEarringSubCategory = 'Kids';
+      }
+
+      if (detectedEarringSubCategory) {
+        matchedSubCategory =
+          findConfiguredSubCategory(
+            detectedEarringSubCategory,
+          ) || detectedEarringSubCategory;
+      } else if (
+        !matchedSubCategory ||
+        normalise(matchedSubCategory) === 'other earrings'
+      ) {
+        matchedSubCategory =
+          findConfiguredSubCategory('Other Earrings') ||
+          'Other Earrings';
+      }
     }
 
     const aiAgeGroup = first('age_group', 'age');
@@ -767,7 +792,7 @@ IMPORTANT PRODUCT IDENTIFICATION RULES:
 4. If earrings are visible as the showcased product, identify the product as EARRINGS even if a girl/woman/model is wearing them.
 5. If earrings are attached to a display card, the card is NOT the product.
 6. For earrings, use main_category exactly "Earrings" when that category exists.
-7. For earrings, choose the closest available sub_category such as Stud, Hoop, Drop, Jhumka, Kids or Other Earrings.
+7. For earrings, choose the closest available sub_category such as Stud, Hoop, Drop, Jhumka, Kids or Other Earrings. IMPORTANT: Dangle, Dangling, Hanging and Chandelier earrings must map to sub_category "Drop". Do not return "Other Earrings" when a more specific type is visible.
 8. For a girl's dress/frock/gown/lehenga/kurti, use main_category exactly "Girl Dress" when that category exists.
 9. For toys, use main_category exactly "Toys" when that category exists.
 10. Prefer category and sub_category values EXACTLY from AVAILABLE CATEGORIES above.
