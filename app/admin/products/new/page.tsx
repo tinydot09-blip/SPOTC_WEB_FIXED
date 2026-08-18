@@ -477,6 +477,7 @@ export default function NewProductPage() {
 
   function applyAiDetails(data: IdentifyResponse) {
     const details = (data.productDetails || data.product_details || data) as Record<string, unknown>;
+
     const first = (...keys: string[]) => {
       for (const key of keys) {
         const value = clean(details[key]);
@@ -485,15 +486,192 @@ export default function NewProductPage() {
       return '';
     };
 
+    const normalise = (value: string) =>
+      value
+        .toLowerCase()
+        .replace(/&/g, 'and')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const rawMainCategory = first(
+      'main_category',
+      'category',
+      'product_category',
+      'product_type',
+    );
+
+    const rawSubCategory = first(
+      'sub_category',
+      'subcategory',
+      'subCategory',
+    );
+
+    const rawTitle = first(
+      'title',
+      'product_title',
+      'product_name',
+    );
+
+    const combinedProductText = normalise(
+      [
+        rawMainCategory,
+        rawSubCategory,
+        rawTitle,
+        first('child_category'),
+        first('style'),
+        first('pattern'),
+        first('description'),
+      ]
+        .filter(Boolean)
+        .join(' '),
+    );
+
+    const findConfiguredCategory = (candidate: string) => {
+      const target = normalise(candidate);
+      if (!target) return '';
+
+      const exact = categoryConfigs.find(
+        (item) => normalise(item.name) === target,
+      );
+
+      if (exact) return exact.name;
+
+      const contained = categoryConfigs.find((item) => {
+        const configured = normalise(item.name);
+        return (
+          configured &&
+          (target.includes(configured) || configured.includes(target))
+        );
+      });
+
+      return contained?.name || '';
+    };
+
+    let matchedMainCategory = findConfiguredCategory(rawMainCategory);
+
+    // Strong product-type fallbacks. This prevents jewellery/earring
+    // photos from accidentally being treated as clothing.
+    if (!matchedMainCategory) {
+      if (
+        /\b(earring|earrings|jhumka|jhumki|stud|hoop|drop earring|dangling earring|chandelier earring|jewellery|jewelry)\b/.test(
+          combinedProductText,
+        )
+      ) {
+        matchedMainCategory =
+          findConfiguredCategory('Earrings') || 'Earrings';
+      } else if (
+        /\b(dress|frock|gown|lehenga|kurti|girl dress|girls dress)\b/.test(
+          combinedProductText,
+        )
+      ) {
+        matchedMainCategory =
+          findConfiguredCategory('Girl Dress') || 'Girl Dress';
+      } else if (
+        /\b(toy|toys|doll|toy car|toy gun|fidget|ball|pretend play)\b/.test(
+          combinedProductText,
+        )
+      ) {
+        matchedMainCategory =
+          findConfiguredCategory('Toys') || 'Toys';
+      }
+    }
+
+    if (!matchedMainCategory) {
+      matchedMainCategory = rawMainCategory;
+    }
+
+    const matchedCategoryConfig =
+      categoryConfigs.find(
+        (item) =>
+          normalise(item.name) ===
+          normalise(matchedMainCategory),
+      ) || null;
+
+    const findConfiguredSubCategory = (candidate: string) => {
+      if (!matchedCategoryConfig) return candidate;
+
+      const target = normalise(candidate);
+      if (!target) return '';
+
+      const exact = matchedCategoryConfig.subcategories.find(
+        (item) => normalise(item) === target,
+      );
+
+      if (exact) return exact;
+
+      const contained = matchedCategoryConfig.subcategories.find(
+        (item) => {
+          const configured = normalise(item);
+          return (
+            configured &&
+            (target.includes(configured) ||
+              configured.includes(target))
+          );
+        },
+      );
+
+      return contained || '';
+    };
+
+    let matchedSubCategory =
+      findConfiguredSubCategory(rawSubCategory);
+
+    const matchedMainNormalised =
+      normalise(matchedMainCategory);
+
+    if (
+      matchedMainNormalised === 'earrings' &&
+      !matchedSubCategory
+    ) {
+      const earringSubCategory =
+        /\b(jhumka|jhumki)\b/.test(combinedProductText)
+          ? 'Jhumka'
+          : /\bstud\b/.test(combinedProductText)
+            ? 'Stud'
+            : /\bhoop\b/.test(combinedProductText)
+              ? 'Hoop'
+              : /\b(kid|kids|child|children|girl)\b/.test(
+                    combinedProductText,
+                  )
+                ? 'Kids'
+                : /\b(drop|dangle|dangling|chandelier)\b/.test(
+                      combinedProductText,
+                    )
+                  ? 'Drop'
+                  : 'Other Earrings';
+
+      matchedSubCategory =
+        findConfiguredSubCategory(earringSubCategory) ||
+        earringSubCategory;
+    }
+
+    const aiAgeGroup = first('age_group', 'age');
+
+    if (
+      matchedMainNormalised === 'girl dress' &&
+      !matchedSubCategory &&
+      aiAgeGroup
+    ) {
+      matchedSubCategory =
+        findConfiguredSubCategory(aiAgeGroup) ||
+        rawSubCategory;
+    }
+
     setForm((prev) => ({
       ...prev,
-      title: first('title', 'product_title', 'product_name') || prev.title,
+      title: rawTitle || prev.title,
       brand: first('brand') || prev.brand,
-      mainCategory: first('main_category', 'category') || prev.mainCategory,
-      subCategory: first('sub_category') || prev.subCategory,
-      childCategory: first('child_category') || prev.childCategory,
-      color: first('color') || prev.color,
-      secondaryColor: first('secondary_color') || prev.secondaryColor,
+      mainCategory:
+        matchedMainCategory || prev.mainCategory,
+      subCategory:
+        matchedSubCategory || prev.subCategory,
+      childCategory:
+        first('child_category') || prev.childCategory,
+      color: first('color', 'colour') || prev.color,
+      secondaryColor:
+        first('secondary_color', 'second_color', 'secondary_colour') ||
+        prev.secondaryColor,
       size: first('size') || prev.size,
       availableSizes:
         first('available_sizes', 'sizes') ||
@@ -522,13 +700,23 @@ export default function NewProductPage() {
           'waist_size',
           'waist',
         ) || prev.waistSize,
-      material: first('material', 'fabric') || prev.material,
-      pattern: first('pattern', 'style') || prev.pattern,
-      gender: first('gender', 'audience') || prev.gender,
-      ageGroup: first('age_group', 'age') || prev.ageGroup,
-      description: first('description', 'ai_description') || prev.description,
-      highlights: first('highlights', 'features') || prev.highlights,
-      tags: first('tags', 'keywords', 'search_tags') || prev.tags,
+      material:
+        first('material', 'fabric') || prev.material,
+      pattern:
+        first('pattern', 'style') || prev.pattern,
+      gender:
+        first('gender', 'audience') || prev.gender,
+      ageGroup:
+        aiAgeGroup || prev.ageGroup,
+      description:
+        first('description', 'ai_description') ||
+        prev.description,
+      highlights:
+        first('highlights', 'features') ||
+        prev.highlights,
+      tags:
+        first('tags', 'keywords', 'search_tags') ||
+        prev.tags,
     }));
   }
 
@@ -556,9 +744,85 @@ export default function NewProductPage() {
       const body = new FormData();
       body.append('image', source.file);
       body.append('uid', auth?.currentUser?.uid || 'web_admin');
+      const categoryGuide = categoryConfigs
+        .map(
+          (category) =>
+            `${category.name}: ${category.subcategories.join(', ') || 'no fixed subcategories'}`,
+        )
+        .join('\n');
+
       body.append(
         'instruction',
-        'Identify this retail product and return strict JSON with productDetails containing title, brand, main_category, sub_category, child_category, color, secondary_color, size, available_sizes, dress_type, garment_type, dress_length, garment_length, chest_size, chest, waist_size, waist, material, fabric, pattern, style, fit, gender, audience, occasion, season, sku, product_code, manufacturer, country_of_origin, weight, description, highlights, features, tags, keywords, search_tags, mrp, selling_price, offer_price, discount_percent.',
+        `Identify the MAIN RETAIL PRODUCT shown in this image.
+
+This SPOTC admin can sell many different product types. Do NOT assume the image is clothing.
+
+AVAILABLE CATEGORIES AND SUBCATEGORIES:
+${categoryGuide}
+
+IMPORTANT PRODUCT IDENTIFICATION RULES:
+1. First determine the actual retail product being sold.
+2. Ignore the model/person, display card, packaging, props, background cloth, furniture and decorative objects when deciding the product.
+3. If a person/model is wearing the product, identify the worn product that is clearly being showcased.
+4. If earrings are visible as the showcased product, identify the product as EARRINGS even if a girl/woman/model is wearing them.
+5. If earrings are attached to a display card, the card is NOT the product.
+6. For earrings, use main_category exactly "Earrings" when that category exists.
+7. For earrings, choose the closest available sub_category such as Stud, Hoop, Drop, Jhumka, Kids or Other Earrings.
+8. For a girl's dress/frock/gown/lehenga/kurti, use main_category exactly "Girl Dress" when that category exists.
+9. For toys, use main_category exactly "Toys" when that category exists.
+10. Prefer category and sub_category values EXACTLY from AVAILABLE CATEGORIES above.
+11. Do not invent brand, SKU, price, size, measurements, manufacturer, country of origin or weight when they cannot be visually determined.
+12. For unknown/non-visible facts return an empty string.
+13. Product title and description should describe the product itself, not the model or background.
+14. Return JSON only. No markdown. No explanation.
+
+Return STRICT JSON in exactly this structure:
+{
+  "productDetails": {
+    "title": "",
+    "brand": "",
+    "main_category": "",
+    "sub_category": "",
+    "child_category": "",
+    "color": "",
+    "secondary_color": "",
+    "size": "",
+    "available_sizes": "",
+    "dress_type": "",
+    "garment_type": "",
+    "dress_length": "",
+    "garment_length": "",
+    "chest_size": "",
+    "chest": "",
+    "waist_size": "",
+    "waist": "",
+    "material": "",
+    "fabric": "",
+    "pattern": "",
+    "style": "",
+    "fit": "",
+    "gender": "",
+    "audience": "",
+    "age_group": "",
+    "occasion": "",
+    "season": "",
+    "sku": "",
+    "product_code": "",
+    "manufacturer": "",
+    "country_of_origin": "",
+    "weight": "",
+    "description": "",
+    "highlights": "",
+    "features": "",
+    "tags": "",
+    "keywords": "",
+    "search_tags": "",
+    "mrp": "",
+    "selling_price": "",
+    "offer_price": "",
+    "discount_percent": ""
+  }
+}`,
       );
 
       const response = await fetch(
