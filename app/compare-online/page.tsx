@@ -193,6 +193,105 @@ const similarityScore = (source: string, candidate: string): number => {
   return Math.round((matches / sourceWords.size) * 100);
 };
 
+const normalizeMatchText = (value: unknown): string =>
+  cleanText(value)
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const selectedCategoryText = (product: BusinessProduct): string => {
+  const source = product as BusinessProduct & Record<string, unknown>;
+
+  return normalizeMatchText(
+    [
+      source.main_category,
+      source.category,
+      source.sub_category,
+      source.child_category,
+      source.dress_type,
+      source.product_type,
+      source.title,
+      source.product_name,
+    ]
+      .filter(Boolean)
+      .join(' '),
+  );
+};
+
+const onlineProductText = (item: OnlineProduct): string =>
+  normalizeMatchText([item.title, item.platform].filter(Boolean).join(' '));
+
+const isEarringProductText = (value: string): boolean =>
+  /\b(earring|earrings|jhumka|jhumki|stud|studs|hoop|hoops|drop earring|drop earrings|dangle|dangler|dangling|chandelier|hanging earring|hanging earrings|ear jewellery|ear jewelry)\b/.test(
+    value,
+  );
+
+const isDressProductText = (value: string): boolean =>
+  /\b(dress|dresses|frock|frocks|gown|gowns|kurti|kurtis|kurta|lehenga|choli|salwar|top and skirt|girls wear|girl dress|kids dress|party dress|ethnic wear|chikankari|dupatta)\b/.test(
+    value,
+  );
+
+const isToyProductText = (value: string): boolean =>
+  /\b(toy|toys|doll|dolls|toy car|toy cars|car toy|gun toy|toy gun|fidget|ball|pretend play|learning toy|kids toy|vehicle toy)\b/.test(
+    value,
+  );
+
+const isStationeryProductText = (value: string): boolean =>
+  /\b(stationery|pencil|pen|eraser|sharpener|notebook|sketch pen|crayon|school supplies|pencil box|geometry box)\b/.test(
+    value,
+  );
+
+const categoryMatchesSelectedProduct = (
+  selected: BusinessProduct,
+  item: OnlineProduct,
+): boolean => {
+  const selectedText = selectedCategoryText(selected);
+  const candidateText = onlineProductText(item);
+
+  const selectedIsEarring = isEarringProductText(selectedText);
+  const selectedIsDress = isDressProductText(selectedText);
+  const selectedIsToy = isToyProductText(selectedText);
+  const selectedIsStationery = isStationeryProductText(selectedText);
+
+  if (selectedIsEarring) {
+    if (isDressProductText(candidateText) || isToyProductText(candidateText)) {
+      return false;
+    }
+    return isEarringProductText(candidateText);
+  }
+
+  if (selectedIsDress) {
+    if (isEarringProductText(candidateText) || isToyProductText(candidateText)) {
+      return false;
+    }
+    return isDressProductText(candidateText);
+  }
+
+  if (selectedIsToy) {
+    if (isDressProductText(candidateText) || isEarringProductText(candidateText)) {
+      return false;
+    }
+    return isToyProductText(candidateText);
+  }
+
+  if (selectedIsStationery) {
+    if (
+      isDressProductText(candidateText) ||
+      isEarringProductText(candidateText) ||
+      isToyProductText(candidateText)
+    ) {
+      return false;
+    }
+    return isStationeryProductText(candidateText);
+  }
+
+  // Unknown/new categories: do not hard-reject.
+  // Fall back to title similarity instead of risking hiding legitimate products.
+  return true;
+};
+
 const money = (value: number): string =>
   `₹${Math.round(value).toLocaleString('en-IN')}`;
 
@@ -362,7 +461,12 @@ function CompareOnlinePageContent() {
 
         if (cancelled) return;
 
-        const usable = items.filter((item) => item.title && item.url);
+        const usable = items.filter(
+          (item) =>
+            item.title &&
+            item.url &&
+            categoryMatchesSelectedProduct(selected, item),
+        );
 
         const exactMatches = usable.filter(
           (item) => item.productId === productId,
@@ -376,8 +480,8 @@ function CompareOnlinePageContent() {
               similarityScore(titleOf(selected), item.title),
           }))
           .filter((item) => {
-            // Directly generated/nested results should always be kept.
-            // Older root-level records need at least a small title match.
+            // Even generated/nested results must match the selected product category.
+            // For legacy/root-level records, also require a small title similarity.
             if (exactMatches.length > 0) return true;
             return item.matchScore >= 20;
           })
