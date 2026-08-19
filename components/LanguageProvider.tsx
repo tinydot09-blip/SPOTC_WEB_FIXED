@@ -183,7 +183,6 @@ const TA: Record<string, string> = {
   'Privacy': 'தனியுரிமை',
   'Terms': 'விதிமுறைகள்',
   'Featured': 'சிறப்பு',
-  'Save': 'சேமிப்பு',
   'left': 'மட்டும் உள்ளது',
   'gift included': 'இலவச பரிசு சேர்க்கப்பட்டுள்ளது',
   'gifts included': 'இலவச பரிசுகள் சேர்க்கப்பட்டுள்ளது',
