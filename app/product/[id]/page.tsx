@@ -49,6 +49,7 @@ import {
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 import { EmptyState } from '@/components/EmptyState';
+import { useSpotcLanguage } from '@/components/LanguageProvider';
 import { addProduct } from '@/lib/cart';
 import { getProductById, getProducts } from '@/lib/data';
 import { requireGoogleLogin } from '@/lib/auth';
@@ -629,6 +630,7 @@ export default function ProductDetailPage() {
   const params = useParams<{ id: string | string[] }>();
   const router = useRouter();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const { language, t, productTitle } = useSpotcLanguage();
 
   const [product, setProduct] = useState<BusinessProduct | null | undefined>(undefined);
   const [related, setRelated] = useState<BusinessProduct[]>([]);
@@ -1088,8 +1090,26 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   const finalReviewCount =
     ratingSnapshot?.count ?? (storedReviewCount > 0 ? storedReviewCount : calculatedCount);
 
-  const description = text(record.description || record.product_description);
-  const highlightsText = text(record.highlights || record.features);
+  const englishProductTitle = titleOf(product);
+  const tamilProductTitle = text(record.title_ta || record.product_name_ta).trim();
+  const displayProductTitle =
+    language === 'ta'
+      ? tamilProductTitle || productTitle(englishProductTitle)
+      : englishProductTitle;
+
+  const englishDescription = text(record.description || record.product_description);
+  const tamilDescription = text(record.description_ta || record.product_description_ta).trim();
+  const description =
+    language === 'ta' && tamilDescription
+      ? tamilDescription
+      : englishDescription;
+
+  const englishHighlightsText = text(record.highlights || record.features);
+  const tamilHighlightsText = text(record.highlights_ta || record.features_ta).trim();
+  const highlightsText =
+    language === 'ta' && tamilHighlightsText
+      ? tamilHighlightsText
+      : englishHighlightsText;
 
   const mainCategoryText = text(
     record.main_category || record.category,
@@ -1650,7 +1670,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
           {
             product_ref: doc(db, 'BusinessProducts', product.id),
             product_id: product.id,
-            product_title: titleOf(product),
+            product_title: displayProductTitle,
             product_image: tryOnResult || productImage,
             tryon_image: tryOnResult || null,
             product_price: price,
@@ -1680,7 +1700,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
           product_id: product.id,
           product_source_key: sourceKey,
           product_no: productNumber,
-          product_title: titleOf(product),
+          product_title: displayProductTitle,
           product_image: tryOnResult || productImage,
           tryon_image: tryOnResult || null,
           product_price: price,
@@ -1728,8 +1748,8 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     )}`;
 
     const shareData = {
-      title: `Should I buy ${titleOf(product)}?`,
-      text: `Help me decide about ${titleOf(product)} from ${businessName} on SPOTC.`,
+      title: language === 'ta' ? `${displayProductTitle} வாங்கலாமா?` : `Should I buy ${displayProductTitle}?`,
+      text: language === 'ta' ? `${displayProductTitle} பற்றி முடிவு செய்ய உதவுங்கள்.` : `Help me decide about ${displayProductTitle} from ${businessName} on SPOTC.`,
       url: shareUrl,
     };
 
@@ -2194,18 +2214,18 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
     {
       key: 'description',
       icon: FileText,
-      title: 'Product Description',
-      subtitle: 'Details, brand, colour, size and availability',
+      title: t('Product Description'),
+      subtitle: t('Details, brand, colour, size and availability'),
       content: (
-        <div className="pd-accordion-copy">
+        <div className="pd-accordion-copy" data-i18n-product-description="true">
           <p>
             {description ||
-              'Contact SPOTC for additional product details.'}
+              t('Contact SPOTC for additional product details.')}
           </p>
 
           {highlightsText && (
             <div className="pd-description-highlights">
-              <strong>Highlights</strong>
+              <strong>{t('Highlights')}</strong>
               <ul>
                 {highlightsText
                   .split(/\n|•/)
@@ -2223,28 +2243,28 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
     {
       key: 'delivery',
       icon: Truck,
-      title: 'Delivery / Free Shipping',
-      subtitle: freeShipping ? 'Free shipping available' : deliveryText,
+      title: t('Delivery / Free Shipping'),
+      subtitle: freeShipping ? t('Free shipping available') : t(deliveryText),
       content: (
         <div className="pd-accordion-copy">
           <p>{deliveryDetails}</p>
 
           <dl className="pd-delivery-slots">
             <div>
-              <dt>Instant</dt>
-              <dd>About 15 mins · ₹20</dd>
+              <dt>{t('Instant')}</dt>
+              <dd>{t('About 15 mins · ₹20')}</dd>
             </div>
             <div>
-              <dt>Morning</dt>
-              <dd>Order 6 AM–12 PM · Delivery 12–2 PM · FREE</dd>
+              <dt>{t('Morning')}</dt>
+              <dd>{t('Order 6 AM–12 PM · Delivery 12–2 PM · FREE')}</dd>
             </div>
             <div>
-              <dt>Afternoon</dt>
-              <dd>Order 12–6 PM · Delivery 6–7 PM · FREE</dd>
+              <dt>{t('Afternoon')}</dt>
+              <dd>{t('Order 12–6 PM · Delivery 6–7 PM · FREE')}</dd>
             </div>
             <div>
-              <dt>Night</dt>
-              <dd>Order 6 PM–6 AM · Delivery 6–8 AM · FREE</dd>
+              <dt>{t('Night')}</dt>
+              <dd>{t('Order 6 PM–6 AM · Delivery 6–8 AM · FREE')}</dd>
             </div>
           </dl>
 
@@ -2258,14 +2278,14 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
     {
       key: 'returns',
       icon: RefreshCcw,
-      title: 'Return & Exchange',
+      title: t('Return & Exchange'),
       subtitle: '5-minute doorstep fit check for eligible clothing',
       content: <div className="pd-accordion-copy"><p>{returnDetails}</p></div>,
     },
     {
       key: 'reviews',
       icon: MessageSquareText,
-      title: 'Reviews',
+      title: t('Reviews'),
       subtitle: finalReviewCount > 0 ? `${Math.round(finalReviewCount)} customer rating${finalReviewCount === 1 ? '' : 's'}` : 'Be the first to review',
       content: (
         <div className="pd-review-area">
@@ -2273,7 +2293,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
             {finalRating !== null ? (
               <>
                 <strong>{finalRating.toFixed(1)}</strong>
-                <span><Star fill="currentColor" />Based on {Math.round(finalReviewCount)} rating{finalReviewCount === 1 ? '' : 's'}</span>
+                <span><Star fill="currentColor" />Based on {Math.round(finalReviewCount)} {finalReviewCount === 1 ? t('rating') : t('ratings')}</span>
               </>
             ) : (
               <p>No customer ratings yet.</p>
@@ -2381,7 +2401,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
             <div
               className="pd-image pd-image-zoom"
               role="img"
-              aria-label={titleOf(product)}
+              aria-label={displayProductTitle}
               onMouseEnter={() => {
                 setZoomActive(true);
               }}
@@ -2502,24 +2522,28 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
           )}
 
         <div className="pd-info">
-          <h1>{titleOf(product)}</h1>
+          <h1>{displayProductTitle}</h1>
 
           <div className="pd-rating">
             {finalRating !== null && <span><Star size={15} fill="currentColor" />{finalRating.toFixed(1)}</span>}
-            {finalReviewCount > 0 && <span>{Math.round(finalReviewCount)} rating{finalReviewCount === 1 ? '' : 's'}</span>}
+            {finalReviewCount > 0 && <span>{Math.round(finalReviewCount)} {finalReviewCount === 1 ? t('rating') : t('ratings')}</span>}
             <span className={inStock ? 'pd-stock-available' : 'pd-stock-unavailable'}>
-              {inStock ? (stockQuantity ? `${stockQuantity} in stock` : 'In stock') : 'Out of stock'}
+              {inStock
+                ? stockQuantity
+                  ? language === 'ta' ? `${stockQuantity} ஸ்டாக்கில் உள்ளது` : `${stockQuantity} in stock`
+                  : t('In stock')
+                : t('Out of stock')}
             </span>
           </div>
 
           <div className="pd-price">
             <strong>₹{Math.round(price)}</strong>
             {oldPrice > price && <del>₹{Math.round(oldPrice)}</del>}
-            {oldPrice > price && <em>Save ₹{Math.round(oldPrice - price)}</em>}
+            {oldPrice > price && <em>{t('Save')} ₹{Math.round(oldPrice - price)}</em>}
           </div>
 {showColorSelector && (
             <div className="pd-option">
-              <label>Colour</label>
+              <label>{t('Colour')}</label>
               <div>
                 {selectableColors.map((option) => (
                   <button
@@ -2535,22 +2559,22 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
             </div>
           )}
 
-          <div className="pd-purchase-benefits" aria-label="Purchase benefits">
+          <div className="pd-purchase-benefits" aria-label={t('Purchase benefits')}>
             <span>
               <Clock3 aria-hidden="true" />
-              15 mins delivery
+              {t('15 mins delivery')}
             </span>
 
             {codAvailable && (
               <span>
                 <PackageCheck aria-hidden="true" />
-                Cash on Delivery
+                {t('Cash on Delivery')}
               </span>
             )}
 
             <span>
               <CheckCircle2 aria-hidden="true" />
-              Ready stock
+              {t('Ready stock')}
             </span>
           </div>
 
@@ -2568,18 +2592,30 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
 
                 <span className="pd-free-gift-cta-copy">
                   <strong>
-                    {freeGiftCount === 1
-                      ? '1 FREE Gift Included'
-                      : `${freeGiftCount} FREE Gifts Included`}
+                    {language === 'ta'
+                      ? `${freeGiftCount} ${freeGiftCount === 1
+                          ? 'இலவச பரிசு சேர்க்கப்பட்டுள்ளது'
+                          : 'இலவச பரிசுகள் சேர்க்கப்பட்டுள்ளன'}`
+                      : freeGiftCount === 1
+                        ? '1 FREE Gift Included'
+                        : `${freeGiftCount} FREE Gifts Included`}
                   </strong>
                   <small>
-                    {selectedGiftIds.length > 0
-                      ? `${selectedGiftIds.length} of ${freeGiftCount} selected · Tap to edit`
-                      : qty > 1
-                        ? `${freeGiftCountPerItem} per item × ${qty} items · Choose gifts`
-                        : freeGiftCount === 1
-                          ? 'Choose your FREE gift'
-                          : `Choose any ${freeGiftCount} FREE gifts`}
+                    {language === 'ta'
+                      ? selectedGiftIds.length > 0
+                        ? `${selectedGiftIds.length} / ${freeGiftCount} தேர்வு செய்யப்பட்டது · திருத்த தட்டவும்`
+                        : qty > 1
+                          ? `ஒவ்வொரு பொருளுக்கும் ${freeGiftCountPerItem} × ${qty} பொருட்கள் · பரிசுகளைத் தேர்ந்தெடுக்கவும்`
+                          : freeGiftCount === 1
+                            ? 'உங்கள் இலவச பரிசைத் தேர்ந்தெடுக்கவும்'
+                            : `${freeGiftCount} இலவச பரிசுகளைத் தேர்ந்தெடுக்கவும்`
+                      : selectedGiftIds.length > 0
+                        ? `${selectedGiftIds.length} of ${freeGiftCount} selected · Tap to edit`
+                        : qty > 1
+                          ? `${freeGiftCountPerItem} per item × ${qty} items · Choose gifts`
+                          : freeGiftCount === 1
+                            ? 'Choose your FREE gift'
+                            : `Choose any ${freeGiftCount} FREE gifts`}
                   </small>
                 </span>
 
@@ -2643,7 +2679,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
               onClick={addToCart}
             >
               <ShoppingBag />
-              <span>{inStock ? 'Add to cart' : 'Out of stock'}</span>
+              <span>{inStock ? t('Add to cart') : t('Out of stock')}</span>
             </button>
 
             <button
@@ -2653,7 +2689,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
               onClick={buyNow}
             >
               <Bolt />
-              <span>{inStock ? 'Buy Now' : 'Out of stock'}</span>
+              <span>{inStock ? t('Buy Now') : t('Out of stock')}</span>
             </button>
           </div>
 
@@ -2664,11 +2700,11 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
             >
               <div className="pd-inline-details-heading">
                 <div>
-                  <small>PRODUCT DETAILS</small>
+                  <small>{t('PRODUCT DETAILS')}</small>
                   <h2>
                     {isGirlDressProduct
-                      ? 'Dress details & measurements'
-                      : 'Product details'}
+                      ? t('Dress details & measurements')
+                      : t('Product details')}
                   </h2>
                 </div>
               </div>
@@ -2696,9 +2732,9 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
         >
           <span className="pd-tool-icon"><GitCompareArrows /></span>
           <span className="pd-tool-copy">
-            <strong>Compare Online</strong>
-            <small>Find similar products &amp; best prices</small>
-            <em>SpotC Price ₹{Math.round(price)}</em>
+            <strong>{t('Compare Online')}</strong>
+            <small>{t('Find similar products & best prices')}</small>
+            <em>{t('SpotC Price')} ₹{Math.round(price)}</em>
           </span>
           <ChevronLeft className="pd-tool-arrow" />
         </button>
@@ -2711,8 +2747,8 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
         >
           <span className="pd-tool-icon"><Users /></span>
           <span className="pd-tool-copy">
-            <strong>Ask Friends &amp; Family</strong>
-            <small>{askFriendsLoading ? 'Creating Shopping Circle…' : 'Share with friends & family to get opinions'}</small>
+            <strong>{t('Ask Friends & Family')}</strong>
+            <small>{askFriendsLoading ? t('Creating Shopping Circle…') : t('Share with friends & family to get opinions')}</small>
           </span>
           <ChevronLeft className="pd-tool-arrow" />
         </button>
@@ -3012,7 +3048,7 @@ const relatedFreeGiftCount =
               <div style={{ backgroundImage: `url("${productImage}")` }} />
               <span>
                 <strong>{businessName}</strong>
-                <small>{titleOf(product)}</small>
+                <small>{displayProductTitle}</small>
                 <em>₹{Math.round(price)}</em>
                 <b>15 min delivery · COD</b>
               </span>

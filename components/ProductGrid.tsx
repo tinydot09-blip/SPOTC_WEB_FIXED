@@ -36,6 +36,7 @@ import { requireGoogleLogin } from '@/lib/auth';
 import type { BusinessProduct } from '@/lib/types';
 import { EmptyState } from './EmptyState';
 import { useDeliveryAvailability } from '@/lib/delivery-radius';
+import { useSpotcLanguage } from '@/components/LanguageProvider';
 
 const numberValue = (value: unknown): number => {
   const parsed = Number(value);
@@ -889,6 +890,7 @@ export function ProductGrid({
   const router = useRouter();
   const searchParams = useSearchParams();
   const delivery = useDeliveryAvailability();
+  const { language, t, productTitle } = useSpotcLanguage();
 
   const [items, setItems] =
     useState<BusinessProduct[] | null>(null);
@@ -910,6 +912,20 @@ export function ProductGrid({
   const [compareBusy, setCompareBusy] =
     useState(false);
   const [mounted, setMounted] = useState(false);
+
+  const localizedTitleOf = (item: BusinessProduct): string => {
+    const record = item as BusinessProduct & Record<string, unknown>;
+    const tamilTitle = textValue(record.title_ta ?? record.product_name_ta);
+
+    if (language === 'ta' && tamilTitle) {
+      return tamilTitle;
+    }
+
+    const englishTitle = titleOf(item);
+    return language === 'ta' ? productTitle(englishTitle) : englishTitle;
+  };
+
+  const categoryLabel = (value: string): string => t(value);
 
   useEffect(() => {
     setMounted(true);
@@ -1487,7 +1503,7 @@ export function ProductGrid({
       <section className="spotc-shop-category-toolbar">
         <div
           className="spotc-main-category-strip"
-          aria-label="Main product categories"
+          aria-label={t('Main product categories')}
         >
           {mainCategories.map((categoryName) => (
             <button
@@ -1513,7 +1529,7 @@ export function ProductGrid({
                 }
               }}
             >
-              {categoryName}
+              {categoryLabel(categoryName)}
             </button>
           ))}
         </div>
@@ -1523,7 +1539,7 @@ export function ProductGrid({
 
           <select
             value={sort}
-            aria-label="Sort products"
+            aria-label={t('Sort products')}
             onChange={(event) =>
               setSort(event.target.value)
             }
@@ -1535,7 +1551,7 @@ export function ProductGrid({
               'Price: High to Low',
               'Biggest Discount',
             ].map((option) => (
-              <option key={option}>{option}</option>
+              <option key={option} value={option}>{t(option)}</option>
             ))}
           </select>
         </div>
@@ -1543,8 +1559,8 @@ export function ProductGrid({
 
       {search.trim() ? (
         <div className="spotc-global-search-status" role="status">
-          Search results for <strong>“{search.trim()}”</strong> · {filteredProducts.length}{' '}
-          {filteredProducts.length === 1 ? 'product' : 'products'}
+          {language === 'ta' ? 'தேடல் முடிவுகள்' : 'Search results for'}{' '}<strong>“{search.trim()}”</strong> · {filteredProducts.length}{' '}
+          {filteredProducts.length === 1 ? t('product') : t('products')}
         </div>
       ) : (
         <div
@@ -1574,7 +1590,7 @@ export function ProductGrid({
                 }
               }}
             >
-              {categoryName}
+              {categoryLabel(categoryName)}
             </button>
           ))}
         </div>
@@ -1595,12 +1611,11 @@ export function ProductGrid({
 
               <div className="spotc-compare-float__copy">
                 <strong>
-                  {compare.size} product
-                  {compare.size > 1 ? 's' : ''} selected
+                  {compare.size} {compare.size > 1 ? t('products selected') : t('product selected')}
                 </strong>
 
                 <span>
-                  Select up to 3 products and ask friends.
+                  {t('Select up to 3 products and ask friends.')}
                 </span>
               </div>
             </div>
@@ -1613,8 +1628,8 @@ export function ProductGrid({
   disabled={compareBusy}
 >
   {compareBusy
-    ? 'Creating circle…'
-    : 'Ask Friends'}
+    ? t('Creating circle…')
+    : t('Ask Friends')}
 </button>
           </aside>,
           document.body,
@@ -1649,7 +1664,7 @@ export function ProductGrid({
                 <Link
                   href={`/product/${item.id}`}
                   className="product-image"
-                  aria-label={`Open ${titleOf(item)}`}
+                  aria-label={`${t('Open')} ${localizedTitleOf(item)}`}
                   style={{
                     backgroundImage: `url("${image}")`,
                   }}
@@ -1696,8 +1711,8 @@ export function ProductGrid({
                   <GitCompareArrows size={15} />
 
                   {compare.has(item.id)
-                    ? 'Added'
-                    : 'Ask Friends'}
+                    ? t('Added')
+                    : t('Ask Friends')}
                 </button>
               </div>
 
@@ -1706,7 +1721,7 @@ export function ProductGrid({
                   href={`/product/${item.id}`}
                   className="product-title-link"
                 >
-                  <h3>{titleOf(item)}</h3>
+                  <h3>{localizedTitleOf(item)}</h3>
                 </Link>
 
                 <div className="product-stock-row">
@@ -1716,13 +1731,13 @@ export function ProductGrid({
                       strokeWidth={2}
                       aria-hidden="true"
                     />
-                    <span>15 mins delivery</span>
+                    <span>{t('15 mins delivery')}</span>
                   </span>
 
                   <small className="product-stock-text">
                     {stock > 0
-                      ? `${stock} left`
-                      : 'In stock'}
+                      ? language === 'ta' ? `${stock} மட்டும் உள்ளது` : `${stock} left`
+                      : t('In stock')}
                   </small>
                 </div>
 
@@ -1730,11 +1745,13 @@ export function ProductGrid({
                   <Link
                     href={`/product/${item.id}?gift=1`}
                     className="product-free-gift-chip"
-                    aria-label={`Select ${giftCount} free ${giftCount === 1 ? 'gift' : 'gifts'} with ${titleOf(item)}`}
+                    aria-label={`${t('Select')} ${giftCount} ${giftCount === 1 ? t('FREE Gift') : t('FREE Gifts')} · ${localizedTitleOf(item)}`}
                   >
                     <Gift size={14} strokeWidth={2.2} aria-hidden="true" />
                     <span>
-                      {giftCount} FREE {giftCount === 1 ? 'gift' : 'gifts'} included
+                      {language === 'ta'
+                        ? `${giftCount} ${giftCount === 1 ? 'இலவச பரிசு சேர்க்கப்பட்டுள்ளது' : 'இலவச பரிசுகள் சேர்க்கப்பட்டுள்ளன'}`
+                        : `${giftCount} FREE ${giftCount === 1 ? 'gift' : 'gifts'} included`}
                     </span>
                   </Link>
                 )}
@@ -1752,10 +1769,7 @@ export function ProductGrid({
 
                   {discount > 0 && (
                     <span>
-                      Save ₹
-                      {Math.round(
-                        oldPrice - price,
-                      )}
+                      {t('Save')} ₹{Math.round(oldPrice - price)}
                     </span>
                   )}
                 </div>
@@ -1769,21 +1783,17 @@ export function ProductGrid({
                     aria-disabled={!delivery.canPurchase}
                     title={
                       delivery.canPurchase
-                        ? 'Add to cart'
+                        ? t('Add to cart')
                         : delivery.status === 'outside'
                           ? 'Ordering will be available in your area shortly'
-                          : 'Enable location to check delivery availability'
+                          : t('Enable location to check delivery availability')
                     }
                     onClick={() => {
                       if (!delivery.canPurchase) {
                         if (delivery.status === 'outside') {
-                          alert(
-                            'SPOTC is coming to your area shortly. You can browse all products now, but ordering is not available yet.',
-                          );
+                          alert(t('SPOTC is coming to your area shortly. You can browse all products now, but ordering is not available yet.'));
                         } else {
-                          alert(
-                            'Please enable location so SPOTC can check delivery availability.',
-                          );
+                          alert(t('Please enable location so SPOTC can check delivery availability.'));
                           delivery.requestLocation();
                         }
                         return;
@@ -1797,11 +1807,11 @@ export function ProductGrid({
                       }
 
                       addProduct(item);
-                      alert('1 product added');
+                      alert(t('1 product added'));
                     }}
                   >
                     <ShoppingBag size={16} />
-                    <span>{delivery.canPurchase ? 'Add to Cart' : 'Browse'}</span>
+                    <span>{delivery.canPurchase ? t('Add to Cart') : t('Browse')}</span>
                   </button>
 
                   <button
@@ -1811,21 +1821,17 @@ export function ProductGrid({
                     aria-disabled={!delivery.canPurchase}
                     title={
                       delivery.canPurchase
-                        ? 'Buy now'
+                        ? t('Buy now')
                         : delivery.status === 'outside'
                           ? 'Ordering will be available in your area shortly'
-                          : 'Enable location to check delivery availability'
+                          : t('Enable location to check delivery availability')
                     }
                     onClick={() => {
                       if (!delivery.canPurchase) {
                         if (delivery.status === 'outside') {
-                          alert(
-                            'SPOTC is coming to your area shortly. You can browse all products now, but ordering is not available yet.',
-                          );
+                          alert(t('SPOTC is coming to your area shortly. You can browse all products now, but ordering is not available yet.'));
                         } else {
-                          alert(
-                            'Please enable location so SPOTC can check delivery availability.',
-                          );
+                          alert(t('Please enable location so SPOTC can check delivery availability.'));
                           delivery.requestLocation();
                         }
                         return;
@@ -1843,7 +1849,7 @@ export function ProductGrid({
                     }}
                   >
                     <ShoppingBag size={16} />
-                    <span>{delivery.canPurchase ? 'Buy Now' : 'Browse'}</span>
+                    <span>{delivery.canPurchase ? t('Buy Now') : t('Browse')}</span>
                   </button>
                 </div>
               </div>
@@ -1854,8 +1860,8 @@ export function ProductGrid({
 
       {!filteredProducts.length && (
         <EmptyState
-          title="No products found"
-          body="Try a different search term or category."
+          title={t('No products found')}
+          body={t('Try a different search term or category.')}
         />
       )}
 

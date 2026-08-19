@@ -210,19 +210,69 @@ const TA: Record<string, string> = {
   'Privacy': 'தனியுரிமை',
   'Terms': 'விதிமுறைகள்',
   'Featured': 'சிறப்பு',
+  'Select': 'தேர்ந்தெடுக்கவும்',
+  'Shopping tools': 'ஷாப்பிங் கருவிகள்',
+  'Contact SPOTC for additional product details.': 'கூடுதல் பொருள் விவரங்களுக்கு SPOTC-ஐ தொடர்பு கொள்ளுங்கள்.',
+  'ratings': 'மதிப்பீடுகள்',
+  'rating': 'மதிப்பீடு',
+  'Please enable location so SPOTC can check delivery availability.': 'டெலிவரி கிடைப்பதை SPOTC சரிபார்க்க இடத்தை இயக்கவும்.',
+  'SPOTC is coming to your area shortly. You can browse all products now, but ordering is not available yet.': 'SPOTC விரைவில் உங்கள் பகுதிக்கு வருகிறது. இப்போது அனைத்து பொருட்களையும் பார்க்கலாம்; ஆனால் இன்னும் ஆர்டர் செய்ய முடியாது.',
+  'Enable location to check delivery availability': 'டெலிவரி கிடைப்பதைச் சரிபார்க்க இடத்தை இயக்கவும்',
+  'Ordering will be available in your area shortly': 'உங்கள் பகுதியில் விரைவில் ஆர்டர் வசதி கிடைக்கும்',
+  '1 product added': '1 பொருள் கார்டில் சேர்க்கப்பட்டது',
+  'Try a different search term or category.': 'வேறு தேடல் சொல் அல்லது வகையை முயற்சிக்கவும்.',
+  'Sort products': 'பொருட்களை வரிசைப்படுத்தவும்',
+  'Main product categories': 'முக்கிய பொருள் வகைகள்',
+  'Open': 'திறக்கவும்',
+  'Added': 'சேர்க்கப்பட்டது',
+  'Creating circle…': 'சர்க்கிள் உருவாக்கப்படுகிறது…',
+  'Select up to 3 products and ask friends.': 'அதிகபட்சம் 3 பொருட்களைத் தேர்ந்தெடுத்து நண்பர்களிடம் கேளுங்கள்.',
+  'products selected': 'பொருட்கள் தேர்ந்தெடுக்கப்பட்டன',
+  'product selected': 'பொருள் தேர்ந்தெடுக்கப்பட்டது',
+  'products': 'பொருட்கள்',
+  'product': 'பொருள்',
+  'Other Toys': 'மற்ற பொம்மைகள்',
+  'Fun & Fidget': 'வேடிக்கை & ஃபிட்ஜெட்',
+  'Balls & Outdoor': 'பந்துகள் & வெளிப்புற விளையாட்டு',
+  'Learning & Creative': 'கற்றல் & படைப்பாற்றல்',
+  'Vehicles & Guns': 'வாகனங்கள் & டாய் கன்கள்',
+  'Dolls & Pretend Play': 'பொம்மைகள் & நடிப்பு விளையாட்டு',
+  '9-12 Years': '9-12 வயது',
+  '6-8 Years': '6-8 வயது',
+  '3-5 Years': '3-5 வயது',
+  '2-3 Years': '2-3 வயது',
+  '1-2 Years': '1-2 வயது',
+  '0-1 Years': '0-1 வயது',
+  'Special': 'சிறப்பு',
+  'Ask friends': 'நண்பர்களிடம் கேளுங்கள்',
+  '15-minute delivery': '15 நிமிட டெலிவரி',
+  'Ready stock': 'தயார் ஸ்டாக்',
+  'In stock': 'ஸ்டாக்கில் உள்ளது',
+  'Out of stock': 'ஸ்டாக் இல்லை',
+  'Add to cart': 'கார்டில் சேர்க்க',
+  'Buy now': 'இப்போது வாங்க',
+  'Creating Shopping Circle…': 'ஷாப்பிங் சர்க்கிள் உருவாக்கப்படுகிறது…',
+  'Dress details & measurements': 'உடை விவரங்கள் மற்றும் அளவுகள்',
+  'Product details': 'பொருள் விவரங்கள்',
+  'PRODUCT DETAILS': 'பொருள் விவரங்கள்',
+  'Colour': 'நிறம்',
+  'Purchase benefits': 'வாங்கும் நன்மைகள்',
   'left': 'மட்டும் உள்ளது',
   'gift included': 'இலவச பரிசு சேர்க்கப்பட்டுள்ளது',
-  'gifts included': 'இலவச பரிசுகள் சேர்க்கப்பட்டுள்ளது',
-};
+  'gifts included': 'இலவச பரிசுகள் சேர்க்கப்பட்டுள்ளது',};
 
 const LanguageContext = createContext<{
   language: SpotcLanguage;
   setLanguage: (language: SpotcLanguage) => void;
   toggleLanguage: () => void;
+  t: (value: string) => string;
+  productTitle: (value: string) => string;
 }>({
   language: 'en',
   setLanguage: () => undefined,
   toggleLanguage: () => undefined,
+  t: (value) => value,
+  productTitle: (value) => value,
 });
 
 const originalText = new WeakMap<Text, string>();
@@ -478,6 +528,18 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     setLanguage(language === 'en' ? 'ta' : 'en');
   }, [language, setLanguage]);
 
+  const t = useCallback(
+    (value: string) =>
+      language === 'ta' ? translateString(value, false) : value,
+    [language],
+  );
+
+  const productTitle = useCallback(
+    (value: string) =>
+      language === 'ta' ? translateString(value, true) : value,
+    [language],
+  );
+
   useEffect(() => {
     document.documentElement.lang = language === 'ta' ? 'ta' : 'en';
     document.documentElement.dataset.spotcLanguage = language;
@@ -510,8 +572,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, [language]);
 
   const value = useMemo(
-    () => ({ language, setLanguage, toggleLanguage }),
-    [language, setLanguage, toggleLanguage],
+    () => ({ language, setLanguage, toggleLanguage, t, productTitle }),
+    [language, setLanguage, toggleLanguage, t, productTitle],
   );
 
   return (
