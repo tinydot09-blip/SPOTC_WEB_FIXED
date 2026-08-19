@@ -40,6 +40,8 @@ import {
   type SpotcUserProfile,
 } from '@/lib/auth';
 import { useDeliveryAvailability } from '@/lib/delivery-radius';
+import { getProducts } from '@/lib/data';
+import type { BusinessProduct } from '@/lib/types';
 
 const navigation = [
   {
@@ -73,6 +75,99 @@ function getUserInitials(user: User): string {
   return initials || 'S';
 }
 
+
+const searchTextOf = (product: BusinessProduct): string =>
+  [
+    product.title,
+    product.product_name,
+    product.brand,
+    product.main_category,
+    product.category,
+    product.sub_category,
+    product.child_category,
+    product.color,
+    product.size,
+    product.age_group,
+    product.gender,
+    product.audience,
+    product.description,
+    product.search_text,
+    Array.isArray(product.tags) ? product.tags.join(' ') : '',
+    Array.isArray(product.search_tags) ? product.search_tags.join(' ') : '',
+    Array.isArray(product.keywords) ? product.keywords.join(' ') : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+const normalizeSuggestionText = (value: unknown): string =>
+  String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const editDistance = (a: string, b: string): number => {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    let diagonal = row[0];
+    row[0] = i;
+
+    for (let j = 1; j <= b.length; j += 1) {
+      const above = row[j];
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      row[j] = Math.min(
+        row[j] + 1,
+        row[j - 1] + 1,
+        diagonal + cost,
+      );
+      diagonal = above;
+    }
+  }
+
+  return row[b.length];
+};
+
+const fuzzyTokenMatch = (candidate: string, query: string): boolean => {
+  const c = candidate.toLowerCase();
+  const q = query.toLowerCase();
+
+  if (c.includes(q) || q.includes(c)) return true;
+
+  const maxDistance = q.length <= 8 ? 1 : 2;
+  return editDistance(c, q) <= maxDistance;
+};
+
+const suggestionScore = (
+  product: BusinessProduct,
+  query: string,
+): number => {
+  const q = query.toLowerCase().trim();
+  const title = normalizeSuggestionText(
+    product.title || product.product_name,
+  ).toLowerCase();
+  const haystack = searchTextOf(product);
+
+  if (!q) return 0;
+  if (title.startsWith(q)) return 100;
+  if (title.includes(q)) return 90;
+  if (haystack.includes(q)) return 75;
+
+  const queryTokens = q.split(/\s+/).filter(Boolean);
+  const productTokens = haystack.split(/[^a-z0-9]+/).filter(Boolean);
+
+  const matched = queryTokens.filter((token) =>
+    productTokens.some((productToken) =>
+      fuzzyTokenMatch(productToken, token),
+    ),
+  ).length;
+
+  return matched === queryTokens.length ? 60 : 0;
+};
+
 export function AppShell({
   children,
 }: {
@@ -100,6 +195,14 @@ export function AppShell({
 
   const [searchValue, setSearchValue] =
     useState('');
+
+  const [searchProducts, setSearchProducts] =
+    useState<BusinessProduct[]>([]);
+  const [searchFocused, setSearchFocused] =
+    useState(false);
+
+  const searchBoxRef =
+    useRef<HTMLDivElement>(null);
 
   const accountMenuRef =
     useRef<HTMLDivElement>(null);
@@ -271,6 +374,48 @@ export function AppShell({
   }, [pathname]);
 
   useEffect(() => {
+    if (!pathname.startsWith('/shop') && !pathname.startsWith('/product/')) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void getProducts()
+      .then((products) => {
+        if (!cancelled) {
+          setSearchProducts(products);
+        }
+      })
+      .catch((error) => {
+        console.error('SPOTC search suggestions failed:', error);
+        if (!cancelled) {
+          setSearchProducts([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
+
+  useEffect(() => {
+    const closeSearchSuggestions = (event: MouseEvent) => {
+      if (
+        searchBoxRef.current &&
+        !searchBoxRef.current.contains(event.target as Node)
+      ) {
+        setSearchFocused(false);
+      }
+    };
+
+    document.addEventListener('mousedown', closeSearchSuggestions);
+
+    return () => {
+      document.removeEventListener('mousedown', closeSearchSuggestions);
+    };
+  }, []);
+
+  useEffect(() => {
     const closeAccountMenu = (
       event: MouseEvent,
     ) => {
@@ -296,6 +441,68 @@ export function AppShell({
       );
     };
   }, []);
+
+  const searchSuggestions = useMemo(() => {
+    const query = searchValue.trim();
+    if (!query) return [];
+
+    const ranked = searchProducts
+      .map((product) => ({
+        product,
+        score: suggestionScore(product, query),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    const seen = new Set<string>();
+    const suggestions: Array<{
+      label: string;
+      secondary: string;
+    }> = [];
+
+    for (const { product } of ranked) {
+      const label = normalizeSuggestionText(
+        product.title || product.product_name || '',
+      );
+
+      if (!label) continue;
+
+      const key = label.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      suggestions.push({
+        label,
+        secondary: normalizeSuggestionText(
+          product.sub_category ||
+            product.child_category ||
+            product.main_category ||
+            product.category ||
+            '',
+        ),
+      });
+
+      if (suggestions.length >= 8) break;
+    }
+
+    return suggestions;
+  }, [searchProducts, searchValue]);
+
+  const chooseSearchSuggestion = (value: string) => {
+    setSearchValue(value);
+    setSearchFocused(false);
+
+    if (pathname.startsWith('/shop')) {
+      window.dispatchEvent(
+        new CustomEvent('spotc-page-search', {
+          detail: value,
+        }),
+      );
+      return;
+    }
+
+    router.push(`/shop?search=${encodeURIComponent(value)}`);
+  };
 
   const handleSearch = (
     value: string,
@@ -484,39 +691,84 @@ if (!signedInUser) {
   })}
 </nav>
 
-          <div className="spotc-header-search">
-            <Search
-              size={17}
-              strokeWidth={2}
-            />
+          <div
+            className="spotc-header-search-wrap"
+            ref={searchBoxRef}
+          >
+            <div className="spotc-header-search">
+              <Search
+                size={17}
+                strokeWidth={2}
+              />
 
-            <input
-              type="search"
-              value={searchValue}
-              placeholder={
-                searchPlaceholder
-              }
-              aria-label={
-                searchPlaceholder
-              }
-              onChange={(event) =>
-                handleSearch(
-                  event.target.value,
-                )
-              }
-            />
+              <input
+                type="search"
+                value={searchValue}
+                placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
+                autoComplete="off"
+                onFocus={() => setSearchFocused(true)}
+                onChange={(event) => {
+                  setSearchFocused(true);
+                  handleSearch(event.target.value);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setSearchFocused(false);
+                  }
 
-            {searchValue.length > 0 && (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() =>
-                  handleSearch('')
-                }
-              >
-                <X size={16} />
-              </button>
-            )}
+                  if (
+                    event.key === 'Enter' &&
+                    searchValue.trim()
+                  ) {
+                    chooseSearchSuggestion(searchValue.trim());
+                  }
+                }}
+              />
+
+              {searchValue.length > 0 && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => {
+                    handleSearch('');
+                    setSearchFocused(false);
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+
+            {searchFocused &&
+              searchValue.trim().length > 0 &&
+              searchSuggestions.length > 0 && (
+                <div
+                  className="spotc-search-suggestions"
+                  role="listbox"
+                  aria-label="Search suggestions"
+                >
+                  {searchSuggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.label}
+                      type="button"
+                      className="spotc-search-suggestion"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() =>
+                        chooseSearchSuggestion(suggestion.label)
+                      }
+                    >
+                      <Search size={17} strokeWidth={2} />
+                      <span>
+                        <strong>{suggestion.label}</strong>
+                        {suggestion.secondary && (
+                          <small>{suggestion.secondary}</small>
+                        )}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
           </div>
 
           <div className="spotc-header-account-actions">
@@ -1081,6 +1333,84 @@ if (!signedInUser) {
   box-shadow:0 0 10px rgba(245,189,77,.45);
 }
 
+        .spotc-header-search-wrap {
+          position: relative;
+          min-width: 0;
+          width: 100%;
+          z-index: 11000;
+        }
+
+        .spotc-search-suggestions {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 0;
+          right: 0;
+          z-index: 12000;
+          max-height: min(520px, calc(100vh - 120px));
+          padding: 6px 0;
+          overflow-y: auto;
+          border: 1px solid #ddd7cf;
+          border-radius: 14px;
+          background: #ffffff;
+          box-shadow: 0 18px 46px rgba(20, 16, 10, 0.18);
+        }
+
+        .spotc-search-suggestion {
+          width: 100% !important;
+          min-height: 54px !important;
+          height: auto !important;
+          padding: 9px 14px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: flex-start !important;
+          gap: 11px !important;
+          border: 0 !important;
+          border-radius: 0 !important;
+          background: #ffffff !important;
+          color: #171717 !important;
+          text-align: left !important;
+          cursor: pointer !important;
+        }
+
+        .spotc-search-suggestion:hover,
+        .spotc-search-suggestion:focus-visible {
+          background: #f6f3ee !important;
+          outline: none !important;
+        }
+
+        .spotc-search-suggestion > svg {
+          width: 18px;
+          height: 18px;
+          flex: 0 0 18px;
+          color: #3d3934;
+        }
+
+        .spotc-search-suggestion > span {
+          min-width: 0;
+          display: grid;
+          gap: 2px;
+        }
+
+        .spotc-search-suggestion strong {
+          overflow: hidden;
+          color: #171717;
+          font-size: 14px;
+          font-weight: 750;
+          line-height: 1.25;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .spotc-search-suggestion small {
+          overflow: hidden;
+          color: #7d756d;
+          font-size: 11px;
+          font-weight: 500;
+          line-height: 1.2;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
         .spotc-header-search {
           height: 40px;
           padding: 0 14px;
@@ -1535,6 +1865,24 @@ if (!signedInUser) {
               minmax(0, 1fr)
               auto;
             gap: 6px;
+          }
+
+          .spotc-search-suggestions {
+            position: fixed;
+            top: 58px;
+            left: 8px;
+            right: 8px;
+            max-height: min(60vh, 430px);
+            border-radius: 12px;
+          }
+
+          .spotc-search-suggestion {
+            min-height: 50px !important;
+            padding: 8px 12px !important;
+          }
+
+          .spotc-search-suggestion strong {
+            font-size: 13px;
           }
 
           .spotc-header-search {

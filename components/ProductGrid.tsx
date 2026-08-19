@@ -9,7 +9,7 @@ import {
   ShoppingBag,
   SlidersHorizontal,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Timestamp,
@@ -778,6 +778,107 @@ const businessIdOf = (product: BusinessProduct): string => {
   return '';
 };
 
+
+const normalizeSearchValue = (value: unknown): string =>
+  textValue(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const searchTokensOf = (product: BusinessProduct): string[] => {
+  const values: unknown[] = [
+    product.title,
+    product.product_name,
+    product.brand,
+    product.main_category,
+    product.category,
+    product.sub_category,
+    product.child_category,
+    product.color,
+    product.size,
+    product.age_group,
+    product.gender,
+    product.audience,
+    product.description,
+    product.search_text,
+    Array.isArray(product.tags) ? product.tags.join(' ') : '',
+    Array.isArray(product.search_tags) ? product.search_tags.join(' ') : '',
+    Array.isArray(product.keywords) ? product.keywords.join(' ') : '',
+  ];
+
+  return normalizeSearchValue(values.map(textValue).filter(Boolean).join(' '))
+    .split(' ')
+    .filter(Boolean);
+};
+
+const editDistance = (a: string, b: string): number => {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+
+  const previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    let diagonal = previous[0];
+    previous[0] = i;
+
+    for (let j = 1; j <= b.length; j += 1) {
+      const above = previous[j];
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+
+      previous[j] = Math.min(
+        previous[j] + 1,
+        previous[j - 1] + 1,
+        diagonal + cost,
+      );
+
+      diagonal = above;
+    }
+  }
+
+  return previous[b.length];
+};
+
+const tokenMatchesQuery = (productToken: string, queryToken: string): boolean => {
+  if (!productToken || !queryToken) return false;
+
+  if (
+    productToken.includes(queryToken) ||
+    queryToken.includes(productToken)
+  ) {
+    return true;
+  }
+
+  // Allows small typing mistakes such as "ballon" -> "balloon".
+  const maxDistance =
+    queryToken.length <= 4 ? 1 :
+    queryToken.length <= 8 ? 1 :
+    2;
+
+  return editDistance(productToken, queryToken) <= maxDistance;
+};
+
+const productMatchesGlobalSearch = (
+  product: BusinessProduct,
+  rawQuery: string,
+): boolean => {
+  const query = normalizeSearchValue(rawQuery);
+  if (!query) return true;
+
+  const queryTokens = query.split(' ').filter(Boolean);
+  const productTokens = searchTokensOf(product);
+
+  if (!queryTokens.length) return true;
+  if (!productTokens.length) return false;
+
+  return queryTokens.every((queryToken) =>
+    productTokens.some((productToken) =>
+      tokenMatchesQuery(productToken, queryToken),
+    ),
+  );
+};
+
 type ProductGridProps = {
   hideBusinessName?: boolean;
 };
@@ -786,6 +887,7 @@ export function ProductGrid({
   hideBusinessName = false,
 }: ProductGridProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const delivery = useDeliveryAvailability();
 
   const [items, setItems] =
@@ -812,6 +914,20 @@ export function ProductGrid({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    const querySearch = searchParams.get('search') || '';
+
+    if (querySearch) {
+      setSearch(querySearch);
+
+      window.dispatchEvent(
+        new CustomEvent('spotc-page-search', {
+          detail: querySearch,
+        }),
+      );
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     getProducts()
@@ -994,63 +1110,41 @@ export function ProductGrid({
   }, [mainCategories, mainCategory]);
 
   const filteredProducts = useMemo(() => {
-    const searchQuery = search.toLowerCase().trim();
+    const searchQuery = search.trim();
 
-    const result = [...(items || [])].filter(
-      (product) => {
-        const searchableText = [
-          titleOf(product),
-          product.brand,
-          product.business_name,
-          product.shop_name,
-          product.businessName,
-          product.main_category,
-          product.sub_category,
-          product.category,
-          product.color,
-          product.size,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
+    const result = [...(items || [])].filter((product) => {
+      /*
+       * GLOBAL SEARCH:
+       * When the header search has text, search across ALL shop products.
+       * Do not restrict results to the currently selected main/sub category.
+       * This also includes currently-unclassified products so searches such
+       * as "balloon" can still find Home & Party / other future categories.
+       */
+      if (searchQuery) {
+        return productMatchesGlobalSearch(product, searchQuery);
+      }
 
-        const productMainCategory =
-          shopMainCategoryOf(product);
+      /*
+       * Normal browsing mode keeps the current category/subcategory rules.
+       */
+      const productMainCategory = shopMainCategoryOf(product);
 
-        /*
-         * Do not force products from other categories
-         * into the current three Shop tabs.
-         */
-        if (!productMainCategory) {
-          return false;
-        }
+      if (!productMainCategory) {
+        return false;
+      }
 
-        const productSubCategory =
-          shopSubCategoryOf(
-            product,
-            productMainCategory,
-          );
+      const productSubCategory =
+        shopSubCategoryOf(product, productMainCategory);
 
-        const matchesSearch =
-          !searchQuery ||
-          searchableText.includes(searchQuery);
+      const matchesMainCategory =
+        productMainCategory === mainCategory;
 
-        const matchesMainCategory =
-          productMainCategory ===
-          mainCategory;
+      const matchesSubCategory =
+        subCategory === 'All' ||
+        productSubCategory === subCategory;
 
-        const matchesSubCategory =
-          subCategory === 'All' ||
-          productSubCategory ===
-            subCategory;
-
-        return (
-          matchesSearch &&
-          matchesMainCategory &&
-          matchesSubCategory
-        );
-      },
-    );
+      return matchesMainCategory && matchesSubCategory;
+    });
 
     if (sort === 'Price: Low to High') {
       result.sort(
@@ -1437,27 +1531,34 @@ export function ProductGrid({
         </div>
       </section>
 
-      <div
-        className="spotc-sub-category-strip"
-        aria-label={`${mainCategory} subcategories`}
-      >
-        {subCategories.map((categoryName) => (
-          <button
-            key={categoryName}
-            type="button"
-            className={
-              subCategory === categoryName
-                ? 'active'
-                : ''
-            }
-            onClick={() =>
-              setSubCategory(categoryName)
-            }
-          >
-            {categoryName}
-          </button>
-        ))}
-      </div>
+      {search.trim() ? (
+        <div className="spotc-global-search-status" role="status">
+          Search results for <strong>“{search.trim()}”</strong> · {filteredProducts.length}{' '}
+          {filteredProducts.length === 1 ? 'product' : 'products'}
+        </div>
+      ) : (
+        <div
+          className="spotc-sub-category-strip"
+          aria-label={`${mainCategory} subcategories`}
+        >
+          {subCategories.map((categoryName) => (
+            <button
+              key={categoryName}
+              type="button"
+              className={
+                subCategory === categoryName
+                  ? 'active'
+                  : ''
+              }
+              onClick={() =>
+                setSubCategory(categoryName)
+              }
+            >
+              {categoryName}
+            </button>
+          ))}
+        </div>
+      )}
 
       {mounted &&
         compare.size > 0 &&
@@ -1739,6 +1840,20 @@ export function ProductGrid({
       )}
 
       <style jsx global>{`
+        .spotc-global-search-status {
+          width: 100%;
+          margin: 0 0 14px;
+          padding: 10px 2px;
+          color: #5f574d;
+          font-size: 13px;
+          line-height: 1.35;
+        }
+
+        .spotc-global-search-status strong {
+          color: #171717;
+          font-weight: 800;
+        }
+
         .product-add-button:disabled,
         .product-buy-now-button:disabled {
           opacity: 0.55 !important;
