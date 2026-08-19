@@ -894,6 +894,25 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     };
   }, [product]);
 
+  useEffect(() => {
+    if (!product || typeof window === 'undefined') return;
+
+    const query = new URLSearchParams(window.location.search);
+    if (query.get('gift') !== '1') return;
+
+    const currentPrice = customerPriceOf(product);
+    const currentGiftCount =
+      currentPrice < 80
+        ? 0
+        : currentPrice < 200
+          ? 1
+          : Math.floor(currentPrice / 100);
+
+    if (currentGiftCount > 0) {
+      setGiftPreviewOpen(true);
+    }
+  }, [product]);
+
   const record = product ? (product as ProductRecord) : null;
   const images = useMemo(() => (record ? imageList(record) : []), [record]);
   const productMedia = useMemo(
@@ -2863,7 +2882,6 @@ const relatedFreeGiftCount =
               {visibleGiftProducts.length ? (
                 visibleGiftProducts.map((gift) => {
                   const giftId = String(gift.id);
-                  const giftPrice = customerPriceOf(gift);
                   const selected =
                     selectedGiftIds.includes(giftId);
                   const limitReached =
@@ -2889,8 +2907,6 @@ const relatedFreeGiftCount =
                             : undefined,
                         }}
                       >
-                        <em>FREE</em>
-
                         {selected && (
                           <b
                             className="pd-gift-selected-tick"
@@ -2905,7 +2921,6 @@ const relatedFreeGiftCount =
                         <strong>{titleOf(gift)}</strong>
 
                         <span className="pd-gift-price-row">
-                          <del>₹{Math.round(giftPrice)}</del>
                           <b>FREE</b>
                         </span>
 
@@ -4879,7 +4894,7 @@ width:200px;
           background-color: #ffffff !important;
           background-position: center center !important;
           background-repeat: no-repeat !important;
-          background-size: contain !important;
+          background-size: cover !important;
           border-bottom: 1px solid #eee7dc !important;
           box-sizing: border-box !important;
         }
@@ -5190,7 +5205,7 @@ width:200px;
           .pd-gift-product-image {
             height: 170px !important;
             min-height: 170px !important;
-            background-size: contain !important;
+            background-size: cover !important;
           }
 
           .pd-gift-product-copy {
@@ -5259,6 +5274,25 @@ width:200px;
           }
         }
 
+
+
+
+        /* =========================================================
+           FREE GIFT SELECTOR — FINAL CLEAN CARD OVERRIDES
+        ========================================================= */
+        .pd-gift-product-image {
+          background-size: cover !important;
+          background-position: center center !important;
+          background-repeat: no-repeat !important;
+        }
+
+        .pd-gift-product-image > em {
+          display: none !important;
+        }
+
+        .pd-gift-price-row del {
+          display: none !important;
+        }
 
         /* =========================================================
            SPOTC AI VIRTUAL TRY ON — FINAL

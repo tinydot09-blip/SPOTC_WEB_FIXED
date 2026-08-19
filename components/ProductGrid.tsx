@@ -48,9 +48,9 @@ const textValue = (value: unknown): string =>
     : String(value ?? '').trim();
 
 const SHOP_MAIN_CATEGORIES = [
-  'Toys',
-  'Earrings',
   'Girl Dress',
+  'Earrings',
+  'Toys',
 ] as const;
 
 type ShopMainCategory =
@@ -795,7 +795,7 @@ export function ProductGrid({
 
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('Featured');
-  const [mainCategory, setMainCategory] = useState<ShopMainCategory>('Toys');
+  const [mainCategory, setMainCategory] = useState<ShopMainCategory>('Girl Dress');
   const [subCategory, setSubCategory] = useState('All');
 
   const [user, setUser] =
@@ -988,7 +988,7 @@ export function ProductGrid({
         mainCategory as ShopMainCategory,
       )
     ) {
-      setMainCategory('Toys');
+      setMainCategory('Girl Dress');
       setSubCategory('All');
     }
   }, [mainCategories, mainCategory]);
@@ -1678,6 +1678,11 @@ export function ProductGrid({
                           );
                           delivery.requestLocation();
                         }
+                        return;
+                      }
+
+                      if (giftCount > 0) {
+                        router.push(`/product/${encodeURIComponent(String(item.id))}?gift=1`);
                         return;
                       }
 
