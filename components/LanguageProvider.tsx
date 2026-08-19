@@ -107,6 +107,22 @@ const TA: Record<string, string> = {
   'Age': 'வயது',
   'Measurements': 'அளவுகள்',
   'Product Details': 'பொருள் விவரங்கள்',
+  'Product Description': 'பொருள் விளக்கம்',
+  'Details, brand, colour, size and availability': 'விவரங்கள், பிராண்ட், நிறம், அளவு மற்றும் கிடைப்புநிலை',
+  'Highlights': 'முக்கிய அம்சங்கள்',
+  'Delivery / Free Shipping': 'டெலிவரி / இலவச ஷிப்பிங்',
+  'Fast local delivery': 'விரைவான உள்ளூர் டெலிவரி',
+  'Free shipping available': 'இலவச ஷிப்பிங் கிடைக்கிறது',
+  '5-minute doorstep fit check for eligible clothing': 'தகுதியான ஆடைகளுக்கு வீட்டு வாசலில் 5 நிமிட ஃபிட் சரிபார்ப்பு',
+  'Be the first to review': 'முதல் மதிப்புரையை பதிவு செய்யுங்கள்',
+  'Instant': 'உடனடி',
+  'Morning': 'காலை',
+  'Afternoon': 'மதியம்',
+  'Night': 'இரவு',
+  'About 15 mins · ₹20': 'சுமார் 15 நிமிடங்கள் · ₹20',
+  'Order 6 AM–12 PM · Delivery 12–2 PM · FREE': 'காலை 6–12 மணிக்குள் ஆர்டர் · மதியம் 12–2 மணி டெலிவரி · இலவசம்',
+  'Order 12–6 PM · Delivery 6–7 PM · FREE': 'மதியம் 12–6 மணிக்குள் ஆர்டர் · மாலை 6–7 மணி டெலிவரி · இலவசம்',
+  'Order 6 PM–6 AM · Delivery 6–8 AM · FREE': 'மாலை 6–காலை 6 மணிக்குள் ஆர்டர் · காலை 6–8 மணி டெலிவரி · இலவசம்',
   'Description': 'விளக்கம்',
   'Delivery & Return': 'டெலிவரி & ரிட்டர்ன்',
   'Delivery & Returns': 'டெலிவரி & ரிட்டர்ன்',
@@ -285,7 +301,7 @@ const translateProductText = (value: string): string => {
     .trim();
 };
 
-const translateString = (value: string): string => {
+const translateString = (value: string, allowProductTranslation = true): string => {
   const leading = value.match(/^\s*/)?.[0] ?? '';
   const trailing = value.match(/\s*$/)?.[0] ?? '';
   const core = value.trim();
@@ -329,12 +345,52 @@ const translateString = (value: string): string => {
   const kmMatch = core.match(/^([\d.]+)\s*km$/i);
   if (kmMatch) return `${leading}${kmMatch[1]} கி.மீ.${trailing}`;
 
-  const productTranslated = translateProductText(core);
-  if (productTranslated !== core) {
-    return `${leading}${productTranslated}${trailing}`;
+  /*
+   * Product-word replacement is used only for short/title-like product text.
+   * Never run it through long descriptions, highlights, policies or other
+   * paragraph content. Partial word replacement inside English sentences
+   * produces unreadable mixed Tamil/English text.
+   */
+  if (allowProductTranslation) {
+    const productTranslated = translateProductText(core);
+    if (productTranslated !== core) {
+      return `${leading}${productTranslated}${trailing}`;
+    }
   }
 
   return value;
+};
+
+const allowDynamicProductTranslation = (
+  element: Element | null,
+  source: string,
+): boolean => {
+  if (!element) return false;
+
+  if (
+    element.closest(
+      '.pd-accordion-copy, .pd-description-highlights, .product-description, .description, [data-product-description="true"]',
+    )
+  ) {
+    return false;
+  }
+
+  const tag = element.tagName.toLowerCase();
+
+  if (['h1', 'h2', 'h3', 'h4'].includes(tag)) return true;
+
+  if (
+    element.closest(
+      '.product-title-link, .product-card, .spotc-search-suggestion, .pd-title, [data-product-title="true"]',
+    )
+  ) {
+    return source.trim().length <= 180;
+  }
+
+  const wordCount = source.trim().split(/\s+/).filter(Boolean).length;
+  if (source.length > 90 || wordCount > 10) return false;
+
+  return true;
 };
 
 const shouldSkip = (element: Element | null): boolean => {
@@ -359,7 +415,12 @@ const translateTree = (root: ParentNode, language: SpotcLanguage) => {
 
     if (!originalText.has(node)) originalText.set(node, node.nodeValue ?? '');
     const source = originalText.get(node) ?? '';
-    const target = language === 'ta' ? translateString(source) : source;
+    const allowProductTranslation =
+      allowDynamicProductTranslation(parent, source);
+    const target =
+      language === 'ta'
+        ? translateString(source, allowProductTranslation)
+        : source;
     if (node.nodeValue !== target) node.nodeValue = target;
   }
 
@@ -380,7 +441,10 @@ const translateTree = (root: ParentNode, language: SpotcLanguage) => {
       if (currentValue == null) continue;
       if (!saved.has(attr)) saved.set(attr, currentValue);
       const source = saved.get(attr) ?? currentValue;
-      const target = language === 'ta' ? translateString(source) : source;
+      const target =
+        language === 'ta'
+          ? translateString(source, false)
+          : source;
       if (currentValue !== target) element.setAttribute(attr, target);
     }
   }
