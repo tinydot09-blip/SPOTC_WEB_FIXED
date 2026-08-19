@@ -1641,22 +1641,9 @@ export function ProductGrid({
 
 
 <div className="product-actions">
-                  <Link
-                    className="product-compare-online"
-                    href={`/compare-online?id=${encodeURIComponent(
-                      item.id,
-                    )}`}
-                  >
-                    <GitCompareArrows
-                      size={16}
-                    />
-
-                    <span>Compare Online</span>
-                  </Link>
-
                   <button
                     type="button"
-                    className="product-add-button"
+                    className="product-add-button product-add-to-cart-button"
                     disabled={!delivery.canPurchase}
                     aria-disabled={!delivery.canPurchase}
                     title={
@@ -1682,7 +1669,9 @@ export function ProductGrid({
                       }
 
                       if (giftCount > 0) {
-                        router.push(`/product/${encodeURIComponent(String(item.id))}?gift=1`);
+                        router.push(
+                          `/product/${encodeURIComponent(String(item.id))}?gift=1&action=cart`,
+                        );
                         return;
                       }
 
@@ -1691,8 +1680,49 @@ export function ProductGrid({
                     }}
                   >
                     <ShoppingBag size={16} />
+                    <span>{delivery.canPurchase ? 'Add to Cart' : 'Browse'}</span>
+                  </button>
 
-                    <span>{delivery.canPurchase ? 'Add' : 'Browse'}</span>
+                  <button
+                    type="button"
+                    className="product-buy-now-button"
+                    disabled={!delivery.canPurchase}
+                    aria-disabled={!delivery.canPurchase}
+                    title={
+                      delivery.canPurchase
+                        ? 'Buy now'
+                        : delivery.status === 'outside'
+                          ? 'Ordering will be available in your area shortly'
+                          : 'Enable location to check delivery availability'
+                    }
+                    onClick={() => {
+                      if (!delivery.canPurchase) {
+                        if (delivery.status === 'outside') {
+                          alert(
+                            'SPOTC is coming to your area shortly. You can browse all products now, but ordering is not available yet.',
+                          );
+                        } else {
+                          alert(
+                            'Please enable location so SPOTC can check delivery availability.',
+                          );
+                          delivery.requestLocation();
+                        }
+                        return;
+                      }
+
+                      if (giftCount > 0) {
+                        router.push(
+                          `/product/${encodeURIComponent(String(item.id))}?gift=1&action=buy`,
+                        );
+                        return;
+                      }
+
+                      addProduct(item);
+                      router.push('/cart');
+                    }}
+                  >
+                    <ShoppingBag size={16} />
+                    <span>{delivery.canPurchase ? 'Buy Now' : 'Browse'}</span>
                   </button>
                 </div>
               </div>
@@ -1709,9 +1739,71 @@ export function ProductGrid({
       )}
 
       <style jsx global>{`
-        .product-add-button:disabled {
+        .product-add-button:disabled,
+        .product-buy-now-button:disabled {
           opacity: 0.55 !important;
           cursor: not-allowed !important;
+        }
+
+        .product-card.rich .product-actions {
+          display: grid !important;
+          grid-template-columns: 1fr 1fr !important;
+          gap: 8px !important;
+          width: 100% !important;
+        }
+
+        .product-card.rich .product-add-to-cart-button,
+        .product-card.rich .product-buy-now-button {
+          width: 100% !important;
+          min-width: 0 !important;
+          min-height: 40px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: 7px !important;
+          padding: 0 12px !important;
+          border-radius: 10px !important;
+          font: inherit !important;
+          font-size: 12px !important;
+          font-weight: 800 !important;
+          line-height: 1 !important;
+          cursor: pointer !important;
+          box-sizing: border-box !important;
+          white-space: nowrap !important;
+        }
+
+        .product-card.rich .product-add-to-cart-button {
+          border: 1px solid #d8d1c7 !important;
+          background: #ffffff !important;
+          color: #171717 !important;
+        }
+
+        .product-card.rich .product-buy-now-button {
+          border: 1px solid #171717 !important;
+          background: #171717 !important;
+          color: #ffffff !important;
+        }
+
+        .product-card.rich .product-add-to-cart-button:hover {
+          background: #f7f4ee !important;
+        }
+
+        .product-card.rich .product-buy-now-button:hover {
+          background: #000000 !important;
+        }
+
+        @media (max-width: 700px) {
+          .product-card.rich .product-actions {
+            gap: 6px !important;
+          }
+
+          .product-card.rich .product-add-to-cart-button,
+          .product-card.rich .product-buy-now-button {
+            min-height: 38px !important;
+            padding: 0 8px !important;
+            font-size: 11px !important;
+            border-radius: 9px !important;
+          }
         }
 
         /*
