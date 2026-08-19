@@ -1087,6 +1087,56 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     record.secondary_color,
   );
 
+  const structuredMeasurements =
+    record.garment_measurements &&
+    typeof record.garment_measurements === 'object'
+      ? (record.garment_measurements as Record<string, unknown>)
+      : {};
+
+  const onePieceMeasurements =
+    structuredMeasurements.one_piece &&
+    typeof structuredMeasurements.one_piece === 'object'
+      ? (structuredMeasurements.one_piece as Record<string, unknown>)
+      : {};
+
+  const topMeasurements =
+    record.top_measurements && typeof record.top_measurements === 'object'
+      ? (record.top_measurements as Record<string, unknown>)
+      : structuredMeasurements.top &&
+          typeof structuredMeasurements.top === 'object'
+        ? (structuredMeasurements.top as Record<string, unknown>)
+        : {};
+
+  const bottomMeasurements =
+    record.bottom_measurements && typeof record.bottom_measurements === 'object'
+      ? (record.bottom_measurements as Record<string, unknown>)
+      : structuredMeasurements.bottom &&
+          typeof structuredMeasurements.bottom === 'object'
+        ? (structuredMeasurements.bottom as Record<string, unknown>)
+        : {};
+
+  const thirdPieceMeasurements =
+    record.third_piece_measurements &&
+    typeof record.third_piece_measurements === 'object'
+      ? (record.third_piece_measurements as Record<string, unknown>)
+      : structuredMeasurements.third_piece &&
+          typeof structuredMeasurements.third_piece === 'object'
+        ? (structuredMeasurements.third_piece as Record<string, unknown>)
+        : {};
+
+  const setTypeText = text(
+    record.set_type ||
+      structuredMeasurements.set_type ||
+      (numberValue(record.piece_count) === 3
+        ? '3 Piece'
+        : numberValue(record.piece_count) === 2
+          ? '2 Piece'
+          : '1 Piece'),
+  ).trim();
+
+  const isMultiPieceDress =
+    setTypeText === '2 Piece' || setTypeText === '3 Piece';
+
   const productDetailRows = (
     isGirlDressProduct
       ? [
@@ -1099,6 +1149,10 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
           {
             label: 'Dress Type',
             value: text(record.dress_type).trim(),
+          },
+          {
+            label: 'Set Type',
+            value: setTypeText,
           },
           {
             label: 'Colour',
@@ -1120,28 +1174,116 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
             label: 'Available Sizes',
             value: sizes.join(', '),
           },
-          {
-            label: 'Dress Length',
-            value: text(
-              record.dress_length ||
-                record.garment_length,
-            ).trim(),
-          },
-          {
-            label: 'Chest',
-            value: text(
-              record.chest_size ||
-                record.chest ||
-                record.bust_size,
-            ).trim(),
-          },
-          {
-            label: 'Waist',
-            value: text(
-              record.waist_size ||
-                record.waist,
-            ).trim(),
-          },
+
+          ...(isMultiPieceDress
+            ? [
+                {
+                  label: 'Top Type',
+                  value: text(topMeasurements.type).trim(),
+                },
+                {
+                  label: 'Top Chest',
+                  value: text(topMeasurements.chest).trim(),
+                },
+                {
+                  label: 'Top Length',
+                  value: text(topMeasurements.length).trim(),
+                },
+                {
+                  label: 'Top Shoulder',
+                  value: text(topMeasurements.shoulder).trim(),
+                },
+                {
+                  label: 'Top Sleeve Length',
+                  value: text(topMeasurements.sleeve).trim(),
+                },
+                {
+                  label: 'Bottom Type',
+                  value: text(bottomMeasurements.type).trim(),
+                },
+                {
+                  label: 'Bottom Waist',
+                  value: text(bottomMeasurements.waist).trim(),
+                },
+                {
+                  label: 'Max Stretch Waist',
+                  value: text(bottomMeasurements.max_waist).trim(),
+                },
+                {
+                  label: 'Hip',
+                  value: text(bottomMeasurements.hip).trim(),
+                },
+                {
+                  label: 'Bottom Length',
+                  value: text(bottomMeasurements.length).trim(),
+                },
+                {
+                  label: 'Inseam',
+                  value: text(bottomMeasurements.inseam).trim(),
+                },
+                ...(setTypeText === '3 Piece'
+                  ? [
+                      {
+                        label: 'Third Piece Type',
+                        value: text(thirdPieceMeasurements.type).trim(),
+                      },
+                      {
+                        label: 'Third Piece Chest',
+                        value: text(thirdPieceMeasurements.chest).trim(),
+                      },
+                      {
+                        label: 'Third Piece Waist',
+                        value: text(thirdPieceMeasurements.waist).trim(),
+                      },
+                      {
+                        label: 'Third Piece Length',
+                        value: text(thirdPieceMeasurements.length).trim(),
+                      },
+                    ]
+                  : []),
+              ]
+            : [
+                {
+                  label: 'Dress Length',
+                  value: text(
+                    onePieceMeasurements.length ||
+                      record.dress_length ||
+                      record.garment_length,
+                  ).trim(),
+                },
+                {
+                  label: 'Chest',
+                  value: text(
+                    onePieceMeasurements.chest ||
+                      record.chest_size ||
+                      record.chest ||
+                      record.bust_size,
+                  ).trim(),
+                },
+                {
+                  label: 'Waist',
+                  value: text(
+                    onePieceMeasurements.waist ||
+                      record.waist_size ||
+                      record.waist,
+                  ).trim(),
+                },
+                {
+                  label: 'Shoulder',
+                  value: text(
+                    onePieceMeasurements.shoulder ||
+                      record.shoulder_size,
+                  ).trim(),
+                },
+                {
+                  label: 'Sleeve Length',
+                  value: text(
+                    onePieceMeasurements.sleeve ||
+                      record.sleeve_length,
+                  ).trim(),
+                },
+              ]),
+
           {
             label: 'Brand',
             value: text(record.brand).trim(),
