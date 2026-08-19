@@ -1597,24 +1597,32 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     const currentUser = await requireGoogleLogin();
     if (!currentUser) return;
 
-    if (!businessId) {
-      alert('Business ID is missing for this product.');
-      return;
-    }
-
     setAskFriendsLoading(true);
 
     try {
       const db = getFirestore();
       const userRef = doc(db, 'Users', currentUser.uid);
-      const businessRef = doc(db, 'BusinessListings', businessId);
+
+      /*
+       * SPOTC-owned products do not always have a BusinessListings ID.
+       * Shopping Circle must work from the product itself, so business
+       * information is optional here.
+       */
+      const businessRef = businessId
+        ? doc(db, 'BusinessListings', businessId)
+        : null;
+
       const safeTitle = titleOf(product)
         .trim()
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '_')
         .replace(/^_+|_+$/g, '');
 
-      const sourceKey = `${businessId}_product_${productNumber}_${safeTitle}`;
+      /*
+       * Use the actual BusinessProduct ID as the stable source key.
+       * This works for both SPOTC-owned products and business products.
+       */
+      const sourceKey = `product_${String(product.id)}_${safeTitle}`;
 
       const existingQuery = query(
         collection(db, 'ShoppingCircles'),
@@ -1630,36 +1638,44 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
       let shareCode = '';
 
       if (!existingSnapshot.empty) {
-  const existingCircle = existingSnapshot.docs[0];
+        const existingCircle = existingSnapshot.docs[0];
 
-  circleId = existingCircle.id;
-  shareCode =
-    text(existingCircle.data().share_code) ||
-    `${circleId}_${Date.now()}`;
+        circleId = existingCircle.id;
+        shareCode =
+          text(existingCircle.data().share_code) ||
+          `${circleId}_${Date.now()}`;
 
-  if (tryOnResult) {
-    await setDoc(
-      existingCircle.ref,
-      {
-        product_image: tryOnResult,
-        tryon_image: tryOnResult,
-        selected_size: size || null,
-        selected_color: showColorSelector ? color || null : null,
-        updated_at: serverTimestamp(),
-      },
-      { merge: true },
-    );
-  }
-} else {
+        await setDoc(
+          existingCircle.ref,
+          {
+            product_ref: doc(db, 'BusinessProducts', product.id),
+            product_id: product.id,
+            product_title: titleOf(product),
+            product_image: tryOnResult || productImage,
+            tryon_image: tryOnResult || null,
+            product_price: price,
+            selected_size: size || null,
+            selected_color: showColorSelector ? color || null : null,
+            business_ref: businessRef,
+            business_id: businessId || '',
+            business_name: businessName,
+            updated_at: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      } else {
         const circleRef = doc(collection(db, 'ShoppingCircles'));
         circleId = circleRef.id;
         shareCode = `${circleId}_${Date.now()}`;
 
         await setDoc(circleRef, {
           created_by: userRef,
+
+          // Optional for SPOTC-owned products.
           business_ref: businessRef,
-          business_id: businessId,
+          business_id: businessId || '',
           business_name: businessName,
+
           product_ref: doc(db, 'BusinessProducts', product.id),
           product_id: product.id,
           product_source_key: sourceKey,
@@ -1670,16 +1686,20 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
           product_price: price,
           selected_size: size || null,
           selected_color: showColorSelector ? color || null : null,
+
           question: 'Should I buy this?',
           share_code: shareCode,
           status: 'active',
+
           participants: 0,
           vote_buy_it: 0,
           vote_looks_good: 0,
           vote_not_sure: 0,
           vote_dont_buy: 0,
           comments_count: 0,
+
           created_at: serverTimestamp(),
+          updated_at: serverTimestamp(),
           expires_at: Timestamp.fromDate(
             new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           ),
@@ -1688,6 +1708,8 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
 
       router.push(`/circle/${encodeURIComponent(shareCode)}`);
     } catch (error) {
+      console.error('Ask friends failed:', error);
+
       alert(
         error instanceof Error
           ? `Ask friends failed: ${error.message}`
