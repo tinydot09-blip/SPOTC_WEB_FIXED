@@ -1501,6 +1501,16 @@ export function ProductGrid({
               onClick={() => {
                 setMainCategory(categoryName);
                 setSubCategory('All');
+
+                if (search.trim()) {
+                  setSearch('');
+
+                  window.dispatchEvent(
+                    new CustomEvent('spotc-search-sync', {
+                      detail: '',
+                    }),
+                  );
+                }
               }}
             >
               {categoryName}
@@ -1550,9 +1560,19 @@ export function ProductGrid({
                   ? 'active'
                   : ''
               }
-              onClick={() =>
-                setSubCategory(categoryName)
-              }
+              onClick={() => {
+                setSubCategory(categoryName);
+
+                if (search.trim()) {
+                  setSearch('');
+
+                  window.dispatchEvent(
+                    new CustomEvent('spotc-search-sync', {
+                      detail: '',
+                    }),
+                  );
+                }
+              }}
             >
               {categoryName}
             </button>

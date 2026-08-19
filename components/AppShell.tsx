@@ -374,6 +374,26 @@ export function AppShell({
   }, [pathname]);
 
   useEffect(() => {
+    const syncSearchValue = (event: Event) => {
+      const customEvent = event as CustomEvent<string>;
+      setSearchValue(String(customEvent.detail || ''));
+      setSearchFocused(false);
+    };
+
+    window.addEventListener(
+      'spotc-search-sync',
+      syncSearchValue,
+    );
+
+    return () => {
+      window.removeEventListener(
+        'spotc-search-sync',
+        syncSearchValue,
+      );
+    };
+  }, []);
+
+  useEffect(() => {
     if (!pathname.startsWith('/shop') && !pathname.startsWith('/product/')) {
       return;
     }
