@@ -513,8 +513,24 @@ useEffect(() => {
     return () => window.clearInterval(timer);
   }, [recording]);
 
-  const comparisonMode = circle?.comparison_mode === true;
   const products = Array.isArray(circle?.products) ? circle!.products! : [];
+
+  /*
+   * A Shopping Circle opened from Product Detail is a SINGLE-product circle.
+   * Older/mixed documents can still contain comparison_mode/products data.
+   * If the document has the single-product fields, always render the product
+   * itself instead of the old "Which one should I buy?" comparison layout.
+   */
+  const hasSingleProduct =
+    Boolean(String(circle?.product_id ?? '').trim()) ||
+    Boolean(String(circle?.product_title ?? '').trim()) ||
+    Boolean(String(circle?.product_image ?? '').trim()) ||
+    Boolean(String(circle?.tryon_image ?? '').trim());
+
+  const comparisonMode =
+    circle?.comparison_mode === true &&
+    products.length >= 2 &&
+    !hasSingleProduct;
 
   const summary = useMemo(() => {
     if (!circle) return { title: 'Circle Summary', text: 'Waiting for opinions.', tone: 'gold' };
@@ -944,7 +960,47 @@ useEffect(() => {
       n(circle.vote_dont_buy) +
       n(circle.none_votes);
 
-  const heroImage = String(circle.tryon_image || circle.product_image || '').trim();
+  const singleProductFallback =
+    !comparisonMode && products.length === 1
+      ? products[0]
+      : null;
+
+  const heroImage = String(
+    circle.tryon_image ||
+      circle.product_image ||
+      singleProductFallback?.image ||
+      '',
+  ).trim();
+
+  const singleProductTitle =
+    String(
+      circle.product_title ||
+        singleProductFallback?.title ||
+        'Product',
+    ).trim() || 'Product';
+
+  const singleProductPrice =
+    circle.product_price ??
+    singleProductFallback?.price ??
+    0;
+
+  const singleProductOldPrice =
+    circle.product_old_price ??
+    singleProductFallback?.old_price ??
+    0;
+
+  const singleProductDiscount =
+    circle.product_discount ??
+    singleProductFallback?.discount ??
+    0;
+
+  const singleProductBusinessName =
+    String(
+      circle.business_name ||
+        singleProductFallback?.business_name ||
+        singleProductFallback?.shop_name ||
+        'SPOTC Official Store',
+    ).trim() || 'SPOTC Official Store';
 
   const recentMessages = messages.filter(
     (item) => item.message_type !== 'vote',
@@ -1084,7 +1140,7 @@ useEffect(() => {
                 {heroImage ? (
                   <img
                     src={heroImage}
-                    alt={circle.product_title || 'Product'}
+                    alt={singleProductTitle}
                   />
                 ) : (
                   <span className="product-hero-placeholder">
@@ -1109,22 +1165,22 @@ useEffect(() => {
 
               <div className="product-summary product-summary-below">
                 <div className="product-info">
-                  <h1>{circle.product_title || 'Product'}</h1>
+                  <h1>{singleProductTitle}</h1>
 
                   <div className="price-row large">
-                    <strong>{formatMoney(circle.product_price)}</strong>
-                    {n(circle.product_old_price) >
-                      n(circle.product_price) && (
-                      <del>{formatMoney(circle.product_old_price)}</del>
+                    <strong>{formatMoney(singleProductPrice)}</strong>
+                    {n(singleProductOldPrice) >
+                      n(singleProductPrice) && (
+                      <del>{formatMoney(singleProductOldPrice)}</del>
                     )}
-                    {n(circle.product_discount) > 0 && (
-                      <em>{n(circle.product_discount)}% OFF</em>
+                    {n(singleProductDiscount) > 0 && (
+                      <em>{n(singleProductDiscount)}% OFF</em>
                     )}
                   </div>
 
                   <div className="store-row">
                     <span>
-                      {circle.business_name || 'SPOTC Official Store'}
+                      {singleProductBusinessName}
                     </span>
                     <span className="verified">
                       <Check size={11} />
@@ -1419,7 +1475,9 @@ useEffect(() => {
 
         <strong>
           {circle.question ||
-            'Which one should I buy?'}
+            (comparisonMode
+              ? 'Which one should I buy?'
+              : 'Should I buy this?')}
         </strong>
       </div>
     </div>
@@ -1597,7 +1655,7 @@ useEffect(() => {
           >
             <img
               src={heroImage}
-              alt={circle.product_title || 'Product'}
+              alt={singleProductTitle}
             />
           </div>
         </div>
