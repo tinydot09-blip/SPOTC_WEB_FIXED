@@ -182,6 +182,11 @@ const TA: Record<string, string> = {
   'Contact': 'தொடர்பு',
   'Privacy': 'தனியுரிமை',
   'Terms': 'விதிமுறைகள்',
+  'Featured': 'சிறப்பு',
+  'Save': 'சேமிப்பு',
+  'left': 'மட்டும் உள்ளது',
+  'gift included': 'இலவச பரிசு சேர்க்கப்பட்டுள்ளது',
+  'gifts included': 'இலவச பரிசுகள் சேர்க்கப்பட்டுள்ளது',
 };
 
 const LanguageContext = createContext<{
@@ -198,6 +203,89 @@ const originalText = new WeakMap<Text, string>();
 const originalAttributes = new WeakMap<Element, Map<string, string>>();
 const TRANSLATABLE_ATTRIBUTES = ['placeholder', 'title', 'aria-label'];
 
+const PRODUCT_PHRASES: Array<[RegExp, string]> = [
+  [/\bbaby girls?\b/gi, 'பெண் குழந்தைகள்'],
+  [/\bbaby boys?\b/gi, 'ஆண் குழந்தைகள்'],
+  [/\btoddler girls?\b/gi, 'சிறுமிகள்'],
+  [/\btoddler boys?\b/gi, 'சிறுவர்கள்'],
+  [/\bbaby unisex\b/gi, 'குழந்தைகளுக்கான'],
+  [/\bfor kids\b/gi, 'குழந்தைகளுக்கு'],
+  [/\bfor girls\b/gi, 'பெண் குழந்தைகளுக்கு'],
+  [/\bfor boys\b/gi, 'ஆண் குழந்தைகளுக்கு'],
+  [/\bfull sleeve\b/gi, 'முழுக்கை'],
+  [/\bhalf sleeve\b/gi, 'அரைக்கை'],
+  [/\bsleeveless\b/gi, 'கையில்லா'],
+  [/\bt[- ]?shirt\b/gi, 'டி-ஷர்ட்'],
+  [/\bteddy bear\b/gi, 'டெடி பியர்'],
+  [/\bsuction cup darts?\b/gi, 'சக்‌ஷன் கப் டார்ட்ஸ்'],
+  [/\btoy gun set\b/gi, 'பொம்மை துப்பாக்கி செட்'],
+  [/\bwater gun\b/gi, 'தண்ணீர் துப்பாக்கி'],
+  [/\bplastic play balls?\b/gi, 'பிளாஸ்டிக் விளையாட்டு பந்துகள்'],
+  [/\banimal figures?\b/gi, 'விலங்கு பொம்மைகள்'],
+  [/\bfarm & wild\b/gi, 'பண்ணை & காட்டு'],
+  [/\bmustard yellow\b/gi, 'மஸ்டர்ட் மஞ்சள்'],
+  [/\bnavy blue\b/gi, 'நேவி நீலம்'],
+  [/\blight blue\b/gi, 'லைட் நீலம்'],
+  [/\bdark blue\b/gi, 'டார்க் நீலம்'],
+  [/\bmulticolor\b/gi, 'பலநிறம்'],
+  [/\bmulti-color\b/gi, 'பலநிறம்'],
+  [/\bwith\b/gi, 'உடன்'],
+  [/\band\b/gi, 'மற்றும்'],
+  [/\bdress\b/gi, 'உடை'],
+  [/\bleggings\b/gi, 'லெக்கிங்ஸ்'],
+  [/\bpants?\b/gi, 'பேன்ட்'],
+  [/\bshorts?\b/gi, 'ஷார்ட்ஸ்'],
+  [/\bset\b/gi, 'செட்'],
+  [/\bappliqu[eé]\b/gi, 'அப்ளிகே'],
+  [/\bembroidered\b/gi, 'எம்பிராய்டரி'],
+  [/\bstriped\b/gi, 'ஸ்ட்ரைப்'],
+  [/\bribbed\b/gi, 'ரிப் வடிவ'],
+  [/\bbelt\b/gi, 'பெல்ட்'],
+  [/\brifle\b/gi, 'ரைஃபிள்'],
+  [/\brevolver\b/gi, 'ரிவால்வர்'],
+  [/\bgun\b/gi, 'துப்பாக்கி'],
+  [/\bballoons?\b/gi, 'பலூன்'],
+  [/\bballs?\b/gi, 'பந்து'],
+  [/\bdolls?\b/gi, 'பொம்மை'],
+  [/\bvehicles?\b/gi, 'வாகனங்கள்'],
+  [/\bearrings?\b/gi, 'காதணிகள்'],
+  [/\bbracelets?\b/gi, 'பிரேஸ்லெட்'],
+  [/\bnecklaces?\b/gi, 'செயின்'],
+  [/\bpink\b/gi, 'பிங்க்'],
+  [/\bred\b/gi, 'சிவப்பு'],
+  [/\byellow\b/gi, 'மஞ்சள்'],
+  [/\bgreen\b/gi, 'பச்சை'],
+  [/\bblue\b/gi, 'நீலம்'],
+  [/\borange\b/gi, 'ஆரஞ்சு'],
+  [/\bblack\b/gi, 'கருப்பு'],
+  [/\bwhite\b/gi, 'வெள்ளை'],
+  [/\bgrey\b/gi, 'சாம்பல்'],
+  [/\bgray\b/gi, 'சாம்பல்'],
+  [/\bbrown\b/gi, 'பழுப்பு'],
+  [/\bkids?\b/gi, 'குழந்தைகள்'],
+  [/\bbaby\b/gi, 'குழந்தை'],
+  [/\bgirls?\b/gi, 'பெண் குழந்தைகள்'],
+  [/\bboys?\b/gi, 'ஆண் குழந்தைகள்'],
+];
+
+const translateProductText = (value: string): string => {
+  let translated = value;
+  let changed = false;
+
+  for (const [pattern, replacement] of PRODUCT_PHRASES) {
+    const next = translated.replace(pattern, replacement);
+    if (next !== translated) changed = true;
+    translated = next;
+  }
+
+  if (!changed) return value;
+
+  return translated
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.:;!?])/g, '$1')
+    .trim();
+};
+
 const translateString = (value: string): string => {
   const leading = value.match(/^\s*/)?.[0] ?? '';
   const trailing = value.match(/\s*$/)?.[0] ?? '';
@@ -206,6 +294,27 @@ const translateString = (value: string): string => {
 
   const exact = TA[core];
   if (exact) return `${leading}${exact}${trailing}`;
+
+  const freeGiftIncluded = core.match(/^(\d+)\s+FREE\s+gift(?:s)?\s+included$/i);
+  if (freeGiftIncluded) {
+    const count = Number(freeGiftIncluded[1]);
+    return `${leading}${count} இலவச ${count === 1 ? 'பரிசு சேர்க்கப்பட்டுள்ளது' : 'பரிசுகள் சேர்க்கப்பட்டுள்ளன'}${trailing}`;
+  }
+
+  const leftMatch = core.match(/^(\d+)\s+left$/i);
+  if (leftMatch) {
+    return `${leading}${leftMatch[1]} மட்டும் உள்ளது${trailing}`;
+  }
+
+  const saveMoneyMatch = core.match(/^Save\s+(₹\s?[\d,.]+)$/i);
+  if (saveMoneyMatch) {
+    return `${leading}சேமிப்பு ${saveMoneyMatch[1]}${trailing}`;
+  }
+
+  const offMatch = core.match(/^(\d+(?:\.\d+)?)%\s*OFF$/i);
+  if (offMatch) {
+    return `${leading}${offMatch[1]}% தள்ளுபடி${trailing}`;
+  }
 
   const searchMatch = core.match(/^Search results for [“\"](.+?)[”\"](?:\s*[·•]\s*(\d+)\s*(product|products))?$/i);
   if (searchMatch) {
@@ -220,6 +329,11 @@ const translateString = (value: string): string => {
 
   const kmMatch = core.match(/^([\d.]+)\s*km$/i);
   if (kmMatch) return `${leading}${kmMatch[1]} கி.மீ.${trailing}`;
+
+  const productTranslated = translateProductText(core);
+  if (productTranslated !== core) {
+    return `${leading}${productTranslated}${trailing}`;
+  }
 
   return value;
 };
