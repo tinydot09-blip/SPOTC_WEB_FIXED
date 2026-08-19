@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 import { AppShell } from '@/components/AppShell';
+import { LanguageProvider } from '@/components/LanguageProvider';
 import FooterWrapper from '@/components/FooterWrapper';
 import NavigationLoader from '@/components/NavigationLoader';
 import ProfileCompletionGate from '@/components/ProfileCompletionGate';
@@ -20,12 +21,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <LanguageProvider>
         <NavigationLoader />
 
         <ProfileCompletionGate>
           <AppShell>{children}</AppShell>
           <FooterWrapper />
         </ProfileCompletionGate>
+        </LanguageProvider>
       </body>
     </html>
   );

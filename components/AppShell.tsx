@@ -42,6 +42,7 @@ import {
 import { useDeliveryAvailability } from '@/lib/delivery-radius';
 import { getProducts } from '@/lib/data';
 import type { BusinessProduct } from '@/lib/types';
+import { useSpotcLanguage } from '@/components/LanguageProvider';
 
 const navigation = [
   {
@@ -176,6 +177,7 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const delivery = useDeliveryAvailability();
+  const { language, setLanguage } = useSpotcLanguage();
   const [deliveryBannerClosed, setDeliveryBannerClosed] = useState(false);
 
   const [firebaseUser, setFirebaseUser] =
@@ -792,6 +794,30 @@ if (!signedInUser) {
           </div>
 
           <div className="spotc-header-account-actions">
+            <div
+              className="spotc-language-switch"
+              data-no-translate="true"
+              aria-label="Language"
+            >
+              <button
+                type="button"
+                className={language === 'en' ? 'active' : ''}
+                aria-pressed={language === 'en'}
+                onClick={() => setLanguage('en')}
+              >
+                EN
+              </button>
+              <span aria-hidden="true">|</span>
+              <button
+                type="button"
+                className={language === 'ta' ? 'active' : ''}
+                aria-pressed={language === 'ta'}
+                onClick={() => setLanguage('ta')}
+              >
+                தமிழ்
+              </button>
+            </div>
+
             {!authLoading &&
               !firebaseUser && (
                 <button
@@ -1463,6 +1489,40 @@ if (!signedInUser) {
           border-radius: 50%;
           background: transparent;
           cursor: pointer;
+        }
+
+        .spotc-language-switch {
+          height: 30px;
+          padding: 0 8px;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          border: 1px solid #d7d0c6;
+          border-radius: 999px;
+          background: #fff;
+          color: #746c62;
+          white-space: nowrap;
+        }
+
+        .spotc-language-switch button {
+          padding: 0;
+          border: 0;
+          background: transparent;
+          color: #746c62;
+          font: inherit;
+          font-size: 11px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .spotc-language-switch button.active {
+          color: #171513;
+          font-weight: 950;
+        }
+
+        .spotc-language-switch span {
+          color: #c9c1b7;
+          font-size: 10px;
         }
 
         .spotc-header-account-actions {
