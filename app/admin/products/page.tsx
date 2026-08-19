@@ -43,9 +43,36 @@ type EditForm = {
   size: string;
   availableSizes: string;
   dressType: string;
+  setType: string;
+
+  // 1-piece measurements
   dressLength: string;
   chestSize: string;
   waistSize: string;
+  shoulderSize: string;
+  sleeveLength: string;
+
+  // 2/3-piece top measurements
+  topType: string;
+  topChest: string;
+  topLength: string;
+  topShoulder: string;
+  topSleeve: string;
+
+  // 2/3-piece bottom measurements
+  bottomType: string;
+  bottomWaist: string;
+  bottomMaxWaist: string;
+  bottomHip: string;
+  bottomLength: string;
+  bottomInseam: string;
+
+  // 3rd piece measurements
+  thirdPieceType: string;
+  thirdPieceChest: string;
+  thirdPieceWaist: string;
+  thirdPieceLength: string;
+
   material: string;
   pattern: string;
   gender: string;
@@ -300,6 +327,56 @@ function productStatus(data: DocumentData) {
 }
 
 function editFormFromProduct(data: DocumentData): EditForm {
+  const garmentMeasurements =
+    data.garment_measurements && typeof data.garment_measurements === 'object'
+      ? (data.garment_measurements as Record<string, unknown>)
+      : {};
+
+  const onePiece =
+    garmentMeasurements.one_piece && typeof garmentMeasurements.one_piece === 'object'
+      ? (garmentMeasurements.one_piece as Record<string, unknown>)
+      : {};
+
+  const topFromGarment =
+    garmentMeasurements.top && typeof garmentMeasurements.top === 'object'
+      ? (garmentMeasurements.top as Record<string, unknown>)
+      : {};
+
+  const bottomFromGarment =
+    garmentMeasurements.bottom && typeof garmentMeasurements.bottom === 'object'
+      ? (garmentMeasurements.bottom as Record<string, unknown>)
+      : {};
+
+  const thirdFromGarment =
+    garmentMeasurements.third_piece && typeof garmentMeasurements.third_piece === 'object'
+      ? (garmentMeasurements.third_piece as Record<string, unknown>)
+      : {};
+
+  const topMeasurements =
+    data.top_measurements && typeof data.top_measurements === 'object'
+      ? (data.top_measurements as Record<string, unknown>)
+      : topFromGarment;
+
+  const bottomMeasurements =
+    data.bottom_measurements && typeof data.bottom_measurements === 'object'
+      ? (data.bottom_measurements as Record<string, unknown>)
+      : bottomFromGarment;
+
+  const thirdMeasurements =
+    data.third_piece_measurements && typeof data.third_piece_measurements === 'object'
+      ? (data.third_piece_measurements as Record<string, unknown>)
+      : thirdFromGarment;
+
+  const savedSetType = String(
+    data.set_type ??
+      garmentMeasurements.set_type ??
+      (Number(data.piece_count) === 3
+        ? '3 Piece'
+        : Number(data.piece_count) === 2
+          ? '2 Piece'
+          : '1 Piece'),
+  );
+
   return {
     title: titleOf(data),
     brand: String(data.brand ?? ''),
@@ -312,10 +389,43 @@ function editFormFromProduct(data: DocumentData): EditForm {
     availableSizes: Array.isArray(data.available_sizes)
       ? data.available_sizes.map((value: unknown) => String(value).trim()).filter(Boolean).join(', ')
       : String(data.available_sizes ?? data.size ?? ''),
-    dressType: String(data.dress_type ?? ''),
-    dressLength: String(data.dress_length ?? data.garment_length ?? ''),
-    chestSize: String(data.chest_size ?? data.chest ?? data.bust_size ?? ''),
-    waistSize: String(data.waist_size ?? data.waist ?? ''),
+    dressType: String(data.dress_type ?? onePiece.type ?? ''),
+    setType: savedSetType,
+
+    dressLength: String(
+      onePiece.length ?? data.dress_length ?? data.garment_length ?? '',
+    ),
+    chestSize: String(
+      onePiece.chest ?? data.chest_size ?? data.chest ?? data.bust_size ?? '',
+    ),
+    waistSize: String(
+      onePiece.waist ?? data.waist_size ?? data.waist ?? '',
+    ),
+    shoulderSize: String(
+      onePiece.shoulder ?? data.shoulder_size ?? '',
+    ),
+    sleeveLength: String(
+      onePiece.sleeve ?? data.sleeve_length ?? '',
+    ),
+
+    topType: String(topMeasurements.type ?? 'T-Shirt'),
+    topChest: String(topMeasurements.chest ?? ''),
+    topLength: String(topMeasurements.length ?? ''),
+    topShoulder: String(topMeasurements.shoulder ?? ''),
+    topSleeve: String(topMeasurements.sleeve ?? ''),
+
+    bottomType: String(bottomMeasurements.type ?? 'Pant / Shorts'),
+    bottomWaist: String(bottomMeasurements.waist ?? ''),
+    bottomMaxWaist: String(bottomMeasurements.max_waist ?? ''),
+    bottomHip: String(bottomMeasurements.hip ?? ''),
+    bottomLength: String(bottomMeasurements.length ?? ''),
+    bottomInseam: String(bottomMeasurements.inseam ?? ''),
+
+    thirdPieceType: String(thirdMeasurements.type ?? ''),
+    thirdPieceChest: String(thirdMeasurements.chest ?? ''),
+    thirdPieceWaist: String(thirdMeasurements.waist ?? ''),
+    thirdPieceLength: String(thirdMeasurements.length ?? ''),
+
     material: String(data.material ?? data.fabric ?? ''),
     pattern: String(data.pattern ?? data.style ?? ''),
     gender: String(data.gender ?? data.audience ?? ''),
@@ -933,9 +1043,122 @@ export default function AdminProductsPage() {
         size: savedSize,
         available_sizes: availableSizes,
         dress_type: editingGirlDress ? editForm.dressType.trim() : '',
-        dress_length: editingGirlDress ? editForm.dressLength.trim() : '',
-        chest_size: editingGirlDress ? editForm.chestSize.trim() : '',
-        waist_size: editingGirlDress ? editForm.waistSize.trim() : '',
+        set_type: editingGirlDress ? editForm.setType : '',
+        piece_count: editingGirlDress
+          ? editForm.setType === '3 Piece'
+            ? 3
+            : editForm.setType === '2 Piece'
+              ? 2
+              : 1
+          : 0,
+
+        // Legacy fields kept populated so existing product-detail code still works.
+        dress_length: editingGirlDress
+          ? editForm.setType === '1 Piece'
+            ? editForm.dressLength.trim()
+            : editForm.topLength.trim()
+          : '',
+        chest_size: editingGirlDress
+          ? editForm.setType === '1 Piece'
+            ? editForm.chestSize.trim()
+            : editForm.topChest.trim()
+          : '',
+        waist_size: editingGirlDress
+          ? editForm.setType === '1 Piece'
+            ? editForm.waistSize.trim()
+            : editForm.bottomWaist.trim()
+          : '',
+        shoulder_size: editingGirlDress
+          ? editForm.setType === '1 Piece'
+            ? editForm.shoulderSize.trim()
+            : editForm.topShoulder.trim()
+          : '',
+        sleeve_length: editingGirlDress
+          ? editForm.setType === '1 Piece'
+            ? editForm.sleeveLength.trim()
+            : editForm.topSleeve.trim()
+          : '',
+
+        garment_measurements: editingGirlDress
+          ? {
+              set_type: editForm.setType,
+              one_piece:
+                editForm.setType === '1 Piece'
+                  ? {
+                      type: editForm.dressType.trim(),
+                      chest: editForm.chestSize.trim(),
+                      waist: editForm.waistSize.trim(),
+                      length: editForm.dressLength.trim(),
+                      shoulder: editForm.shoulderSize.trim(),
+                      sleeve: editForm.sleeveLength.trim(),
+                    }
+                  : null,
+              top:
+                editForm.setType !== '1 Piece'
+                  ? {
+                      type: editForm.topType.trim(),
+                      chest: editForm.topChest.trim(),
+                      length: editForm.topLength.trim(),
+                      shoulder: editForm.topShoulder.trim(),
+                      sleeve: editForm.topSleeve.trim(),
+                    }
+                  : null,
+              bottom:
+                editForm.setType !== '1 Piece'
+                  ? {
+                      type: editForm.bottomType.trim(),
+                      waist: editForm.bottomWaist.trim(),
+                      max_waist: editForm.bottomMaxWaist.trim(),
+                      hip: editForm.bottomHip.trim(),
+                      length: editForm.bottomLength.trim(),
+                      inseam: editForm.bottomInseam.trim(),
+                    }
+                  : null,
+              third_piece:
+                editForm.setType === '3 Piece'
+                  ? {
+                      type: editForm.thirdPieceType.trim(),
+                      chest: editForm.thirdPieceChest.trim(),
+                      waist: editForm.thirdPieceWaist.trim(),
+                      length: editForm.thirdPieceLength.trim(),
+                    }
+                  : null,
+            }
+          : null,
+
+        top_measurements:
+          editingGirlDress && editForm.setType !== '1 Piece'
+            ? {
+                type: editForm.topType.trim(),
+                chest: editForm.topChest.trim(),
+                length: editForm.topLength.trim(),
+                shoulder: editForm.topShoulder.trim(),
+                sleeve: editForm.topSleeve.trim(),
+              }
+            : null,
+
+        bottom_measurements:
+          editingGirlDress && editForm.setType !== '1 Piece'
+            ? {
+                type: editForm.bottomType.trim(),
+                waist: editForm.bottomWaist.trim(),
+                max_waist: editForm.bottomMaxWaist.trim(),
+                hip: editForm.bottomHip.trim(),
+                length: editForm.bottomLength.trim(),
+                inseam: editForm.bottomInseam.trim(),
+              }
+            : null,
+
+        third_piece_measurements:
+          editingGirlDress && editForm.setType === '3 Piece'
+            ? {
+                type: editForm.thirdPieceType.trim(),
+                chest: editForm.thirdPieceChest.trim(),
+                waist: editForm.thirdPieceWaist.trim(),
+                length: editForm.thirdPieceLength.trim(),
+              }
+            : null,
+
         material: editForm.material.trim(),
         fabric: editForm.material.trim(),
         pattern: editForm.pattern.trim(),
@@ -1668,32 +1891,246 @@ export default function AdminProductsPage() {
                         placeholder="Example: 18, 20, 22"
                       />
 
-                      <EditField
-                        label="Dress Length"
-                        value={editForm.dressLength}
-                        onChange={(value) =>
-                          updateEditField('dressLength', value)
-                        }
-                        placeholder="Example: 21 inch"
-                      />
+                      <label>
+                        <span style={modalLabel}>Set Type</span>
+                        <select
+                          value={editForm.setType}
+                          onChange={(event) =>
+                            updateEditField('setType', event.target.value)
+                          }
+                          style={modalInput}
+                        >
+                          <option value="1 Piece">1 Piece</option>
+                          <option value="2 Piece">2 Piece</option>
+                          <option value="3 Piece">3 Piece</option>
+                        </select>
+                      </label>
 
-                      <EditField
-                        label="Chest"
-                        value={editForm.chestSize}
-                        onChange={(value) =>
-                          updateEditField('chestSize', value)
-                        }
-                        placeholder="Example: 24 inch"
-                      />
+                      {editForm.setType === '1 Piece' ? (
+                        <>
+                          <EditField
+                            label="Dress / Garment Length"
+                            value={editForm.dressLength}
+                            onChange={(value) =>
+                              updateEditField('dressLength', value)
+                            }
+                            placeholder="Example: 21 inch"
+                          />
+                          <EditField
+                            label="Chest"
+                            value={editForm.chestSize}
+                            onChange={(value) =>
+                              updateEditField('chestSize', value)
+                            }
+                            placeholder="Example: 24 inch"
+                          />
+                          <EditField
+                            label="Waist"
+                            value={editForm.waistSize}
+                            onChange={(value) =>
+                              updateEditField('waistSize', value)
+                            }
+                            placeholder="Example: 22 inch"
+                          />
+                          <EditField
+                            label="Shoulder"
+                            value={editForm.shoulderSize}
+                            onChange={(value) =>
+                              updateEditField('shoulderSize', value)
+                            }
+                            placeholder="Example: 9 inch"
+                          />
+                          <EditField
+                            label="Sleeve Length"
+                            value={editForm.sleeveLength}
+                            onChange={(value) =>
+                              updateEditField('sleeveLength', value)
+                            }
+                            placeholder="Example: 5 inch or Sleeveless"
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+                            <div style={editMeasurementTitle}>
+                              TOP / T-SHIRT MEASUREMENTS
+                            </div>
+                          </div>
 
-                      <EditField
-                        label="Waist"
-                        value={editForm.waistSize}
-                        onChange={(value) =>
-                          updateEditField('waistSize', value)
-                        }
-                        placeholder="Example: 22 inch"
-                      />
+                          <label>
+                            <span style={modalLabel}>Top Type</span>
+                            <select
+                              value={editForm.topType}
+                              onChange={(event) =>
+                                updateEditField('topType', event.target.value)
+                              }
+                              style={modalInput}
+                            >
+                              <option value="T-Shirt">T-Shirt</option>
+                              <option value="Shirt">Shirt</option>
+                              <option value="Top">Top</option>
+                              <option value="Kurti">Kurti</option>
+                              <option value="Blouse">Blouse</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </label>
+
+                          <EditField
+                            label="Top Chest"
+                            value={editForm.topChest}
+                            onChange={(value) =>
+                              updateEditField('topChest', value)
+                            }
+                            placeholder="Example: 24 inch"
+                          />
+                          <EditField
+                            label="Top Length"
+                            value={editForm.topLength}
+                            onChange={(value) =>
+                              updateEditField('topLength', value)
+                            }
+                            placeholder="Example: 16 inch"
+                          />
+                          <EditField
+                            label="Top Shoulder"
+                            value={editForm.topShoulder}
+                            onChange={(value) =>
+                              updateEditField('topShoulder', value)
+                            }
+                            placeholder="Example: 9 inch"
+                          />
+                          <EditField
+                            label="Top Sleeve Length"
+                            value={editForm.topSleeve}
+                            onChange={(value) =>
+                              updateEditField('topSleeve', value)
+                            }
+                            placeholder="Example: 5 inch or Sleeveless"
+                          />
+
+                          <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+                            <div style={editMeasurementTitle}>
+                              BOTTOM / PANT MEASUREMENTS
+                            </div>
+                          </div>
+
+                          <label>
+                            <span style={modalLabel}>Bottom Type</span>
+                            <select
+                              value={editForm.bottomType}
+                              onChange={(event) =>
+                                updateEditField('bottomType', event.target.value)
+                              }
+                              style={modalInput}
+                            >
+                              <option value="Pant / Shorts">Pant / Shorts</option>
+                              <option value="Pant">Pant</option>
+                              <option value="Shorts">Shorts</option>
+                              <option value="Skirt">Skirt</option>
+                              <option value="Leggings">Leggings</option>
+                              <option value="Dhoti">Dhoti</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </label>
+
+                          <EditField
+                            label="Bottom Waist"
+                            value={editForm.bottomWaist}
+                            onChange={(value) =>
+                              updateEditField('bottomWaist', value)
+                            }
+                            placeholder="Example: 18 inch"
+                          />
+                          <EditField
+                            label="Max Stretch Waist"
+                            value={editForm.bottomMaxWaist}
+                            onChange={(value) =>
+                              updateEditField('bottomMaxWaist', value)
+                            }
+                            placeholder="Example: 22 inch"
+                          />
+                          <EditField
+                            label="Hip"
+                            value={editForm.bottomHip}
+                            onChange={(value) =>
+                              updateEditField('bottomHip', value)
+                            }
+                            placeholder="Example: 24 inch"
+                          />
+                          <EditField
+                            label="Bottom Length"
+                            value={editForm.bottomLength}
+                            onChange={(value) =>
+                              updateEditField('bottomLength', value)
+                            }
+                            placeholder="Example: 12 inch"
+                          />
+                          <EditField
+                            label="Inseam"
+                            value={editForm.bottomInseam}
+                            onChange={(value) =>
+                              updateEditField('bottomInseam', value)
+                            }
+                            placeholder="Example: 4 inch"
+                          />
+
+                          {editForm.setType === '3 Piece' && (
+                            <>
+                              <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+                                <div style={editMeasurementTitle}>
+                                  THIRD PIECE MEASUREMENTS
+                                </div>
+                              </div>
+
+                              <label>
+                                <span style={modalLabel}>Third Piece Type</span>
+                                <select
+                                  value={editForm.thirdPieceType}
+                                  onChange={(event) =>
+                                    updateEditField(
+                                      'thirdPieceType',
+                                      event.target.value,
+                                    )
+                                  }
+                                  style={modalInput}
+                                >
+                                  <option value="">Select third piece</option>
+                                  <option value="Jacket">Jacket</option>
+                                  <option value="Shrug">Shrug</option>
+                                  <option value="Vest">Vest</option>
+                                  <option value="Dupatta">Dupatta</option>
+                                  <option value="Other">Other</option>
+                                </select>
+                              </label>
+
+                              <EditField
+                                label="Third Piece Chest"
+                                value={editForm.thirdPieceChest}
+                                onChange={(value) =>
+                                  updateEditField('thirdPieceChest', value)
+                                }
+                                placeholder="Optional"
+                              />
+                              <EditField
+                                label="Third Piece Waist"
+                                value={editForm.thirdPieceWaist}
+                                onChange={(value) =>
+                                  updateEditField('thirdPieceWaist', value)
+                                }
+                                placeholder="Optional"
+                              />
+                              <EditField
+                                label="Third Piece Length"
+                                value={editForm.thirdPieceLength}
+                                onChange={(value) =>
+                                  updateEditField('thirdPieceLength', value)
+                                }
+                                placeholder="Example: 14 inch"
+                              />
+                            </>
+                          )}
+                        </>
+                      )}
                     </>
                   ) : (
                     <EditField
@@ -1735,8 +2172,9 @@ export default function AdminProductsPage() {
                       fontSize: 12,
                     }}
                   >
-                    Age Group is taken from Sub Category. Enter the actual dress
-                    sizes and measurements for this design.
+                    Age Group is taken from Sub Category. Select 1 Piece, 2 Piece or
+                    3 Piece and enter the actual garment measurements in inches. For
+                    2/3 piece sets, enter Top and Bottom separately.
                   </div>
                 )}
 
@@ -2042,6 +2480,7 @@ const editMediaCancelButton: React.CSSProperties = { border: '1px solid #ddd', b
 const editUploadNotice: React.CSSProperties = { marginTop: 12, padding: 10, borderRadius: 9, background: '#fff7e8', border: '1px solid #f2d8a5', fontSize: 12, fontWeight: 500 };
 const editSection: React.CSSProperties = { background: '#fff', border: '1px solid #e7e7e7', borderRadius: 14, padding: 16, marginBottom: 14 };
 const editGrid3: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 12, marginBottom: 12 };
+const editMeasurementTitle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '9px 11px', border: '1px solid #e4e4e4', borderRadius: 9, background: '#f7f7f7', fontSize: 11, fontWeight: 700, color: '#333' };
 const modalLabel: React.CSSProperties = { display: 'block', fontSize: 11, color: '#555', fontWeight: 400, marginBottom: 5 };
 const modalInput: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '11px 12px', border: '1px solid #ddd', borderRadius: 9, fontSize: 14, outline: 'none', background: '#fff' };
 const inventoryInfoGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(3,minmax(100px,1fr))', gap: 10, marginTop: 4 };
