@@ -724,7 +724,9 @@ if (!signedInUser) {
               />
 
               <input
-                type="search"
+                type="text"
+                inputMode="search"
+                enterKeyHint="search"
                 value={searchValue}
                 placeholder={searchPlaceholder}
                 aria-label={searchPlaceholder}
