@@ -1665,10 +1665,17 @@ export function ProductGrid({
                   href={`/product/${item.id}`}
                   className="product-image"
                   aria-label={`${t('Open')} ${localizedTitleOf(item)}`}
-                  style={{
-                    backgroundImage: `url("${image}")`,
-                  }}
-                />
+                >
+                  {image ? (
+                    <img
+                      src={image}
+                      alt={localizedTitleOf(item)}
+                      loading="lazy"
+                      decoding="async"
+                      fetchPriority="low"
+                    />
+                  ) : null}
+                </Link>
 
                 {discount > 0 && (
                   <span className="discount-chip">
@@ -1866,6 +1873,20 @@ export function ProductGrid({
       )}
 
       <style jsx global>{`
+        .product-card.rich .product-image {
+          display: block;
+          overflow: hidden;
+          background: #f4f1ec;
+        }
+
+        .product-card.rich .product-image img {
+          width: 100%;
+          height: 100%;
+          display: block;
+          object-fit: cover;
+          object-position: center;
+        }
+
         .spotc-global-search-status {
           width: 100%;
           margin: 0 0 14px;
