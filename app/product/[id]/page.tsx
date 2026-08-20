@@ -3877,9 +3877,9 @@ onClick={openShoppingCircle}
 .pd-shop-category-pill:hover{border-color:#bdb3a8;color:#17120d}
 .pd-shop-category-pill.active{border-color:#171717;background:#171717;color:#fff}
 .pd-shop-sort{
-  width:190px;
+  width:150px;
   min-height:48px;
-  padding:0 44px 0 18px;
+  padding:0 16px;
   justify-self:end;
   border:1px solid #ded7cf;
   border-radius:16px;
@@ -3979,7 +3979,8 @@ onClick={openShoppingCircle}
   width:132px;
   flex:0 0 132px;
   min-height:40px;
-  padding:0 30px 0 12px;
+  padding:0 14px;
+
   border-radius:13px;
   font-size:12px;
 }
