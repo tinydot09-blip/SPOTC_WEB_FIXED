@@ -20,26 +20,40 @@ const navItems = [
   ['/admin/reports', 'Reports'],
 ] as const;
 
+const PRIMARY_ADMIN_EMAILS = [
+  'tinydot09@gmail.com',
+  'shashanth.in09@gmail.com',
+  // Add another permanent admin email here:
+  // 'secondadmin@gmail.com',
+];
+
 function emailAllowed(user: User): boolean {
   const email = user.email?.trim().toLowerCase() || '';
 
-  // Main SPOTC admin account
-  if (email === 'tinydot09@gmail.com') {
+  const permanentAdmins = PRIMARY_ADMIN_EMAILS.map((value) =>
+    value.trim().toLowerCase(),
+  );
+
+  if (permanentAdmins.includes(email)) {
     return true;
   }
 
-  const configured = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '')
+  const configuredAdmins = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '')
     .split(',')
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
 
-  return configured.includes(email);
+  return configuredAdmins.includes(email);
 }
 
 async function hasAdminAccess(user: User): Promise<boolean> {
-  if (emailAllowed(user)) return true;
+  if (emailAllowed(user)) {
+    return true;
+  }
 
-  if (!db) return false;
+  if (!db) {
+    return false;
+  }
 
   try {
     const snap = await getDoc(doc(db, 'Users', user.uid));
@@ -53,7 +67,8 @@ async function hasAdminAccess(user: User): Promise<boolean> {
     return (
       data.is_admin === true ||
       data.isAdmin === true ||
-      data.role === 'admin'
+      data.role === 'admin' ||
+      data.role === 'super_admin'
     );
   } catch (error) {
     console.error('Admin access check failed', error);
@@ -84,6 +99,8 @@ export default function AdminShell({
         setAccess('signed-out');
         return;
       }
+
+      setAccess('loading');
 
       const allowed = await hasAdminAccess(nextUser);
 
@@ -126,8 +143,9 @@ export default function AdminShell({
           </p>
 
           <button
+            type="button"
             className={styles.signIn}
-            onClick={() => requireGoogleLogin()}
+            onClick={() => void requireGoogleLogin()}
           >
             Sign in with Google
           </button>
@@ -148,10 +166,16 @@ export default function AdminShell({
           </p>
 
           <p>
-            Set <code>role: "admin"</code> or{' '}
-            <code>is_admin: true</code> on your{' '}
-            <code>Users/{user?.uid}</code> document, or add the email to{' '}
-            <code>NEXT_PUBLIC_ADMIN_EMAILS</code>.
+            Add this account to the admin list, or set one of these fields
+            in <code>Users/{user?.uid}</code>:
+          </p>
+
+          <p>
+            <code>role: "admin"</code>
+            <br />
+            <code>role: "super_admin"</code>
+            <br />
+            <code>is_admin: true</code>
           </p>
 
           <p>
