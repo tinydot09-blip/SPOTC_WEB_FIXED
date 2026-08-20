@@ -899,7 +899,14 @@ export function ProductGrid({
 
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('Featured');
-  const [mainCategory, setMainCategory] = useState<ShopMainCategory>('Girl Dress');
+  const initialCategoryParam = searchParams.get('category');
+  const initialMainCategory: ShopMainCategory =
+    SHOP_MAIN_CATEGORIES.includes(initialCategoryParam as ShopMainCategory)
+      ? (initialCategoryParam as ShopMainCategory)
+      : 'Girl Dress';
+
+  const [mainCategory, setMainCategory] =
+    useState<ShopMainCategory>(initialMainCategory);
   const [subCategory, setSubCategory] = useState('All');
 
   const [user, setUser] =
@@ -930,6 +937,19 @@ export function ProductGrid({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    const categoryParam = searchParams.get('category');
+
+    if (
+      categoryParam &&
+      SHOP_MAIN_CATEGORIES.includes(categoryParam as ShopMainCategory) &&
+      categoryParam !== mainCategory
+    ) {
+      setMainCategory(categoryParam as ShopMainCategory);
+      setSubCategory('All');
+    }
+  }, [searchParams, mainCategory]);
 
   useEffect(() => {
     const querySearch = searchParams.get('search') || '';
@@ -1517,16 +1537,18 @@ export function ProductGrid({
               onClick={() => {
                 setMainCategory(categoryName);
                 setSubCategory('All');
+                setSearch('');
 
-                if (search.trim()) {
-                  setSearch('');
+                window.dispatchEvent(
+                  new CustomEvent('spotc-search-sync', {
+                    detail: '',
+                  }),
+                );
 
-                  window.dispatchEvent(
-                    new CustomEvent('spotc-search-sync', {
-                      detail: '',
-                    }),
-                  );
-                }
+                const params = new URLSearchParams(searchParams.toString());
+                params.delete('search');
+                params.set('category', categoryName);
+                router.replace(`/shop?${params.toString()}`, { scroll: false });
               }}
             >
               {categoryLabel(categoryName)}
