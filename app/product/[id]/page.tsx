@@ -2412,7 +2412,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
             );
           }}
         >
-          <option value="Featured">Featured</option>
+          <option value="Featured">Sort</option>
           <option value="Low Price">Low Price</option>
           <option value="High Price">High Price</option>
           <option value="Discount">Discount</option>
@@ -3880,7 +3880,7 @@ onClick={openShoppingCircle}
   width:190px;
   min-height:48px;
   padding:0 44px 0 18px;
-  justify-self:start;
+  justify-self:end;
   border:1px solid #ded7cf;
   border-radius:16px;
   background:#fff;
