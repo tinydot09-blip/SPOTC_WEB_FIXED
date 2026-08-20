@@ -271,7 +271,13 @@
 
     const slug = decodeURIComponent(
       String(params.slug || ''),
-    );
+    ).trim();
+
+    const normalizedSlug = slug.toLowerCase();
+
+    const isLegacyHomePath =
+      normalizedSlug === 'index.html' ||
+      normalizedSlug === 'index.htm';
 
     const [business, setBusiness] =
       useState<
@@ -376,6 +382,24 @@
     useEffect(() => {
       let active = true;
 
+      // Old / legacy home URLs must never be treated as business slugs.
+      if (isLegacyHomePath) {
+        router.replace('/offers');
+
+        return () => {
+          active = false;
+        };
+      }
+
+      // Empty slug safety.
+      if (!slug) {
+        router.replace('/offers');
+
+        return () => {
+          active = false;
+        };
+      }
+
       setBusiness(undefined);
       setProducts([]);
       setProductsLoading(true);
@@ -442,7 +466,11 @@
       return () => {
         active = false;
       };
-    }, [slug]);
+    }, [
+      slug,
+      isLegacyHomePath,
+      router,
+    ]);
 
     useEffect(() => {
       let active = true;
