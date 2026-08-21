@@ -756,6 +756,44 @@ const discountOf = (product: BusinessProduct): number => {
   );
 };
 
+
+/*
+ * FEATURED SHUFFLE
+ * ----------------
+ * Mix all visible products so upload order / similar colour variants
+ * do not appear one after another.
+ *
+ * This is deterministic, so the order stays stable during refreshes
+ * instead of jumping around every time React renders.
+ */
+const featuredShuffleScore = (product: BusinessProduct): number => {
+  const value = [
+    textValue(product.id),
+    titleOf(product),
+    textValue(product.color),
+    textValue(product.sub_category),
+    textValue(product.age_group),
+  ].join('|');
+
+  let hash = 2166136261;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+};
+
+const shuffleFeaturedProducts = (
+  products: BusinessProduct[],
+): BusinessProduct[] =>
+  [...products].sort(
+    (a, b) =>
+      featuredShuffleScore(a) -
+      featuredShuffleScore(b),
+  );
+
 const businessIdOf = (product: BusinessProduct): string => {
   const value =
     product.business_ref ??
@@ -1222,6 +1260,15 @@ export function ProductGrid({
       result.sort(
         (a, b) => discountOf(b) - discountOf(a),
       );
+    }
+
+    /*
+     * Featured = shuffled/mixed catalogue order.
+     * Apply after stock/category filtering.
+     * Search and explicit sort choices keep their own order.
+     */
+    if (sort === 'Featured' && !searchQuery) {
+      return shuffleFeaturedProducts(result);
     }
 
     return result;
