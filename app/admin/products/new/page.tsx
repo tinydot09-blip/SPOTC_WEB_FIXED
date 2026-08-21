@@ -105,6 +105,87 @@ function extensionOf(file: File) {
   return 'jpg';
 }
 
+
+/**
+ * Build a lightweight AI-analysis copy while preserving the original file.
+ * The original selected image is still used for R2 upload and product display.
+ */
+async function prepareImageForAi(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('AI product identification requires an image.');
+  }
+
+  const MAX_DIMENSION = 1400;
+  const MAX_BYTES = 1_800_000;
+
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+
+      img.onload = () => resolve(img);
+      img.onerror = () =>
+        reject(new Error('Could not read the selected image for AI analysis.'));
+      img.src = objectUrl;
+    });
+
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+
+    if (!sourceWidth || !sourceHeight) {
+      throw new Error('The selected image has invalid dimensions.');
+    }
+
+    const scale = Math.min(
+      1,
+      MAX_DIMENSION / Math.max(sourceWidth, sourceHeight),
+    );
+
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext('2d');
+
+    if (!context) {
+      throw new Error('Browser could not prepare the image for AI analysis.');
+    }
+
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    const qualities = [0.88, 0.8, 0.72, 0.64, 0.56];
+
+    for (const quality of qualities) {
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, 'image/jpeg', quality);
+      });
+
+      if (!blob) continue;
+
+      if (blob.size <= MAX_BYTES || quality === qualities[qualities.length - 1]) {
+        return new File(
+          [blob],
+          `${file.name.replace(/\.[^.]+$/, '') || 'product'}_ai.jpg`,
+          {
+            type: 'image/jpeg',
+            lastModified: Date.now(),
+          },
+        );
+      }
+    }
+
+    throw new Error('Could not prepare a small enough AI analysis image.');
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export default function NewProductPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -784,8 +865,12 @@ export default function NewProductPage() {
     setMessage('AI is identifying the product…');
 
     try {
+      setMessage('Preparing image for AI…');
+
+      const aiImage = await prepareImageForAi(source.file);
+
       const body = new FormData();
-      body.append('image', source.file);
+      body.append('image', aiImage);
       body.append('uid', auth?.currentUser?.uid || 'web_admin');
       const categoryGuide = categoryConfigs
         .map(
