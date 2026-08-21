@@ -1150,6 +1150,26 @@ export function ProductGrid({
 
     const result = [...(items || [])].filter((product) => {
       /*
+       * LIVE SHOP AVAILABILITY:
+       * Hide inactive, explicitly out-of-stock, and zero-stock products
+       * from normal browsing AND global search.
+       *
+       * The product remains in Firestore/Admin so it can be restocked later.
+       */
+      const stock = numberValue(
+        product.stock_qty ??
+          product.stock_quantity,
+      );
+
+      if (
+        product.isActive === false ||
+        product.is_in_stock === false ||
+        stock <= 0
+      ) {
+        return false;
+      }
+
+      /*
        * GLOBAL SEARCH:
        * When the header search has text, search across ALL shop products.
        * Do not restrict results to the currently selected main/sub category.
@@ -1765,8 +1785,10 @@ export function ProductGrid({
 
                   <small className="product-stock-text">
                     {stock > 0
-                      ? language === 'ta' ? `${stock} மட்டும் உள்ளது` : `${stock} left`
-                      : t('In stock')}
+                      ? language === 'ta'
+                        ? `${stock} மட்டும் உள்ளது`
+                        : `${stock} left`
+                      : t('Out of stock')}
                   </small>
                 </div>
 
