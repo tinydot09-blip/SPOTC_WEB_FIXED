@@ -54,8 +54,74 @@ const SHOP_MAIN_CATEGORIES = [
   'Toys',
 ] as const;
 
-type ShopMainCategory =
-  (typeof SHOP_MAIN_CATEGORIES)[number];
+type ShopMainCategory = string;
+
+type ProductCategoryConfig = {
+  id: string;
+  name: string;
+  subcategories: string[];
+  isActive: boolean;
+  sortOrder: number;
+};
+
+const FALLBACK_CATEGORY_CONFIGS: ProductCategoryConfig[] = [
+  {
+    id: 'girl-dress',
+    name: 'Girl Dress',
+    subcategories: [
+      '0-1 Years',
+      '1-2 Years',
+      '2-3 Years',
+      '3-5 Years',
+      '6-8 Years',
+      '9-12 Years',
+    ],
+    isActive: true,
+    sortOrder: 1,
+  },
+  {
+    id: 'earrings',
+    name: 'Earrings',
+    subcategories: [],
+    isActive: true,
+    sortOrder: 2,
+  },
+  {
+    id: 'toys',
+    name: 'Toys',
+    subcategories: [
+      'Dolls & Pretend Play',
+      'Vehicles & Guns',
+      'Learning & Creative',
+      'Balls & Outdoor',
+      'Fun & Fidget',
+      'Other Toys',
+    ],
+    isActive: true,
+    sortOrder: 3,
+  },
+];
+
+const mergeCategoryConfigs = (
+  firestoreCategories: ProductCategoryConfig[],
+): ProductCategoryConfig[] => {
+  const merged = new Map<string, ProductCategoryConfig>();
+
+  for (const item of FALLBACK_CATEGORY_CONFIGS) {
+    merged.set(item.name.toLowerCase(), item);
+  }
+
+  for (const item of firestoreCategories) {
+    if (!item.name || !item.isActive) continue;
+    merged.set(item.name.toLowerCase(), item);
+  }
+
+  return Array.from(merged.values()).sort((a, b) => {
+    const orderDifference = a.sortOrder - b.sortOrder;
+    if (orderDifference !== 0) return orderDifference;
+    return a.name.localeCompare(b.name);
+  });
+};
 
 const GIRL_DRESS_AGE_GROUPS = [
   'All',
@@ -370,6 +436,43 @@ const shopMainCategoryOf = (
   }
 
   return null;
+};
+
+const dynamicShopMainCategoryOf = (
+  product: BusinessProduct,
+  availableCategories: string[],
+): ShopMainCategory | null => {
+  const explicit = textValue(
+    product.main_category ||
+      product.category ||
+      '',
+  );
+
+  if (explicit) {
+    const exact = availableCategories.find(
+      (category) =>
+        category.toLowerCase() ===
+        explicit.toLowerCase(),
+    );
+
+    if (exact) {
+      return exact;
+    }
+  }
+
+  const legacy = shopMainCategoryOf(product);
+
+  if (!legacy) {
+    return null;
+  }
+
+  return (
+    availableCategories.find(
+      (category) =>
+        category.toLowerCase() ===
+        legacy.toLowerCase(),
+    ) || null
+  );
 };
 
 const extractNumbers = (
@@ -937,14 +1040,16 @@ export function ProductGrid({
 
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('Featured');
-  const initialCategoryParam = searchParams.get('category');
-  const initialMainCategory: ShopMainCategory =
-    SHOP_MAIN_CATEGORIES.includes(initialCategoryParam as ShopMainCategory)
-      ? (initialCategoryParam as ShopMainCategory)
-      : 'Girl Dress';
 
+  const [categoryConfigs, setCategoryConfigs] =
+    useState<ProductCategoryConfig[]>(FALLBACK_CATEGORY_CONFIGS);
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
+
+  const initialCategoryParam = searchParams.get('category');
   const [mainCategory, setMainCategory] =
-    useState<ShopMainCategory>(initialMainCategory);
+    useState<ShopMainCategory>(
+      initialCategoryParam || 'Girl Dress',
+    );
   const [subCategory, setSubCategory] = useState('All');
 
   const [user, setUser] =
@@ -977,17 +1082,98 @@ export function ProductGrid({
   }, []);
 
   useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      if (!db) {
+        if (active) {
+          setCategoryConfigs(FALLBACK_CATEGORY_CONFIGS);
+          setCategoriesLoaded(true);
+        }
+        return;
+      }
+
+      try {
+        const snapshot = await getDocs(
+          collection(db, 'ProductCategories'),
+        );
+
+        if (!active) return;
+
+        const loaded = snapshot.docs
+          .map((item) => {
+            const data = item.data() as Record<string, unknown>;
+
+            return {
+              id: item.id,
+              name: textValue(data.name),
+              subcategories: Array.isArray(data.subcategories)
+                ? data.subcategories
+                    .map((value) => textValue(value))
+                    .filter(Boolean)
+                : [],
+              isActive: data.is_active !== false,
+              sortOrder: numberValue(data.sort_order),
+            } satisfies ProductCategoryConfig;
+          })
+          .filter((item) => item.name && item.isActive);
+
+        setCategoryConfigs(
+          mergeCategoryConfigs(loaded),
+        );
+      } catch (reason) {
+        console.error(
+          'Loading ProductCategories failed:',
+          reason,
+        );
+
+        if (active) {
+          setCategoryConfigs(FALLBACK_CATEGORY_CONFIGS);
+        }
+      } finally {
+        if (active) {
+          setCategoriesLoaded(true);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const mainCategories = useMemo(
+    () =>
+      categoryConfigs
+        .filter((item) => item.isActive)
+        .map((item) => item.name)
+        .filter(Boolean),
+    [categoryConfigs],
+  );
+
+  useEffect(() => {
     const categoryParam = searchParams.get('category');
 
-    if (
-      categoryParam &&
-      SHOP_MAIN_CATEGORIES.includes(categoryParam as ShopMainCategory) &&
-      categoryParam !== mainCategory
-    ) {
-      setMainCategory(categoryParam as ShopMainCategory);
+    if (!categoryParam || !categoriesLoaded) {
+      return;
+    }
+
+    const matched = mainCategories.find(
+      (category) =>
+        category.toLowerCase() ===
+        categoryParam.toLowerCase(),
+    );
+
+    if (matched && matched !== mainCategory) {
+      setMainCategory(matched);
       setSubCategory('All');
     }
-  }, [searchParams, mainCategory]);
+  }, [
+    searchParams,
+    mainCategory,
+    mainCategories,
+    categoriesLoaded,
+  ]);
 
   useEffect(() => {
     const querySearch = searchParams.get('search') || '';
@@ -1101,27 +1287,18 @@ export function ProductGrid({
     };
   }, []);
 
-  const mainCategories = useMemo(
-    () => [...SHOP_MAIN_CATEGORIES],
-    [],
-  );
-
   const subCategories = useMemo(() => {
     /*
-     * Toys uses a small, fixed set of grouped categories.
-     */
-    if (mainCategory === 'Toys') {
-      return [...TOY_SUB_CATEGORIES];
-    }
-
-    /*
-     * Girl Dress uses fixed age bands.
+     * Girl Dress keeps the existing age-band behavior because older
+     * products may store age in size/title rather than sub_category.
      */
     if (mainCategory === 'Girl Dress') {
       const hasOtherAges = (items || []).some(
         (product) =>
-          shopMainCategoryOf(product) ===
-            'Girl Dress' &&
+          dynamicShopMainCategoryOf(
+            product,
+            mainCategories,
+          ) === 'Girl Dress' &&
           girlDressAgeBandOf(product) ===
             'Other Ages',
       );
@@ -1135,16 +1312,48 @@ export function ProductGrid({
     }
 
     /*
-     * Earrings keeps the real Firestore subcategories.
+     * Toys keeps the existing grouped fallback for old toy records.
+     * If Admin has configured toy subcategories, those values are used.
      */
-    const unique =
-      new Map<string, string>();
+    const configuredCategory =
+      categoryConfigs.find(
+        (item) =>
+          item.name.toLowerCase() ===
+          mainCategory.toLowerCase(),
+      );
+
+    const configuredSubcategories =
+      configuredCategory?.subcategories || [];
+
+    if (
+      configuredSubcategories.length > 0 &&
+      mainCategory !== 'Girl Dress'
+    ) {
+      return [
+        'All',
+        ...Array.from(
+          new Set(configuredSubcategories),
+        ),
+      ];
+    }
+
+    if (mainCategory === 'Toys') {
+      return [...TOY_SUB_CATEGORIES];
+    }
+
+    /*
+     * For categories without configured subcategories, derive them from
+     * the actual products so older inventory remains browseable.
+     */
+    const unique = new Map<string, string>();
 
     (items || [])
       .filter(
         (product) =>
-          shopMainCategoryOf(product) ===
-          mainCategory,
+          dynamicShopMainCategoryOf(
+            product,
+            mainCategories,
+          ) === mainCategory,
       )
       .map((product) =>
         shopSubCategoryOf(
@@ -1154,8 +1363,7 @@ export function ProductGrid({
       )
       .filter(Boolean)
       .forEach((value) => {
-        const key =
-          value.toLowerCase();
+        const key = value.toLowerCase();
 
         if (!unique.has(key)) {
           unique.set(key, value);
@@ -1164,24 +1372,41 @@ export function ProductGrid({
 
     return [
       'All',
-      ...Array.from(
-        unique.values(),
-      ).sort((a, b) =>
-        a.localeCompare(b),
+      ...Array.from(unique.values()).sort(
+        (a, b) => a.localeCompare(b),
       ),
     ];
-  }, [items, mainCategory]);
+  }, [
+    items,
+    mainCategory,
+    categoryConfigs,
+    mainCategories,
+  ]);
 
   useEffect(() => {
-    if (
-      !mainCategories.includes(
-        mainCategory as ShopMainCategory,
-      )
-    ) {
-      setMainCategory('Girl Dress');
+    if (!categoriesLoaded || mainCategories.length === 0) {
+      return;
+    }
+
+    const exists = mainCategories.some(
+      (category) =>
+        category.toLowerCase() ===
+        mainCategory.toLowerCase(),
+    );
+
+    if (!exists) {
+      setMainCategory(
+        mainCategories.includes('Girl Dress')
+          ? 'Girl Dress'
+          : mainCategories[0],
+      );
       setSubCategory('All');
     }
-  }, [mainCategories, mainCategory]);
+  }, [
+    mainCategories,
+    mainCategory,
+    categoriesLoaded,
+  ]);
 
   const filteredProducts = useMemo(() => {
     const searchQuery = search.trim();
@@ -1221,7 +1446,11 @@ export function ProductGrid({
       /*
        * Normal browsing mode keeps the current category/subcategory rules.
        */
-      const productMainCategory = shopMainCategoryOf(product);
+      const productMainCategory =
+        dynamicShopMainCategoryOf(
+          product,
+          mainCategories,
+        );
 
       if (!productMainCategory) {
         return false;
@@ -1278,6 +1507,7 @@ export function ProductGrid({
     sort,
     mainCategory,
     subCategory,
+    mainCategories,
   ]);
 
   const toggleCompare = (id: string) => {
