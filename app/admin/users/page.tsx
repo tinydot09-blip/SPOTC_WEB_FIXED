@@ -99,6 +99,7 @@ function timestampMillis(value: unknown): number {
 function userCreatedMillis(data: DocumentData): number {
   return timestampMillis(
     data.created_at ??
+      data.created_time ??
       data.createdAt ??
       data.joined_at ??
       data.first_login_at ??
@@ -433,20 +434,9 @@ export default function AdminUsersPage() {
 
       for (const collectionName of ['Users', 'users'] as const) {
         try {
-          let snap;
-
-          try {
-            snap = await getDocs(
-              query(
-                collection(firestore, collectionName),
-                orderBy('created_at', 'desc'),
-              ),
-            );
-          } catch {
-            snap = await getDocs(
-              collection(firestore, collectionName),
-            );
-          }
+          const snap = await getDocs(
+            collection(firestore, collectionName),
+          );
 
           if (collectionName === 'Users') {
             usersUpper = snap.size;
