@@ -27,6 +27,8 @@ import { auth, db } from '@/lib/firebase';
 type OfferRow = {
   id: string;
   data: DocumentData;
+  source: 'listing' | 'product';
+  productId?: string;
 };
 
 type ProductRow = {
@@ -202,13 +204,109 @@ function offerStatus(data: DocumentData): {
 }
 
 function videoUrl(data: DocumentData): string {
-  return text(
-    data.playback_url ??
+  const direct = text(
+    data.product_video_url ??
       data.playback_720_url ??
       data.playback_480_url ??
+      data.playback_url ??
       data.business_video_url ??
-      data.video_url,
+      data.video_url ??
+      data.hls_master_url,
   );
+
+  if (direct) return direct;
+
+  if (Array.isArray(data.media)) {
+    const media = data.media as Array<Record<string, unknown>>;
+
+    const videoItem = media.find((item) => {
+      const type = text(item.type).toLowerCase();
+      const role = text(item.role).toLowerCase();
+      const slot = text(item.slot).toLowerCase();
+
+      return (
+        type === 'video' ||
+        role === 'video' ||
+        slot === 'product_video'
+      );
+    });
+
+    if (videoItem) {
+      return text(
+        videoItem.url ??
+          videoItem.publicUrl ??
+          videoItem.public_url ??
+          videoItem.src,
+      );
+    }
+  }
+
+  return '';
+}
+
+function normalizeVideoUrl(value: string): string {
+  const raw = text(value);
+  if (!raw) return '';
+
+  try {
+    return decodeURIComponent(raw.split('?')[0])
+      .trim()
+      .toLowerCase();
+  } catch {
+    return raw.split('?')[0].trim().toLowerCase();
+  }
+}
+
+function productOfferRow(row: ProductRow): OfferRow | null {
+  const url = videoUrl(row.data);
+  if (!url) return null;
+
+  const data = row.data;
+  const title = productTitle(data);
+
+  return {
+    id: `product-video-${row.id}`,
+    source: 'product',
+    productId: row.id,
+    data: {
+      ...data,
+
+      // Shape this product video exactly like an offer row for the admin UI.
+      title,
+      offer_title:
+        text(data.offer_title) ||
+        title,
+      offer_text:
+        text(data.offer_text) ||
+        title,
+
+      business_video_url: url,
+      playback_url: url,
+
+      linked_product_ids: [row.id],
+      product_ids: [row.id],
+      product_id: row.id,
+      linked_product_id: row.id,
+
+      isActive:
+        data.isActive !== false,
+      approval_status: 'approved',
+      isApproved: true,
+      processing_status: 'ready',
+
+      // Keep any existing limited-time fields already stored on the product.
+      offer_start_at:
+        data.offer_start_at ??
+        data.start_at ??
+        data.created_at ??
+        null,
+      offer_end_at:
+        data.offer_end_at ??
+        data.end_at ??
+        data.valid_until ??
+        null,
+    },
+  };
 }
 
 export default function AdminOffersPage() {
@@ -279,23 +377,7 @@ export default function AdminOffersPage() {
         productSnap = await getDocs(collection(db, 'BusinessProducts'));
       }
 
-      setOffers(
-        offerSnap.docs
-          .map((item) => ({
-            id: item.id,
-            data: item.data(),
-          }))
-          .filter(({ data }) => {
-            // Keep admin-created SPOTC offers plus older records that still contain video.
-            return (
-              data.source === 'web_admin' ||
-              data.seller_type === 'spotc' ||
-              Boolean(videoUrl(data))
-            );
-          }),
-      );
-
-      setProducts(
+      const productRows: ProductRow[] =
         productSnap.docs
           .map((item) => ({
             id: item.id,
@@ -303,10 +385,68 @@ export default function AdminOffersPage() {
           }))
           .filter(
             ({ data }) =>
-              data.isDeleted !== true &&
-              data.isActive !== false,
-          ),
+              data.isDeleted !== true,
+          );
+
+      setProducts(
+        productRows.filter(
+          ({ data }) =>
+            data.isActive !== false,
+        ),
       );
+
+      const listingRows: OfferRow[] =
+        offerSnap.docs
+          .map((item) => ({
+            id: item.id,
+            data: item.data(),
+            source: 'listing' as const,
+          }))
+          .filter(({ data }) => {
+            // Admin must show every BusinessListings video that can represent
+            // an offer, including old/legacy limited-time offers.
+            return Boolean(videoUrl(data));
+          });
+
+      const listingVideos = new Set(
+        listingRows
+          .map((row) =>
+            normalizeVideoUrl(
+              videoUrl(row.data),
+            ),
+          )
+          .filter(Boolean),
+      );
+
+      // The live customer Offers feed also converts BusinessProducts that have
+      // product_video_url/media video into offer cards. Mirror that here.
+      const productVideoRows =
+        productRows
+          .map(productOfferRow)
+          .filter(
+            (
+              row,
+            ): row is OfferRow =>
+              row !== null,
+          )
+          .filter((row) => {
+            const normalized =
+              normalizeVideoUrl(
+                videoUrl(row.data),
+              );
+
+            return (
+              Boolean(normalized) &&
+              !listingVideos.has(
+                normalized,
+              )
+            );
+          });
+
+      setOffers([
+        ...listingRows,
+        ...productVideoRows,
+      ]);
 
       setMessage('');
     } catch (error) {
@@ -784,6 +924,13 @@ export default function AdminOffersPage() {
   async function toggleOffer(row: OfferRow) {
     if (!db || busyId) return;
 
+    if (row.source === 'product') {
+      setMessage(
+        'This offer comes directly from a product video. Edit the product to change or remove its video.',
+      );
+      return;
+    }
+
     const nextActive = row.data.isActive === false;
 
     setBusyId(row.id);
@@ -829,6 +976,13 @@ export default function AdminOffersPage() {
 
   async function deleteOffer(row: OfferRow) {
     if (!db || busyId) return;
+
+    if (row.source === 'product') {
+      setMessage(
+        'This offer is generated from the product video. Open the product editor to replace/remove that video.',
+      );
+      return;
+    }
 
     if (
       !window.confirm(
@@ -895,11 +1049,50 @@ export default function AdminOffersPage() {
       </div>
 
       <div style={summaryGrid}>
-        <SummaryCard label="Total Offers" value={summary.total} />
-        <SummaryCard label="Active" value={summary.active} />
-        <SummaryCard label="Scheduled" value={summary.scheduled} />
-        <SummaryCard label="Expired" value={summary.expired} />
-        <SummaryCard label="Hidden" value={summary.hidden} />
+        <SummaryCard
+          label="Total Offers"
+          value={summary.total}
+          active={statusFilter === 'all'}
+          onClick={() =>
+            setStatusFilter('all')
+          }
+        />
+
+        <SummaryCard
+          label="Active"
+          value={summary.active}
+          active={statusFilter === 'active'}
+          onClick={() =>
+            setStatusFilter('active')
+          }
+        />
+
+        <SummaryCard
+          label="Scheduled"
+          value={summary.scheduled}
+          active={statusFilter === 'scheduled'}
+          onClick={() =>
+            setStatusFilter('scheduled')
+          }
+        />
+
+        <SummaryCard
+          label="Expired"
+          value={summary.expired}
+          active={statusFilter === 'expired'}
+          onClick={() =>
+            setStatusFilter('expired')
+          }
+        />
+
+        <SummaryCard
+          label="Hidden"
+          value={summary.hidden}
+          active={statusFilter === 'hidden'}
+          onClick={() =>
+            setStatusFilter('hidden')
+          }
+        />
       </div>
 
       <div style={controlsCard}>
@@ -1017,7 +1210,11 @@ export default function AdminOffersPage() {
                             )}
                           </div>
 
-                          <div style={smallText}>{row.id}</div>
+                          <div style={smallText}>
+                            {row.source === 'product'
+                              ? `Product video • ${row.productId}`
+                              : row.id}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -1071,43 +1268,56 @@ export default function AdminOffersPage() {
                     </td>
 
                     <td style={actionsCell}>
-                      <div style={actionRow}>
-                        <button
-                          type="button"
-                          title={
-                            row.data.isActive === false
-                              ? 'Activate offer'
-                              : 'Hide offer'
-                          }
-                          aria-label={
-                            row.data.isActive === false
-                              ? 'Activate offer'
-                              : 'Hide offer'
-                          }
-                          disabled={busy}
-                          onClick={() => void toggleOffer(row)}
-                          style={{
-                            ...iconActionButton,
-                            opacity: busy ? 0.45 : 1,
-                          }}
+                      {row.source === 'product' ? (
+                        <a
+                          href={`/admin/products?edit=${encodeURIComponent(
+                            row.productId ?? '',
+                          )}`}
+                          title="Edit product video"
+                          aria-label="Edit product video"
+                          style={productEditAction}
                         >
-                          {row.data.isActive === false ? '◉' : '⊘'}
-                        </button>
+                          ✎
+                        </a>
+                      ) : (
+                        <div style={actionRow}>
+                          <button
+                            type="button"
+                            title={
+                              row.data.isActive === false
+                                ? 'Activate offer'
+                                : 'Hide offer'
+                            }
+                            aria-label={
+                              row.data.isActive === false
+                                ? 'Activate offer'
+                                : 'Hide offer'
+                            }
+                            disabled={busy}
+                            onClick={() => void toggleOffer(row)}
+                            style={{
+                              ...iconActionButton,
+                              opacity: busy ? 0.45 : 1,
+                            }}
+                          >
+                            {row.data.isActive === false ? '◉' : '⊘'}
+                          </button>
 
-                        <button
-                          type="button"
-                          title="Delete offer"
-                          aria-label="Delete offer"
-                          disabled={busy}
-                          onClick={() => void deleteOffer(row)}
-                          style={{
-                            ...iconDeleteButton,
-                            opacity: busy ? 0.45 : 1,
-                          }}
-                        >
-                          🗑
-                        </button>
-                      </div>
+                          <button
+                            type="button"
+                            title="Delete offer"
+                            aria-label="Delete offer"
+                            disabled={busy}
+                            onClick={() => void deleteOffer(row)}
+                            style={{
+                              ...iconDeleteButton,
+                              opacity: busy ? 0.45 : 1,
+                            }}
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
@@ -1429,15 +1639,28 @@ export default function AdminOffersPage() {
 function SummaryCard({
   label,
   value,
+  active = false,
+  onClick,
 }: {
   label: string;
   value: number;
+  active?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <div style={summaryCard}>
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        ...summaryCard,
+        ...(active
+          ? summaryCardActive
+          : {}),
+      }}
+    >
       <div style={summaryLabel}>{label}</div>
       <div style={summaryValue}>{value}</div>
-    </div>
+    </button>
   );
 }
 
@@ -1556,10 +1779,20 @@ const summaryGrid: React.CSSProperties = {
 };
 
 const summaryCard: React.CSSProperties = {
+  width: '100%',
   background: '#fff',
   border: '1px solid #e7e7e7',
   borderRadius: 14,
   padding: 15,
+  textAlign: 'left',
+  font: 'inherit',
+  cursor: 'pointer',
+};
+
+const summaryCardActive: React.CSSProperties = {
+  borderColor: '#d68a2c',
+  boxShadow:
+    '0 0 0 2px rgba(214,138,44,.12)',
 };
 
 const summaryLabel: React.CSSProperties = {
@@ -1756,6 +1989,19 @@ const actionRow: React.CSSProperties = {
   display: 'flex',
   gap: 5,
   alignItems: 'center',
+};
+
+const productEditAction: React.CSSProperties = {
+  width: 30,
+  height: 30,
+  border: '1px solid #ddd',
+  background: '#111',
+  color: '#fff',
+  borderRadius: 8,
+  display: 'grid',
+  placeItems: 'center',
+  textDecoration: 'none',
+  fontSize: 14,
 };
 
 const iconActionButton: React.CSSProperties = {
