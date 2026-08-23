@@ -1122,7 +1122,10 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     ),
   ];
 
-  const visibleGiftProducts = useMemo(() => {
+  // IMPORTANT: this is intentionally a normal calculation, not a React hook.
+  // This block is below the loading/not-found returns, so using useMemo here
+  // causes React error #310 (different hook count between renders).
+  const visibleGiftProducts = (() => {
     const searchValue = giftSearch.trim().toLowerCase();
 
     const matchingProducts = giftProducts.filter((item) => {
@@ -1215,7 +1218,7 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     }
 
     return mixedProducts;
-  }, [giftProducts, giftCategory, giftSearch]);
+  })();
 
   const selectedGiftProducts = giftProducts.filter((item) =>
     selectedGiftIds.includes(String(item.id)),
