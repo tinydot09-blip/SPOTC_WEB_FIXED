@@ -17,16 +17,6 @@ const CART_KEY = 'spotc_cart';
 const ORDERS_KEY = 'spotc_orders';
 export const CART_CHANGE_EVENT = 'spotc-cart-change';
 
-const safeQuantity = (value: unknown, fallback = 1): number => {
-  const quantity = Number(value);
-
-  if (!Number.isFinite(quantity) || quantity < 1) {
-    return fallback;
-  }
-
-  return Math.floor(quantity);
-};
-
 const businessIdOf = (product: BusinessProduct): string => {
   const record = product as BusinessProduct & {
     business_id?: unknown;
@@ -61,6 +51,11 @@ const businessIdOf = (product: BusinessProduct): string => {
   return text(reference).trim();
 };
 
+const cartItemKey = (
+  item: Pick<CartItem, 'id' | 'size' | 'color'>,
+): string =>
+  `${item.id}:${item.size || ''}:${item.color || ''}`;
+
 export function readCart(): CartItem[] {
   if (typeof window === 'undefined') return [];
 
@@ -69,10 +64,12 @@ export function readCart(): CartItem[] {
     if (!storedValue) return [];
 
     const parsed = JSON.parse(storedValue) as unknown;
-
     if (!Array.isArray(parsed)) return [];
 
-    return parsed
+    const seen = new Set<string>();
+    const normalizedItems: CartItem[] = [];
+
+    parsed
       .filter(
         (item): item is CartItem =>
           Boolean(
@@ -81,35 +78,39 @@ export function readCart(): CartItem[] {
               'id' in item,
           ),
       )
-      .map((item) => ({
-        ...item,
-        id: String(item.id),
-        title: String(item.title || 'Product'),
-        image: String(item.image || ''),
-        price: Number(item.price) || 0,
-        qty: safeQuantity(item.qty),
-        size: String(item.size || ''),
-        color: String(item.color || ''),
-      }));
+      .forEach((item) => {
+        const normalizedItem: CartItem = {
+          ...item,
+          id: String(item.id),
+          title: String(item.title || 'Product'),
+          image: String(item.image || ''),
+          price: Number(item.price) || 0,
+          qty: 1,
+          size: String(item.size || ''),
+          color: String(item.color || ''),
+        };
+
+        const key = cartItemKey(normalizedItem);
+        if (seen.has(key)) return;
+
+        seen.add(key);
+        normalizedItems.push(normalizedItem);
+      });
+
+    return normalizedItems;
   } catch {
     return [];
   }
 }
 
 export function getCartCount(): number {
-  return readCart().reduce(
-    (total, item) => total + safeQuantity(item.qty),
-    0,
-  );
+  return readCart().length;
 }
 
 function notifyCartChange(items: CartItem[]): void {
   if (typeof window === 'undefined') return;
 
-  const count = items.reduce(
-    (total, item) => total + safeQuantity(item.qty),
-    0,
-  );
+  const count = items.length;
 
   window.dispatchEvent(
     new CustomEvent(CART_CHANGE_EVENT, {
@@ -120,11 +121,6 @@ function notifyCartChange(items: CartItem[]): void {
     }),
   );
 
-  /*
-   * The native storage event normally fires only in other tabs.
-   * Dispatching this event also updates components listening for
-   * storage changes in the current tab.
-   */
   window.dispatchEvent(
     new StorageEvent('storage', {
       key: CART_KEY,
@@ -137,15 +133,30 @@ function notifyCartChange(items: CartItem[]): void {
 export function writeCart(items: CartItem[]): void {
   if (typeof window === 'undefined') return;
 
+  const seen = new Set<string>();
+
   const normalizedItems = items
     .filter((item) => Boolean(item?.id))
     .map((item) => ({
       ...item,
-      qty: safeQuantity(item.qty),
+      id: String(item.id),
+      title: String(item.title || 'Product'),
+      image: String(item.image || ''),
+      qty: 1,
       price: Number(item.price) || 0,
       size: item.size || '',
       color: item.color || '',
-    }));
+    }))
+    .filter((item) => {
+      const key = cartItemKey(item);
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
 
   window.localStorage.setItem(
     CART_KEY,
@@ -169,26 +180,23 @@ export function addProduct(
 
   const size = text(options?.size ?? product.size).trim();
   const color = text(options?.color ?? product.color).trim();
-  const quantityToAdd = safeQuantity(options?.qty);
 
   const productId = String(product.id);
   const cartKey = `${productId}:${size}:${color}`;
 
-  const existingItem = items.find((item) => {
-    const existingKey = `${item.id}:${item.size || ''}:${item.color || ''}`;
-    return existingKey === cartKey;
-  });
+  const existingItem = items.find(
+    (item) => cartItemKey(item) === cartKey,
+  );
 
   if (existingItem) {
-    existingItem.qty =
-      safeQuantity(existingItem.qty) + quantityToAdd;
+    existingItem.qty = 1;
   } else {
     items.push({
       id: productId,
       title: titleOf(product),
       image: imageOf(product),
       price: priceOf(product),
-      qty: quantityToAdd,
+      qty: 1,
       businessId: businessIdOf(product),
       businessName: text(product.business_name).trim(),
       size,
@@ -205,6 +213,11 @@ export function updateCartQuantity(
   size = '',
   color = '',
 ): void {
+  if (quantity <= 0) {
+    removeCartItem(id, size, color);
+    return;
+  }
+
   const items = readCart();
 
   const item = items.find(
@@ -216,12 +229,7 @@ export function updateCartQuantity(
 
   if (!item) return;
 
-  if (quantity <= 0) {
-    removeCartItem(id, size, color);
-    return;
-  }
-
-  item.qty = safeQuantity(quantity);
+  item.qty = 1;
   writeCart(items);
 }
 
