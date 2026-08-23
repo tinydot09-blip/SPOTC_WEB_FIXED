@@ -2,6 +2,7 @@
 
 import {
   collection,
+  deleteDoc,
   doc,
   getDocs,
   orderBy,
@@ -180,6 +181,109 @@ function orderNumber(row: OrderRow): string {
 
 function orderItems(data: DocumentData): DocumentData[] {
   return Array.isArray(data.items) ? data.items : [];
+}
+
+type FreeGiftInfo = {
+  id: string;
+  title: string;
+  image: string;
+  originalPrice: number;
+};
+
+function freeGiftsFromOrder(data: DocumentData): FreeGiftInfo[] {
+  const candidates: unknown[] = [];
+
+  const topLevelSources = [
+    data.free_gifts,
+    data.selected_free_gifts,
+    data.freeGifts,
+    data.selectedFreeGifts,
+    data.gifts,
+  ];
+
+  for (const source of topLevelSources) {
+    if (Array.isArray(source)) {
+      candidates.push(...source);
+    }
+  }
+
+  for (const item of orderItems(data)) {
+    if (
+      item?.is_free_gift === true ||
+      item?.isFreeGift === true ||
+      text(item?.type).toLowerCase() === 'free_gift'
+    ) {
+      candidates.push(item);
+    }
+
+    const nestedSources = [
+      item?.free_gifts,
+      item?.selected_free_gifts,
+      item?.freeGifts,
+      item?.selectedFreeGifts,
+      item?.gifts,
+    ];
+
+    for (const source of nestedSources) {
+      if (Array.isArray(source)) {
+        candidates.push(...source);
+      }
+    }
+  }
+
+  const unique = new Map<string, FreeGiftInfo>();
+
+  candidates.forEach((candidate, index) => {
+    if (!candidate || typeof candidate !== 'object') return;
+
+    const gift = candidate as DocumentData;
+
+    const id =
+      text(
+        gift.id ??
+          gift.product_id ??
+          gift.productId ??
+          gift.gift_id ??
+          gift.giftId,
+      ) || `gift-${index}`;
+
+    const title =
+      text(
+        gift.title ??
+          gift.product_name ??
+          gift.name ??
+          gift.gift_name ??
+          gift.giftName,
+      ) || 'FREE Gift';
+
+    const image = text(
+      gift.image ??
+        gift.image_url ??
+        gift.product_image ??
+        gift.product_image_url ??
+        gift.thumbnail_url,
+    );
+
+    const originalPrice = Math.max(
+      0,
+      numberValue(
+        gift.original_price ??
+          gift.originalPrice ??
+          gift.mrp ??
+          gift.price ??
+          0,
+      ),
+    );
+
+    unique.set(id, {
+      id,
+      title,
+      image,
+      originalPrice,
+    });
+  });
+
+  return [...unique.values()];
 }
 
 function quantityOf(item: DocumentData): number {
@@ -1186,6 +1290,198 @@ export default function AdminOrdersPage() {
     }
   }
 
+  async function deleteOrder(row: OrderRow) {
+    if (!db || busyId) return;
+
+    const status = normalizeStatus(row.data.order_status);
+    const inventoryState = normalizeInventoryState(
+      row.data.inventory_state,
+    );
+
+    const warning =
+      inventoryState === 'reserved'
+        ? '\n\nReserved stock will be released before deleting this order.'
+        : inventoryState === 'sold' || status === 'delivered'
+          ? '\n\nThis order has already affected sold stock. The order record will be deleted, but stock and Sold Qty will NOT be reversed.'
+          : '';
+
+    const confirmed = window.confirm(
+      `Permanently delete order ${orderNumber(row)}?${warning}\n\nThis cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    const firestore = db;
+
+    setBusyId(row.id);
+    setMessage('');
+
+    try {
+      const orderRef = doc(
+        firestore,
+        'Orders',
+        row.id,
+      );
+
+      if (inventoryState === 'reserved') {
+        await runTransaction(
+          firestore,
+          async (transaction) => {
+            const liveOrderSnap =
+              await transaction.get(orderRef);
+
+            if (!liveOrderSnap.exists()) {
+              throw new Error(
+                'Order no longer exists.',
+              );
+            }
+
+            const liveOrder =
+              liveOrderSnap.data();
+
+            const liveInventoryState =
+              normalizeInventoryState(
+                liveOrder.inventory_state,
+              );
+
+            const quantitiesByProduct =
+              new Map<string, number>();
+
+            for (const item of orderItems(liveOrder)) {
+              const productId =
+                productIdFromItem(item);
+
+              if (!productId) continue;
+
+              quantitiesByProduct.set(
+                productId,
+                (quantitiesByProduct.get(
+                  productId,
+                ) || 0) + quantityOf(item),
+              );
+            }
+
+            if (liveInventoryState === 'reserved') {
+              const productSnaps = new Map<
+                string,
+                {
+                  ref: DocumentReference;
+                  data: DocumentData;
+                }
+              >();
+
+              for (const [productId] of quantitiesByProduct) {
+                const productRef = doc(
+                  firestore,
+                  'BusinessProducts',
+                  productId,
+                );
+
+                const productSnap =
+                  await transaction.get(
+                    productRef,
+                  );
+
+                if (productSnap.exists()) {
+                  productSnaps.set(productId, {
+                    ref: productRef,
+                    data: productSnap.data(),
+                  });
+                }
+              }
+
+              for (const [
+                productId,
+                qty,
+              ] of quantitiesByProduct) {
+                const product =
+                  productSnaps.get(productId);
+
+                if (!product) continue;
+
+                const currentStock =
+                  Math.max(
+                    0,
+                    numberValue(
+                      product.data.stock_qty ??
+                        product.data.stock_quantity ??
+                        0,
+                    ),
+                  );
+
+                const currentReserved =
+                  Math.max(
+                    0,
+                    numberValue(
+                      product.data.reserved_qty ??
+                        0,
+                    ),
+                  );
+
+                const nextReserved =
+                  Math.max(
+                    0,
+                    currentReserved - qty,
+                  );
+
+                transaction.update(
+                  product.ref,
+                  {
+                    reserved_qty:
+                      nextReserved,
+                    available_qty:
+                      Math.max(
+                        0,
+                        currentStock -
+                          nextReserved,
+                      ),
+                    is_in_stock:
+                      currentStock -
+                        nextReserved >
+                      0,
+                    updated_at:
+                      serverTimestamp(),
+                  },
+                );
+              }
+            }
+
+            transaction.delete(orderRef);
+          },
+        );
+      } else {
+        await deleteDoc(orderRef);
+      }
+
+      setOrders((prev) =>
+        prev.filter(
+          (item) => item.id !== row.id,
+        ),
+      );
+
+      if (expandedOrderId === row.id) {
+        setExpandedOrderId('');
+      }
+
+      setMessage(
+        `Order ${orderNumber(row)} deleted successfully.`,
+      );
+    } catch (error) {
+      console.error(
+        'Delete order failed:',
+        error,
+      );
+
+      setMessage(
+        error instanceof Error
+          ? `Delete failed: ${error.message}`
+          : 'Failed to delete order.',
+      );
+    } finally {
+      setBusyId('');
+    }
+  }
+
   async function deleteAllOrders() {
     if (!db || deletingAll || orders.length === 0) return;
 
@@ -1462,6 +1758,9 @@ export default function AdminOrdersPage() {
             const items =
               orderItems(row.data);
 
+            const freeGifts =
+              freeGiftsFromOrder(row.data);
+
             const expanded =
               expandedOrderId === row.id;
 
@@ -1566,6 +1865,11 @@ export default function AdminOrdersPage() {
                         0,
                       )}{' '}
                       unit(s)
+                      {freeGifts.length > 0
+                        ? ` + ${freeGifts.length} FREE gift${
+                            freeGifts.length === 1 ? '' : 's'
+                          }`
+                        : ''}
                     </div>
                   </div>
                 </div>
@@ -1738,6 +2042,76 @@ export default function AdminOrdersPage() {
                   )}
                 </div>
 
+                {freeGifts.length > 0 && (
+                  <div style={freeGiftSection}>
+                    <div style={freeGiftHeader}>
+                      <span style={freeGiftIcon}>
+                        🎁
+                      </span>
+
+                      <div>
+                        <div style={freeGiftHeading}>
+                          {freeGifts.length} FREE Gift
+                          {freeGifts.length === 1
+                            ? ''
+                            : 's'}{' '}
+                          Included
+                        </div>
+
+                        <div style={freeGiftSubheading}>
+                          Pack with this order at no extra cost.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={freeGiftList}>
+                      {freeGifts.map((gift) => (
+                        <div
+                          key={`${row.id}-gift-${gift.id}`}
+                          style={freeGiftRow}
+                        >
+                          {gift.image ? (
+                            <img
+                              src={gift.image}
+                              alt=""
+                              style={freeGiftImage}
+                            />
+                          ) : (
+                            <div
+                              style={freeGiftPlaceholder}
+                            >
+                              🎁
+                            </div>
+                          )}
+
+                          <div style={freeGiftMain}>
+                            <div style={freeGiftTitle}>
+                              {gift.title}
+                            </div>
+
+                            <div style={freeGiftPriceRow}>
+                              <span style={freeBadge}>
+                                FREE
+                              </span>
+
+                              {gift.originalPrice > 0 && (
+                                <span
+                                  style={freeGiftOldPrice}
+                                >
+                                  ₹
+                                  {gift.originalPrice.toFixed(
+                                    0,
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div style={orderActions}>
                   {nextStatus && (
                     <button
@@ -1794,6 +2168,23 @@ export default function AdminOrdersPage() {
                         Cancel
                       </button>
                     )}
+
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      void deleteOrder(row)
+                    }
+                    style={{
+                      ...deleteOrderButton,
+                      opacity: busy ? 0.5 : 1,
+                      cursor: busy
+                        ? 'not-allowed'
+                        : 'pointer',
+                    }}
+                  >
+                    Delete
+                  </button>
                 </div>
               </article>
             );
@@ -2320,6 +2711,121 @@ const expandButton: React.CSSProperties = {
   padding: '10px 0',
   cursor: 'pointer',
   fontSize: 12,
+};
+
+const freeGiftSection: React.CSSProperties = {
+  margin: '0 16px 12px',
+  padding: 12,
+  border: '1px solid #cfe8d6',
+  borderRadius: 12,
+  background: '#f3faf5',
+};
+
+const freeGiftHeader: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 9,
+  marginBottom: 10,
+};
+
+const freeGiftIcon: React.CSSProperties = {
+  fontSize: 19,
+  lineHeight: 1,
+};
+
+const freeGiftHeading: React.CSSProperties = {
+  color: '#176b37',
+  fontSize: 12,
+  fontWeight: 700,
+};
+
+const freeGiftSubheading: React.CSSProperties = {
+  marginTop: 2,
+  color: '#6f7d73',
+  fontSize: 10,
+};
+
+const freeGiftList: React.CSSProperties = {
+  display: 'grid',
+  gap: 7,
+};
+
+const freeGiftRow: React.CSSProperties = {
+  minWidth: 0,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  padding: 8,
+  border: '1px solid #dcecdf',
+  borderRadius: 10,
+  background: '#fff',
+};
+
+const freeGiftImage: React.CSSProperties = {
+  width: 48,
+  height: 48,
+  flex: '0 0 48px',
+  objectFit: 'contain',
+  objectPosition: 'center',
+  border: '1px solid #edf1ee',
+  borderRadius: 8,
+  background: '#f8fbf9',
+};
+
+const freeGiftPlaceholder: React.CSSProperties = {
+  width: 48,
+  height: 48,
+  flex: '0 0 48px',
+  display: 'grid',
+  placeItems: 'center',
+  borderRadius: 8,
+  background: '#f8fbf9',
+  fontSize: 20,
+};
+
+const freeGiftMain: React.CSSProperties = {
+  minWidth: 0,
+};
+
+const freeGiftTitle: React.CSSProperties = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  color: '#222',
+  fontSize: 12,
+  fontWeight: 600,
+};
+
+const freeGiftPriceRow: React.CSSProperties = {
+  marginTop: 5,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 7,
+};
+
+const freeBadge: React.CSSProperties = {
+  display: 'inline-flex',
+  padding: '3px 6px',
+  borderRadius: 999,
+  background: '#e9f7ed',
+  color: '#137333',
+  fontSize: 10,
+  fontWeight: 800,
+};
+
+const freeGiftOldPrice: React.CSSProperties = {
+  color: '#929a94',
+  fontSize: 10,
+  textDecoration: 'line-through',
+};
+
+const deleteOrderButton: React.CSSProperties = {
+  border: '1px solid #efb7b3',
+  background: '#fff1f0',
+  color: '#b42318',
+  borderRadius: 9,
+  padding: '10px 14px',
+  fontWeight: 400,
 };
 
 const orderActions: React.CSSProperties = {
