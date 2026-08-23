@@ -383,18 +383,15 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (loading || !items.length || !address) return;
 
-    const signature = items
-      .map((item) => `${item.id}:${item.qty}:${item.price}:${item.size}:${item.color}`)
-      .join('|');
+    const signature = [
+      ...items.map(
+        (item) =>
+          `${item.id}:${item.qty}:${item.price}:${item.size}:${item.color}`,
+      ),
+      selectedDelivery.id,
+    ].join('|');
 
     if (checkoutTrackedRef.current === signature) return;
-
-    sendGa4Event('begin_checkout', {
-      currency: 'INR',
-      value: total,
-      items: items.map(ga4ItemFromCart),
-      delivery_option: selectedDelivery.id,
-    });
 
     sendGa4Event('add_shipping_info', {
       currency: 'INR',

@@ -175,7 +175,7 @@ export default function CartPage() {
     useState<Record<string, SavedGiftBundle>>({});
   const [selectedDeliveryId, setSelectedDeliveryId] =
     useState<DeliveryOptionId>('instant');
-  const viewCartTrackedRef = useRef('');
+  const viewCartTrackedRef = useRef(false);
 
   useEffect(() => {
     const cartItems = readCart();
@@ -212,13 +212,7 @@ export default function CartPage() {
   }, []);
 
   useEffect(() => {
-    if (!items.length) return;
-
-    const signature = items
-      .map((item) => `${item.id}:${item.qty}:${item.price}:${item.size}:${item.color}`)
-      .join('|');
-
-    if (viewCartTrackedRef.current === signature) return;
+    if (!items.length || viewCartTrackedRef.current) return;
 
     sendGa4Event('view_cart', {
       currency: 'INR',
@@ -230,7 +224,7 @@ export default function CartPage() {
       items: items.map(ga4ItemFromCart),
     });
 
-    viewCartTrackedRef.current = signature;
+    viewCartTrackedRef.current = true;
   }, [items]);
 
   const updateCart = (
@@ -293,17 +287,30 @@ export default function CartPage() {
   const decreaseQuantity = (
     itemIndex: number,
   ) => {
+    const item = items[itemIndex];
+
+    if (!item || item.qty <= 1) return;
+
+    sendGa4Event('remove_from_cart', {
+      currency: 'INR',
+      value: Number(item.price) || 0,
+      items: [
+        {
+          ...ga4ItemFromCart(item),
+          quantity: 1,
+        },
+      ],
+      spotc_action: 'decrease_quantity',
+    });
+
     updateCart(
-      items.map((item, index) =>
+      items.map((cartItem, index) =>
         index === itemIndex
           ? {
-              ...item,
-              qty: Math.max(
-                1,
-                item.qty - 1,
-              ),
+              ...cartItem,
+              qty: cartItem.qty - 1,
             }
-          : item,
+          : cartItem,
       ),
     );
   };
@@ -311,14 +318,30 @@ export default function CartPage() {
   const increaseQuantity = (
     itemIndex: number,
   ) => {
+    const item = items[itemIndex];
+
+    if (!item) return;
+
+    sendGa4Event('add_to_cart', {
+      currency: 'INR',
+      value: Number(item.price) || 0,
+      items: [
+        {
+          ...ga4ItemFromCart(item),
+          quantity: 1,
+        },
+      ],
+      spotc_action: 'increase_quantity',
+    });
+
     updateCart(
-      items.map((item, index) =>
+      items.map((cartItem, index) =>
         index === itemIndex
           ? {
-              ...item,
-              qty: item.qty + 1,
+              ...cartItem,
+              qty: cartItem.qty + 1,
             }
-          : item,
+          : cartItem,
       ),
     );
   };

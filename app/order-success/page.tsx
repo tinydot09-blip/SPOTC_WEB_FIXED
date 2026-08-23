@@ -1040,7 +1040,17 @@ export default function OrderSuccessPage() {
         return;
       }
 
-      sendGa4Event('purchase', {
+      const gtag = (
+        window as typeof window & {
+          gtag?: (...args: unknown[]) => void;
+        }
+      ).gtag;
+
+      if (typeof gtag !== 'function') {
+        return;
+      }
+
+      gtag('event', 'purchase', {
         transaction_id: transactionId,
         currency: 'INR',
         value: Number(order.total || 0),

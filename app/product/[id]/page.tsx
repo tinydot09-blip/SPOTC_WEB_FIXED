@@ -1703,6 +1703,12 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
       spotc_action: 'buy_now',
     });
 
+    sendGa4Event('select_content', {
+      content_type: 'product',
+      content_id: String(product.id),
+      spotc_action: 'buy_now',
+    });
+
     router.push('/cart');
   };
 
