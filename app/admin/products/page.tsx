@@ -331,6 +331,127 @@ function safeFilePart(value: string): string {
     .slice(0, 50);
 }
 
+
+const OLD_IMAGE_BATCH_SIZE = 30;
+const OPTIMIZED_IMAGE_MAX_DIMENSION = 1400;
+const OPTIMIZED_IMAGE_TARGET_BYTES = 650_000;
+
+type OldImageCandidate = {
+  rowId: string;
+  slot: Exclude<SlotKey, 'product_video'>;
+  sourceUrl: string;
+};
+
+async function fetchImageAsFile(
+  url: string,
+  name: string,
+): Promise<File> {
+  const response = await fetch(url, { mode: 'cors' });
+
+  if (!response.ok) {
+    throw new Error(`Image download failed (${response.status})`);
+  }
+
+  const blob = await response.blob();
+
+  if (!blob.type.startsWith('image/')) {
+    throw new Error('Downloaded file is not an image.');
+  }
+
+  return new File([blob], name, {
+    type: blob.type || 'image/jpeg',
+    lastModified: Date.now(),
+  });
+}
+
+async function prepareExistingImageForUpload(file: File): Promise<File> {
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () =>
+        reject(new Error('Could not decode an old product image.'));
+      img.src = objectUrl;
+    });
+
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+
+    if (!sourceWidth || !sourceHeight) {
+      throw new Error('Old product image has invalid dimensions.');
+    }
+
+    const scale = Math.min(
+      1,
+      OPTIMIZED_IMAGE_MAX_DIMENSION /
+        Math.max(sourceWidth, sourceHeight),
+    );
+
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext('2d');
+
+    if (!context) {
+      throw new Error('Browser could not prepare the old product image.');
+    }
+
+    context.drawImage(image, 0, 0, width, height);
+
+    const qualities = [0.84, 0.78, 0.72, 0.66, 0.6];
+    let lastBlob: Blob | null = null;
+
+    for (const quality of qualities) {
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, 'image/webp', quality);
+      });
+
+      if (!blob) continue;
+      lastBlob = blob;
+
+      if (blob.size <= OPTIMIZED_IMAGE_TARGET_BYTES) {
+        return new File(
+          [blob],
+          `${file.name.replace(/\.[^.]+$/, '') || 'product'}.webp`,
+          {
+            type: 'image/webp',
+            lastModified: Date.now(),
+          },
+        );
+      }
+    }
+
+    if (!lastBlob) {
+      throw new Error('Could not compress old product image.');
+    }
+
+    return new File(
+      [lastBlob],
+      `${file.name.replace(/\.[^.]+$/, '') || 'product'}.webp`,
+      {
+        type: 'image/webp',
+        lastModified: Date.now(),
+      },
+    );
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function isAlreadyOptimizedImage(url: string): boolean {
+  const value = url.toLowerCase();
+  return (
+    value.includes('/optimized-products/') ||
+    value.includes('_optimized.webp')
+  );
+}
+
 function existingMediaUrl(data: DocumentData, slot: SlotKey): string {
   const media = Array.isArray(data.media) ? data.media : [];
 
@@ -560,6 +681,9 @@ export default function AdminProductsPage() {
     Partial<Record<SlotKey, EditMediaAsset>>
   >({});
   const [editUploadStatus, setEditUploadStatus] = useState('');
+  const [optimizingOldImages, setOptimizingOldImages] = useState(false);
+  const [optimizeStatus, setOptimizeStatus] = useState('');
+  const [optimizedImageCount, setOptimizedImageCount] = useState(0);
 
   async function loadProducts(showLoader = true) {
     if (!db) {
@@ -1547,6 +1671,308 @@ export default function AdminProductsPage() {
     }
   }
 
+
+  function collectOldImageCandidates(): OldImageCandidate[] {
+    const candidates: OldImageCandidate[] = [];
+
+    for (const row of rows) {
+      const slots: Array<Exclude<SlotKey, 'product_video'>> = [
+        'ai_main',
+        'real_front',
+        'real_back',
+        'detail',
+      ];
+
+      for (const slot of slots) {
+        const sourceUrl = existingMediaUrl(row.data, slot);
+
+        if (!sourceUrl) continue;
+        if (!sourceUrl.startsWith('http')) continue;
+        if (isAlreadyOptimizedImage(sourceUrl)) continue;
+
+        candidates.push({
+          rowId: row.id,
+          slot,
+          sourceUrl,
+        });
+      }
+    }
+
+    return candidates;
+  }
+
+  async function uploadOptimizedOldImage(
+    sourceUrl: string,
+    rowId: string,
+    slot: Exclude<SlotKey, 'product_video'>,
+  ): Promise<string> {
+    const user = auth?.currentUser;
+
+    if (!user) {
+      throw new Error('Admin login is required.');
+    }
+
+    const downloaded = await fetchImageAsFile(
+      sourceUrl,
+      `${rowId}_${slot}.jpg`,
+    );
+
+    const optimized = await prepareExistingImageForUpload(downloaded);
+
+    const functions = getFunctions(getApp(), 'asia-south1');
+
+    const getUploadUrl = httpsCallable<
+      {
+        fileName: string;
+        contentType: string;
+      },
+      UploadResult
+    >(functions, 'getR2UploadUrl');
+
+    const fileName =
+      `optimized-products/${user.uid}/` +
+      `${Date.now()}_${safeFilePart(rowId)}_${slot}_optimized.webp`;
+
+    const result = await getUploadUrl({
+      fileName,
+      contentType: 'image/webp',
+    });
+
+    const uploadUrl = cleanText(result.data?.uploadUrl);
+    const publicUrl = cleanText(result.data?.publicUrl);
+
+    if (!uploadUrl || !publicUrl) {
+      throw new Error('R2 upload URL was not returned.');
+    }
+
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'image/webp',
+      },
+      body: optimized,
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error(
+        `R2 upload failed (${uploadResponse.status})`,
+      );
+    }
+
+    return publicUrl;
+  }
+
+  async function optimizeNextOldImageBatch() {
+    if (!db || optimizingOldImages) return;
+
+    const allCandidates = collectOldImageCandidates();
+    const batch = allCandidates.slice(0, OLD_IMAGE_BATCH_SIZE);
+
+    if (!batch.length) {
+      setOptimizeStatus('All old product images are already optimized.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Optimize the next ${batch.length} old images?\n\n` +
+        'This creates new WebP copies and updates Firestore. ' +
+        'Old R2 files are NOT deleted.',
+    );
+
+    if (!confirmed) return;
+
+    setOptimizingOldImages(true);
+    setOptimizeStatus(
+      `Starting batch of ${batch.length} images…`,
+    );
+
+    let successCount = 0;
+    let failedCount = 0;
+    const updatedRows = new Map<string, DocumentData>();
+
+    try {
+      for (let index = 0; index < batch.length; index += 1) {
+        const candidate = batch[index];
+
+        setOptimizeStatus(
+          `Optimizing ${index + 1} / ${batch.length}…`,
+        );
+
+        try {
+          const row =
+            updatedRows.has(candidate.rowId)
+              ? {
+                  id: candidate.rowId,
+                  data: updatedRows.get(candidate.rowId)!,
+                }
+              : rows.find((item) => item.id === candidate.rowId);
+
+          if (!row) {
+            failedCount += 1;
+            continue;
+          }
+
+          const optimizedUrl = await uploadOptimizedOldImage(
+            candidate.sourceUrl,
+            candidate.rowId,
+            candidate.slot,
+          );
+
+          const currentData = { ...row.data };
+
+          const aiMain =
+            candidate.slot === 'ai_main'
+              ? optimizedUrl
+              : existingMediaUrl(currentData, 'ai_main');
+          const realFront =
+            candidate.slot === 'real_front'
+              ? optimizedUrl
+              : existingMediaUrl(currentData, 'real_front');
+          const realBack =
+            candidate.slot === 'real_back'
+              ? optimizedUrl
+              : existingMediaUrl(currentData, 'real_back');
+          const detail =
+            candidate.slot === 'detail'
+              ? optimizedUrl
+              : existingMediaUrl(currentData, 'detail');
+          const video = existingMediaUrl(
+            currentData,
+            'product_video',
+          );
+
+          const images = [
+            aiMain,
+            realFront,
+            realBack,
+            detail,
+          ].filter(Boolean);
+
+          const media = [
+            aiMain
+              ? {
+                  slot: 'ai_main',
+                  role: 'ai',
+                  type: 'image',
+                  label: 'AI Main Image',
+                  url: aiMain,
+                  order: 1,
+                }
+              : null,
+            realFront
+              ? {
+                  slot: 'real_front',
+                  role: 'front',
+                  type: 'image',
+                  label: 'Real Front',
+                  url: realFront,
+                  order: 2,
+                }
+              : null,
+            realBack
+              ? {
+                  slot: 'real_back',
+                  role: 'back',
+                  type: 'image',
+                  label: 'Real Back',
+                  url: realBack,
+                  order: 3,
+                }
+              : null,
+            detail
+              ? {
+                  slot: 'detail',
+                  role: 'additional',
+                  type: 'image',
+                  label: 'Detail Image',
+                  url: detail,
+                  order: 4,
+                }
+              : null,
+            video
+              ? {
+                  slot: 'product_video',
+                  role: 'video',
+                  type: 'video',
+                  label: 'Product Video',
+                  url: video,
+                  order: 5,
+                }
+              : null,
+          ].filter(Boolean);
+
+          const patch: Record<string, unknown> = {
+            images,
+            media,
+            image: aiMain,
+            image_url: aiMain,
+            product_image: aiMain,
+            product_image_url: aiMain,
+            product_thumbnail: aiMain,
+            thumbnail_url: aiMain,
+            studio_image_url: aiMain,
+            raw_image_url: realFront || aiMain,
+            real_front_url: realFront,
+            real_back_url: realBack,
+            detail_image_url: detail,
+            product_video_url: video,
+            image_optimization_version: 1,
+            image_optimized_at: serverTimestamp(),
+            updated_at: serverTimestamp(),
+          };
+
+          await updateDoc(
+            doc(db, 'BusinessProducts', candidate.rowId),
+            patch,
+          );
+
+          const merged = {
+            ...currentData,
+            ...patch,
+            image_optimized_at: new Date(),
+          };
+
+          updatedRows.set(candidate.rowId, merged);
+          successCount += 1;
+          setOptimizedImageCount((count) => count + 1);
+        } catch (error) {
+          console.error(
+            'Old image optimization failed:',
+            candidate,
+            error,
+          );
+          failedCount += 1;
+        }
+      }
+
+      if (updatedRows.size) {
+        setRows((current) =>
+          current.map((row) =>
+            updatedRows.has(row.id)
+              ? {
+                  ...row,
+                  data: updatedRows.get(row.id)!,
+                }
+              : row,
+          ),
+        );
+      }
+
+      const remaining = Math.max(
+        0,
+        collectOldImageCandidates().length - successCount,
+      );
+
+      setOptimizeStatus(
+        `Batch finished: ${successCount} optimized` +
+          (failedCount ? `, ${failedCount} failed` : '') +
+          `. Approx. ${remaining} old images remain.`,
+      );
+    } finally {
+      setOptimizingOldImages(false);
+    }
+  }
+
   async function adjustStock(row: ProductRow, delta: number) {
     if (!db || busyId) return;
     setBusyId(row.id);
@@ -1763,6 +2189,21 @@ export default function AdminProductsPage() {
 
           <button
             type="button"
+            onClick={() => void optimizeNextOldImageBatch()}
+            disabled={optimizingOldImages}
+            style={{
+              ...secondaryButton,
+              opacity: optimizingOldImages ? 0.55 : 1,
+              cursor: optimizingOldImages ? 'wait' : 'pointer',
+            }}
+          >
+            {optimizingOldImages
+              ? 'Optimizing 30…'
+              : 'Optimize Next 30 Images'}
+          </button>
+
+          <button
+            type="button"
             onClick={() => {
               window.location.href = '/admin/products/new';
             }}
@@ -1772,6 +2213,23 @@ export default function AdminProductsPage() {
           </button>
         </div>
       </div>
+
+      {(optimizeStatus || optimizedImageCount > 0) && (
+        <div
+          style={{
+            margin: '0 0 16px',
+            padding: '12px 14px',
+            border: '1px solid #e7dfd2',
+            borderRadius: 12,
+            background: '#fffaf2',
+            color: '#5f4a2e',
+            fontSize: 13,
+            fontWeight: 700,
+          }}
+        >
+          {optimizeStatus || `${optimizedImageCount} images optimized`}
+        </div>
+      )}
 
       <div style={summaryGrid}>
         <SummaryCard
