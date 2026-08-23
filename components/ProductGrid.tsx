@@ -2929,31 +2929,49 @@ export function ProductGrid({
 
           @media (max-width: 700px) {
             .spotc-shop-category-toolbar {
-              gap: 8px;
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) auto;
+              align-items: center;
+              gap: 8px 10px;
               margin-bottom: 8px;
             }
 
+            /* Main categories get the full first row.
+               Swipe horizontally to reach every category. */
             .spotc-main-category-strip {
-              flex: 1 1 auto;
-              gap: 7px;
+              grid-column: 1 / -1;
+              width: 100%;
+              min-width: 0;
+              gap: 8px;
+              padding: 0 1px 2px;
+              scroll-behavior: smooth;
+              overscroll-behavior-x: contain;
+              scroll-snap-type: x proximity;
             }
 
             .spotc-main-category-strip button {
-              min-height: 36px;
-              padding: 0 12px;
-              font-size: 12px;
+              min-height: 38px;
+              padding: 0 14px;
+              font-size: 13px;
+              scroll-snap-align: start;
             }
 
+            /* Sort no longer steals space from the category row. */
             .spotc-shop-sort-box {
-              width: 128px !important;
-              min-width: 128px !important;
-              max-width: 128px !important;
+              grid-column: 2;
+              grid-row: 2;
+              justify-self: end;
+              width: 132px !important;
+              min-width: 132px !important;
+              max-width: 132px !important;
+              margin: 0 !important;
             }
 
             .spotc-shop-sort-box select {
               font-size: 11px !important;
             }
 
+            /* Subcategories use the left side of row two and remain swipeable. */
             .spotc-sub-category-strip {
               gap: 7px;
               margin-bottom: 13px;
@@ -2968,13 +2986,14 @@ export function ProductGrid({
 
           @media (max-width: 420px) {
             .spotc-shop-sort-box {
-              width: 112px !important;
-              min-width: 112px !important;
-              max-width: 112px !important;
+              width: 118px !important;
+              min-width: 118px !important;
+              max-width: 118px !important;
             }
 
             .spotc-main-category-strip button {
-              padding: 0 10px;
+              padding: 0 12px;
+              font-size: 12px;
             }
           }
 
