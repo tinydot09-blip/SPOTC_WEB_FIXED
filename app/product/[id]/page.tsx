@@ -1634,6 +1634,34 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     }
   };
 
+  const decreaseQuantity = () => {
+    const nextQty = Math.max(1, qty - 1);
+
+    if (nextQty === qty) return;
+
+    setQty(nextQty);
+
+    const nextGiftLimit =
+      freeGiftCountPerItem * nextQty;
+
+    setSelectedGiftIds((selected) =>
+      selected.slice(0, nextGiftLimit),
+    );
+  };
+
+  const increaseQuantity = () => {
+    if (!inStock) return;
+
+    const nextQty = Math.min(
+      maximumQuantity,
+      qty + 1,
+    );
+
+    if (nextQty === qty) return;
+
+    setQty(nextQty);
+  };
+
   const toggleFreeGift = (giftId: string) => {
     setSelectedGiftIds((current) => {
       if (current.includes(giftId)) {
@@ -2863,19 +2891,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
                     type="button"
                     aria-label="Decrease quantity"
                     disabled={qty <= 1}
-                    onClick={() => {
-                      setQty((current) => {
-                        const nextQty = Math.max(1, current - 1);
-                        const nextGiftLimit =
-                          freeGiftCountPerItem * nextQty;
-
-                        setSelectedGiftIds((selected) =>
-                          selected.slice(0, nextGiftLimit),
-                        );
-
-                        return nextQty;
-                      });
-                    }}
+                    onClick={decreaseQuantity}
                   >
                     <Minus />
                   </button>
@@ -2886,11 +2902,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
                     type="button"
                     aria-label="Increase quantity"
                     disabled={!inStock || qty >= maximumQuantity}
-                    onClick={() =>
-                      setQty((current) =>
-                        Math.min(maximumQuantity, current + 1),
-                      )
-                    }
+                    onClick={increaseQuantity}
                   >
                     <Plus />
                   </button>
