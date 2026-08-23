@@ -526,7 +526,7 @@ export default function CartPage() {
                     <h3>Choose delivery time</h3>
                   </div>
 
-                  <strong>{money(delivery)}</strong>
+                  <strong>{delivery === 0 ? 'FREE' : money(delivery)}</strong>
                 </div>
 
                 <div className="spotc-delivery-options">
@@ -603,10 +603,9 @@ export default function CartPage() {
                 <span>Delivery</span>
 
                 <strong>
-                  {money(delivery)}
+                  {delivery === 0 ? 'FREE' : money(delivery)}
                 </strong>
               </p>
-
               <p>
                 <span>Platform fee</span>
                 <strong>₹0</strong>
