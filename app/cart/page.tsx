@@ -7,6 +7,7 @@ import {
   useState,
 } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Clock3,
   ShoppingBag,
@@ -166,6 +167,7 @@ const ga4ItemFromCart = (item: CartItem) => ({
 });
 
 export default function CartPage() {
+  const router = useRouter();
   const [items, setItems] =
     useState<CartItem[]>([]);
 
@@ -216,7 +218,7 @@ export default function CartPage() {
       currency: 'INR',
       value: items.reduce(
         (sum, item) =>
-          sum + (Number(item.price) || 0) * Math.max(1, Number(item.qty) || 1),
+          sum + (Number(item.price) || 0),
         0,
       ),
       items: items.map(ga4ItemFromCart),
@@ -276,6 +278,17 @@ export default function CartPage() {
     0,
   );
 
+  const changeFreeGifts = (productId: string) => {
+    if (typeof window === 'undefined') return;
+
+    window.localStorage.setItem(
+      'spotc-change-free-gift-product-id',
+      productId,
+    );
+
+    router.push(`/product/${encodeURIComponent(productId)}?changeGift=1`);
+  };
+
   const removeItem = (
     itemIndex: number,
   ) => {
@@ -291,9 +304,7 @@ export default function CartPage() {
     if (itemToRemove) {
       sendGa4Event('remove_from_cart', {
         currency: 'INR',
-        value:
-          (Number(itemToRemove.price) || 0) *
-          Math.max(1, Number(itemToRemove.qty) || 1),
+        value: Number(itemToRemove.price) || 0,
         items: [ga4ItemFromCart(itemToRemove)],
       });
     }
@@ -441,11 +452,21 @@ export default function CartPage() {
                       {freeGifts.length > 0 && (
                         <div className="spotc-free-gifts">
                           <div className="spotc-free-gifts-title">
-                            <span>🎁</span>
-                            <strong>
-                              FREE Gift
-                              {freeGifts.length === 1 ? '' : 's'} Included
-                            </strong>
+                            <div className="spotc-free-gifts-title-copy">
+                              <span>🎁</span>
+                              <strong>
+                                FREE Gift
+                                {freeGifts.length === 1 ? '' : 's'} Included
+                              </strong>
+                            </div>
+
+                            <button
+                              type="button"
+                              className="spotc-change-gifts-button"
+                              onClick={() => changeFreeGifts(item.id)}
+                            >
+                              Change gifts
+                            </button>
                           </div>
 
                           <div className="spotc-free-gifts-list">
@@ -784,9 +805,35 @@ const styles = `
   .spotc-free-gifts-title {
     display: flex;
     align-items: center;
-    gap: 7px;
+    justify-content: space-between;
+    gap: 12px;
     margin-bottom: 10px;
     color: #137333;
+  }
+
+  .spotc-free-gifts-title-copy {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .spotc-change-gifts-button {
+    flex: 0 0 auto;
+    padding: 7px 10px;
+    border: 1px solid #b9dfc6;
+    border-radius: 999px;
+    color: #137333;
+    background: #ffffff;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .spotc-change-gifts-button:hover {
+    background: #eaf7ef;
   }
 
   .spotc-free-gifts-title strong {
@@ -1335,8 +1382,17 @@ const styles = `
       padding: 12px;
     }
 
+    .spotc-free-gifts-title {
+      gap: 8px;
+    }
+
     .spotc-free-gifts-title strong {
       font-size: 13px;
+    }
+
+    .spotc-change-gifts-button {
+      padding: 6px 9px;
+      font-size: 11px;
     }
 
     .spotc-free-gift {
