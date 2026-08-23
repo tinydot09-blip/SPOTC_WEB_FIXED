@@ -269,7 +269,7 @@ export default function CartPage() {
     }
   };
 
-  const totalQuantity = items.length;
+  
 
   const totalFreeGifts = Object.values(
     giftBundles,
@@ -429,11 +429,7 @@ export default function CartPage() {
               </span>
 
               <div>
-                <strong>
-                  {totalQuantity} product
-                  {totalQuantity === 1 ? '' : 's'} in your cart
-                </strong>
-
+                <strong>Your cart</strong>
                 <small>
                   All products are sold directly by SPOTC
                   {totalFreeGifts > 0
@@ -450,13 +446,7 @@ export default function CartPage() {
                   <h2>Your Items</h2>
                 </div>
 
-                <span>
-                  {totalQuantity} item
-                  {totalQuantity === 1 ? '' : 's'}
-                  {totalFreeGifts > 0
-                    ? ` + ${totalFreeGifts} FREE`
-                    : ''}
-                </span>
+                
               </div>
 
               <div className="spotc-products-list">
