@@ -415,10 +415,6 @@ export default function CartPage() {
             <h1>My Cart</h1>
           </div>
 
-          <span>
-            {totalQuantity} product
-            {totalQuantity === 1 ? '' : 's'}
-          </span>
         </header>
 
         <div className="spotc-cart-layout">
