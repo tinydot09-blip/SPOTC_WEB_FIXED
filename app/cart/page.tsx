@@ -173,16 +173,18 @@ export default function CartPage() {
 
   const [giftBundles, setGiftBundles] =
     useState<Record<string, SavedGiftBundle>>({});
-  const [selectedDeliveryIndex, setSelectedDeliveryIndex] = useState<number>(0);
-  const selectedDelivery = DELIVERY_OPTIONS[selectedDeliveryIndex];
+  const [selectedDeliveryId, setSelectedDeliveryId] =
+    useState<DeliveryOptionId>('instant');
+
+  const selectedDelivery =
+    DELIVERY_OPTIONS.find(
+      (option) => option.id === selectedDeliveryId,
+    ) ?? DELIVERY_OPTIONS[0];
 
   const selectDelivery = (
     option: DeliveryOption,
   ) => {
-    const foundIndex = DELIVERY_OPTIONS.findIndex(o => o.id === option.id);
-    if (foundIndex !== -1) {
-      setSelectedDeliveryIndex(foundIndex);
-    }
+    setSelectedDeliveryId(option.id);
   };
   const viewCartTrackedRef = useRef(false);
 
@@ -252,7 +254,11 @@ export default function CartPage() {
    * - GA4 checkout shipping value
    */
   const delivery =
-    items.length > 0 ? selectedDelivery.fee : 0;
+    items.length === 0
+      ? 0
+      : selectedDeliveryId === 'instant'
+        ? 20
+        : 0;
 
   const total =
     subtotal + delivery;
@@ -520,7 +526,10 @@ export default function CartPage() {
                 })}
               </div>
 
-              <section className="spotc-delivery-section">
+              <section
+                key={selectedDeliveryId}
+                className="spotc-delivery-section"
+              >
                 <div className="spotc-delivery-section-head">
                   <div>
                     <small>DELIVERY OPTION</small>
@@ -589,7 +598,10 @@ export default function CartPage() {
             </article>
           </section>
 
-          <aside className="spotc-bill-card">
+          <aside
+            key={selectedDeliveryId}
+            className="spotc-bill-card"
+          >
             <h2>Bill details</h2>
 
             <div className="spotc-bill-lines">
