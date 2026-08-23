@@ -29,31 +29,25 @@ const firebaseConfig = {
   appId: '1:457147494277:web:be35b6dcad2a7c31831eec',
 };
 
-const APP_NAME = 'spotc-web';
-
 export const firebaseReady = true;
 
+// IMPORTANT:
+// SPOTC existing code expects Firebase's DEFAULT app.
+// Do not create a separately named app here.
 let app: FirebaseApp;
 
-const existingApp = getApps().find(
-  (item) => item.name === APP_NAME,
-);
-
-if (existingApp) {
-  app = existingApp;
+if (getApps().length > 0) {
+  app = getApp();
 } else {
-  app = initializeApp(firebaseConfig, APP_NAME);
+  app = initializeApp(firebaseConfig);
 }
 
 const authInstance: Auth = getAuth(app);
-const firestoreInstance: Firestore =
-  getFirestore(app);
-const storageInstance: FirebaseStorage =
-  getStorage(app);
+const firestoreInstance: Firestore = getFirestore(app);
+const storageInstance: FirebaseStorage = getStorage(app);
 
 export const auth = authInstance;
 export const db = firestoreInstance;
 export const storage = storageInstance;
 
-export const firebaseProjectId =
-  firebaseConfig.projectId;
+export const firebaseProjectId = firebaseConfig.projectId;
