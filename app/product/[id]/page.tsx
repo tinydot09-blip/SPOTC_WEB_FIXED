@@ -2375,7 +2375,13 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
     <main className="pd-page">
       <div className="pd-shop-category-bar" aria-label="Shop categories">
         <div className="pd-shop-category-list">
-          {['Girl Dress', 'Earrings', 'Toys'].map((categoryName) => {
+          {[
+            'Girl Dress',
+            'Earrings',
+            'Fancy Items',
+            'Toys',
+            'Keychains',
+          ].map((categoryName) => {
             const isActive =
               mainCategoryText.trim().toLowerCase() ===
               categoryName.trim().toLowerCase();
