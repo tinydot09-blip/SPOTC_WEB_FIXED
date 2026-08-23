@@ -832,23 +832,15 @@ if (!signedInUser) {
               )}
 
             <Link
-              href="/cart"
-              className="spotc-header-cart-button"
-              aria-label={`Shopping cart with ${cartCount} items`}
-            >
-              <ShoppingBag
-                size={21}
-                strokeWidth={1.9}
-              />
-
-              {cartCount > 0 && (
-                <span className="spotc-header-cart-badge">
-                  {cartCount > 99
-                    ? '99+'
-                    : cartCount}
-                </span>
-              )}
-            </Link>
+  href="/cart"
+  className="spotc-header-cart-button"
+  aria-label="Shopping cart"
+>
+  <ShoppingBag
+    size={21}
+    strokeWidth={1.9}
+  />
+</Link>
 
             {!authLoading && (
               <div
