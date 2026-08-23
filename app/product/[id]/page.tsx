@@ -721,6 +721,7 @@ export default function ProductDetailPage() {
   const [giftSearch, setGiftSearch] = useState('');
   const [giftCategory, setGiftCategory] = useState('All');
   const [selectedGiftIds, setSelectedGiftIds] = useState<string[]>([]);
+  const [changingGiftIndex, setChangingGiftIndex] = useState<number | null>(null);
   const giftProductsRef = useRef<HTMLDivElement | null>(null);
   const viewItemTrackedRef = useRef('');
   const [tryOnOpen, setTryOnOpen] = useState(false);
@@ -761,6 +762,7 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     setGiftSearch('');
     setGiftCategory('All');
     setSelectedGiftIds([]);
+    setChangingGiftIndex(null);
 
     getProductById(id)
       .then((loadedProduct) => {
@@ -961,7 +963,10 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     if (!product || typeof window === 'undefined') return;
 
     const query = new URLSearchParams(window.location.search);
-    if (query.get('gift') !== '1') return;
+    const openNormalGiftPicker = query.get('gift') === '1';
+    const changeOneGift = query.get('changeGift') === '1';
+
+    if (!openNormalGiftPicker && !changeOneGift) return;
 
     const currentPrice = customerPriceOf(product);
     const currentGiftCount =
@@ -971,9 +976,60 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
           ? 1
           : Math.floor(currentPrice / 100);
 
-    if (currentGiftCount > 0) {
+    if (currentGiftCount <= 0) return;
+
+    if (changeOneGift) {
+      const queryGiftIndex = Number(query.get('giftIndex'));
+      const storedGiftIndex = Number(
+        window.localStorage.getItem('spotc-change-free-gift-index'),
+      );
+
+      const requestedGiftIndex = Number.isInteger(queryGiftIndex)
+        ? queryGiftIndex
+        : storedGiftIndex;
+
+      const safeGiftIndex =
+        Number.isInteger(requestedGiftIndex) &&
+        requestedGiftIndex >= 0 &&
+        requestedGiftIndex < currentGiftCount
+          ? requestedGiftIndex
+          : 0;
+
+      try {
+        const rawBundle = window.localStorage.getItem(
+          `spotc-free-gifts:${product.id}`,
+        );
+
+        if (rawBundle) {
+          const parsed = JSON.parse(rawBundle) as {
+            gifts?: Array<{ id?: unknown }>;
+          };
+
+          const currentGiftIds = Array.isArray(parsed.gifts)
+            ? parsed.gifts
+                .map((gift) => String(gift?.id || ''))
+                .filter(Boolean)
+            : [];
+
+          setSelectedGiftIds(
+            currentGiftIds.filter((_, index) => index !== safeGiftIndex),
+          );
+        } else {
+          setSelectedGiftIds([]);
+        }
+      } catch {
+        setSelectedGiftIds([]);
+      }
+
+      setChangingGiftIndex(safeGiftIndex);
+      setGiftSearch('');
+      setGiftCategory('All');
       setGiftPreviewOpen(true);
+      return;
     }
+
+    setChangingGiftIndex(null);
+    setGiftPreviewOpen(true);
   }, [product]);
 
   const record = product ? (product as ProductRecord) : null;
@@ -1594,7 +1650,17 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
 
   const confirmFreeGifts = () => {
     if (selectedGiftIds.length !== freeGiftCount) return;
+
+    saveSelectedGiftsForCart();
     setGiftPreviewOpen(false);
+
+    if (changingGiftIndex !== null && typeof window !== 'undefined') {
+      window.localStorage.removeItem('spotc-change-free-gift-product-id');
+      window.localStorage.removeItem('spotc-change-free-gift-id');
+      window.localStorage.removeItem('spotc-change-free-gift-index');
+      setChangingGiftIndex(null);
+      router.push('/cart');
+    }
   };
 
   const saveSelectedGiftsForCart = () => {
@@ -3038,7 +3104,10 @@ const relatedFreeGiftCount =
           <div
             className="pd-modal-backdrop pd-gift-selector-backdrop"
             role="presentation"
-            onMouseDown={() => setGiftPreviewOpen(false)}
+            onMouseDown={() => {
+              setGiftPreviewOpen(false);
+              setChangingGiftIndex(null);
+            }}
           >
           <section
             className="pd-modal pd-gift-selector"
@@ -3053,8 +3122,11 @@ const relatedFreeGiftCount =
                   FREE WITH THIS ORDER
                 </span>
                 <h2>
-                  Choose {freeGiftCount} FREE{' '}
-                  {freeGiftCount === 1 ? 'gift' : 'gifts'}
+                  {changingGiftIndex !== null
+                    ? 'Choose a replacement FREE gift'
+                    : `Choose ${freeGiftCount} FREE ${
+                        freeGiftCount === 1 ? 'gift' : 'gifts'
+                      }`}
                 </h2>
               
               </div>
@@ -3063,7 +3135,10 @@ const relatedFreeGiftCount =
                 type="button"
                 className="pd-modal-close pd-gift-selector-close"
                 aria-label="Close FREE gift selector"
-                onClick={() => setGiftPreviewOpen(false)}
+                onClick={() => {
+                  setGiftPreviewOpen(false);
+                  setChangingGiftIndex(null);
+                }}
               >
                 <X />
               </button>
@@ -3170,14 +3245,22 @@ const relatedFreeGiftCount =
             <footer className="pd-gift-selector-footer">
               <div>
                 <strong>
-                  {selectedGiftIds.length} of {freeGiftCount} selected
+                  {changingGiftIndex !== null
+                    ? selectedGiftIds.length === freeGiftCount
+                      ? 'Replacement selected'
+                      : 'Choose 1 replacement'
+                    : `${selectedGiftIds.length} of ${freeGiftCount} selected`}
                 </strong>
                 <span>
-                  {selectedGiftIds.length === freeGiftCount
-                    ? 'Your FREE gifts are ready.'
-                    : `Choose ${
-                        freeGiftCount - selectedGiftIds.length
-                      } more.`}
+                  {changingGiftIndex !== null
+                    ? selectedGiftIds.length === freeGiftCount
+                      ? 'Only this FREE gift will be changed.'
+                      : 'Your other FREE gifts will stay unchanged.'
+                    : selectedGiftIds.length === freeGiftCount
+                      ? 'Your FREE gifts are ready.'
+                      : `Choose ${
+                          freeGiftCount - selectedGiftIds.length
+                        } more.`}
                 </span>
               </div>
 
@@ -3189,10 +3272,14 @@ const relatedFreeGiftCount =
                 onClick={confirmFreeGifts}
               >
                 {selectedGiftIds.length === freeGiftCount
-                  ? 'Confirm FREE Gifts'
-                  : `Select ${
-                      freeGiftCount - selectedGiftIds.length
-                    } more`}
+                  ? changingGiftIndex !== null
+                    ? 'Replace Gift'
+                    : 'Confirm FREE Gifts'
+                  : changingGiftIndex !== null
+                    ? 'Choose 1 gift'
+                    : `Select ${
+                        freeGiftCount - selectedGiftIds.length
+                      } more`}
               </button>
             </footer>
           </section>
