@@ -679,6 +679,7 @@ export default function ProductDetailPage() {
   const [giftCategory, setGiftCategory] = useState('All');
   const [selectedGiftIds, setSelectedGiftIds] = useState<string[]>([]);
   const giftProductsRef = useRef<HTMLDivElement | null>(null);
+  const viewItemTrackedRef = useRef('');
   const [tryOnOpen, setTryOnOpen] = useState(false);
 const [tryOnImage, setTryOnImage] = useState<File | null>(null);
 const [tryOnPreview, setTryOnPreview] = useState('');
@@ -725,6 +726,44 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
         if (!loadedProduct) return;
 
         const record = loadedProduct as ProductRecord;
+
+        // GA4 ecommerce: track one product-detail view per product ID.
+        if (
+          typeof window !== 'undefined' &&
+          viewItemTrackedRef.current !== String(loadedProduct.id)
+        ) {
+          const gtag = (
+            window as typeof window & {
+              gtag?: (...args: unknown[]) => void;
+            }
+          ).gtag;
+
+          if (typeof gtag === 'function') {
+            const itemPrice = customerPriceOf(loadedProduct);
+
+            gtag('event', 'view_item', {
+              currency: 'INR',
+              value: itemPrice,
+              items: [
+                {
+                  item_id: String(loadedProduct.id),
+                  item_name: titleOf(loadedProduct),
+                  item_brand: text(record.brand).trim() || undefined,
+                  item_category:
+                    text(record.main_category || record.category).trim() ||
+                    undefined,
+                  item_category2:
+                    text(record.sub_category).trim() || undefined,
+                  price: itemPrice,
+                  quantity: 1,
+                },
+              ],
+            });
+
+            viewItemTrackedRef.current = String(loadedProduct.id);
+          }
+        }
+
         const loadedImages = imageList(record);
         const loadedMedia = productMediaList(record);
         const loadedSizes = stringList(
