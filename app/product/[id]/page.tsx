@@ -1704,33 +1704,6 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     }
   };
 
-  const decreaseQuantity = () => {
-    if (qty <= 1) return;
-
-    const nextQty = qty - 1;
-    setQty(nextQty);
-
-    const nextGiftLimit =
-      freeGiftCountPerItem * nextQty;
-
-    setSelectedGiftIds((selected) =>
-      selected.slice(0, nextGiftLimit),
-    );
-  };
-
-  const increaseQuantity = () => {
-    if (!inStock) return;
-
-    const stockLimit =
-      stockQuantity !== null && stockQuantity > 0
-        ? stockQuantity
-        : 99;
-
-    if (qty >= stockLimit) return;
-
-    setQty(qty + 1);
-  };
-
   const toggleFreeGift = (giftId: string) => {
     setSelectedGiftIds((current) => {
       if (current.includes(giftId)) {
@@ -2959,29 +2932,46 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
                   <button
                     type="button"
                     aria-label="Decrease quantity"
-                    aria-disabled={qty <= 1}
-                    className={qty <= 1 ? 'is-disabled' : ''}
-                    onClick={decreaseQuantity}
+                    onClick={() => {
+                      const nextQty = Math.max(1, qty - 1);
+
+                      if (nextQty === qty) return;
+
+                      setQty(nextQty);
+
+                      const nextGiftLimit =
+                        freeGiftCountPerItem * nextQty;
+
+                      setSelectedGiftIds((selected) =>
+                        selected.slice(0, nextGiftLimit),
+                      );
+                    }}
                   >
                     <Minus />
                   </button>
 
-                  <strong className="pd-qty-value">{qty}</strong>
+                  <strong className="pd-qty-value">
+                    {String(qty)}
+                  </strong>
 
                   <button
                     type="button"
                     aria-label="Increase quantity"
-                    aria-disabled={
-                      !inStock ||
-                      (stockQuantity !== null && qty >= stockQuantity)
-                    }
-                    className={
-                      !inStock ||
-                      (stockQuantity !== null && qty >= stockQuantity)
-                        ? 'is-disabled'
-                        : ''
-                    }
-                    onClick={increaseQuantity}
+                    onClick={() => {
+                      const maxQty =
+                        stockQuantity !== null && stockQuantity > 0
+                          ? stockQuantity
+                          : 99;
+
+                      const nextQty = Math.min(
+                        maxQty,
+                        qty + 1,
+                      );
+
+                      if (nextQty === qty) return;
+
+                      setQty(nextQty);
+                    }}
                   >
                     <Plus />
                   </button>
@@ -4377,8 +4367,7 @@ onClick={openShoppingCircle}
   background:#f7f7f7 !important;
 }
 
-.pd-qty-inline button:disabled,
-.pd-qty-inline button.is-disabled{
+.pd-qty-inline button:disabled{
   opacity:.35 !important;
   cursor:not-allowed !important;
 }
