@@ -2789,8 +2789,8 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
             </>
           )}
 
-          <div className={`pd-purchase-row ${stockQuantity === 1? 'pd-purchase-row-no-qty' : ''}`}>
-            {(stockQuantity !== null && stockQuantity >= 2) && (
+          <div className={`pd-purchase-row ${stockQuantity !== null && stockQuantity <= 2 ? 'pd-purchase-row-no-qty' : ''}`}>
+            {(stockQuantity === null || stockQuantity > 2) && (
               <div className="pd-qty pd-qty-inline">
                 <div>
                   <button
