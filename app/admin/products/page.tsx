@@ -464,6 +464,7 @@ export default function AdminProductsPage() {
   const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [soldOnly, setSoldOnly] = useState(false);
+  const [reservedOnly, setReservedOnly] = useState(false);
   const deepLinkOpenedRef = useRef('');
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
@@ -689,6 +690,7 @@ export default function AdminProductsPage() {
       if (stockFilter === 'attention' && stock > 2) return false;
 
       if (soldOnly && soldOf(data) <= 0) return false;
+      if (reservedOnly && reservedOf(data) <= 0) return false;
 
       if (statusFilter === 'active' && data.isActive === false) return false;
       if (statusFilter === 'hidden' && data.isActive !== false) return false;
@@ -732,6 +734,7 @@ export default function AdminProductsPage() {
     categoryFilter,
     stockFilter,
     soldOnly,
+    reservedOnly,
     statusFilter,
     giftFilter,
     locationFilter,
@@ -745,6 +748,7 @@ export default function AdminProductsPage() {
     categoryFilter,
     stockFilter,
     soldOnly,
+    reservedOnly,
     statusFilter,
     giftFilter,
     locationFilter,
@@ -1464,7 +1468,63 @@ export default function AdminProductsPage() {
     setGiftFilter('all');
     setLocationFilter('all');
     setSoldOnly(false);
+    setReservedOnly(false);
     setSortBy('newest');
+  }
+
+  function resetSummaryFilters() {
+    setSearch('');
+    setCategoryFilter('all');
+    setStockFilter('all');
+    setStatusFilter('all');
+    setGiftFilter('all');
+    setLocationFilter('all');
+    setSoldOnly(false);
+    setReservedOnly(false);
+    setSortBy('newest');
+    setPage(1);
+  }
+
+  function showTotalProducts() {
+    resetSummaryFilters();
+  }
+
+  function showActiveProducts() {
+    resetSummaryFilters();
+    setStatusFilter('active');
+  }
+
+  function showLowStockProducts() {
+    resetSummaryFilters();
+    setStockFilter('low_stock');
+    setSortBy('stock_low');
+  }
+
+  function showOutOfStockProducts() {
+    resetSummaryFilters();
+    setStockFilter('out_of_stock');
+    setSortBy('stock_low');
+  }
+
+  function showSoldProducts() {
+    resetSummaryFilters();
+    setSoldOnly(true);
+    setSortBy('sold_high');
+  }
+
+  function showReservedProducts() {
+    resetSummaryFilters();
+    setReservedOnly(true);
+  }
+
+  function showFreeGiftProducts() {
+    resetSummaryFilters();
+    setGiftFilter('gift');
+  }
+
+  function showMissingLocationProducts() {
+    resetSummaryFilters();
+    setLocationFilter('missing');
   }
 
   return (
@@ -1504,14 +1564,71 @@ export default function AdminProductsPage() {
       </div>
 
       <div style={summaryGrid}>
-        <SummaryCard label="Total Products" value={summary.total} />
-        <SummaryCard label="Active" value={summary.active} />
-        <SummaryCard label="Low Stock ≤ 2" value={summary.lowStock} danger={summary.lowStock > 0} />
-        <SummaryCard label="Out of Stock" value={summary.outStock} danger={summary.outStock > 0} />
-        <SummaryCard label="Units Sold" value={summary.unitsSold} />
-        <SummaryCard label="Reserved" value={summary.reservedUnits} />
-        <SummaryCard label="Free Gifts" value={summary.gifts} />
-        <SummaryCard label="Location Missing" value={summary.missingLocation} warning={summary.missingLocation > 0} />
+        <SummaryCard
+          label="Total Products"
+          value={summary.total}
+          onClick={showTotalProducts}
+          active={
+            stockFilter === 'all' &&
+            statusFilter === 'all' &&
+            giftFilter === 'all' &&
+            locationFilter === 'all' &&
+            !soldOnly &&
+            !reservedOnly
+          }
+        />
+
+        <SummaryCard
+          label="Active"
+          value={summary.active}
+          onClick={showActiveProducts}
+          active={statusFilter === 'active'}
+        />
+
+        <SummaryCard
+          label="Low Stock ≤ 2"
+          value={summary.lowStock}
+          danger={summary.lowStock > 0}
+          onClick={showLowStockProducts}
+          active={stockFilter === 'low_stock'}
+        />
+
+        <SummaryCard
+          label="Out of Stock"
+          value={summary.outStock}
+          danger={summary.outStock > 0}
+          onClick={showOutOfStockProducts}
+          active={stockFilter === 'out_of_stock'}
+        />
+
+        <SummaryCard
+          label="Units Sold"
+          value={summary.unitsSold}
+          onClick={showSoldProducts}
+          active={soldOnly}
+        />
+
+        <SummaryCard
+          label="Reserved"
+          value={summary.reservedUnits}
+          onClick={showReservedProducts}
+          active={reservedOnly}
+        />
+
+        <SummaryCard
+          label="Free Gifts"
+          value={summary.gifts}
+          onClick={showFreeGiftProducts}
+          active={giftFilter === 'gift'}
+        />
+
+        <SummaryCard
+          label="Location Missing"
+          value={summary.missingLocation}
+          warning={summary.missingLocation > 0}
+          onClick={showMissingLocationProducts}
+          active={locationFilter === 'missing'}
+        />
       </div>
 
       <div style={controlsCard}>
@@ -1528,6 +1645,19 @@ export default function AdminProductsPage() {
             <button
               type="button"
               onClick={() => setSoldOnly(false)}
+              style={activeFilterClear}
+            >
+              Clear
+            </button>
+          </div>
+        )}
+
+        {reservedOnly && (
+          <div style={activeFilterBanner}>
+            Showing products with Reserved Qty &gt; 0
+            <button
+              type="button"
+              onClick={() => setReservedOnly(false)}
               style={activeFilterClear}
             >
               Clear
@@ -2436,12 +2566,45 @@ export default function AdminProductsPage() {
   );
 }
 
-function SummaryCard({ label, value, danger = false, warning = false }: { label: string; value: number; danger?: boolean; warning?: boolean }) {
+function SummaryCard({
+  label,
+  value,
+  danger = false,
+  warning = false,
+  active = false,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  danger?: boolean;
+  warning?: boolean;
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <div style={summaryCard}>
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        ...summaryCard,
+        ...(active ? summaryCardActive : {}),
+      }}
+      aria-label={`Filter products by ${label}`}
+    >
       <div style={summaryLabel}>{label}</div>
-      <div style={{ ...summaryValue, color: danger ? '#b42318' : warning ? '#b36b00' : '#111' }}>{value}</div>
-    </div>
+      <div
+        style={{
+          ...summaryValue,
+          color: danger
+            ? '#b42318'
+            : warning
+              ? '#b36b00'
+              : '#111',
+        }}
+      >
+        {value}
+      </div>
+    </button>
   );
 }
 
@@ -2494,7 +2657,23 @@ const headerActions: React.CSSProperties = { display: 'flex', gap: 9, flexWrap: 
 const addButton: React.CSSProperties = { border: 0, background: '#111', color: 'white', textDecoration: 'none', fontWeight: 400, padding: '12px 18px', borderRadius: 12, cursor: 'pointer', fontSize: 14 };
 const secondaryButton: React.CSSProperties = { border: '1px solid #dcdcdc', background: '#fff', color: '#222', fontWeight: 400, padding: '10px 14px', borderRadius: 10, cursor: 'pointer' };
 const summaryGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, margin: '22px 0' };
-const summaryCard: React.CSSProperties = { background: 'white', padding: 16, border: '1px solid #e8e8e8', borderRadius: 14 };
+const summaryCard: React.CSSProperties = {
+  width: '100%',
+  minWidth: 0,
+  background: 'white',
+  padding: 16,
+  border: '1px solid #e8e8e8',
+  borderRadius: 14,
+  textAlign: 'left',
+  font: 'inherit',
+  cursor: 'pointer',
+  transition: 'border-color .15s ease, box-shadow .15s ease, transform .15s ease',
+};
+
+const summaryCardActive: React.CSSProperties = {
+  borderColor: '#d68a2c',
+  boxShadow: '0 0 0 2px rgba(214,138,44,.12)',
+};
 const summaryLabel: React.CSSProperties = { fontSize: 12, color: '#777', fontWeight: 400 };
 const summaryValue: React.CSSProperties = { fontSize: 26, fontWeight: 400, marginTop: 4 };
 const controlsCard: React.CSSProperties = { background: '#fff', border: '1px solid #e7e7e7', borderRadius: 16, padding: 14, marginBottom: 16 };
