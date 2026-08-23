@@ -1899,8 +1899,34 @@ export function ProductGrid({
           ))}
         </div>
 
-        <div className="sort-box spotc-shop-sort-box">
+        <div className="sort-box spotc-shop-sort-box spotc-shop-sort-desktop">
           <SlidersHorizontal size={18} />
+
+          <select
+            value={sort}
+            aria-label={t('Sort products')}
+            onChange={(event) =>
+              setSort(event.target.value)
+            }
+          >
+            {[
+              'Featured',
+              'Newest',
+              'Price: Low to High',
+              'Price: High to Low',
+              'Biggest Discount',
+            ].map((option) => (
+              <option key={option} value={option}>{t(option)}</option>
+            ))}
+          </select>
+        </div>
+
+        <div
+          className="spotc-shop-sort-mobile"
+          aria-label={t('Sort products')}
+          title={t('Sort products')}
+        >
+          <SlidersHorizontal size={19} aria-hidden="true" />
 
           <select
             value={sort}
@@ -2927,31 +2953,82 @@ export function ProductGrid({
             background: #fff5df;
           }
 
+          .spotc-shop-sort-mobile {
+            display: none;
+          }
+
           @media (max-width: 700px) {
             .spotc-shop-category-toolbar {
+              display: flex;
+              align-items: center;
               gap: 8px;
               margin-bottom: 8px;
             }
 
+            /* Categories use all remaining width and swipe horizontally. */
             .spotc-main-category-strip {
               flex: 1 1 auto;
-              gap: 7px;
+              width: auto;
+              min-width: 0;
+              gap: 8px;
+              padding: 0 1px 2px;
+              scroll-behavior: smooth;
+              overscroll-behavior-x: contain;
+              scroll-snap-type: x proximity;
             }
 
             .spotc-main-category-strip button {
-              min-height: 36px;
-              padding: 0 12px;
-              font-size: 12px;
+              min-height: 38px;
+              padding: 0 14px;
+              font-size: 13px;
+              scroll-snap-align: start;
             }
 
-            .spotc-shop-sort-box {
-              width: 128px !important;
-              min-width: 128px !important;
-              max-width: 128px !important;
+            /* Mobile uses a separate real icon-only sort control.
+               Hide the desktop Featured dropdown completely. */
+            .spotc-shop-sort-desktop {
+              display: none !important;
             }
 
-            .spotc-shop-sort-box select {
-              font-size: 11px !important;
+            .spotc-shop-sort-mobile {
+              position: relative;
+              flex: 0 0 42px;
+              width: 42px;
+              min-width: 42px;
+              max-width: 42px;
+              height: 42px;
+              min-height: 42px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 0;
+              margin: 0;
+              overflow: hidden;
+              box-sizing: border-box;
+              border: 1px solid #d8d8d8;
+              border-radius: 12px;
+              background: #ffffff;
+              color: #222222;
+            }
+
+            .spotc-shop-sort-mobile > svg {
+              width: 19px;
+              height: 19px;
+              flex: 0 0 19px;
+              pointer-events: none;
+            }
+
+            .spotc-shop-sort-mobile select {
+              position: absolute;
+              inset: 0;
+              width: 100%;
+              height: 100%;
+              margin: 0;
+              padding: 0;
+              opacity: 0;
+              cursor: pointer;
+              appearance: none;
+              -webkit-appearance: none;
             }
 
             .spotc-sub-category-strip {
@@ -2967,14 +3044,18 @@ export function ProductGrid({
           }
 
           @media (max-width: 420px) {
-            .spotc-shop-sort-box {
-              width: 112px !important;
-              min-width: 112px !important;
-              max-width: 112px !important;
+            .spotc-main-category-strip button {
+              padding: 0 12px;
+              font-size: 12px;
             }
 
-            .spotc-main-category-strip button {
-              padding: 0 10px;
+            .spotc-shop-sort-mobile {
+              flex-basis: 40px;
+              width: 40px;
+              min-width: 40px;
+              max-width: 40px;
+              height: 40px;
+              min-height: 40px;
             }
           }
 
