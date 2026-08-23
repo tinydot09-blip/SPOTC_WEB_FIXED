@@ -1103,16 +1103,7 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
   // Example: ₹999 = 9 gifts per item; qty 2 = 18 FREE gifts.
   const freeGiftCount = freeGiftCountPerItem * qty;
 
-  useEffect(() => {
-    setSelectedGiftIds((selected) => {
-      if (selected.length <= freeGiftCount) {
-        return selected;
-      }
-
-      return selected.slice(0, freeGiftCount);
-    });
-  }, [freeGiftCount]);
-
+ 
   const giftCategories = [
     'All',
     ...Array.from(
