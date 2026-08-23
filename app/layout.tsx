@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 
 import './globals.css';
 
@@ -7,6 +8,8 @@ import { LanguageProvider } from '@/components/LanguageProvider';
 import FooterWrapper from '@/components/FooterWrapper';
 import NavigationLoader from '@/components/NavigationLoader';
 import ProfileCompletionGate from '@/components/ProfileCompletionGate';
+
+const GA_MEASUREMENT_ID = 'G-YLJ3YNCN2C';
 
 export const metadata: Metadata = {
   title: 'SPOTC — Namma Area, Namma Kadai',
@@ -20,14 +23,32 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+          strategy="afterInteractive"
+        />
+
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GA_MEASUREMENT_ID}', {
+              page_path: window.location.pathname,
+            });
+          `}
+        </Script>
+      </head>
+
       <body>
         <LanguageProvider>
-        <NavigationLoader />
+          <NavigationLoader />
 
-        <ProfileCompletionGate>
-          <AppShell>{children}</AppShell>
-          <FooterWrapper />
-        </ProfileCompletionGate>
+          <ProfileCompletionGate>
+            <AppShell>{children}</AppShell>
+            <FooterWrapper />
+          </ProfileCompletionGate>
         </LanguageProvider>
       </body>
     </html>
