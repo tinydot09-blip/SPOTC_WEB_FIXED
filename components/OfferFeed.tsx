@@ -988,22 +988,24 @@ function OfferCard({
                 <Link className="spotc-buy-now" href={buyHref}>
                   Buy Now
                 </Link>
-              ) : (
+              ) : delivery.status === "outside" ? (
                 <button
                   type="button"
                   className="spotc-buy-now spotc-buy-now-disabled"
-                  title={
-                    delivery.status === "outside"
-                      ? "Ordering will be available in your area shortly"
-                      : "Enable location to check delivery availability"
-                  }
+                  title="Ordering will be available in your area shortly"
                   onClick={(event) => {
                     event.stopPropagation();
-
-                    if (delivery.status === "outside") {
-                      return;
-                    }
-
+                  }}
+                >
+                  Buy Now
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="spotc-buy-now"
+                  title="Allow location to check delivery availability"
+                  onClick={(event) => {
+                    event.stopPropagation();
                     delivery.requestLocation();
                   }}
                 >
