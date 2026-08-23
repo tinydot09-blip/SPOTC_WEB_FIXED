@@ -4,6 +4,7 @@ import {
   collection,
   doc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -344,6 +345,12 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
   const [message, setMessage] = useState('');
+  const [sourceCounts, setSourceCounts] = useState({
+    ordersUpper: 0,
+    ordersLower: 0,
+    usersUpper: 0,
+    usersLower: 0,
+  });
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] =
@@ -370,36 +377,59 @@ export default function AdminUsersPage() {
     setMessage('');
 
     try {
-      // IMPORTANT:
-      // Load Orders independently first. Even if the Users collection is
-      // empty, missing, lower-case, or unreadable, real order customers must
-      // still appear in Admin -> Users.
-      let ordersSnap;
+      const orderRows: OrderRow[] = [];
+      const seenOrderIds = new Set<string>();
 
-      try {
-        ordersSnap = await getDocs(
-          query(
-            collection(firestore, 'Orders'),
-            orderBy('created_at', 'desc'),
-          ),
-        );
-      } catch {
-        ordersSnap = await getDocs(
-          collection(firestore, 'Orders'),
-        );
+      let ordersUpper = 0;
+      let ordersLower = 0;
+
+      for (const collectionName of ['Orders', 'orders'] as const) {
+        try {
+          let snap;
+
+          try {
+            snap = await getDocs(
+              query(
+                collection(firestore, collectionName),
+                orderBy('created_at', 'desc'),
+              ),
+            );
+          } catch {
+            snap = await getDocs(
+              collection(firestore, collectionName),
+            );
+          }
+
+          if (collectionName === 'Orders') {
+            ordersUpper = snap.size;
+          } else {
+            ordersLower = snap.size;
+          }
+
+          for (const item of snap.docs) {
+            const key = `${collectionName}:${item.id}`;
+
+            if (seenOrderIds.has(key)) continue;
+            seenOrderIds.add(key);
+
+            orderRows.push({
+              id: item.id,
+              data: item.data(),
+            });
+          }
+        } catch (error) {
+          console.warn(
+            `Unable to read ${collectionName}:`,
+            error,
+          );
+        }
       }
 
-      const orderRows: OrderRow[] =
-        ordersSnap.docs.map((item) => ({
-          id: item.id,
-          data: item.data(),
-        }));
-
-      // Read both common user collection names.
-      // Some older parts of the project may have written "users" while newer
-      // code reads "Users".
       const registeredUsers: UserRow[] = [];
       const seenRealUserIds = new Set<string>();
+
+      let usersUpper = 0;
+      let usersLower = 0;
 
       for (const collectionName of ['Users', 'users'] as const) {
         try {
@@ -418,14 +448,15 @@ export default function AdminUsersPage() {
             );
           }
 
+          if (collectionName === 'Users') {
+            usersUpper = snap.size;
+          } else {
+            usersLower = snap.size;
+          }
+
           for (const item of snap.docs) {
-            const dedupeKey = item.id;
-
-            if (seenRealUserIds.has(dedupeKey)) {
-              continue;
-            }
-
-            seenRealUserIds.add(dedupeKey);
+            if (seenRealUserIds.has(item.id)) continue;
+            seenRealUserIds.add(item.id);
 
             registeredUsers.push({
               id: item.id,
@@ -435,18 +466,21 @@ export default function AdminUsersPage() {
               userCollection: collectionName,
             });
           }
-        } catch (userCollectionError) {
-          // Do not fail the whole Users page. Orders are still a valid source
-          // for real customers.
+        } catch (error) {
           console.warn(
-            `Unable to read ${collectionName} collection:`,
-            userCollectionError,
+            `Unable to read ${collectionName}:`,
+            error,
           );
         }
       }
 
-      // Index registered users by UID, phone and email so order customers
-      // merge into an account whenever possible.
+      setSourceCounts({
+        ordersUpper,
+        ordersLower,
+        usersUpper,
+        usersLower,
+      });
+
       const registeredByIdentity =
         new Map<string, UserRow>();
 
@@ -456,44 +490,33 @@ export default function AdminUsersPage() {
         }
       }
 
-      const mergedUsers =
-        new Map<string, UserRow>();
+      const mergedUsers = new Map<string, UserRow>();
 
-      registeredUsers.forEach((row) => {
+      for (const row of registeredUsers) {
         mergedUsers.set(row.id, row);
-      });
+      }
 
-      // Always create/merge a customer from every order.
       for (const order of orderRows) {
+        const uid = orderUserId(order.data);
+
+        const phone = orderCustomerPhone(order.data)
+          .replace(/\D+/g, '');
+
+        const email = orderCustomerEmail(order.data)
+          .toLowerCase();
+
         const identityKey =
           customerIdentityKey(order.data);
 
-        const uid =
-          orderUserId(order.data);
-
-        const phone =
-          orderCustomerPhone(order.data)
-            .replace(/\D+/g, '');
-
-        const email =
-          orderCustomerEmail(order.data)
-            .toLowerCase();
-
         const matchingRegistered =
           (uid
-            ? registeredByIdentity.get(
-                `uid:${uid}`,
-              )
+            ? registeredByIdentity.get(`uid:${uid}`)
             : undefined) ||
           (phone
-            ? registeredByIdentity.get(
-                `phone:${phone}`,
-              )
+            ? registeredByIdentity.get(`phone:${phone}`)
             : undefined) ||
           (email
-            ? registeredByIdentity.get(
-                `email:${email}`,
-              )
+            ? registeredByIdentity.get(`email:${email}`)
             : undefined) ||
           registeredByIdentity.get(identityKey);
 
@@ -505,29 +528,15 @@ export default function AdminUsersPage() {
               data: {
                 ...matchingRegistered.data,
                 display_name:
-                  userName(
-                    matchingRegistered.data,
-                  ) !== 'Customer'
-                    ? userName(
-                        matchingRegistered.data,
-                      )
-                    : orderCustomerName(
-                        order.data,
-                      ),
+                  userName(matchingRegistered.data) !== 'Customer'
+                    ? userName(matchingRegistered.data)
+                    : orderCustomerName(order.data),
                 phone_number:
-                  userPhone(
-                    matchingRegistered.data,
-                  ) ||
-                  orderCustomerPhone(
-                    order.data,
-                  ),
+                  userPhone(matchingRegistered.data) ||
+                  orderCustomerPhone(order.data),
                 email:
-                  userEmail(
-                    matchingRegistered.data,
-                  ) ||
-                  orderCustomerEmail(
-                    order.data,
-                  ),
+                  userEmail(matchingRegistered.data) ||
+                  orderCustomerEmail(order.data),
               },
             },
           );
@@ -536,127 +545,54 @@ export default function AdminUsersPage() {
         }
 
         const syntheticId =
-          syntheticUserIdFromOrder(
-            order.data,
-          );
+          syntheticUserIdFromOrder(order.data);
 
         const existing =
           mergedUsers.get(syntheticId);
 
-        const orderCreated =
-          timestampMillis(
-            order.data.created_at,
-          );
-
         if (!existing) {
-          mergedUsers.set(
-            syntheticId,
-            {
-              id: syntheticId,
-              source: 'orders',
-              hasUserDoc: false,
-              data: {
-                display_name:
-                  orderCustomerName(
-                    order.data,
-                  ),
-                phone_number:
-                  orderCustomerPhone(
-                    order.data,
-                  ),
-                email:
-                  orderCustomerEmail(
-                    order.data,
-                  ),
-                created_at:
-                  order.data.created_at ??
-                  null,
-                last_login_at: null,
-                auth_provider:
-                  'order',
-                order_only_customer:
-                  true,
-                derived_user_uid:
-                  uid || '',
-                is_blocked: false,
-                account_status:
-                  'active',
-              },
+          mergedUsers.set(syntheticId, {
+            id: syntheticId,
+            source: 'orders',
+            hasUserDoc: false,
+            data: {
+              display_name:
+                orderCustomerName(order.data),
+              phone_number:
+                orderCustomerPhone(order.data),
+              email:
+                orderCustomerEmail(order.data),
+              created_at:
+                order.data.created_at ?? null,
+              last_login_at: null,
+              auth_provider: 'order',
+              order_only_customer: true,
+              derived_user_uid: uid || '',
+              is_blocked: false,
+              account_status: 'active',
             },
-          );
-        } else {
-          const existingCreated =
-            userCreatedMillis(
-              existing.data,
-            );
-
-          if (
-            !existingCreated ||
-            orderCreated >=
-              existingCreated
-          ) {
-            mergedUsers.set(
-              syntheticId,
-              {
-                ...existing,
-                data: {
-                  ...existing.data,
-                  display_name:
-                    orderCustomerName(
-                      order.data,
-                    ) ||
-                    userName(
-                      existing.data,
-                    ),
-                  phone_number:
-                    orderCustomerPhone(
-                      order.data,
-                    ) ||
-                    userPhone(
-                      existing.data,
-                    ),
-                  email:
-                    orderCustomerEmail(
-                      order.data,
-                    ) ||
-                    userEmail(
-                      existing.data,
-                    ),
-                  created_at:
-                    existing.data
-                      .created_at ??
-                    order.data
-                      .created_at ??
-                    null,
-                },
-              },
-            );
-          }
+          });
         }
       }
 
       setOrders(orderRows);
-      setUsers(
-        [...mergedUsers.values()],
-      );
+      setUsers([...mergedUsers.values()]);
 
-      if (
-        registeredUsers.length === 0 &&
-        orderRows.length > 0
-      ) {
+      if (orderRows.length === 0 && registeredUsers.length === 0) {
+        setMessage(
+          'No customer data was returned from Orders/orders or Users/users. The source counts below show exactly what this page can read.',
+        );
+      } else if (registeredUsers.length === 0) {
         setMessage(
           `Showing ${mergedUsers.size} customer${
             mergedUsers.size === 1 ? '' : 's'
-          } from Orders. No profile documents were found in Users/users.`,
+          } from order records.`,
         );
       } else {
         setMessage('');
       }
     } catch (error) {
-      console.error(
-        'Users load failed:',
-        error,
-      );
+      console.error('Users load failed:', error);
 
       setMessage(
         error instanceof Error
@@ -1063,6 +999,27 @@ export default function AdminUsersPage() {
         >
           ↻ Refresh
         </button>
+      </div>
+
+      <div style={sourceInfoBar}>
+        <span>
+          Data source:
+        </span>
+        <strong>
+          Orders {sourceCounts.ordersUpper}
+        </strong>
+        <span>•</span>
+        <strong>
+          orders {sourceCounts.ordersLower}
+        </strong>
+        <span>•</span>
+        <strong>
+          Users {sourceCounts.usersUpper}
+        </strong>
+        <span>•</span>
+        <strong>
+          users {sourceCounts.usersLower}
+        </strong>
       </div>
 
       <div style={summaryGrid}>
@@ -1804,6 +1761,20 @@ const refreshButton: React.CSSProperties = {
   padding: '10px 14px',
   cursor: 'pointer',
   fontWeight: 400,
+};
+
+const sourceInfoBar: React.CSSProperties = {
+  marginTop: 14,
+  padding: '9px 11px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 7,
+  flexWrap: 'wrap',
+  border: '1px solid #e4e6e9',
+  borderRadius: 10,
+  background: '#fff',
+  color: '#6d7177',
+  fontSize: 10,
 };
 
 const summaryGrid: React.CSSProperties = {
