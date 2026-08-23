@@ -342,20 +342,65 @@ type OldImageCandidate = {
   sourceUrl: string;
 };
 
+type FailedOldImage = {
+  key: string;
+  rowId: string;
+  slot: Exclude<SlotKey, 'product_video'>;
+  sourceUrl: string;
+  reason: string;
+};
+
+function oldImageCandidateKey(candidate: OldImageCandidate): string {
+  return `${candidate.rowId}::${candidate.slot}::${candidate.sourceUrl}`;
+}
+
 async function fetchImageAsFile(
   url: string,
   name: string,
 ): Promise<File> {
-  const response = await fetch(url, { mode: 'cors' });
+  let response: Response | null = null;
+  let directError = '';
 
-  if (!response.ok) {
-    throw new Error(`Image download failed (${response.status})`);
+  try {
+    response = await fetch(url, {
+      mode: 'cors',
+      cache: 'no-store',
+    });
+  } catch (error) {
+    directError =
+      error instanceof Error ? error.message : 'Direct browser fetch failed.';
+  }
+
+  if (!response?.ok) {
+    const proxyResponse = await fetch(
+      `/api/admin/image-proxy?url=${encodeURIComponent(url)}`,
+      {
+        method: 'GET',
+        cache: 'no-store',
+      },
+    );
+
+    if (!proxyResponse.ok) {
+      const detail = await proxyResponse.text().catch(() => '');
+
+      throw new Error(
+        `Image download failed. Direct: ${
+          response ? response.status : directError || 'blocked'
+        }. Proxy: ${proxyResponse.status}${
+          detail ? ` - ${detail.slice(0, 180)}` : ''
+        }`,
+      );
+    }
+
+    response = proxyResponse;
   }
 
   const blob = await response.blob();
 
   if (!blob.type.startsWith('image/')) {
-    throw new Error('Downloaded file is not an image.');
+    throw new Error(
+      `Downloaded file is not an image (${blob.type || 'unknown type'}).`,
+    );
   }
 
   return new File([blob], name, {
@@ -684,6 +729,8 @@ export default function AdminProductsPage() {
   const [optimizingOldImages, setOptimizingOldImages] = useState(false);
   const [optimizeStatus, setOptimizeStatus] = useState('');
   const [optimizedImageCount, setOptimizedImageCount] = useState(0);
+  const [failedOldImages, setFailedOldImages] = useState<FailedOldImage[]>([]);
+  const [showOptimizeFailures, setShowOptimizeFailures] = useState(false);
 
   async function loadProducts(showLoader = true) {
     if (!db) {
@@ -1690,11 +1737,19 @@ export default function AdminProductsPage() {
         if (!sourceUrl.startsWith('http')) continue;
         if (isAlreadyOptimizedImage(sourceUrl)) continue;
 
-        candidates.push({
+        const candidate: OldImageCandidate = {
           rowId: row.id,
           slot,
           sourceUrl,
-        });
+        };
+
+        const key = oldImageCandidateKey(candidate);
+
+        if (failedOldImages.some((item) => item.key === key)) {
+          continue;
+        }
+
+        candidates.push(candidate);
       }
     }
 
@@ -1788,6 +1843,7 @@ export default function AdminProductsPage() {
 
     let successCount = 0;
     let failedCount = 0;
+    const batchFailures: FailedOldImage[] = [];
     const updatedRows = new Map<string, DocumentData>();
 
     try {
@@ -1809,6 +1865,13 @@ export default function AdminProductsPage() {
 
           if (!row) {
             failedCount += 1;
+            batchFailures.push({
+              key: oldImageCandidateKey(candidate),
+              rowId: candidate.rowId,
+              slot: candidate.slot,
+              sourceUrl: candidate.sourceUrl,
+              reason: 'Product row no longer exists.',
+            });
             continue;
           }
 
@@ -1941,7 +2004,20 @@ export default function AdminProductsPage() {
             candidate,
             error,
           );
+
+          const reason =
+            error instanceof Error
+              ? error.message
+              : 'Unknown optimization error.';
+
           failedCount += 1;
+          batchFailures.push({
+            key: oldImageCandidateKey(candidate),
+            rowId: candidate.rowId,
+            slot: candidate.slot,
+            sourceUrl: candidate.sourceUrl,
+            reason,
+          });
         }
       }
 
@@ -1958,15 +2034,37 @@ export default function AdminProductsPage() {
         );
       }
 
-      const remaining = Math.max(
-        0,
-        collectOldImageCandidates().length - successCount,
+      if (batchFailures.length) {
+        setFailedOldImages((current) => {
+          const map = new Map(
+            current.map((item) => [item.key, item] as const),
+          );
+
+          for (const item of batchFailures) {
+            map.set(item.key, item);
+          }
+
+          return Array.from(map.values());
+        });
+      }
+
+      const processedKeys = new Set(
+        batch.map((item) => oldImageCandidateKey(item)),
       );
+
+      const remaining = collectOldImageCandidates().filter(
+        (item) => !processedKeys.has(oldImageCandidateKey(item)),
+      ).length;
 
       setOptimizeStatus(
         `Batch finished: ${successCount} optimized` +
-          (failedCount ? `, ${failedCount} failed` : '') +
-          `. Approx. ${remaining} old images remain.`,
+          (failedCount
+            ? `, ${failedCount} skipped after error`
+            : '') +
+          `. Approx. ${remaining} eligible old images remain.` +
+          (failedCount
+            ? ' Failed images will not be retried in this browser session.'
+            : ''),
       );
     } finally {
       setOptimizingOldImages(false);
@@ -2202,6 +2300,26 @@ export default function AdminProductsPage() {
               : 'Optimize Next 30 Images'}
           </button>
 
+          {failedOldImages.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setFailedOldImages([]);
+                setShowOptimizeFailures(false);
+                setOptimizeStatus(
+                  'Failed-image skip list cleared. They can be retried now.',
+                );
+              }}
+              disabled={optimizingOldImages}
+              style={{
+                ...secondaryButton,
+                opacity: optimizingOldImages ? 0.55 : 1,
+              }}
+            >
+              Retry Failed ({failedOldImages.length})
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => {
@@ -2227,7 +2345,60 @@ export default function AdminProductsPage() {
             fontWeight: 700,
           }}
         >
-          {optimizeStatus || `${optimizedImageCount} images optimized`}
+          <div>{optimizeStatus || `${optimizedImageCount} images optimized`}</div>
+
+          {failedOldImages.length > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                setShowOptimizeFailures((current) => !current)
+              }
+              style={{
+                marginTop: 8,
+                border: 0,
+                padding: 0,
+                background: 'transparent',
+                color: '#9a4f00',
+                fontWeight: 800,
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              {showOptimizeFailures ? 'Hide' : 'Show'} failed image reasons
+              {' '}({failedOldImages.length})
+            </button>
+          )}
+        </div>
+      )}
+
+      {showOptimizeFailures && failedOldImages.length > 0 && (
+        <div
+          style={{
+            margin: '0 0 16px',
+            padding: 14,
+            border: '1px solid #f2c7c7',
+            borderRadius: 12,
+            background: '#fff7f7',
+            maxHeight: 260,
+            overflow: 'auto',
+          }}
+        >
+          {failedOldImages.map((item) => (
+            <div
+              key={item.key}
+              style={{
+                padding: '8px 0',
+                borderBottom: '1px solid #f2dddd',
+                fontSize: 12,
+                lineHeight: 1.45,
+              }}
+            >
+              <strong>{item.rowId}</strong> · {item.slot}
+              <div style={{ color: '#b42318', fontWeight: 700 }}>
+                {item.reason}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
