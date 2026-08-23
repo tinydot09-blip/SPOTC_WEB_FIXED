@@ -102,6 +102,14 @@ const FALLBACK_CATEGORY_CONFIGS: ProductCategoryConfig[] = [
   },
 ];
 
+const SHOP_CATEGORY_ORDER = [
+  'Girl Dress',
+  'Earrings',
+  'Fancy Items',
+  'Toys',
+  'Keychains',
+] as const;
+
 const mergeCategoryConfigs = (
   firestoreCategories: ProductCategoryConfig[],
 ): ProductCategoryConfig[] => {
@@ -117,8 +125,22 @@ const mergeCategoryConfigs = (
   }
 
   return Array.from(merged.values()).sort((a, b) => {
+    const aPreferred = SHOP_CATEGORY_ORDER.findIndex(
+      (name) => name.toLowerCase() === a.name.toLowerCase(),
+    );
+    const bPreferred = SHOP_CATEGORY_ORDER.findIndex(
+      (name) => name.toLowerCase() === b.name.toLowerCase(),
+    );
+
+    if (aPreferred !== -1 || bPreferred !== -1) {
+      if (aPreferred === -1) return 1;
+      if (bPreferred === -1) return -1;
+      if (aPreferred !== bPreferred) return aPreferred - bPreferred;
+    }
+
     const orderDifference = a.sortOrder - b.sortOrder;
     if (orderDifference !== 0) return orderDifference;
+
     return a.name.localeCompare(b.name);
   });
 };
