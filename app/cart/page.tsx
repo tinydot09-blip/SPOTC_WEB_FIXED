@@ -257,14 +257,6 @@ export default function CartPage() {
   const total =
     subtotal + delivery;
 
-  const selectDelivery = (
-    option: DeliveryOption,
-  ) => {
-    setSelectedDelivery(option);
-  };
-
-  
-
   const totalFreeGifts = Object.values(
     giftBundles,
   ).reduce(
