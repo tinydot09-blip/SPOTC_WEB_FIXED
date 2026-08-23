@@ -8,6 +8,7 @@ import {
   orderBy,
   query,
   type DocumentData,
+  type QuerySnapshot,
 } from 'firebase/firestore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -376,7 +377,7 @@ export default function AdminHomePage() {
     }
 
     const handleSnapshot = (
-      snapshot: Awaited<ReturnType<typeof getDocs>>,
+      snapshot: QuerySnapshot<DocumentData>,
     ) => {
       const nextOrders: OrderRow[] = snapshot.docs.map((item) => ({
         id: item.id,
