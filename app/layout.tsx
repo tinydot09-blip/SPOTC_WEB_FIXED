@@ -6,6 +6,7 @@ import './globals.css';
 import { AppShell } from '@/components/AppShell';
 import { LanguageProvider } from '@/components/LanguageProvider';
 import FooterWrapper from '@/components/FooterWrapper';
+import GoogleAnalyticsPageView from '@/components/GoogleAnalyticsPageView';
 import NavigationLoader from '@/components/NavigationLoader';
 import ProfileCompletionGate from '@/components/ProfileCompletionGate';
 
@@ -33,15 +34,18 @@ export default function RootLayout({
           {`
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
+            window.gtag = gtag;
             gtag('js', new Date());
             gtag('config', '${GA_MEASUREMENT_ID}', {
-              page_path: window.location.pathname,
+              send_page_view: false
             });
           `}
         </Script>
       </head>
 
       <body>
+        <GoogleAnalyticsPageView />
+
         <LanguageProvider>
           <NavigationLoader />
 

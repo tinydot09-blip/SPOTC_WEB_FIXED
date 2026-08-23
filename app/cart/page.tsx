@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import Link from 'next/link';
@@ -135,6 +136,37 @@ const readSavedGifts = (
   }
 };
 
+const sendGa4Event = (
+  eventName: string,
+  parameters: Record<string, unknown>,
+) => {
+  if (typeof window === 'undefined') return;
+
+  const gtag = (
+    window as typeof window & {
+      gtag?: (...args: unknown[]) => void;
+    }
+  ).gtag;
+
+  if (typeof gtag === 'function') {
+    gtag('event', eventName, parameters);
+  }
+};
+
+const ga4ItemFromCart = (item: CartItem) => ({
+  item_id: String(item.id),
+  item_name: String(item.title || 'SPOTC Product'),
+  item_variant:
+    [
+      item.size ? `Size ${item.size}` : '',
+      item.color ? `Colour ${item.color}` : '',
+    ]
+      .filter(Boolean)
+      .join(' / ') || undefined,
+  price: Number(item.price) || 0,
+  quantity: Math.max(1, Number(item.qty) || 1),
+});
+
 export default function CartPage() {
   const [items, setItems] =
     useState<CartItem[]>([]);
@@ -143,6 +175,7 @@ export default function CartPage() {
     useState<Record<string, SavedGiftBundle>>({});
   const [selectedDeliveryId, setSelectedDeliveryId] =
     useState<DeliveryOptionId>('instant');
+  const viewCartTrackedRef = useRef('');
 
   useEffect(() => {
     const cartItems = readCart();
@@ -177,6 +210,28 @@ export default function CartPage() {
       setSelectedDeliveryId(savedDeliveryId);
     }
   }, []);
+
+  useEffect(() => {
+    if (!items.length) return;
+
+    const signature = items
+      .map((item) => `${item.id}:${item.qty}:${item.price}:${item.size}:${item.color}`)
+      .join('|');
+
+    if (viewCartTrackedRef.current === signature) return;
+
+    sendGa4Event('view_cart', {
+      currency: 'INR',
+      value: items.reduce(
+        (sum, item) =>
+          sum + (Number(item.price) || 0) * Math.max(1, Number(item.qty) || 1),
+        0,
+      ),
+      items: items.map(ga4ItemFromCart),
+    });
+
+    viewCartTrackedRef.current = signature;
+  }, [items]);
 
   const updateCart = (
     nextItems: CartItem[],
@@ -279,6 +334,16 @@ export default function CartPage() {
     );
 
     updateCart(nextItems);
+
+    if (itemToRemove) {
+      sendGa4Event('remove_from_cart', {
+        currency: 'INR',
+        value:
+          (Number(itemToRemove.price) || 0) *
+          Math.max(1, Number(itemToRemove.qty) || 1),
+        items: [ga4ItemFromCart(itemToRemove)],
+      });
+    }
 
     if (
       itemToRemove &&
@@ -621,6 +686,14 @@ export default function CartPage() {
             <Link
               className="spotc-checkout-button"
               href="/address"
+              onClick={() => {
+                sendGa4Event('begin_checkout', {
+                  currency: 'INR',
+                  value: total,
+                  items: items.map(ga4ItemFromCart),
+                  delivery_option: selectedDelivery.id,
+                });
+              }}
             >
               Continue to Address
             </Link>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Banknote,
@@ -212,6 +212,37 @@ const readSavedGifts = (
   }
 };
 
+const sendGa4Event = (
+  eventName: string,
+  parameters: Record<string, unknown>,
+) => {
+  if (typeof window === 'undefined') return;
+
+  const gtag = (
+    window as typeof window & {
+      gtag?: (...args: unknown[]) => void;
+    }
+  ).gtag;
+
+  if (typeof gtag === 'function') {
+    gtag('event', eventName, parameters);
+  }
+};
+
+const ga4ItemFromCart = (item: CartItem) => ({
+  item_id: String(item.id),
+  item_name: String(item.title || 'SPOTC Product'),
+  item_variant:
+    [
+      item.size ? `Size ${item.size}` : '',
+      item.color ? `Colour ${item.color}` : '',
+    ]
+      .filter(Boolean)
+      .join(' / ') || undefined,
+  price: Number(item.price) || 0,
+  quantity: Math.max(1, Number(item.qty) || 1),
+});
+
 export default function CheckoutPage() {
   const router = useRouter();
 
@@ -224,6 +255,7 @@ export default function CheckoutPage() {
     useState<DeliveryOptionId>('instant');
   const [loading, setLoading] = useState(true);
   const [placing, setPlacing] = useState(false);
+  const checkoutTrackedRef = useRef('');
 
   const groups = useMemo(
     () => groupCartByBusiness(items),
@@ -348,6 +380,46 @@ export default function CheckoutPage() {
   const totalFreeGifts =
     selectedFreeGifts.length;
 
+  useEffect(() => {
+    if (loading || !items.length || !address) return;
+
+    const signature = items
+      .map((item) => `${item.id}:${item.qty}:${item.price}:${item.size}:${item.color}`)
+      .join('|');
+
+    if (checkoutTrackedRef.current === signature) return;
+
+    sendGa4Event('begin_checkout', {
+      currency: 'INR',
+      value: total,
+      items: items.map(ga4ItemFromCart),
+      delivery_option: selectedDelivery.id,
+    });
+
+    sendGa4Event('add_shipping_info', {
+      currency: 'INR',
+      value: total,
+      shipping_tier: selectedDelivery.title,
+      items: items.map(ga4ItemFromCart),
+    });
+
+    sendGa4Event('add_payment_info', {
+      currency: 'INR',
+      value: total,
+      payment_type: 'Cash on Delivery',
+      items: items.map(ga4ItemFromCart),
+    });
+
+    checkoutTrackedRef.current = signature;
+  }, [
+    address,
+    items,
+    loading,
+    selectedDelivery.id,
+    selectedDelivery.title,
+    total,
+  ]);
+
   const place = async () => {
     if (
       placing ||
@@ -421,6 +493,18 @@ export default function CheckoutPage() {
           total: order.total,
           created_at: new Date().toISOString(),
         });
+      }
+
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(
+          'spotc-ga4-checkout-snapshot',
+          JSON.stringify({
+            currency: 'INR',
+            value: total,
+            items: items.map(ga4ItemFromCart),
+            created_order_ids: created.map((order) => order.documentId),
+          }),
+        );
       }
 
       clearCart();

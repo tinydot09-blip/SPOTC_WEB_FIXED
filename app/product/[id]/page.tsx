@@ -365,6 +365,49 @@ const customerPriceOf = (product: BusinessProduct): number => {
   if (price > 0) return price;
   return mrp;
 };
+const sendGa4Event = (
+  eventName: string,
+  parameters: Record<string, unknown>,
+) => {
+  if (typeof window === 'undefined') return;
+
+  const gtag = (
+    window as typeof window & {
+      gtag?: (...args: unknown[]) => void;
+    }
+  ).gtag;
+
+  if (typeof gtag === 'function') {
+    gtag('event', eventName, parameters);
+  }
+};
+
+const ga4ItemFromProduct = (
+  product: BusinessProduct,
+  quantity = 1,
+) => {
+  const record = product as ProductRecord;
+
+  return {
+    item_id: String(product.id),
+    item_name: titleOf(product),
+    item_brand: text(record.brand).trim() || undefined,
+    item_category:
+      text(record.main_category || record.category).trim() || undefined,
+    item_category2:
+      text(record.sub_category).trim() || undefined,
+    item_variant:
+      [
+        text(record.color).trim(),
+        text(record.size).trim(),
+      ]
+        .filter(Boolean)
+        .join(' / ') || undefined,
+    price: customerPriceOf(product),
+    quantity,
+  };
+};
+
 const booleanValue = (value: unknown): boolean | null => {
   if (typeof value === 'boolean') return value;
 
@@ -732,36 +775,15 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
           typeof window !== 'undefined' &&
           viewItemTrackedRef.current !== String(loadedProduct.id)
         ) {
-          const gtag = (
-            window as typeof window & {
-              gtag?: (...args: unknown[]) => void;
-            }
-          ).gtag;
+          const itemPrice = customerPriceOf(loadedProduct);
 
-          if (typeof gtag === 'function') {
-            const itemPrice = customerPriceOf(loadedProduct);
+          sendGa4Event('view_item', {
+            currency: 'INR',
+            value: itemPrice,
+            items: [ga4ItemFromProduct(loadedProduct, 1)],
+          });
 
-            gtag('event', 'view_item', {
-              currency: 'INR',
-              value: itemPrice,
-              items: [
-                {
-                  item_id: String(loadedProduct.id),
-                  item_name: titleOf(loadedProduct),
-                  item_brand: text(record.brand).trim() || undefined,
-                  item_category:
-                    text(record.main_category || record.category).trim() ||
-                    undefined,
-                  item_category2:
-                    text(record.sub_category).trim() || undefined,
-                  price: itemPrice,
-                  quantity: 1,
-                },
-              ],
-            });
-
-            viewItemTrackedRef.current = String(loadedProduct.id);
-          }
+          viewItemTrackedRef.current = String(loadedProduct.id);
         }
 
         const loadedImages = imageList(record);
@@ -1635,6 +1657,25 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
 
     saveSelectedGiftsForCart();
     addProduct(product, { size, color: showColorSelector ? color : '', qty });
+
+    sendGa4Event('add_to_cart', {
+      currency: 'INR',
+      value: price * qty,
+      items: [
+        {
+          ...ga4ItemFromProduct(product, qty),
+          item_variant:
+            [
+              size ? `Size ${size}` : '',
+              showColorSelector && color ? `Colour ${color}` : '',
+            ]
+              .filter(Boolean)
+              .join(' / ') || undefined,
+        },
+      ],
+      spotc_action: 'add_to_cart',
+    });
+
     alert('1 product added to cart');
   };
 
@@ -1643,6 +1684,25 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
 
     saveSelectedGiftsForCart();
     addProduct(product, { size, color: showColorSelector ? color : '', qty });
+
+    sendGa4Event('add_to_cart', {
+      currency: 'INR',
+      value: price * qty,
+      items: [
+        {
+          ...ga4ItemFromProduct(product, qty),
+          item_variant:
+            [
+              size ? `Size ${size}` : '',
+              showColorSelector && color ? `Colour ${color}` : '',
+            ]
+              .filter(Boolean)
+              .join(' / ') || undefined,
+        },
+      ],
+      spotc_action: 'buy_now',
+    });
+
     router.push('/cart');
   };
 

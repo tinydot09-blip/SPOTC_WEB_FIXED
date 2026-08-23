@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import Link from 'next/link';
@@ -905,12 +906,50 @@ const mapsHref = (
   )}`;
 };
 
+const sendGa4Event = (
+  eventName: string,
+  parameters: Record<string, unknown>,
+) => {
+  if (typeof window === 'undefined') return;
+
+  const gtag = (
+    window as typeof window & {
+      gtag?: (...args: unknown[]) => void;
+    }
+  ).gtag;
+
+  if (typeof gtag === 'function') {
+    gtag('event', eventName, parameters);
+  }
+};
+
+const ga4ItemFromOrder = (item: OrderItem) => {
+  const quantity = Math.max(
+    1,
+    Number(item.quantity ?? item.qty) || 1,
+  );
+
+  const price =
+    Number(item.price) ||
+    (Number(item.subtotal) > 0
+      ? Number(item.subtotal) / quantity
+      : 0);
+
+  return {
+    item_id: String(item.id || ''),
+    item_name: String(item.title || 'SPOTC Product'),
+    price,
+    quantity,
+  };
+};
+
 export default function OrderSuccessPage() {
   const [orders, setOrders] =
     useState<HydratedOrder[]>([]);
 
   const [loading, setLoading] =
     useState(true);
+  const purchaseTrackedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -978,6 +1017,43 @@ export default function OrderSuccessPage() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (
+      loading ||
+      !orders.length ||
+      purchaseTrackedRef.current ||
+      typeof window === 'undefined'
+    ) {
+      return;
+    }
+
+    orders.forEach((order) => {
+      const transactionId =
+        text(order.order_number) || text(order.id);
+
+      if (!transactionId) return;
+
+      const storageKey = `spotc-ga4-purchase:${transactionId}`;
+
+      if (window.localStorage.getItem(storageKey) === '1') {
+        return;
+      }
+
+      sendGa4Event('purchase', {
+        transaction_id: transactionId,
+        currency: 'INR',
+        value: Number(order.total || 0),
+        payment_type: text(order.payment_method) || 'Cash on Delivery',
+        items: (order.items || []).map(ga4ItemFromOrder),
+      });
+
+      window.localStorage.setItem(storageKey, '1');
+    });
+
+    purchaseTrackedRef.current = true;
+    window.sessionStorage.removeItem('spotc-ga4-checkout-snapshot');
+  }, [loading, orders]);
 
   const totals = useMemo(
     () => ({
