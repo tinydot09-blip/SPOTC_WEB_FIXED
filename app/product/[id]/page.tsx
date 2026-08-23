@@ -2958,13 +2958,9 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
                     <Minus />
                   </button>
 
-                  <output
-                    className="pd-qty-value"
-                    aria-live="polite"
-                    aria-label={`Quantity ${qty}`}
-                  >
-                    {qty}
-                  </output>
+                  <strong className="pd-qty-value">
+  {qty}
+</strong>
 
                   <button
                     type="button"
