@@ -300,9 +300,37 @@ export default function NewProductPage() {
           })
           .filter((item) => item.name && item.isActive);
 
-        setCategoryConfigs(
-          loaded.length ? loaded : FALLBACK_CATEGORIES,
+        // Keep SPOTC's original built-in categories AND add any categories
+        // created from Admin > Product Categories.
+        //
+        // Firestore categories override a fallback category with the same name,
+        // so an admin can later customise Toys / Earrings / Girl Dress without
+        // editing code. Brand-new categories such as Fancy Items or Keychains
+        // are simply added to the list.
+        const mergedByName = new Map<string, ProductCategoryConfig>();
+
+        for (const fallback of FALLBACK_CATEGORIES) {
+          mergedByName.set(fallback.name.trim().toLowerCase(), fallback);
+        }
+
+        for (const firestoreCategory of loaded) {
+          mergedByName.set(
+            firestoreCategory.name.trim().toLowerCase(),
+            firestoreCategory,
+          );
+        }
+
+        const mergedCategories = Array.from(mergedByName.values()).sort(
+          (a, b) => {
+            const aOrder = Number(a.sortOrder) || 0;
+            const bOrder = Number(b.sortOrder) || 0;
+
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return a.name.localeCompare(b.name);
+          },
         );
+
+        setCategoryConfigs(mergedCategories);
       } catch (error) {
         console.error('Unable to load product categories:', error);
 
