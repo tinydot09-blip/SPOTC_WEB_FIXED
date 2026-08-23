@@ -86,7 +86,15 @@ function createdMillis(data: DocumentData): number {
 }
 
 function timestampMillis(value: unknown): number {
-  if (value?.toMillis) return value.toMillis();
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toMillis' in value &&
+    typeof (value as { toMillis?: unknown }).toMillis === 'function'
+  ) {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+
   if (value instanceof Date) return value.getTime();
   if (typeof value === 'number') return value;
 
