@@ -17,6 +17,8 @@ import { db } from '@/lib/firebase';
 type UserRow = {
   id: string;
   data: DocumentData;
+  source: 'users' | 'orders';
+  hasUserDoc: boolean;
 };
 
 type OrderRow = {
@@ -220,6 +222,97 @@ function orderUserId(data: DocumentData): string {
   return '';
 }
 
+function orderCustomerName(data: DocumentData): string {
+  return text(
+    data.customer_name ??
+      data.user_name ??
+      data.display_name ??
+      data.delivery_name ??
+      data.name ??
+      data.address?.full_name ??
+      data.address?.name ??
+      'Customer',
+  );
+}
+
+function orderCustomerPhone(data: DocumentData): string {
+  return text(
+    data.customer_phone ??
+      data.phone ??
+      data.phone_number ??
+      data.delivery_phone ??
+      data.address?.phone ??
+      data.address?.phone_number ??
+      '',
+  );
+}
+
+function orderCustomerEmail(data: DocumentData): string {
+  return text(
+    data.customer_email ??
+      data.user_email ??
+      data.email ??
+      data.address?.email ??
+      '',
+  );
+}
+
+function customerIdentityKey(data: DocumentData): string {
+  const uid = orderUserId(data);
+  if (uid) return `uid:${uid}`;
+
+  const phone = orderCustomerPhone(data)
+    .replace(/\D+/g, '');
+  if (phone) return `phone:${phone}`;
+
+  const email = orderCustomerEmail(data)
+    .toLowerCase();
+  if (email) return `email:${email}`;
+
+  const name = orderCustomerName(data)
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return `name:${name || 'customer'}`;
+}
+
+function syntheticUserIdFromOrder(data: DocumentData): string {
+  const uid = orderUserId(data);
+  if (uid) return uid;
+
+  const phone = orderCustomerPhone(data)
+    .replace(/\D+/g, '');
+  if (phone) return `order-phone-${phone}`;
+
+  const email = orderCustomerEmail(data)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (email) return `order-email-${email}`;
+
+  const name = orderCustomerName(data)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return `order-customer-${name || 'unknown'}`;
+}
+
+function userIdentityKeys(row: UserRow): string[] {
+  const keys: string[] = [`uid:${row.id}`];
+
+  const phone = userPhone(row.data)
+    .replace(/\D+/g, '');
+  if (phone) keys.push(`phone:${phone}`);
+
+  const email = userEmail(row.data)
+    .toLowerCase();
+  if (email) keys.push(`email:${email}`);
+
+  return keys;
+}
+
 function isDelivered(status: string): boolean {
   return (
     status === 'delivered' ||
@@ -301,19 +394,132 @@ export default function AdminUsersPage() {
         );
       }
 
-      setUsers(
-        usersSnap.docs.map((item) => ({
-          id: item.id,
-          data: item.data(),
-        })),
-      );
-
-      setOrders(
+      const orderRows: OrderRow[] =
         ordersSnap.docs.map((item) => ({
           id: item.id,
           data: item.data(),
-        })),
-      );
+        }));
+
+      const registeredUsers: UserRow[] =
+        usersSnap.docs.map((item) => ({
+          id: item.id,
+          data: item.data(),
+          source: 'users' as const,
+          hasUserDoc: true,
+        }));
+
+      // Index registered users by UID, phone and email so order customers
+      // merge into the real account whenever possible.
+      const registeredByIdentity = new Map<string, UserRow>();
+
+      for (const row of registeredUsers) {
+        for (const key of userIdentityKeys(row)) {
+          registeredByIdentity.set(key, row);
+        }
+      }
+
+      const mergedUsers = new Map<string, UserRow>();
+
+      registeredUsers.forEach((row) => {
+        mergedUsers.set(row.id, row);
+      });
+
+      // Add customers that exist in Orders even when no Users document exists.
+      // This keeps Admin -> Users accurate for real customers who have ordered.
+      for (const order of orderRows) {
+        const identityKey = customerIdentityKey(order.data);
+        const uid = orderUserId(order.data);
+
+        const matchingRegistered =
+          registeredByIdentity.get(identityKey) ||
+          (uid
+            ? registeredByIdentity.get(`uid:${uid}`)
+            : undefined);
+
+        if (matchingRegistered) {
+          // Fill missing profile fields from the order without overwriting
+          // richer data stored in Users.
+          mergedUsers.set(
+            matchingRegistered.id,
+            {
+              ...matchingRegistered,
+              data: {
+                ...matchingRegistered.data,
+                display_name:
+                  userName(matchingRegistered.data) !== 'Customer'
+                    ? userName(matchingRegistered.data)
+                    : orderCustomerName(order.data),
+                phone_number:
+                  userPhone(matchingRegistered.data) ||
+                  orderCustomerPhone(order.data),
+                email:
+                  userEmail(matchingRegistered.data) ||
+                  orderCustomerEmail(order.data),
+              },
+            },
+          );
+          continue;
+        }
+
+        const syntheticId =
+          syntheticUserIdFromOrder(order.data);
+
+        const existing = mergedUsers.get(syntheticId);
+
+        const orderCreated =
+          timestampMillis(order.data.created_at);
+
+        if (!existing) {
+          mergedUsers.set(syntheticId, {
+            id: syntheticId,
+            source: 'orders',
+            hasUserDoc: false,
+            data: {
+              display_name:
+                orderCustomerName(order.data),
+              phone_number:
+                orderCustomerPhone(order.data),
+              email:
+                orderCustomerEmail(order.data),
+              created_at:
+                order.data.created_at ?? null,
+              last_login_at: null,
+              auth_provider: 'order',
+              order_only_customer: true,
+              derived_user_uid:
+                uid || '',
+              is_blocked: false,
+              account_status: 'active',
+            },
+          });
+        } else if (
+          orderCreated >
+          userCreatedMillis(existing.data)
+        ) {
+          mergedUsers.set(syntheticId, {
+            ...existing,
+            data: {
+              ...existing.data,
+              display_name:
+                orderCustomerName(order.data) ||
+                userName(existing.data),
+              phone_number:
+                orderCustomerPhone(order.data) ||
+                userPhone(existing.data),
+              email:
+                orderCustomerEmail(order.data) ||
+                userEmail(existing.data),
+              created_at:
+                existing.data.created_at ??
+                order.data.created_at ??
+                null,
+            },
+          });
+        }
+      }
+
+      setUsers([...mergedUsers.values()]);
+      setOrders(orderRows);
 
       setMessage('');
     } catch (error) {
@@ -347,13 +553,41 @@ export default function AdminUsersPage() {
       };
     }
 
+    const userIdByIdentity = new Map<string, string>();
+
+    for (const row of users) {
+      for (const key of userIdentityKeys(row)) {
+        userIdByIdentity.set(key, row.id);
+      }
+
+      if (row.source === 'orders') {
+        const derivedUid = text(
+          row.data.derived_user_uid,
+        );
+
+        if (derivedUid) {
+          userIdByIdentity.set(
+            `uid:${derivedUid}`,
+            row.id,
+          );
+        }
+      }
+    }
+
     for (const order of orders) {
       const uid = orderUserId(order.data);
+      const identityKey =
+        customerIdentityKey(order.data);
 
-      if (!uid) continue;
+      const resolvedUserId =
+        (uid
+          ? userIdByIdentity.get(`uid:${uid}`)
+          : undefined) ||
+        userIdByIdentity.get(identityKey) ||
+        syntheticUserIdFromOrder(order.data);
 
-      if (!map[uid]) {
-        map[uid] = {
+      if (!map[resolvedUserId]) {
+        map[resolvedUserId] = {
           totalOrders: 0,
           deliveredOrders: 0,
           cancelledOrders: 0,
@@ -363,7 +597,7 @@ export default function AdminUsersPage() {
         };
       }
 
-      const stats = map[uid];
+      const stats = map[resolvedUserId];
       const status = orderStatus(order.data);
       const created = timestampMillis(
         order.data.created_at,
@@ -572,6 +806,13 @@ export default function AdminUsersPage() {
 
   async function toggleBlocked(row: UserRow) {
     if (!db || busyId) return;
+
+    if (!row.hasUserDoc) {
+      setMessage(
+        'This customer is shown from an order but does not have a Users profile document yet, so account blocking is not available for this row.',
+      );
+      return;
+    }
 
     const currentlyBlocked = isBlocked(row.data);
     const nextBlocked = !currentlyBlocked;
@@ -915,6 +1156,12 @@ export default function AdminUsersPage() {
                               'No email'}
                           </div>
 
+                          {row.source === 'orders' && (
+                            <div style={orderCustomerTag}>
+                              Customer from Orders
+                            </div>
+                          )}
+
                           <div style={uidText}>
                             {row.id}
                           </div>
@@ -990,16 +1237,23 @@ export default function AdminUsersPage() {
                         <button
                           type="button"
                           title={
-                            blocked
-                              ? 'Unblock customer'
-                              : 'Block customer'
+                            !row.hasUserDoc
+                              ? 'No Users profile document'
+                              : blocked
+                                ? 'Unblock customer'
+                                : 'Block customer'
                           }
                           aria-label={
-                            blocked
-                              ? 'Unblock customer'
-                              : 'Block customer'
+                            !row.hasUserDoc
+                              ? 'No Users profile document'
+                              : blocked
+                                ? 'Unblock customer'
+                                : 'Block customer'
                           }
-                          disabled={busy}
+                          disabled={
+                            busy ||
+                            !row.hasUserDoc
+                          }
                           onClick={() =>
                             void toggleBlocked(row)
                           }
@@ -1007,7 +1261,10 @@ export default function AdminUsersPage() {
                             ...(blocked
                               ? iconUnblockButton
                               : iconBlockButton),
-                            opacity: busy ? 0.45 : 1,
+                            opacity:
+                              busy || !row.hasUserDoc
+                                ? 0.35
+                                : 1,
                           }}
                         >
                           {blocked ? '✓' : '⊘'}
@@ -1111,6 +1368,7 @@ export default function AdminUsersPage() {
             }
           }
           busy={busyId === selectedUser.id}
+          hasUserDoc={selectedUser.hasUserDoc}
           onClose={() => setSelectedUser(null)}
           onToggleBlock={() =>
             void toggleBlocked(selectedUser)
@@ -1152,12 +1410,14 @@ function UserModal({
   row,
   stats,
   busy,
+  hasUserDoc,
   onClose,
   onToggleBlock,
 }: {
   row: UserRow;
   stats: UserStats;
   busy: boolean;
+  hasUserDoc: boolean;
   onClose: () => void;
   onToggleBlock: () => void;
 }) {
@@ -1233,7 +1493,10 @@ function UserModal({
             <DetailItem
               label="Auth Provider"
               value={
-                text(data.auth_provider) || '—'
+                text(data.auth_provider) ||
+                (row.source === 'orders'
+                  ? 'Order customer'
+                  : '—')
               }
             />
 
@@ -1310,18 +1573,27 @@ function UserModal({
 
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || !hasUserDoc}
             onClick={onToggleBlock}
             style={{
               ...(blocked
                 ? unblockButton
                 : blockButton),
-              opacity: busy ? 0.5 : 1,
+              opacity:
+                busy || !hasUserDoc
+                  ? 0.45
+                  : 1,
+              cursor:
+                busy || !hasUserDoc
+                  ? 'not-allowed'
+                  : 'pointer',
             }}
           >
-            {blocked
-              ? 'Unblock Customer'
-              : 'Block Customer'}
+            {!hasUserDoc
+              ? 'No Account Profile'
+              : blocked
+                ? 'Unblock Customer'
+                : 'Block Customer'}
           </button>
         </div>
       </div>
@@ -1583,6 +1855,17 @@ const subText: React.CSSProperties = {
   fontSize: 10,
   color: '#888',
   marginTop: 2,
+};
+
+const orderCustomerTag: React.CSSProperties = {
+  display: 'inline-flex',
+  marginTop: 4,
+  padding: '3px 6px',
+  borderRadius: 999,
+  background: '#fff6e8',
+  color: '#9b5d00',
+  fontSize: 9,
+  fontWeight: 600,
 };
 
 const uidText: React.CSSProperties = {
