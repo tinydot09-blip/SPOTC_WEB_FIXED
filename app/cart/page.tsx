@@ -173,8 +173,17 @@ export default function CartPage() {
 
   const [giftBundles, setGiftBundles] =
     useState<Record<string, SavedGiftBundle>>({});
-  const [selectedDelivery, setSelectedDelivery] =
-    useState<DeliveryOption>(DELIVERY_OPTIONS[0]);
+  const [selectedDeliveryIndex, setSelectedDeliveryIndex] = useState<number>(0);
+  const selectedDelivery = DELIVERY_OPTIONS[selectedDeliveryIndex];
+
+  const selectDelivery = (
+    option: DeliveryOption,
+  ) => {
+    const foundIndex = DELIVERY_OPTIONS.findIndex(o => o.id === option.id);
+    if (foundIndex !== -1) {
+      setSelectedDeliveryIndex(foundIndex);
+    }
+  };
   const viewCartTrackedRef = useRef(false);
 
   useEffect(() => {
