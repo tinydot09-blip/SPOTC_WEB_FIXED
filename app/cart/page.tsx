@@ -9,6 +9,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
+  ArrowLeft,
   Clock3,
   ShoppingBag,
   Trash2,
@@ -369,9 +370,20 @@ export default function CartPage() {
         <header className="spotc-cart-head">
           <div>
             <small>SPOTC CART</small>
-            <h1>My Cart</h1>
-          </div>
 
+            <div className="spotc-cart-title-row">
+              <button
+                type="button"
+                className="spotc-cart-back-button"
+                aria-label="Go back"
+                onClick={() => router.back()}
+              >
+                <ArrowLeft size={23} />
+              </button>
+
+              <h1>My Cart</h1>
+            </div>
+          </div>
         </header>
 
         <div className="spotc-cart-layout">
@@ -704,8 +716,32 @@ const styles = `
     letter-spacing: 0.15em;
   }
 
+  .spotc-cart-title-row {
+    margin-top: 7px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .spotc-cart-back-button {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    display: grid;
+    place-items: center;
+    border: 1px solid #ded6cd;
+    border-radius: 50%;
+    color: #2a2520;
+    background: #ffffff;
+    cursor: pointer;
+  }
+
+  .spotc-cart-back-button:hover {
+    background: #f5f1eb;
+  }
+
   .spotc-cart-head h1 {
-    margin: 7px 0 0;
+    margin: 0;
     font-size: clamp(38px, 5vw, 56px);
     line-height: 1;
     font-weight: 650;
@@ -1354,6 +1390,16 @@ const styles = `
 
     .spotc-cart-head h1 {
       font-size: 38px;
+    }
+
+    .spotc-cart-title-row {
+      gap: 10px;
+    }
+
+    .spotc-cart-back-button {
+      width: 38px;
+      height: 38px;
+      flex-basis: 38px;
     }
 
     .spotc-cart-head > span {
