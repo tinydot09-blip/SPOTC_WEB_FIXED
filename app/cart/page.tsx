@@ -197,18 +197,16 @@ export default function CartPage() {
 
     setGiftBundles(nextGiftBundles);
 
-    const savedDeliveryId = window.localStorage.getItem(
+    /*
+     * Always start the cart with Instant Delivery selected.
+     * This prevents an old saved slot (for example Afternoon)
+     * from making the bill show ₹0 while the Instant card appears selected.
+     */
+    setSelectedDeliveryId('instant');
+    window.localStorage.setItem(
       'spotc-delivery-option',
-    ) as DeliveryOptionId | null;
-
-    if (
-      savedDeliveryId &&
-      DELIVERY_OPTIONS.some(
-        (option) => option.id === savedDeliveryId,
-      )
-    ) {
-      setSelectedDeliveryId(savedDeliveryId);
-    }
+      'instant',
+    );
   }, []);
 
   useEffect(() => {
@@ -546,7 +544,7 @@ export default function CartPage() {
                 <div className="spotc-delivery-options">
                   {DELIVERY_OPTIONS.map((option) => {
                     const selected =
-                      option.id === selectedDeliveryId;
+                      option.id === selectedDelivery.id;
 
                     return (
                       <button
@@ -650,6 +648,7 @@ export default function CartPage() {
                 sendGa4Event('begin_checkout', {
                   currency: 'INR',
                   value: total,
+                  shipping: delivery,
                   items: items.map(ga4ItemFromCart),
                   delivery_option: selectedDelivery.id,
                 });
