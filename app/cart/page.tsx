@@ -173,8 +173,8 @@ export default function CartPage() {
 
   const [giftBundles, setGiftBundles] =
     useState<Record<string, SavedGiftBundle>>({});
-  const [selectedDeliveryId, setSelectedDeliveryId] =
-    useState<DeliveryOptionId>('instant');
+  const [selectedDelivery, setSelectedDelivery] =
+    useState<DeliveryOption>(DELIVERY_OPTIONS[0]);
   const viewCartTrackedRef = useRef(false);
 
   useEffect(() => {
@@ -197,24 +197,6 @@ export default function CartPage() {
 
     setGiftBundles(nextGiftBundles);
 
-    const savedDeliveryId = window.localStorage.getItem(
-      'spotc-delivery-option',
-    ) as DeliveryOptionId | null;
-
-    if (
-      savedDeliveryId &&
-      DELIVERY_OPTIONS.some(
-        (option) => option.id === savedDeliveryId,
-      )
-    ) {
-      setSelectedDeliveryId(savedDeliveryId);
-    } else {
-      setSelectedDeliveryId('instant');
-      window.localStorage.setItem(
-        'spotc-delivery-option',
-        'instant',
-      );
-    }
   }, []);
 
   useEffect(() => {
@@ -250,34 +232,26 @@ export default function CartPage() {
     [items],
   );
 
-  // One source of truth for delivery selection:
-  // selectedDeliveryId drives the card, fee, bill and checkout.
-  const selectedDelivery =
-    DELIVERY_OPTIONS.find(
-      (option) => option.id === selectedDeliveryId,
-    ) ?? DELIVERY_OPTIONS[0];
-
+  /*
+   * SINGLE DELIVERY SOURCE OF TRUTH
+   * --------------------------------
+   * The selected delivery option object controls:
+   * - green selected card
+   * - delivery charge
+   * - bill delivery name
+   * - total
+   * - GA4 checkout shipping value
+   */
   const delivery =
-    items.length === 0
-      ? 0
-      : selectedDeliveryId === 'instant'
-        ? 20
-        : 0;
+    items.length > 0 ? selectedDelivery.fee : 0;
 
   const total =
     subtotal + delivery;
 
   const selectDelivery = (
-    optionId: DeliveryOptionId,
+    option: DeliveryOption,
   ) => {
-    setSelectedDeliveryId(optionId);
-
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(
-        'spotc-delivery-option',
-        optionId,
-      );
-    }
+    setSelectedDelivery(option);
   };
 
   
@@ -558,7 +532,7 @@ export default function CartPage() {
                 <div className="spotc-delivery-options">
                   {DELIVERY_OPTIONS.map((option) => {
                     const selected =
-                      option.id === selectedDeliveryId;
+                      option.id === selectedDelivery.id;
 
                     return (
                       <button
@@ -568,7 +542,7 @@ export default function CartPage() {
                           selected ? 'active' : ''
                         }`}
                         onClick={() =>
-                          selectDelivery(option.id)
+                          selectDelivery(option)
                         }
                       >
                         <span className="spotc-delivery-option-icon">
