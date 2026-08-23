@@ -4,11 +4,12 @@ import Link from 'next/link';
 import {
   collection,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   type DocumentData,
 } from 'firebase/firestore';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { db } from '@/lib/firebase';
 
@@ -193,29 +194,108 @@ function formatDate(milliseconds: number): string {
   }).format(new Date(milliseconds));
 }
 
+
+function normalizedStatus(data: DocumentData): string {
+  return orderStatus(data).trim().toLowerCase();
+}
+
+function isNewOrder(data: DocumentData): boolean {
+  const status = normalizedStatus(data);
+
+  return [
+    'new',
+    'placed',
+    'order placed',
+    'pending',
+    'confirmed',
+    'processing',
+  ].includes(status);
+}
+
+function playNewOrderSound() {
+  try {
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as typeof window & {
+        webkitAudioContext?: typeof AudioContext;
+      }).webkitAudioContext;
+
+    if (!AudioContextClass) return;
+
+    const context = new AudioContextClass();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, context.currentTime);
+    oscillator.frequency.setValueAtTime(1100, context.currentTime + 0.12);
+
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.18, context.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.38);
+
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.4);
+
+    window.setTimeout(() => {
+      void context.close();
+    }, 700);
+  } catch (error) {
+    console.warn('Unable to play new-order sound:', error);
+  }
+}
+
+function showBrowserOrderNotification(order: OrderRow) {
+  if (
+    typeof window === 'undefined' ||
+    !('Notification' in window) ||
+    Notification.permission !== 'granted'
+  ) {
+    return;
+  }
+
+  try {
+    const notification = new Notification('New SPOTC order', {
+      body: `#${orderNumber(order.id, order.data)} • ${formatMoney(
+        orderTotal(order.data),
+      )}`,
+      icon: '/favicon.ico',
+      tag: `spotc-order-${order.id}`,
+    });
+
+    notification.onclick = () => {
+      window.focus();
+      window.location.href = '/admin/orders';
+      notification.close();
+    };
+  } catch (error) {
+    console.warn('Browser notification failed:', error);
+  }
+}
+
 export default function AdminHomePage() {
-  const [products, setProducts] = useState<
-    ProductRow[]
-  >([]);
+  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [ordersReady, setOrdersReady] = useState(false);
+  const [error, setError] = useState('');
+  const [alertsEnabled, setAlertsEnabled] = useState(false);
+  const [liveMessage, setLiveMessage] = useState('');
 
-  const [orders, setOrders] = useState<
-    OrderRow[]
-  >([]);
+  const firstOrderSnapshot = useRef(true);
+  const knownOrderIds = useRef<Set<string>>(new Set());
 
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState('');
-
-  async function loadDashboard() {
+  async function loadProducts(showLoader = true) {
     if (!db) {
       setError('Firebase is not available.');
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    if (showLoader) setLoading(true);
     setError('');
 
     try {
@@ -224,94 +304,208 @@ export default function AdminHomePage() {
       try {
         productSnapshot = await getDocs(
           query(
-            collection(
-              db,
-              'BusinessProducts',
-            ),
-            orderBy(
-              'created_at',
-              'desc',
-            ),
+            collection(db, 'BusinessProducts'),
+            orderBy('created_at', 'desc'),
           ),
         );
       } catch {
-        productSnapshot =
-          await getDocs(
-            collection(
-              db,
-              'BusinessProducts',
-            ),
-          );
+        productSnapshot = await getDocs(
+          collection(db, 'BusinessProducts'),
+        );
       }
 
-      const productRows =
+      setProducts(
         productSnapshot.docs
           .map((item) => ({
             id: item.id,
             data: item.data(),
           }))
-          .filter(
-            ({ data }) =>
-              data.isDeleted !== true,
-          );
-
-      setProducts(productRows);
-
-      try {
-        let orderSnapshot;
-
-        try {
-          orderSnapshot = await getDocs(
-            query(
-              collection(db, 'Orders'),
-              orderBy(
-                'created_at',
-                'desc',
-              ),
-            ),
-          );
-        } catch {
-          orderSnapshot =
-            await getDocs(
-              collection(db, 'Orders'),
-            );
-        }
-
-        setOrders(
-          orderSnapshot.docs.map(
-            (item) => ({
-              id: item.id,
-              data: item.data(),
-            }),
-          ),
-        );
-      } catch (orderError) {
-        console.error(
-          'Orders dashboard load failed:',
-          orderError,
-        );
-
-        setOrders([]);
-      }
-    } catch (loadError) {
-      console.error(
-        'Admin dashboard load failed:',
-        loadError,
+          .filter(({ data }) => data.isDeleted !== true),
       );
-
+    } catch (loadError) {
+      console.error('Admin dashboard product load failed:', loadError);
       setError(
         loadError instanceof Error
           ? loadError.message
-          : 'Failed to load dashboard.',
+          : 'Failed to load products.',
       );
     } finally {
       setLoading(false);
     }
   }
 
+  async function enableNewOrderAlerts() {
+    let permissionGranted = true;
+
+    if ('Notification' in window) {
+      if (Notification.permission === 'default') {
+        const permission = await Notification.requestPermission();
+        permissionGranted = permission === 'granted';
+      } else {
+        permissionGranted = Notification.permission === 'granted';
+      }
+    }
+
+    localStorage.setItem('spotc-admin-order-alerts', '1');
+    setAlertsEnabled(true);
+
+    // A user click unlocks browser audio on browsers that restrict autoplay.
+    playNewOrderSound();
+
+    setLiveMessage(
+      permissionGranted
+        ? 'New-order sound and browser alerts are enabled.'
+        : 'New-order sound is enabled. Browser notifications are blocked by the browser.',
+    );
+
+    window.setTimeout(() => setLiveMessage(''), 4500);
+  }
+
   useEffect(() => {
-    void loadDashboard();
+    void loadProducts();
+
+    setAlertsEnabled(
+      localStorage.getItem('spotc-admin-order-alerts') === '1',
+    );
   }, []);
+
+  useEffect(() => {
+    if (!db) {
+      setOrdersReady(true);
+      return;
+    }
+
+    const handleSnapshot = (
+      snapshot: Awaited<ReturnType<typeof getDocs>>,
+    ) => {
+      const nextOrders: OrderRow[] = snapshot.docs.map((item) => ({
+        id: item.id,
+        data: item.data(),
+      }));
+
+      if (firstOrderSnapshot.current) {
+        knownOrderIds.current = new Set(nextOrders.map((item) => item.id));
+        firstOrderSnapshot.current = false;
+        setOrders(nextOrders);
+        setOrdersReady(true);
+        return;
+      }
+
+      const newOrders = nextOrders.filter(
+        (item) =>
+          !knownOrderIds.current.has(item.id) &&
+          isNewOrder(item.data),
+      );
+
+      knownOrderIds.current = new Set(nextOrders.map((item) => item.id));
+      setOrders(nextOrders);
+      setOrdersReady(true);
+
+      if (newOrders.length > 0) {
+        const newest = newOrders[0];
+
+        setLiveMessage(
+          newOrders.length === 1
+            ? `New order received: #${orderNumber(newest.id, newest.data)}`
+            : `${newOrders.length} new orders received`,
+        );
+
+        if (localStorage.getItem('spotc-admin-order-alerts') === '1') {
+          playNewOrderSound();
+          showBrowserOrderNotification(newest);
+        }
+
+        window.setTimeout(() => setLiveMessage(''), 6000);
+      }
+    };
+
+    let unsubscribeFallback: (() => void) | null = null;
+
+    const orderedQuery = query(
+      collection(db, 'Orders'),
+      orderBy('created_at', 'desc'),
+    );
+
+    const unsubscribe = onSnapshot(
+      orderedQuery,
+      handleSnapshot,
+      (listenerError) => {
+        console.warn(
+          'Ordered realtime Orders listener failed; using fallback:',
+          listenerError,
+        );
+
+        unsubscribeFallback = onSnapshot(
+          collection(db, 'Orders'),
+          handleSnapshot,
+          (fallbackError) => {
+            console.error('Realtime Orders listener failed:', fallbackError);
+            setError(
+              fallbackError instanceof Error
+                ? `Orders live update failed: ${fallbackError.message}`
+                : 'Orders live update failed.',
+            );
+            setOrdersReady(true);
+          },
+        );
+      },
+    );
+
+    return () => {
+      unsubscribe();
+      unsubscribeFallback?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    const newCount = orders.filter(({ data }) => isNewOrder(data)).length;
+
+    // Update the existing admin sidebar Orders link without requiring a
+    // separate AdminShell change.
+    const orderLinks = Array.from(
+      document.querySelectorAll<HTMLAnchorElement>('a[href="/admin/orders"]'),
+    );
+
+    orderLinks.forEach((link) => {
+      if (!link.closest('aside') && !link.closest('nav')) return;
+
+      let badge = link.querySelector<HTMLSpanElement>(
+        '[data-spotc-order-badge="1"]',
+      );
+
+      if (newCount <= 0) {
+        badge?.remove();
+        return;
+      }
+
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.dataset.spotcOrderBadge = '1';
+        badge.style.marginLeft = 'auto';
+        badge.style.minWidth = '22px';
+        badge.style.height = '22px';
+        badge.style.padding = '0 6px';
+        badge.style.display = 'inline-flex';
+        badge.style.alignItems = 'center';
+        badge.style.justifyContent = 'center';
+        badge.style.borderRadius = '999px';
+        badge.style.background = '#d92d20';
+        badge.style.color = '#fff';
+        badge.style.fontSize = '11px';
+        badge.style.fontWeight = '800';
+        badge.style.lineHeight = '1';
+        link.appendChild(badge);
+      }
+
+      badge.textContent = newCount > 99 ? '99+' : String(newCount);
+    });
+
+    return () => {
+      document
+        .querySelectorAll('[data-spotc-order-badge="1"]')
+        .forEach((item) => item.remove());
+    };
+  }, [orders]);
 
   const dashboard = useMemo(() => {
     const totalProducts =
@@ -383,6 +577,9 @@ export default function AdminHomePage() {
         0,
       );
 
+    const newOrders =
+      orders.filter(({ data }) => isNewOrder(data)).length;
+
     return {
       totalProducts,
       inStock,
@@ -391,6 +588,7 @@ export default function AdminHomePage() {
       totalUnitsSold,
       soldProducts,
       totalOrders: orders.length,
+      newOrders,
       todayOrders:
         todayOrders.length,
       totalSales,
@@ -428,7 +626,7 @@ export default function AdminHomePage() {
         .slice(0, 5);
     }, [products]);
 
-  if (loading) {
+  if (loading && !ordersReady) {
     return (
       <div style={loadingBox}>
         <div style={spinner} />
@@ -457,17 +655,44 @@ export default function AdminHomePage() {
         <button
           type="button"
           onClick={() =>
-            void loadDashboard()
+            void loadProducts(false)
           }
           style={refreshButton}
         >
-          ↻ Refresh
+          ↻ Refresh Products
         </button>
       </div>
 
       {error && (
         <div style={errorBox}>
           {error}
+        </div>
+      )}
+
+      <div style={alertControlRow}>
+        <div style={liveIndicator}>
+          <span style={liveDot} />
+          Orders are live
+        </div>
+
+        <button
+          type="button"
+          onClick={() => void enableNewOrderAlerts()}
+          style={{
+            ...alertEnableButton,
+            ...(alertsEnabled ? alertEnableButtonActive : {}),
+          }}
+        >
+          {alertsEnabled ? '🔔 Alerts Enabled' : '🔔 Enable New Order Alerts'}
+        </button>
+      </div>
+
+      {liveMessage && (
+        <div style={liveOrderBanner}>
+          <strong>🔔 {liveMessage}</strong>
+          <Link href="/admin/orders" style={liveOrderBannerLink}>
+            Open Orders →
+          </Link>
         </div>
       )}
 
@@ -519,6 +744,14 @@ export default function AdminHomePage() {
           }
           subtitle="All products"
           href="/admin/products"
+        />
+
+        <StatCard
+          title="New Orders"
+          value={dashboard.newOrders}
+          subtitle="Needs attention"
+          href="/admin/orders"
+          danger={dashboard.newOrders > 0}
         />
 
         <StatCard
@@ -923,6 +1156,12 @@ export default function AdminHomePage() {
                             data,
                           )}
                         </Link>
+
+                        {isNewOrder(data) && (
+                          <span style={newOrderMiniBadge}>
+                            NEW
+                          </span>
+                        )}
                       </td>
 
                       <td
@@ -1473,6 +1712,82 @@ const emptyState: React.CSSProperties = {
   color: '#8b8f95',
   fontSize: 12,
   textAlign: 'center',
+};
+
+const alertControlRow: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 12,
+  marginBottom: 14,
+};
+
+const liveIndicator: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 7,
+  color: '#477154',
+  fontSize: 12,
+  fontWeight: 700,
+};
+
+const liveDot: React.CSSProperties = {
+  width: 8,
+  height: 8,
+  borderRadius: '50%',
+  background: '#12b76a',
+  boxShadow: '0 0 0 4px rgba(18,183,106,.12)',
+};
+
+const alertEnableButton: React.CSSProperties = {
+  minHeight: 38,
+  padding: '0 13px',
+  border: '1px solid #dedfe2',
+  borderRadius: 10,
+  background: '#fff',
+  color: '#35383d',
+  fontSize: 11,
+  fontWeight: 700,
+  cursor: 'pointer',
+};
+
+const alertEnableButtonActive: React.CSSProperties = {
+  borderColor: '#b7dfc7',
+  background: '#f1fbf5',
+  color: '#287146',
+};
+
+const liveOrderBanner: React.CSSProperties = {
+  marginBottom: 16,
+  padding: '13px 15px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 14,
+  border: '1px solid #f4c17a',
+  borderRadius: 12,
+  background: '#fff7e8',
+  color: '#7a4a00',
+  fontSize: 12,
+};
+
+const liveOrderBannerLink: React.CSSProperties = {
+  color: '#a95c00',
+  fontWeight: 800,
+  textDecoration: 'none',
+  whiteSpace: 'nowrap',
+};
+
+const newOrderMiniBadge: React.CSSProperties = {
+  marginLeft: 7,
+  padding: '3px 6px',
+  display: 'inline-block',
+  borderRadius: 999,
+  background: '#fee4e2',
+  color: '#b42318',
+  fontSize: 9,
+  fontWeight: 800,
+  verticalAlign: 'middle',
 };
 
 const errorBox: React.CSSProperties = {
