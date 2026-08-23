@@ -269,12 +269,7 @@ export default function CartPage() {
     }
   };
 
-  const totalQuantity =
-    items.reduce(
-      (sum, item) =>
-        sum + item.qty,
-      0,
-    );
+  const totalQuantity = items.length;
 
   const totalFreeGifts = Object.values(
     giftBundles,
