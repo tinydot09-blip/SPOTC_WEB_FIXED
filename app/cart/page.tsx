@@ -7,11 +7,8 @@ import {
   useState,
 } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   Clock3,
-  Minus,
-  Plus,
   ShoppingBag,
   Trash2,
   Truck,
@@ -165,11 +162,10 @@ const ga4ItemFromCart = (item: CartItem) => ({
       .filter(Boolean)
       .join(' / ') || undefined,
   price: Number(item.price) || 0,
-  quantity: Math.max(1, Number(item.qty) || 1),
+  quantity: 1,
 });
 
 export default function CartPage() {
-  const router = useRouter();
   const [items, setItems] =
     useState<CartItem[]>([]);
 
@@ -240,8 +236,7 @@ export default function CartPage() {
     () =>
       items.reduce(
         (sum, item) =>
-          sum +
-          item.price * item.qty,
+          sum + item.price,
         0,
       ),
     [items],
@@ -280,79 +275,6 @@ export default function CartPage() {
       sum + bundle.gifts.length,
     0,
   );
-
-  const decreaseQuantity = (
-    itemIndex: number,
-  ) => {
-    const item = items[itemIndex];
-
-    if (!item || item.qty <= 1) return;
-
-    sendGa4Event('remove_from_cart', {
-      currency: 'INR',
-      value: Number(item.price) || 0,
-      items: [
-        {
-          ...ga4ItemFromCart(item),
-          quantity: 1,
-        },
-      ],
-      spotc_action: 'decrease_quantity',
-    });
-
-    updateCart(
-      items.map((cartItem, index) =>
-        index === itemIndex
-          ? {
-              ...cartItem,
-              qty: cartItem.qty - 1,
-            }
-          : cartItem,
-      ),
-    );
-  };
-
-  const increaseQuantity = (
-    itemIndex: number,
-  ) => {
-    const item = items[itemIndex];
-
-    if (!item) return;
-
-    sendGa4Event('add_to_cart', {
-      currency: 'INR',
-      value: Number(item.price) || 0,
-      items: [
-        {
-          ...ga4ItemFromCart(item),
-          quantity: 1,
-        },
-      ],
-      spotc_action: 'increase_quantity',
-    });
-
-    updateCart(
-      items.map((cartItem, index) =>
-        index === itemIndex
-          ? {
-              ...cartItem,
-              qty: cartItem.qty + 1,
-            }
-          : cartItem,
-      ),
-    );
-  };
-
-  const changeFreeGifts = (productId: string) => {
-    if (typeof window === 'undefined') return;
-
-    window.localStorage.setItem(
-      'spotc-change-free-gift-product-id',
-      productId,
-    );
-
-    router.push(`/product/${encodeURIComponent(productId)}?changeGift=1`);
-  };
 
   const removeItem = (
     itemIndex: number,
@@ -502,30 +424,6 @@ export default function CartPage() {
                         </div>
 
                         <div className="spotc-cart-controls">
-                          <div className="spotc-qty-control">
-                            <button
-                              type="button"
-                              aria-label="Decrease quantity"
-                              onClick={() =>
-                                decreaseQuantity(index)
-                              }
-                            >
-                              <Minus size={16} />
-                            </button>
-
-                            <span>{item.qty}</span>
-
-                            <button
-                              type="button"
-                              aria-label="Increase quantity"
-                              onClick={() =>
-                                increaseQuantity(index)
-                              }
-                            >
-                              <Plus size={16} />
-                            </button>
-                          </div>
-
                           <button
                             type="button"
                             className="spotc-remove-button"
@@ -543,21 +441,11 @@ export default function CartPage() {
                       {freeGifts.length > 0 && (
                         <div className="spotc-free-gifts">
                           <div className="spotc-free-gifts-title">
-                            <div className="spotc-free-gifts-title-copy">
-                              <span>🎁</span>
-                              <strong>
-                                FREE Gift
-                                {freeGifts.length === 1 ? '' : 's'} Included
-                              </strong>
-                            </div>
-
-                            <button
-                              type="button"
-                              className="spotc-change-gifts-button"
-                              onClick={() => changeFreeGifts(item.id)}
-                            >
-                              Change gifts
-                            </button>
+                            <span>🎁</span>
+                            <strong>
+                              FREE Gift
+                              {freeGifts.length === 1 ? '' : 's'} Included
+                            </strong>
                           </div>
 
                           <div className="spotc-free-gifts-list">
@@ -896,33 +784,9 @@ const styles = `
   .spotc-free-gifts-title {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    gap: 7px;
     margin-bottom: 10px;
     color: #137333;
-  }
-
-  .spotc-free-gifts-title-copy {
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-  }
-
-  .spotc-change-gifts-button {
-    flex: 0 0 auto;
-    padding: 7px 10px;
-    border: 1px solid #b9dfc6;
-    border-radius: 999px;
-    color: #137333;
-    background: #ffffff;
-    font-size: 12px;
-    font-weight: 800;
-    cursor: pointer;
-  }
-
-  .spotc-change-gifts-button:hover {
-    background: #eaf7ef;
   }
 
   .spotc-free-gifts-title strong {
@@ -1226,34 +1090,6 @@ const styles = `
     gap: 11px;
   }
 
-  .spotc-qty-control {
-    height: 42px;
-    display: flex;
-    align-items: center;
-    overflow: hidden;
-    border: 1px solid #ddd5cd;
-    border-radius: 13px;
-    background: #ffffff;
-  }
-
-  .spotc-qty-control button {
-    width: 42px;
-    height: 42px;
-    display: grid;
-    place-items: center;
-    border: 0;
-    color: #29241f;
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .spotc-qty-control span {
-    min-width: 40px;
-    text-align: center;
-    font-size: 14px;
-    font-weight: 650;
-  }
-
   .spotc-remove-button {
     padding: 7px 10px;
     display: inline-flex;
@@ -1499,18 +1335,8 @@ const styles = `
       padding: 12px;
     }
 
-    .spotc-free-gifts-title {
-      align-items: center;
-      gap: 8px;
-    }
-
     .spotc-free-gifts-title strong {
       font-size: 13px;
-    }
-
-    .spotc-change-gifts-button {
-      padding: 6px 9px;
-      font-size: 11px;
     }
 
     .spotc-free-gift {
@@ -1567,7 +1393,7 @@ const styles = `
     /* =========================================================
        MOBILE CART PRODUCT ALIGNMENT
        Image + product info on row 1.
-       Quantity + Remove on row 2.
+       Remove action on row 2.
     ========================================================= */
 
     .spotc-cart-product {
@@ -1633,22 +1459,6 @@ const styles = `
       gap: 10px;
     }
 
-    .spotc-qty-control {
-      height: 40px;
-      flex: 0 0 auto;
-      border-radius: 12px;
-    }
-
-    .spotc-qty-control button {
-      width: 40px;
-      height: 40px;
-    }
-
-    .spotc-qty-control span {
-      min-width: 36px;
-      font-size: 14px;
-    }
-
     .spotc-remove-button {
       min-height: 40px;
       margin: 0;
@@ -1705,19 +1515,6 @@ const styles = `
 
     .spotc-cart-controls {
       gap: 8px;
-    }
-
-    .spotc-qty-control {
-      height: 38px;
-    }
-
-    .spotc-qty-control button {
-      width: 38px;
-      height: 38px;
-    }
-
-    .spotc-qty-control span {
-      min-width: 32px;
     }
 
     .spotc-remove-button {
