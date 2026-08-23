@@ -559,6 +559,9 @@ export default function AdminOrdersPage() {
   const [expandedOrderId, setExpandedOrderId] =
     useState('');
 
+  const [previewImage, setPreviewImage] =
+    useState<{ src: string; title: string } | null>(null);
+
   async function loadData(showLoader = true) {
     if (!db) {
       setLoading(false);
@@ -2026,11 +2029,29 @@ export default function AdminOrdersPage() {
                             style={itemRow}
                           >
                             {image ? (
-                              <img
-                                src={image}
-                                alt=""
-                                style={itemImageStyle}
-                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewImage({
+                                    src: image,
+                                    title:
+                                      product?.title ||
+                                      itemTitle(item),
+                                  })
+                                }
+                                style={imagePreviewButton}
+                                title="View large image"
+                                aria-label="View large product image"
+                              >
+                                <img
+                                  src={image}
+                                  alt={
+                                    product?.title ||
+                                    itemTitle(item)
+                                  }
+                                  style={itemImageStyle}
+                                />
+                              </button>
                             ) : (
                               <div
                                 style={itemImagePlaceholder}
@@ -2188,11 +2209,24 @@ export default function AdminOrdersPage() {
                           style={freeGiftRow}
                         >
                           {gift.image ? (
-                            <img
-                              src={gift.image}
-                              alt=""
-                              style={freeGiftImage}
-                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPreviewImage({
+                                  src: gift.image,
+                                  title: gift.title,
+                                })
+                              }
+                              style={giftImagePreviewButton}
+                              title="View large gift image"
+                              aria-label="View large free gift image"
+                            >
+                              <img
+                                src={gift.image}
+                                alt={gift.title}
+                                style={freeGiftImage}
+                              />
+                            </button>
                           ) : (
                             <div
                               style={freeGiftPlaceholder}
@@ -2306,6 +2340,38 @@ export default function AdminOrdersPage() {
               </article>
             );
           })}
+        </div>
+      )}
+
+      {previewImage && (
+        <div
+          style={imageModalBackdrop}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setPreviewImage(null);
+            }
+          }}
+        >
+          <div style={imageModalCard}>
+            <div style={imageModalHeader}>
+              <div style={imageModalTitle}>{previewImage.title}</div>
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                style={imageModalClose}
+                aria-label="Close image"
+              >
+                ×
+              </button>
+            </div>
+            <div style={imageModalBody}>
+              <img
+                src={previewImage.src}
+                alt={previewImage.title}
+                style={imageModalImage}
+              />
+            </div>
+          </div>
         </div>
       )}
 
@@ -2764,6 +2830,100 @@ const itemRow: React.CSSProperties = {
   gap: 12,
   padding: '12px 0',
   borderBottom: '1px solid #f0f0f0',
+};
+
+const imagePreviewButton: React.CSSProperties = {
+  width: 52,
+  height: 52,
+  flex: '0 0 52px',
+  padding: 0,
+  border: 0,
+  borderRadius: 8,
+  background: 'transparent',
+  cursor: 'zoom-in',
+  overflow: 'hidden',
+};
+
+const giftImagePreviewButton: React.CSSProperties = {
+  width: 48,
+  height: 48,
+  flex: '0 0 48px',
+  padding: 0,
+  border: 0,
+  borderRadius: 8,
+  background: 'transparent',
+  cursor: 'zoom-in',
+  overflow: 'hidden',
+};
+
+const imageModalBackdrop: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: 5000,
+  display: 'grid',
+  placeItems: 'center',
+  padding: 20,
+  background: 'rgba(0,0,0,.78)',
+};
+
+const imageModalCard: React.CSSProperties = {
+  width: 'min(760px, 96vw)',
+  maxHeight: '92vh',
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
+  borderRadius: 16,
+  background: '#fff',
+  boxShadow: '0 24px 80px rgba(0,0,0,.35)',
+};
+
+const imageModalHeader: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 12,
+  padding: '12px 14px',
+  borderBottom: '1px solid #eee',
+};
+
+const imageModalTitle: React.CSSProperties = {
+  minWidth: 0,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  fontSize: 13,
+  fontWeight: 700,
+};
+
+const imageModalClose: React.CSSProperties = {
+  width: 34,
+  height: 34,
+  border: 0,
+  borderRadius: 9,
+  background: '#f1f1f1',
+  color: '#222',
+  fontSize: 22,
+  lineHeight: 1,
+  cursor: 'pointer',
+};
+
+const imageModalBody: React.CSSProperties = {
+  minHeight: 240,
+  maxHeight: 'calc(92vh - 60px)',
+  padding: 16,
+  display: 'grid',
+  placeItems: 'center',
+  overflow: 'auto',
+  background: '#f7f7f7',
+};
+
+const imageModalImage: React.CSSProperties = {
+  display: 'block',
+  maxWidth: '100%',
+  maxHeight: 'calc(92vh - 100px)',
+  width: 'auto',
+  height: 'auto',
+  objectFit: 'contain',
 };
 
 const itemImageStyle: React.CSSProperties = {
