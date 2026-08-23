@@ -376,6 +376,8 @@ export default function AdminHomePage() {
       return;
     }
 
+    const firestore = db;
+
     const handleSnapshot = (
       snapshot: QuerySnapshot<DocumentData>,
     ) => {
@@ -423,7 +425,7 @@ export default function AdminHomePage() {
     let unsubscribeFallback: (() => void) | null = null;
 
     const orderedQuery = query(
-      collection(db, 'Orders'),
+      collection(firestore, 'Orders'),
       orderBy('created_at', 'desc'),
     );
 
@@ -437,7 +439,7 @@ export default function AdminHomePage() {
         );
 
         unsubscribeFallback = onSnapshot(
-          collection(db, 'Orders'),
+          collection(firestore, 'Orders'),
           handleSnapshot,
           (fallbackError) => {
             console.error('Realtime Orders listener failed:', fallbackError);
