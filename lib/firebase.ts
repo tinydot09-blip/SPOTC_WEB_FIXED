@@ -29,23 +29,31 @@ const firebaseConfig = {
   appId: '1:457147494277:web:be35b6dcad2a7c31831eec',
 };
 
+const APP_NAME = 'spotc-web';
+
 export const firebaseReady = true;
 
-let app: FirebaseApp | null = null;
-let authInstance: Auth | null = null;
-let firestoreInstance: Firestore | null = null;
-let storageInstance: FirebaseStorage | null = null;
+let app: FirebaseApp;
 
-app = getApps().length > 0
-  ? getApp()
-  : initializeApp(firebaseConfig);
+const existingApp = getApps().find(
+  (item) => item.name === APP_NAME,
+);
 
-authInstance = getAuth(app);
-firestoreInstance = getFirestore(app);
-storageInstance = getStorage(app);
+if (existingApp) {
+  app = existingApp;
+} else {
+  app = initializeApp(firebaseConfig, APP_NAME);
+}
+
+const authInstance: Auth = getAuth(app);
+const firestoreInstance: Firestore =
+  getFirestore(app);
+const storageInstance: FirebaseStorage =
+  getStorage(app);
 
 export const auth = authInstance;
 export const db = firestoreInstance;
 export const storage = storageInstance;
 
-export const firebaseProjectId = firebaseConfig.projectId;
+export const firebaseProjectId =
+  firebaseConfig.projectId;
