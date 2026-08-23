@@ -107,6 +107,94 @@ function extensionOf(file: File) {
 
 
 /**
+ * Prepare a web-optimised product image before R2 upload.
+ * Images are resized to max 1400px and encoded as WebP.
+ * Videos are not changed.
+ */
+async function prepareImageForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) return file;
+
+  const MAX_DIMENSION = 1400;
+  const TARGET_BYTES = 650_000;
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () =>
+        reject(new Error('Could not read the selected product image.'));
+      img.src = objectUrl;
+    });
+
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+
+    if (!sourceWidth || !sourceHeight) {
+      throw new Error('The selected image has invalid dimensions.');
+    }
+
+    const scale = Math.min(
+      1,
+      MAX_DIMENSION / Math.max(sourceWidth, sourceHeight),
+    );
+
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('Browser could not prepare the product image.');
+    }
+
+    context.drawImage(image, 0, 0, width, height);
+
+    const qualities = [0.84, 0.78, 0.72, 0.66, 0.6];
+
+    let lastBlob: Blob | null = null;
+
+    for (const quality of qualities) {
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, 'image/webp', quality);
+      });
+
+      if (!blob) continue;
+      lastBlob = blob;
+
+      if (blob.size <= TARGET_BYTES) {
+        return new File(
+          [blob],
+          `${file.name.replace(/\.[^.]+$/, '') || 'product'}.webp`,
+          {
+            type: 'image/webp',
+            lastModified: Date.now(),
+          },
+        );
+      }
+    }
+
+    if (!lastBlob) {
+      throw new Error('Could not compress the product image.');
+    }
+
+    return new File(
+      [lastBlob],
+      `${file.name.replace(/\.[^.]+$/, '') || 'product'}.webp`,
+      {
+        type: 'image/webp',
+        lastModified: Date.now(),
+      },
+    );
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+/**
  * Build a lightweight AI-analysis copy while preserving the original file.
  * The original selected image is still used for R2 upload and product display.
  */
@@ -527,25 +615,39 @@ export default function NewProductPage() {
       { uploadUrl: string; publicUrl: string }
     >(functions, 'getR2UploadUrl');
 
-    const ext = extensionOf(item.file);
+    // Product images are resized/compressed before upload.
+    // Product videos remain exactly as selected.
+    const uploadFile = item.file.type.startsWith('image/')
+      ? await prepareImageForUpload(item.file)
+      : item.file;
+
+    const ext = extensionOf(uploadFile);
     const safeSlot = item.slot.replace(/[^a-z0-9_-]/gi, '_');
     const fileName = `${user.uid}_${Date.now()}_${safeSlot}.${ext}`;
+    const contentType =
+      uploadFile.type ||
+      (item.slot === 'product_video' ? 'video/mp4' : 'image/webp');
 
     const signed = await getR2UploadUrl({
       fileName,
-      contentType: item.file.type || (item.slot === 'product_video' ? 'video/mp4' : 'image/jpeg'),
+      contentType,
       folder: 'business-products',
     });
 
     const response = await fetch(signed.data.uploadUrl, {
       method: 'PUT',
       headers: {
-        'Content-Type': item.file.type || (item.slot === 'product_video' ? 'video/mp4' : 'image/jpeg'),
+        'Content-Type': contentType,
       },
-      body: item.file,
+      body: uploadFile,
     });
 
-    if (!response.ok) throw new Error(`R2 upload failed (${response.status}) for ${item.file.name}`);
+    if (!response.ok) {
+      throw new Error(
+        `R2 upload failed (${response.status}) for ${item.file.name}`,
+      );
+    }
+
     return signed.data.publicUrl;
   }
 
