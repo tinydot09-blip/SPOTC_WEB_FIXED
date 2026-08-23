@@ -425,7 +425,7 @@ export default function AdminHomePage() {
             stockOf(a.data) -
             stockOf(b.data),
         )
-        .slice(0, 8);
+        .slice(0, 5);
     }, [products]);
 
   if (loading) {
@@ -1185,16 +1185,20 @@ const twoColumn: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns:
     'minmax(0,1.6fr) minmax(300px,.8fr)',
+  alignItems: 'start',
   gap: 16,
   marginBottom: 16,
 };
 
 const panel: React.CSSProperties = {
+  width: '100%',
+  minWidth: 0,
   marginBottom: 16,
   padding: 20,
   border: '1px solid #e7e9ed',
   borderRadius: 18,
   background: '#fff',
+  alignSelf: 'start',
 };
 
 const panelHeader: React.CSSProperties = {
@@ -1308,9 +1312,14 @@ const salesValue: React.CSSProperties = {
 const alertList: React.CSSProperties = {
   display: 'grid',
   gap: 8,
+  width: '100%',
+  minWidth: 0,
 };
 
 const alertRow: React.CSSProperties = {
+  width: '100%',
+  minWidth: 0,
+  minHeight: 64,
   display: 'flex',
   alignItems: 'center',
   gap: 11,
@@ -1319,6 +1328,7 @@ const alertRow: React.CSSProperties = {
   borderRadius: 12,
   color: 'inherit',
   textDecoration: 'none',
+  overflow: 'hidden',
 };
 
 const alertImage: React.CSSProperties = {
@@ -1456,7 +1466,10 @@ const quickArrow: React.CSSProperties = {
 };
 
 const emptyState: React.CSSProperties = {
-  padding: '32px 10px',
+  minHeight: 92,
+  padding: '28px 10px',
+  display: 'grid',
+  placeItems: 'center',
   color: '#8b8f95',
   fontSize: 12,
   textAlign: 'center',
