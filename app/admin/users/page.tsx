@@ -19,6 +19,7 @@ type UserRow = {
   data: DocumentData;
   source: 'users' | 'orders';
   hasUserDoc: boolean;
+  userCollection?: 'Users' | 'users';
 };
 
 type OrderRow = {
@@ -363,34 +364,28 @@ export default function AdminUsersPage() {
       return;
     }
 
+    const firestore = db;
+
     if (showLoader) setLoading(true);
+    setMessage('');
 
     try {
-      let usersSnap;
-
-      try {
-        usersSnap = await getDocs(
-          query(
-            collection(db, 'Users'),
-            orderBy('created_at', 'desc'),
-          ),
-        );
-      } catch {
-        usersSnap = await getDocs(collection(db, 'Users'));
-      }
-
+      // IMPORTANT:
+      // Load Orders independently first. Even if the Users collection is
+      // empty, missing, lower-case, or unreadable, real order customers must
+      // still appear in Admin -> Users.
       let ordersSnap;
 
       try {
         ordersSnap = await getDocs(
           query(
-            collection(db, 'Orders'),
+            collection(firestore, 'Orders'),
             orderBy('created_at', 'desc'),
           ),
         );
       } catch {
         ordersSnap = await getDocs(
-          collection(db, 'Orders'),
+          collection(firestore, 'Orders'),
         );
       }
 
@@ -400,17 +395,60 @@ export default function AdminUsersPage() {
           data: item.data(),
         }));
 
-      const registeredUsers: UserRow[] =
-        usersSnap.docs.map((item) => ({
-          id: item.id,
-          data: item.data(),
-          source: 'users' as const,
-          hasUserDoc: true,
-        }));
+      // Read both common user collection names.
+      // Some older parts of the project may have written "users" while newer
+      // code reads "Users".
+      const registeredUsers: UserRow[] = [];
+      const seenRealUserIds = new Set<string>();
+
+      for (const collectionName of ['Users', 'users'] as const) {
+        try {
+          let snap;
+
+          try {
+            snap = await getDocs(
+              query(
+                collection(firestore, collectionName),
+                orderBy('created_at', 'desc'),
+              ),
+            );
+          } catch {
+            snap = await getDocs(
+              collection(firestore, collectionName),
+            );
+          }
+
+          for (const item of snap.docs) {
+            const dedupeKey = item.id;
+
+            if (seenRealUserIds.has(dedupeKey)) {
+              continue;
+            }
+
+            seenRealUserIds.add(dedupeKey);
+
+            registeredUsers.push({
+              id: item.id,
+              data: item.data(),
+              source: 'users',
+              hasUserDoc: true,
+              userCollection: collectionName,
+            });
+          }
+        } catch (userCollectionError) {
+          // Do not fail the whole Users page. Orders are still a valid source
+          // for real customers.
+          console.warn(
+            `Unable to read ${collectionName} collection:`,
+            userCollectionError,
+          );
+        }
+      }
 
       // Index registered users by UID, phone and email so order customers
-      // merge into the real account whenever possible.
-      const registeredByIdentity = new Map<string, UserRow>();
+      // merge into an account whenever possible.
+      const registeredByIdentity =
+        new Map<string, UserRow>();
 
       for (const row of registeredUsers) {
         for (const key of userIdentityKeys(row)) {
@@ -418,27 +456,48 @@ export default function AdminUsersPage() {
         }
       }
 
-      const mergedUsers = new Map<string, UserRow>();
+      const mergedUsers =
+        new Map<string, UserRow>();
 
       registeredUsers.forEach((row) => {
         mergedUsers.set(row.id, row);
       });
 
-      // Add customers that exist in Orders even when no Users document exists.
-      // This keeps Admin -> Users accurate for real customers who have ordered.
+      // Always create/merge a customer from every order.
       for (const order of orderRows) {
-        const identityKey = customerIdentityKey(order.data);
-        const uid = orderUserId(order.data);
+        const identityKey =
+          customerIdentityKey(order.data);
+
+        const uid =
+          orderUserId(order.data);
+
+        const phone =
+          orderCustomerPhone(order.data)
+            .replace(/\D+/g, '');
+
+        const email =
+          orderCustomerEmail(order.data)
+            .toLowerCase();
 
         const matchingRegistered =
-          registeredByIdentity.get(identityKey) ||
           (uid
-            ? registeredByIdentity.get(`uid:${uid}`)
-            : undefined);
+            ? registeredByIdentity.get(
+                `uid:${uid}`,
+              )
+            : undefined) ||
+          (phone
+            ? registeredByIdentity.get(
+                `phone:${phone}`,
+              )
+            : undefined) ||
+          (email
+            ? registeredByIdentity.get(
+                `email:${email}`,
+              )
+            : undefined) ||
+          registeredByIdentity.get(identityKey);
 
         if (matchingRegistered) {
-          // Fill missing profile fields from the order without overwriting
-          // richer data stored in Users.
           mergedUsers.set(
             matchingRegistered.id,
             {
@@ -446,84 +505,158 @@ export default function AdminUsersPage() {
               data: {
                 ...matchingRegistered.data,
                 display_name:
-                  userName(matchingRegistered.data) !== 'Customer'
-                    ? userName(matchingRegistered.data)
-                    : orderCustomerName(order.data),
+                  userName(
+                    matchingRegistered.data,
+                  ) !== 'Customer'
+                    ? userName(
+                        matchingRegistered.data,
+                      )
+                    : orderCustomerName(
+                        order.data,
+                      ),
                 phone_number:
-                  userPhone(matchingRegistered.data) ||
-                  orderCustomerPhone(order.data),
+                  userPhone(
+                    matchingRegistered.data,
+                  ) ||
+                  orderCustomerPhone(
+                    order.data,
+                  ),
                 email:
-                  userEmail(matchingRegistered.data) ||
-                  orderCustomerEmail(order.data),
+                  userEmail(
+                    matchingRegistered.data,
+                  ) ||
+                  orderCustomerEmail(
+                    order.data,
+                  ),
               },
             },
           );
+
           continue;
         }
 
         const syntheticId =
-          syntheticUserIdFromOrder(order.data);
+          syntheticUserIdFromOrder(
+            order.data,
+          );
 
-        const existing = mergedUsers.get(syntheticId);
+        const existing =
+          mergedUsers.get(syntheticId);
 
         const orderCreated =
-          timestampMillis(order.data.created_at);
+          timestampMillis(
+            order.data.created_at,
+          );
 
         if (!existing) {
-          mergedUsers.set(syntheticId, {
-            id: syntheticId,
-            source: 'orders',
-            hasUserDoc: false,
-            data: {
-              display_name:
-                orderCustomerName(order.data),
-              phone_number:
-                orderCustomerPhone(order.data),
-              email:
-                orderCustomerEmail(order.data),
-              created_at:
-                order.data.created_at ?? null,
-              last_login_at: null,
-              auth_provider: 'order',
-              order_only_customer: true,
-              derived_user_uid:
-                uid || '',
-              is_blocked: false,
-              account_status: 'active',
+          mergedUsers.set(
+            syntheticId,
+            {
+              id: syntheticId,
+              source: 'orders',
+              hasUserDoc: false,
+              data: {
+                display_name:
+                  orderCustomerName(
+                    order.data,
+                  ),
+                phone_number:
+                  orderCustomerPhone(
+                    order.data,
+                  ),
+                email:
+                  orderCustomerEmail(
+                    order.data,
+                  ),
+                created_at:
+                  order.data.created_at ??
+                  null,
+                last_login_at: null,
+                auth_provider:
+                  'order',
+                order_only_customer:
+                  true,
+                derived_user_uid:
+                  uid || '',
+                is_blocked: false,
+                account_status:
+                  'active',
+              },
             },
-          });
-        } else if (
-          orderCreated >
-          userCreatedMillis(existing.data)
-        ) {
-          mergedUsers.set(syntheticId, {
-            ...existing,
-            data: {
-              ...existing.data,
-              display_name:
-                orderCustomerName(order.data) ||
-                userName(existing.data),
-              phone_number:
-                orderCustomerPhone(order.data) ||
-                userPhone(existing.data),
-              email:
-                orderCustomerEmail(order.data) ||
-                userEmail(existing.data),
-              created_at:
-                existing.data.created_at ??
-                order.data.created_at ??
-                null,
-            },
-          });
+          );
+        } else {
+          const existingCreated =
+            userCreatedMillis(
+              existing.data,
+            );
+
+          if (
+            !existingCreated ||
+            orderCreated >=
+              existingCreated
+          ) {
+            mergedUsers.set(
+              syntheticId,
+              {
+                ...existing,
+                data: {
+                  ...existing.data,
+                  display_name:
+                    orderCustomerName(
+                      order.data,
+                    ) ||
+                    userName(
+                      existing.data,
+                    ),
+                  phone_number:
+                    orderCustomerPhone(
+                      order.data,
+                    ) ||
+                    userPhone(
+                      existing.data,
+                    ),
+                  email:
+                    orderCustomerEmail(
+                      order.data,
+                    ) ||
+                    userEmail(
+                      existing.data,
+                    ),
+                  created_at:
+                    existing.data
+                      .created_at ??
+                    order.data
+                      .created_at ??
+                    null,
+                },
+              },
+            );
+          }
         }
       }
 
-      setUsers([...mergedUsers.values()]);
       setOrders(orderRows);
+      setUsers(
+        [...mergedUsers.values()],
+      );
 
-      setMessage('');
+      if (
+        registeredUsers.length === 0 &&
+        orderRows.length > 0
+      ) {
+        setMessage(
+          `Showing ${mergedUsers.size} customer${
+            mergedUsers.size === 1 ? '' : 's'
+          } from Orders. No profile documents were found in Users/users.`,
+        );
+      } else {
+        setMessage('');
+      }
     } catch (error) {
-      console.error('Users load failed:', error);
+      console.error(
+        'Users load failed:',
+        error,
+      );
 
       setMessage(
         error instanceof Error
@@ -832,7 +965,13 @@ export default function AdminUsersPage() {
     setMessage('');
 
     try {
-      await updateDoc(doc(db, 'Users', row.id), {
+      await updateDoc(
+        doc(
+          db,
+          row.userCollection ?? 'Users',
+          row.id,
+        ),
+        {
         is_blocked: nextBlocked,
         account_status: nextBlocked
           ? 'blocked'
@@ -840,8 +979,9 @@ export default function AdminUsersPage() {
         blocked_at: nextBlocked
           ? serverTimestamp()
           : null,
-        updated_at: serverTimestamp(),
-      });
+          updated_at: serverTimestamp(),
+        },
+      );
 
       setUsers((prev) =>
         prev.map((item) =>
