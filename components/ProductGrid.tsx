@@ -1185,11 +1185,11 @@ export function ProductGrid({
   );
 
   useEffect(() => {
+    if (!categoriesLoaded) return;
+
     const categoryParam = searchParams.get('category');
 
-    if (!categoryParam || !categoriesLoaded) {
-      return;
-    }
+    if (!categoryParam) return;
 
     const matched = mainCategories.find(
       (category) =>
@@ -1197,16 +1197,16 @@ export function ProductGrid({
         categoryParam.toLowerCase(),
     );
 
-    if (matched && matched !== mainCategory) {
-      setMainCategory(matched);
-      setSubCategory('All');
-    }
-  }, [
-    searchParams,
-    mainCategory,
-    mainCategories,
-    categoriesLoaded,
-  ]);
+    if (!matched) return;
+
+    setMainCategory((current) => {
+      if (current === matched) {
+        return current;
+      }
+
+      return matched;
+    });
+  }, [searchParams, mainCategories, categoriesLoaded]);
 
   useEffect(() => {
     const querySearch = searchParams.get('search') || '';
@@ -1865,6 +1865,12 @@ export function ProductGrid({
                   : ''
               }
               onClick={() => {
+                if (categoryName === mainCategory) {
+                  return;
+                }
+
+                // Update the selected category immediately without triggering
+                // a Next.js navigation/re-render cycle.
                 setMainCategory(categoryName);
                 setSubCategory('All');
                 setSearch('');
@@ -1875,10 +1881,17 @@ export function ProductGrid({
                   }),
                 );
 
+                // Keep the URL shareable/bookmarkable without allowing the
+                // previous URL category to briefly overwrite local state.
                 const params = new URLSearchParams(searchParams.toString());
                 params.delete('search');
                 params.set('category', categoryName);
-                router.replace(`/shop?${params.toString()}`, { scroll: false });
+
+                window.history.replaceState(
+                  window.history.state,
+                  '',
+                  `/shop?${params.toString()}`,
+                );
               }}
             >
               {categoryLabel(categoryName)}
