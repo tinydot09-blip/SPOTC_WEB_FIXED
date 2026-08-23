@@ -197,16 +197,24 @@ export default function CartPage() {
 
     setGiftBundles(nextGiftBundles);
 
-    /*
-     * Always start the cart with Instant Delivery selected.
-     * This prevents an old saved slot (for example Afternoon)
-     * from making the bill show ₹0 while the Instant card appears selected.
-     */
-    setSelectedDeliveryId('instant');
-    window.localStorage.setItem(
+    const savedDeliveryId = window.localStorage.getItem(
       'spotc-delivery-option',
-      'instant',
-    );
+    ) as DeliveryOptionId | null;
+
+    if (
+      savedDeliveryId &&
+      DELIVERY_OPTIONS.some(
+        (option) => option.id === savedDeliveryId,
+      )
+    ) {
+      setSelectedDeliveryId(savedDeliveryId);
+    } else {
+      setSelectedDeliveryId('instant');
+      window.localStorage.setItem(
+        'spotc-delivery-option',
+        'instant',
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -242,13 +250,19 @@ export default function CartPage() {
     [items],
   );
 
+  // One source of truth for delivery selection:
+  // selectedDeliveryId drives the card, fee, bill and checkout.
   const selectedDelivery =
     DELIVERY_OPTIONS.find(
       (option) => option.id === selectedDeliveryId,
     ) ?? DELIVERY_OPTIONS[0];
 
   const delivery =
-    items.length > 0 ? selectedDelivery.fee : 0;
+    items.length === 0
+      ? 0
+      : selectedDeliveryId === 'instant'
+        ? 20
+        : 0;
 
   const total =
     subtotal + delivery;
@@ -544,7 +558,7 @@ export default function CartPage() {
                 <div className="spotc-delivery-options">
                   {DELIVERY_OPTIONS.map((option) => {
                     const selected =
-                      option.id === selectedDelivery.id;
+                      option.id === selectedDeliveryId;
 
                     return (
                       <button
