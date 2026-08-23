@@ -1103,6 +1103,16 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
   // Example: ₹999 = 9 gifts per item; qty 2 = 18 FREE gifts.
   const freeGiftCount = freeGiftCountPerItem * qty;
 
+  useEffect(() => {
+    setSelectedGiftIds((selected) => {
+      if (selected.length <= freeGiftCount) {
+        return selected;
+      }
+
+      return selected.slice(0, freeGiftCount);
+    });
+  }, [freeGiftCount]);
+
   const giftCategories = [
     'All',
     ...Array.from(
@@ -1121,34 +1131,100 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     ),
   ];
 
-  const visibleGiftProducts = giftProducts.filter((item) => {
-    const itemRecord = item as ProductRecord;
-
-    const itemCategory = text(
-      itemRecord.main_category ||
-        itemRecord.category ||
-        itemRecord.sub_category,
-    ).trim();
-
-    const matchesCategory =
-      giftCategory === 'All' || itemCategory === giftCategory;
-
+  const visibleGiftProducts = useMemo(() => {
     const searchValue = giftSearch.trim().toLowerCase();
-    const searchable = [
-      titleOf(item),
-      itemRecord.brand,
-      itemRecord.main_category,
-      itemRecord.category,
-      itemRecord.sub_category,
-    ]
-      .map((value) => text(value).toLowerCase())
-      .join(' ');
 
-    const matchesSearch =
-      !searchValue || searchable.includes(searchValue);
+    const matchingProducts = giftProducts.filter((item) => {
+      const itemRecord = item as ProductRecord;
 
-    return matchesCategory && matchesSearch;
-  });
+      const itemCategory = text(
+        itemRecord.main_category ||
+          itemRecord.category ||
+          itemRecord.sub_category,
+      ).trim();
+
+      const matchesCategory =
+        giftCategory === 'All' || itemCategory === giftCategory;
+
+      const searchable = [
+        titleOf(item),
+        itemRecord.brand,
+        itemRecord.main_category,
+        itemRecord.category,
+        itemRecord.sub_category,
+      ]
+        .map((value) => text(value).toLowerCase())
+        .join(' ');
+
+      const matchesSearch =
+        !searchValue || searchable.includes(searchValue);
+
+      return matchesCategory && matchesSearch;
+    });
+
+    /*
+     * FREE GIFT "ALL" VIEW
+     * --------------------
+     * Firestore/getProducts can return many products from the same category
+     * together. If we render that array directly, the first rows can look like
+     * one category only (for example, many stickers in a row).
+     *
+     * When "All" is selected, group the eligible gifts by category and then
+     * take one product from each category in turn:
+     *
+     * Fancy Item -> Girl Dress -> Earrings -> Toys -> ...
+     * Fancy Item -> Girl Dress -> Earrings -> Toys -> ...
+     *
+     * This is deterministic (no random shuffle), so cards do not jump around
+     * whenever React re-renders. Selecting a category still shows that
+     * category normally, and search continues to work.
+     */
+    if (giftCategory !== 'All' || matchingProducts.length <= 1) {
+      return matchingProducts;
+    }
+
+    const categoryBuckets = new Map<string, BusinessProduct[]>();
+
+    matchingProducts.forEach((item) => {
+      const itemRecord = item as ProductRecord;
+      const category =
+        text(
+          itemRecord.main_category ||
+            itemRecord.category ||
+            itemRecord.sub_category,
+        ).trim() || 'Other';
+
+      const bucket = categoryBuckets.get(category);
+
+      if (bucket) {
+        bucket.push(item);
+      } else {
+        categoryBuckets.set(category, [item]);
+      }
+    });
+
+    const buckets = Array.from(categoryBuckets.values());
+    const mixedProducts: BusinessProduct[] = [];
+    let rowIndex = 0;
+
+    while (mixedProducts.length < matchingProducts.length) {
+      let addedInThisRound = false;
+
+      buckets.forEach((bucket) => {
+        const item = bucket[rowIndex];
+
+        if (item) {
+          mixedProducts.push(item);
+          addedInThisRound = true;
+        }
+      });
+
+      if (!addedInThisRound) break;
+      rowIndex += 1;
+    }
+
+    return mixedProducts;
+  }, [giftProducts, giftCategory, giftSearch]);
 
   const selectedGiftProducts = giftProducts.filter((item) =>
     selectedGiftIds.includes(String(item.id)),
@@ -1635,31 +1711,30 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   };
 
   const decreaseQuantity = () => {
-    const nextQty = Math.max(1, qty - 1);
+    setQty((currentQty) => {
+      const nextQty = Math.max(1, currentQty - 1);
 
-    if (nextQty === qty) return;
+      if (nextQty === currentQty) {
+        return currentQty;
+      }
 
-    setQty(nextQty);
+      const nextGiftLimit =
+        freeGiftCountPerItem * nextQty;
 
-    const nextGiftLimit =
-      freeGiftCountPerItem * nextQty;
+      setSelectedGiftIds((selected) =>
+        selected.slice(0, nextGiftLimit),
+      );
 
-    setSelectedGiftIds((selected) =>
-      selected.slice(0, nextGiftLimit),
-    );
+      return nextQty;
+    });
   };
 
   const increaseQuantity = () => {
     if (!inStock) return;
 
-    const nextQty = Math.min(
-      maximumQuantity,
-      qty + 1,
+    setQty((currentQty) =>
+      Math.min(maximumQuantity, currentQty + 1),
     );
-
-    if (nextQty === qty) return;
-
-    setQty(nextQty);
   };
 
   const toggleFreeGift = (giftId: string) => {
