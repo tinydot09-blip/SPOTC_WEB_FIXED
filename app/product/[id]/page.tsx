@@ -2444,7 +2444,6 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
                 src={selectedMedia.url}
                 poster={selectedMedia.poster || productImage || undefined}
                 controls
-                autoPlay
                 playsInline
                 preload="metadata"
               />
@@ -2545,7 +2544,14 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
                       </span>
                     </>
                   ) : (
-                    <img src={media.url} alt="" />
+                    <img
+                      src={media.url}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      width={152}
+                      height={152}
+                    />
                   )}
 
                 </button>
@@ -2861,10 +2867,19 @@ const relatedFreeGiftCount =
 
               return (
                 <Link className="pd-related-card" href={`/product/${item.id}`} key={item.id}>
-                  <div
-                    className="pd-related-image"
-                    style={{ backgroundImage: `url("${imageOf(item)}")` }}
-                  >
+                  <div className="pd-related-image">
+                    {imageOf(item) ? (
+                      <img
+                        src={imageOf(item)}
+                        alt={titleOf(item)}
+                        loading="lazy"
+                        decoding="async"
+                        width={480}
+                        height={600}
+                        className="pd-related-image-file"
+                      />
+                    ) : null}
+
                     {discountOf(item) > 0 && (
                       <span className="pd-related-discount-chip">
                         {discountOf(item)}% OFF
@@ -3899,6 +3914,8 @@ onClick={openShoppingCircle}
 .pd-top{display:flex;justify-content:space-between;margin-bottom:22px}.pd-top button,.pd-top a{display:inline-flex;align-items:center;gap:7px;border:0;background:#fff;color:#17120d;text-decoration:none;padding:10px 14px;border-radius:999px;font-weight:800;box-shadow:0 6px 22px rgba(37,24,12,.08);cursor:pointer}.pd-top svg{width:18px}.pd-main{position:relative;display:grid;grid-template-columns:minmax(0,1.06fr) minmax(380px,.94fr);gap:48px;align-items:start}.pd-image{position:relative;width:100%;aspect-ratio:4/5;border-radius:26px;background:#eee center/cover no-repeat;box-shadow:0 14px 45px rgba(37,24,12,.1)}.pd-discount-chip{position:absolute;left:16px;top:16px;padding:8px 11px;border-radius:10px;background:#f1b46d;color:#181008;font-size:12px;font-weight:900}
         .pd-delivery-chip{position:absolute;right:16px;top:16px;display:flex;align-items:center;gap:7px;padding:10px 14px;border-radius:999px;background:#25c963;color:#fff;font-size:16px;font-weight:900;box-shadow:0 8px 20px rgba(37,201,99,.34)}
         .pd-delivery-chip svg{width:15px;height:15px}.pd-thumbs{display:flex;gap:10px;margin-top:12px;overflow:auto;padding-bottom:3px}.pd-thumbs button{width:76px;height:76px;padding:0;border:2px solid transparent;border-radius:13px;overflow:hidden;background:#eee;cursor:pointer;flex:0 0 auto}.pd-thumbs button.active{border-color:#17120d}.pd-thumbs img{width:100%;height:100%;object-fit:cover}
+.pd-related-image{overflow:hidden}
+.pd-related-image-file{width:100%;height:100%;display:block;object-fit:cover}
 
 /* PRODUCT MEDIA GALLERY — AI / FRONT / BACK / VIDEO / DETAIL */
 .pd-media-video-shell{display:grid;place-items:center;overflow:hidden;background:#111!important}

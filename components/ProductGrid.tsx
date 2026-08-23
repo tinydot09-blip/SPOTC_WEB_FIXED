@@ -823,13 +823,24 @@ const shopSubCategoryOf = (
   return sub || 'Other';
 };
 
-const imageOf = (product: BusinessProduct): string =>
-  product.product_thumbnail ||
-  product.images?.[0] ||
-  product.image ||
-  product.image_url ||
-  product.image1 ||
-  '';
+const imageOf = (product: BusinessProduct): string => {
+  const record = product as BusinessProduct & Record<string, unknown>;
+
+  return textValue(
+    record.thumbnail_url ||
+      record.thumbnailUrl ||
+      record.thumb_url ||
+      record.thumbUrl ||
+      record.web_thumbnail_url ||
+      record.card_image_url ||
+      record.product_thumbnail ||
+      product.images?.[0] ||
+      product.image ||
+      product.image_url ||
+      product.image1 ||
+      '',
+  );
+};
 
 const titleOf = (product: BusinessProduct): string =>
   product.title || product.product_name || 'Product';
@@ -1983,7 +1994,7 @@ export function ProductGrid({
             : 'shop-product-grid'
         }`}
       >
-        {filteredProducts.map((item) => {
+        {filteredProducts.map((item, itemIndex) => {
           const price = priceOf(item);
           const oldPrice = oldPriceOf(item);
           const discount = discountOf(item);
@@ -2011,9 +2022,11 @@ export function ProductGrid({
                     <img
                       src={image}
                       alt={localizedTitleOf(item)}
-                      loading="lazy"
+                      loading={itemIndex < 4 ? 'eager' : 'lazy'}
                       decoding="async"
-                      fetchPriority="low"
+                      fetchPriority={itemIndex < 2 ? 'high' : 'low'}
+                      width={640}
+                      height={800}
                     />
                   ) : null}
                 </Link>
