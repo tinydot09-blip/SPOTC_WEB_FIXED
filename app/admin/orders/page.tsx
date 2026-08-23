@@ -48,6 +48,7 @@ type OrderStatus =
 type InventoryState = 'none' | 'reserved' | 'sold' | 'released';
 
 type StatusFilter = 'all' | OrderStatus;
+type PeriodFilter = 'all' | 'today' | 'delivered_today';
 type SortOption = 'newest' | 'oldest' | 'total_high' | 'total_low';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
@@ -82,6 +83,37 @@ function createdMillis(data: DocumentData): number {
 
   const parsed = Date.parse(text(value));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function timestampMillis(value: unknown): number {
+  if (value?.toMillis) return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+
+  const parsed = Date.parse(text(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isTodayMillis(millis: number): boolean {
+  if (!millis) return false;
+
+  const date = new Date(millis);
+  const now = new Date();
+
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  );
+}
+
+function deliveredMillis(data: DocumentData): number {
+  return timestampMillis(
+    data.delivered_at ??
+      data.deliveredAt ??
+      data.updated_at ??
+      data.updatedAt,
+  );
 }
 
 function formatDate(data: DocumentData): string {
@@ -508,6 +540,8 @@ export default function AdminOrdersPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] =
     useState<StatusFilter>('all');
+  const [periodFilter, setPeriodFilter] =
+    useState<PeriodFilter>('all');
   const [sortBy, setSortBy] =
     useState<SortOption>('newest');
 
@@ -586,6 +620,33 @@ export default function AdminOrdersPage() {
   }
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(
+        window.location.search,
+      );
+
+      const status = params.get('status');
+      if (
+        status === 'pending' ||
+        status === 'confirmed' ||
+        status === 'picking' ||
+        status === 'packed' ||
+        status === 'out_for_delivery' ||
+        status === 'delivered' ||
+        status === 'cancelled'
+      ) {
+        setStatusFilter(status);
+      }
+
+      const period = params.get('period');
+      if (
+        period === 'today' ||
+        period === 'delivered_today'
+      ) {
+        setPeriodFilter(period);
+      }
+    }
+
     void loadData();
   }, []);
 
@@ -653,6 +714,24 @@ export default function AdminOrdersPage() {
       if (
         statusFilter !== 'all' &&
         status !== statusFilter
+      ) {
+        return false;
+      }
+
+      if (
+        periodFilter === 'today' &&
+        !isTodayMillis(
+          createdMillis(row.data),
+        )
+      ) {
+        return false;
+      }
+
+      if (
+        periodFilter === 'delivered_today' &&
+        !isTodayMillis(
+          deliveredMillis(row.data),
+        )
       ) {
         return false;
       }
@@ -728,6 +807,7 @@ export default function AdminOrdersPage() {
     products,
     search,
     statusFilter,
+    periodFilter,
     sortBy,
   ]);
 
@@ -736,6 +816,7 @@ export default function AdminOrdersPage() {
   }, [
     search,
     statusFilter,
+    periodFilter,
     sortBy,
     pageSize,
   ]);
@@ -1541,6 +1622,7 @@ export default function AdminOrdersPage() {
   function clearFilters() {
     setSearch('');
     setStatusFilter('all');
+    setPeriodFilter('all');
     setSortBy('newest');
   }
 
@@ -1667,6 +1749,33 @@ export default function AdminOrdersPage() {
                   </option>
                 ),
               )}
+            </select>
+          </label>
+
+          <label style={filterLabelWrap}>
+            <span style={filterLabel}>
+              Period
+            </span>
+
+            <select
+              value={periodFilter}
+              onChange={(event) =>
+                setPeriodFilter(
+                  event.target
+                    .value as PeriodFilter,
+                )
+              }
+              style={filterSelect}
+            >
+              <option value="all">
+                All Dates
+              </option>
+              <option value="today">
+                Placed Today
+              </option>
+              <option value="delivered_today">
+                Delivered Today
+              </option>
             </select>
           </label>
 

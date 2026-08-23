@@ -18,7 +18,7 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { auth, db } from '@/lib/firebase';
 
 type ProductRow = { id: string; data: DocumentData };
-type StockFilter = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock';
+type StockFilter = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock' | 'attention';
 type StatusFilter = 'all' | 'active' | 'hidden';
 type GiftFilter = 'all' | 'gift' | 'not_gift';
 type LocationFilter = 'all' | 'set' | 'missing';
@@ -30,7 +30,8 @@ type SortOption =
   | 'price_low'
   | 'price_high'
   | 'stock_low'
-  | 'stock_high';
+  | 'stock_high'
+  | 'sold_high';
 
 type EditForm = {
   title: string;
@@ -462,6 +463,8 @@ export default function AdminProductsPage() {
   const [giftFilter, setGiftFilter] = useState<GiftFilter>('all');
   const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
+  const [soldOnly, setSoldOnly] = useState(false);
+  const deepLinkOpenedRef = useRef('');
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
 
@@ -534,8 +537,72 @@ export default function AdminProductsPage() {
   }
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(
+        window.location.search,
+      );
+
+      const stock = params.get('stock');
+      if (
+        stock === 'in_stock' ||
+        stock === 'low_stock' ||
+        stock === 'out_of_stock' ||
+        stock === 'attention'
+      ) {
+        setStockFilter(stock);
+      }
+
+      if (params.get('sold') === '1') {
+        setSoldOnly(true);
+      }
+
+      const sort = params.get('sort');
+      if (
+        sort === 'newest' ||
+        sort === 'oldest' ||
+        sort === 'name_az' ||
+        sort === 'name_za' ||
+        sort === 'price_low' ||
+        sort === 'price_high' ||
+        sort === 'stock_low' ||
+        sort === 'stock_high' ||
+        sort === 'sold_high'
+      ) {
+        setSortBy(sort);
+      }
+    }
+
     void loadProducts();
   }, []);
+
+  useEffect(() => {
+    if (
+      typeof window === 'undefined' ||
+      rows.length === 0
+    ) {
+      return;
+    }
+
+    const editId = new URLSearchParams(
+      window.location.search,
+    ).get('edit');
+
+    if (
+      !editId ||
+      deepLinkOpenedRef.current === editId
+    ) {
+      return;
+    }
+
+    const target = rows.find(
+      (row) => row.id === editId,
+    );
+
+    if (target) {
+      deepLinkOpenedRef.current = editId;
+      openEdit(target);
+    }
+  }, [rows]);
 
   const categories = useMemo(
     () =>
@@ -619,6 +686,9 @@ export default function AdminProductsPage() {
       if (stockFilter === 'in_stock' && stock <= 2) return false;
       if (stockFilter === 'low_stock' && !(stock > 0 && stock <= 2)) return false;
       if (stockFilter === 'out_of_stock' && stock > 0) return false;
+      if (stockFilter === 'attention' && stock > 2) return false;
+
+      if (soldOnly && soldOf(data) <= 0) return false;
 
       if (statusFilter === 'active' && data.isActive === false) return false;
       if (statusFilter === 'hidden' && data.isActive !== false) return false;
@@ -648,6 +718,8 @@ export default function AdminProductsPage() {
           return stockOf(a.data) - stockOf(b.data);
         case 'stock_high':
           return stockOf(b.data) - stockOf(a.data);
+        case 'sold_high':
+          return soldOf(b.data) - soldOf(a.data);
         default:
           return createdMillis(b.data) - createdMillis(a.data);
       }
@@ -659,6 +731,7 @@ export default function AdminProductsPage() {
     search,
     categoryFilter,
     stockFilter,
+    soldOnly,
     statusFilter,
     giftFilter,
     locationFilter,
@@ -671,6 +744,7 @@ export default function AdminProductsPage() {
     search,
     categoryFilter,
     stockFilter,
+    soldOnly,
     statusFilter,
     giftFilter,
     locationFilter,
@@ -1389,6 +1463,7 @@ export default function AdminProductsPage() {
     setStatusFilter('all');
     setGiftFilter('all');
     setLocationFilter('all');
+    setSoldOnly(false);
     setSortBy('newest');
   }
 
@@ -1447,6 +1522,19 @@ export default function AdminProductsPage() {
           style={searchInput}
         />
 
+        {soldOnly && (
+          <div style={activeFilterBanner}>
+            Showing products with Sold Qty &gt; 0
+            <button
+              type="button"
+              onClick={() => setSoldOnly(false)}
+              style={activeFilterClear}
+            >
+              Clear
+            </button>
+          </div>
+        )}
+
         <div style={filterGrid}>
           <SelectControl label="Category" value={categoryFilter} onChange={setCategoryFilter}>
             <option value="all">All Categories</option>
@@ -1458,6 +1546,7 @@ export default function AdminProductsPage() {
             <option value="in_stock">In Stock &gt; 2</option>
             <option value="low_stock">Low Stock 1–2</option>
             <option value="out_of_stock">Out of Stock</option>
+            <option value="attention">Low + Out of Stock</option>
           </SelectControl>
 
           <SelectControl label="Status" value={statusFilter} onChange={(value) => setStatusFilter(value as StatusFilter)}>
@@ -1487,6 +1576,7 @@ export default function AdminProductsPage() {
             <option value="price_high">Price High–Low</option>
             <option value="stock_low">Stock Low–High</option>
             <option value="stock_high">Stock High–Low</option>
+            <option value="sold_high">Sold High–Low</option>
           </SelectControl>
         </div>
 
@@ -2409,6 +2499,29 @@ const summaryLabel: React.CSSProperties = { fontSize: 12, color: '#777', fontWei
 const summaryValue: React.CSSProperties = { fontSize: 26, fontWeight: 400, marginTop: 4 };
 const controlsCard: React.CSSProperties = { background: '#fff', border: '1px solid #e7e7e7', borderRadius: 16, padding: 14, marginBottom: 16 };
 const searchInput: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '13px 15px', border: '1px solid #ddd', borderRadius: 12, fontSize: 15, marginBottom: 12, outline: 'none' };
+const activeFilterBanner: React.CSSProperties = {
+  marginBottom: 10,
+  padding: '8px 10px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 10,
+  border: '1px solid #d9e8dc',
+  borderRadius: 9,
+  background: '#f4faf5',
+  color: '#347048',
+  fontSize: 11,
+};
+
+const activeFilterClear: React.CSSProperties = {
+  border: 0,
+  background: 'transparent',
+  color: '#9b5d00',
+  fontSize: 11,
+  fontWeight: 700,
+  cursor: 'pointer',
+};
+
 const filterGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 };
 const selectWrap: React.CSSProperties = { display: 'grid', gap: 5 };
 const filterLabel: React.CSSProperties = { fontSize: 11, color: '#666', fontWeight: 400 };

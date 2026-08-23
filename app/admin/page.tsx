@@ -33,8 +33,7 @@ function stockOf(data: DocumentData): number {
   return Math.max(
     0,
     numberOf(
-      data.available_qty ??
-        data.stock_qty ??
+      data.stock_qty ??
         data.stock_quantity ??
         0,
     ),
@@ -176,6 +175,54 @@ function orderStatus(data: DocumentData): string {
   );
 }
 
+function normalizedOrderStatus(data: DocumentData):
+  | 'pending'
+  | 'processing'
+  | 'delivered'
+  | 'cancelled' {
+  const raw = orderStatus(data)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+
+  if (
+    raw === 'delivered' ||
+    raw === 'completed' ||
+    raw === 'complete'
+  ) return 'delivered';
+
+  if (
+    raw === 'cancelled' ||
+    raw === 'canceled' ||
+    raw === 'rejected'
+  ) return 'cancelled';
+
+  if (
+    raw === 'confirmed' ||
+    raw === 'accepted' ||
+    raw === 'processing' ||
+    raw === 'picking' ||
+    raw === 'picked' ||
+    raw === 'packed' ||
+    raw === 'ready' ||
+    raw === 'out_for_delivery' ||
+    raw === 'shipped' ||
+    raw === 'dispatch' ||
+    raw === 'dispatched'
+  ) return 'processing';
+
+  return 'pending';
+}
+
+function deliveredMillis(data: DocumentData): number {
+  return timestampMillis(
+    data.delivered_at ??
+      data.deliveredAt ??
+      data.updated_at ??
+      data.updatedAt,
+  );
+}
+
 function formatMoney(value: number): string {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -201,16 +248,7 @@ function normalizedStatus(data: DocumentData): string {
 }
 
 function isNewOrder(data: DocumentData): boolean {
-  const status = normalizedStatus(data);
-
-  return [
-    'new',
-    'placed',
-    'order placed',
-    'pending',
-    'confirmed',
-    'processing',
-  ].includes(status);
+  return normalizedOrderStatus(data) === 'pending';
 }
 
 function playNewOrderSound() {
@@ -558,8 +596,15 @@ export default function AdminHomePage() {
             soldOf(a.data),
         );
 
+    const deliveredOrders =
+      orders.filter(
+        ({ data }) =>
+          normalizedOrderStatus(data) ===
+          'delivered',
+      );
+
     const totalSales =
-      orders.reduce(
+      deliveredOrders.reduce(
         (sum, { data }) =>
           sum + orderTotal(data),
         0,
@@ -574,14 +619,24 @@ export default function AdminHomePage() {
       );
 
     const todaySales =
-      todayOrders.reduce(
-        (sum, { data }) =>
-          sum + orderTotal(data),
-        0,
-      );
+      deliveredOrders
+        .filter(
+          ({ data }) =>
+            isToday(
+              deliveredMillis(data),
+            ),
+        )
+        .reduce(
+          (sum, { data }) =>
+            sum + orderTotal(data),
+          0,
+        );
 
     const newOrders =
-      orders.filter(({ data }) => isNewOrder(data)).length;
+      orders.filter(
+        ({ data }) =>
+          isNewOrder(data),
+      ).length;
 
     return {
       totalProducts,
@@ -715,14 +770,14 @@ export default function AdminHomePage() {
           title="In Stock"
           value={dashboard.inStock}
           subtitle="More than 2 units"
-          href="/admin/products"
+          href="/admin/products?stock=in_stock"
         />
 
         <StatCard
           title="Low Stock"
           value={dashboard.lowStock}
           subtitle="Only 1–2 left"
-          href="/admin/products"
+          href="/admin/products?stock=low_stock"
           warning={
             dashboard.lowStock > 0
           }
@@ -734,7 +789,7 @@ export default function AdminHomePage() {
             dashboard.outOfStock
           }
           subtitle="Needs restocking"
-          href="/admin/products"
+          href="/admin/products?stock=out_of_stock"
           danger={
             dashboard.outOfStock > 0
           }
@@ -745,15 +800,15 @@ export default function AdminHomePage() {
           value={
             dashboard.totalUnitsSold
           }
-          subtitle="All products"
-          href="/admin/products"
+          subtitle="Sold products"
+          href="/admin/products?sold=1&sort=sold_high"
         />
 
         <StatCard
           title="New Orders"
           value={dashboard.newOrders}
           subtitle="Needs attention"
-          href="/admin/orders"
+          href="/admin/orders?status=pending"
           danger={dashboard.newOrders > 0}
         />
 
@@ -771,8 +826,8 @@ export default function AdminHomePage() {
           value={
             dashboard.todayOrders
           }
-          subtitle="Orders today"
-          href="/admin/orders"
+          subtitle="Orders placed today"
+          href="/admin/orders?period=today"
         />
 
         <StatCard
@@ -780,8 +835,8 @@ export default function AdminHomePage() {
           value={formatMoney(
             dashboard.todaySales,
           )}
-          subtitle="Revenue today"
-          href="/admin/orders"
+          subtitle="Delivered today"
+          href="/admin/orders?status=delivered&period=delivered_today"
         />
 
         <StatCard
@@ -789,8 +844,8 @@ export default function AdminHomePage() {
           value={formatMoney(
             dashboard.totalSales,
           )}
-          subtitle="Order revenue"
-          href="/admin/reports"
+          subtitle="Delivered revenue"
+          href="/admin/orders?status=delivered"
         />
       </section>
 
@@ -809,7 +864,7 @@ export default function AdminHomePage() {
             </div>
 
             <Link
-              href="/admin/products"
+              href="/admin/products?sold=1&sort=sold_high"
               style={viewLink}
             >
               View Products →
@@ -847,7 +902,9 @@ export default function AdminHomePage() {
                     return (
                       <Link
                         key={id}
-                        href="/admin/products"
+                        href={`/admin/products?edit=${encodeURIComponent(
+                          id,
+                        )}`}
                         style={
                           soldProductCard
                         }
@@ -958,7 +1015,7 @@ export default function AdminHomePage() {
             </div>
 
             <Link
-              href="/admin/products"
+              href="/admin/products?stock=attention"
               style={viewLink}
             >
               Manage →
@@ -988,7 +1045,9 @@ export default function AdminHomePage() {
                   return (
                     <Link
                       key={id}
-                      href="/admin/products"
+                      href={`/admin/products?edit=${encodeURIComponent(
+                        id,
+                      )}`}
                       style={alertRow}
                     >
                       {image ? (
