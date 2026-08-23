@@ -991,27 +991,6 @@ export default function AdminUsersPage() {
         </button>
       </div>
 
-      <div style={sourceInfoBar}>
-        <span>
-          Data source:
-        </span>
-        <strong>
-          Orders {sourceCounts.ordersUpper}
-        </strong>
-        <span>•</span>
-        <strong>
-          orders {sourceCounts.ordersLower}
-        </strong>
-        <span>•</span>
-        <strong>
-          Users {sourceCounts.usersUpper}
-        </strong>
-        <span>•</span>
-        <strong>
-          users {sourceCounts.usersLower}
-        </strong>
-      </div>
-
       <div style={summaryGrid}>
         <SummaryCard
           label="Total Users"
