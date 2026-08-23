@@ -18,6 +18,14 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { auth, db } from '@/lib/firebase';
 
 type ProductRow = { id: string; data: DocumentData };
+
+type ProductCategoryConfig = {
+  id: string;
+  name: string;
+  subcategories: string[];
+  isActive: boolean;
+  sortOrder: number;
+};
 type StockFilter = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock' | 'attention';
 type StatusFilter = 'all' | 'active' | 'hidden';
 type GiftFilter = 'all' | 'gift' | 'not_gift';
@@ -127,6 +135,72 @@ const MEDIA_SLOTS: Array<{
 ];
 
 const PAGE_SIZE_OPTIONS = [10, 20, 100];
+
+const FALLBACK_CATEGORIES: ProductCategoryConfig[] = [
+  {
+    id: 'girl-dress',
+    name: 'Girl Dress',
+    subcategories: [
+      '0-1 Years',
+      '1-2 Years',
+      '2-3 Years',
+      '3-5 Years',
+      '6-8 Years',
+      '9-12 Years',
+    ],
+    isActive: true,
+    sortOrder: 1,
+  },
+  {
+    id: 'earrings',
+    name: 'Earrings',
+    subcategories: [
+      'Stud',
+      'Hoop',
+      'Drop',
+      'Jhumka',
+      'Kids',
+      'Other Earrings',
+    ],
+    isActive: true,
+    sortOrder: 2,
+  },
+  {
+    id: 'toys',
+    name: 'Toys',
+    subcategories: [
+      'Dolls & Pretend Play',
+      'Vehicles & Guns',
+      'Learning & Creative',
+      'Balls & Outdoor',
+      'Fun & Fidget',
+      'Other Toys',
+    ],
+    isActive: true,
+    sortOrder: 3,
+  },
+];
+
+function mergeCategoryConfigs(
+  firestoreCategories: ProductCategoryConfig[],
+): ProductCategoryConfig[] {
+  const merged = new Map<string, ProductCategoryConfig>();
+
+  for (const item of FALLBACK_CATEGORIES) {
+    merged.set(item.name.toLowerCase(), item);
+  }
+
+  for (const item of firestoreCategories) {
+    if (!item.name || !item.isActive) continue;
+    merged.set(item.name.toLowerCase(), item);
+  }
+
+  return Array.from(merged.values()).sort((a, b) => {
+    const orderDiff = a.sortOrder - b.sortOrder;
+    if (orderDiff !== 0) return orderDiff;
+    return a.name.localeCompare(b.name);
+  });
+}
 
 function productImage(data: DocumentData): string {
   const images = Array.isArray(data.images) ? data.images : [];
@@ -473,6 +547,10 @@ export default function AdminProductsPage() {
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
 
+  const [categoryConfigs, setCategoryConfigs] =
+    useState<ProductCategoryConfig[]>(FALLBACK_CATEGORIES);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+
   const isEditingGirlDress =
     editForm?.mainCategory.trim().toLowerCase() === 'girl dress';
 
@@ -536,6 +614,71 @@ export default function AdminProductsPage() {
       setRefreshing(false);
     }
   }
+
+  useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      if (!db) {
+        if (active) {
+          setCategoryConfigs(FALLBACK_CATEGORIES);
+          setCategoriesLoading(false);
+        }
+        return;
+      }
+
+      try {
+        let snapshot;
+
+        try {
+          snapshot = await getDocs(
+            query(
+              collection(db, 'ProductCategories'),
+              orderBy('sort_order', 'asc'),
+            ),
+          );
+        } catch {
+          snapshot = await getDocs(collection(db, 'ProductCategories'));
+        }
+
+        if (!active) return;
+
+        const loaded = snapshot.docs
+          .map((item) => {
+            const data = item.data() as Record<string, unknown>;
+
+            return {
+              id: item.id,
+              name: String(data.name || '').trim(),
+              subcategories: Array.isArray(data.subcategories)
+                ? data.subcategories
+                    .map((value) => String(value).trim())
+                    .filter(Boolean)
+                : [],
+              isActive: data.is_active !== false,
+              sortOrder: Number(data.sort_order) || 0,
+            } satisfies ProductCategoryConfig;
+          })
+          .filter((item) => item.name && item.isActive);
+
+        setCategoryConfigs(mergeCategoryConfigs(loaded));
+      } catch (error) {
+        console.error('Unable to load ProductCategories:', error);
+
+        if (active) {
+          setCategoryConfigs(FALLBACK_CATEGORIES);
+        }
+      } finally {
+        if (active) {
+          setCategoriesLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -769,6 +912,73 @@ export default function AdminProductsPage() {
 
   const pageStart = filtered.length === 0 ? 0 : (page - 1) * pageSize + 1;
   const pageEnd = Math.min(page * pageSize, filtered.length);
+
+  const editMainCategoryOptions = useMemo(() => {
+    const values = categoryConfigs
+      .map((item) => item.name)
+      .filter(Boolean);
+
+    const current = editForm?.mainCategory.trim() || '';
+
+    if (
+      current &&
+      !values.some(
+        (value) => value.toLowerCase() === current.toLowerCase(),
+      )
+    ) {
+      values.unshift(current);
+    }
+
+    return Array.from(new Set(values));
+  }, [categoryConfigs, editForm?.mainCategory]);
+
+  const selectedEditCategoryConfig = useMemo(() => {
+    const current = editForm?.mainCategory.trim().toLowerCase() || '';
+
+    if (!current) return null;
+
+    return (
+      categoryConfigs.find(
+        (item) => item.name.toLowerCase() === current,
+      ) || null
+    );
+  }, [categoryConfigs, editForm?.mainCategory]);
+
+  const editSubCategoryOptions = useMemo(() => {
+    const values = selectedEditCategoryConfig
+      ? [...selectedEditCategoryConfig.subcategories]
+      : [];
+
+    const current = editForm?.subCategory.trim() || '';
+
+    if (
+      current &&
+      !values.some(
+        (value) => value.toLowerCase() === current.toLowerCase(),
+      )
+    ) {
+      values.unshift(current);
+    }
+
+    return Array.from(new Set(values));
+  }, [selectedEditCategoryConfig, editForm?.subCategory]);
+
+  function changeEditMainCategory(value: string) {
+    setEditForm((prev) => {
+      if (!prev) return prev;
+
+      const sameCategory =
+        prev.mainCategory.trim().toLowerCase() ===
+        value.trim().toLowerCase();
+
+      return {
+        ...prev,
+        mainCategory: value,
+        subCategory: sameCategory ? prev.subCategory : '',
+        childCategory: sameCategory ? prev.childCategory : '',
+      };
+    });
+  }
 
   function clearEditMediaChanges() {
     Object.values(editMediaChanges).forEach((asset) => {
@@ -2049,17 +2259,52 @@ export default function AdminProductsPage() {
                     onChange={(value) => updateEditField('brand', value)}
                   />
 
-                  <EditField
-                    label="Main Category"
-                    value={editForm.mainCategory}
-                    onChange={(value) => updateEditField('mainCategory', value)}
-                  />
+                  <label>
+                    <span style={modalLabel}>Main Category</span>
+                    <select
+                      value={editForm.mainCategory}
+                      onChange={(event) =>
+                        changeEditMainCategory(event.target.value)
+                      }
+                      style={modalInput}
+                    >
+                      <option value="">
+                        {categoriesLoading
+                          ? 'Loading categories…'
+                          : 'Select main category'}
+                      </option>
 
-                  <EditField
-                    label="Sub Category / Age Group"
-                    value={editForm.subCategory}
-                    onChange={(value) => updateEditField('subCategory', value)}
-                  />
+                      {editMainCategoryOptions.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span style={modalLabel}>Sub Category / Age Group</span>
+                    <select
+                      value={editForm.subCategory}
+                      onChange={(event) =>
+                        updateEditField('subCategory', event.target.value)
+                      }
+                      style={modalInput}
+                      disabled={!editForm.mainCategory}
+                    >
+                      <option value="">
+                        {editForm.mainCategory
+                          ? 'Select sub category'
+                          : 'Select main category first'}
+                      </option>
+
+                      {editSubCategoryOptions.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
                   <EditField
                     label="Child Category"
