@@ -11,8 +11,9 @@ export default function Footer() {
           <p>Namma Area. Namma Kadai.</p>
 
           <p>
-            Shop local products, discover offers and get fast
-            nearby delivery.
+            Shop SPOTC&apos;s own collection of kids wear, toys,
+            fancy items and accessories with special offers, free gifts
+            and fast local delivery.
           </p>
         </div>
 
@@ -41,29 +42,19 @@ export default function Footer() {
           </Link>
         </div>
 
-        {/* HELP */}
-        <div className="spotc-footer-column">
-          <h4>Help</h4>
-
-          <Link href="/contact">Contact</Link>
-
-          <Link href="/contact?type=support">
-            Help &amp; Support
-          </Link>
-        </div>
-
         {/* COMPANY */}
         <div className="spotc-footer-column">
           <h4>Company</h4>
 
           <Link href="/about">About</Link>
+          <Link href="/contact">Contact</Link>
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
         </div>
       </div>
 
       <div className="spotc-footer-bottom">
-        © 2026 SpotC.in Technologies
+        © 2026 SPOTC Technologies
       </div>
 
       <style jsx global>{`
@@ -82,10 +73,10 @@ export default function Footer() {
           display: grid;
 
           grid-template-columns:
-            minmax(260px, 1.7fr)
-            repeat(4, minmax(120px, 1fr));
+            minmax(280px, 1.8fr)
+            repeat(3, minmax(140px, 1fr));
 
-          gap: 42px;
+          gap: 48px;
           align-items: start;
         }
 
@@ -118,7 +109,7 @@ export default function Footer() {
         }
 
         .spotc-footer-brand p {
-          max-width: 330px;
+          max-width: 360px;
 
           margin-bottom: 10px;
 
@@ -175,7 +166,7 @@ export default function Footer() {
         @media (max-width: 980px) {
           .spotc-footer-grid {
             grid-template-columns:
-              repeat(2, minmax(0, 1fr));
+              repeat(3, minmax(0, 1fr));
 
             gap: 30px 40px;
           }

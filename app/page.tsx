@@ -1,2 +1,5 @@
-import { redirect } from 'next/navigation';
-export default function Home(){ redirect('/offers'); }
+import { permanentRedirect } from 'next/navigation';
+
+export default function Home() {
+  permanentRedirect('/offers');
+}

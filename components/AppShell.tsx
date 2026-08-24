@@ -266,8 +266,7 @@ export function AppShell({
   pathname.startsWith('/circle/');
 
   const mobileNavAtTop =
-    pathname.startsWith('/offers') ||
-    pathname.startsWith('/spots');
+  pathname.startsWith('/offers');
 
   const profileCompletion = useMemo(
     () => getProfileCompletionPercentage(spotcProfile),
@@ -281,9 +280,13 @@ export function AppShell({
       return 'Search products';
     }
 
-    if (pathname.startsWith('/spots')) {
-      return 'Search spots';
-    }
+    const searchPlaceholder = useMemo(() => {
+  if (pathname.startsWith('/shop')) {
+    return 'Search products';
+  }
+
+  return 'Search offers';
+}, [pathname]);
 
     return 'Search offers';
   }, [pathname]);

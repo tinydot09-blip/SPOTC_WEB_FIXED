@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   },
 
   description:
-    'Shop kids wear, toys, fancy items and accessories from SPOTC with fast local delivery in Karamadai and nearby areas.',
+    "Shop SPOTC's own collection of kids wear, toys, fancy items and accessories in Karamadai with special offers, free gifts and fast local delivery.",
 
   applicationName: 'SPOTC',
 
@@ -35,10 +35,12 @@ export const metadata: Metadata = {
     'fancy items Karamadai',
     'earrings Karamadai',
     'hair accessories Karamadai',
+    'kids accessories Karamadai',
     'kids wear Mettupalayam',
     'toys Mettupalayam',
     'online shopping Karamadai',
     'local delivery Karamadai',
+    'free gifts Karamadai',
     'Teacher Colony shopping',
     'EB Colony shopping',
   ],
@@ -75,7 +77,7 @@ export const metadata: Metadata = {
       'SPOTC — Kids Wear, Toys & Fancy Items in Karamadai',
 
     description:
-      'Shop kids wear, toys, fancy items and accessories from SPOTC with fast local delivery in Karamadai and nearby areas.',
+      "Shop SPOTC's own collection of kids wear, toys, fancy items and accessories in Karamadai with special offers, free gifts and fast local delivery.",
   },
 
   twitter: {
@@ -85,7 +87,7 @@ export const metadata: Metadata = {
       'SPOTC — Kids Wear, Toys & Fancy Items in Karamadai',
 
     description:
-      'Shop kids wear, toys, fancy items and accessories from SPOTC with fast local delivery.',
+      "Shop SPOTC's own kids wear, toys, fancy items and accessories with special offers, free gifts and fast local delivery.",
   },
 
   category: 'shopping',
@@ -100,6 +102,9 @@ const organizationJsonLd = {
   alternateName: 'SPOTC',
 
   url: SITE_URL,
+
+  description:
+    "SPOTC offers its own collection of kids wear, toys, fancy items and accessories in Karamadai with special offers, free gifts and fast local delivery.",
 
   brand: {
     '@type': 'Brand',
@@ -116,6 +121,9 @@ const websiteJsonLd = {
   alternateName: 'SPOTC Technologies',
 
   url: SITE_URL,
+
+  description:
+    "Shop SPOTC's own collection of kids wear, toys, fancy items and accessories in Karamadai.",
 
   publisher: {
     '@type': 'Organization',

@@ -3,10 +3,10 @@ import type { Metadata } from 'next';
 import { OfferFeed } from '@/components/OfferFeed';
 
 export const metadata: Metadata = {
-  title: 'Local Offers & Deals in Karamadai | SPOTC',
+  title: 'Kids Wear, Toys & Fancy Items in Karamadai | SPOTC',
 
   description:
-    'Discover local offers, deals, kids wear, toys, fancy items and accessories on SPOTC with fast local delivery in Karamadai and nearby areas.',
+    "Shop SPOTC's own collection of kids wear, toys, fancy items and accessories in Karamadai. Enjoy special offers, free gifts and fast local delivery.",
 
   alternates: {
     canonical: 'https://www.spotc.in/offers',
@@ -30,16 +30,20 @@ export const metadata: Metadata = {
     locale: 'en_IN',
     url: 'https://www.spotc.in/offers',
     siteName: 'SPOTC',
-    title: 'Local Offers & Deals in Karamadai | SPOTC',
+
+    title: 'Kids Wear, Toys & Fancy Items in Karamadai | SPOTC',
+
     description:
-      'Discover local offers, deals, kids wear, toys, fancy items and accessories with fast local delivery.',
+      "Shop SPOTC's own collection of kids wear, toys, fancy items and accessories in Karamadai with special offers, free gifts and fast local delivery.",
   },
 
   twitter: {
     card: 'summary_large_image',
-    title: 'Local Offers & Deals in Karamadai | SPOTC',
+
+    title: 'Kids Wear, Toys & Fancy Items in Karamadai | SPOTC',
+
     description:
-      'Discover local offers and deals from SPOTC with fast local delivery.',
+      "Shop SPOTC's own kids wear, toys, fancy items and accessories in Karamadai with special offers, free gifts and fast local delivery.",
   },
 };
 

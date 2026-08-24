@@ -56,7 +56,7 @@ function getProductDescription(
   const title =
     getProductTitle(product);
 
-  return `Shop ${title} from SPOTC with fast local delivery in Karamadai and nearby areas.`;
+  return `Shop ${title} from SPOTC's own collection with fast local delivery in Karamadai and nearby areas.`;
 }
 
 function getProductImage(
@@ -148,10 +148,225 @@ function productInStock(
   return true;
 }
 
+function isClothingProduct(
+  product: ProductRecord,
+): boolean {
+  const searchable = [
+    product.main_category,
+    product.category,
+    product.sub_category,
+    product.product_type,
+    product.title,
+    product.product_name,
+  ]
+    .map((value) =>
+      text(value).toLowerCase(),
+    )
+    .filter(Boolean)
+    .join(' ');
+
+  const clothingTerms = [
+    'dress',
+    'frock',
+    'shirt',
+    't-shirt',
+    'tshirt',
+    'top',
+    'pant',
+    'pants',
+    'trouser',
+    'jeans',
+    'kurti',
+    'kurta',
+    'salwar',
+    'churidar',
+    'gown',
+    'lehenga',
+    'skirt',
+    'shorts',
+    'romper',
+    'jumpsuit',
+    'nightwear',
+    'clothing',
+    'kids wear',
+    'boys wear',
+    'girls wear',
+    'girl dress',
+    'boy dress',
+  ];
+
+  return clothingTerms.some(
+    (term) =>
+      searchable.includes(term),
+  );
+}
+
+function getShippingDetails() {
+  return [
+    {
+      '@type':
+        'OfferShippingDetails',
+
+      shippingRate: {
+        '@type':
+          'MonetaryAmount',
+
+        value:
+          '20.00',
+
+        currency:
+          'INR',
+      },
+
+      shippingDestination: {
+        '@type':
+          'DefinedRegion',
+
+        addressCountry:
+          'IN',
+
+        addressRegion:
+          'Tamil Nadu',
+      },
+
+      deliveryTime: {
+        '@type':
+          'ShippingDeliveryTime',
+
+        handlingTime: {
+          '@type':
+            'QuantitativeValue',
+
+          minValue:
+            0,
+
+          maxValue:
+            0,
+
+          unitCode:
+            'DAY',
+        },
+
+        transitTime: {
+          '@type':
+            'QuantitativeValue',
+
+          minValue:
+            0,
+
+          maxValue:
+            0,
+
+          unitCode:
+            'DAY',
+        },
+      },
+    },
+
+    {
+      '@type':
+        'OfferShippingDetails',
+
+      shippingRate: {
+        '@type':
+          'MonetaryAmount',
+
+        value:
+          '0.00',
+
+        currency:
+          'INR',
+      },
+
+      shippingDestination: {
+        '@type':
+          'DefinedRegion',
+
+        addressCountry:
+          'IN',
+
+        addressRegion:
+          'Tamil Nadu',
+      },
+
+      deliveryTime: {
+        '@type':
+          'ShippingDeliveryTime',
+
+        handlingTime: {
+          '@type':
+            'QuantitativeValue',
+
+          minValue:
+            0,
+
+          maxValue:
+            0,
+
+          unitCode:
+            'DAY',
+        },
+
+        transitTime: {
+          '@type':
+            'QuantitativeValue',
+
+          minValue:
+            0,
+
+          maxValue:
+            1,
+
+          unitCode:
+            'DAY',
+        },
+      },
+    },
+  ];
+}
+
+function getMerchantReturnPolicy(
+  product: ProductRecord,
+) {
+  const clothing =
+    isClothingProduct(product);
+
+  if (!clothing) {
+    return {
+      '@type':
+        'MerchantReturnPolicy',
+
+      applicableCountry:
+        'IN',
+
+      returnPolicyCategory:
+        'https://schema.org/MerchantReturnNotPermitted',
+    };
+  }
+
+  return {
+    '@type':
+      'MerchantReturnPolicy',
+
+    applicableCountry:
+      'IN',
+
+    returnPolicyCategory:
+      'https://schema.org/MerchantReturnFiniteReturnWindow',
+
+    merchantReturnDays:
+      0,
+
+    returnFees:
+      'https://schema.org/FreeReturn',
+  };
+}
+
 export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
-  const productId = params.id;
+  const productId =
+    params.id;
 
   const productUrl =
     `${SITE_URL}/product/${encodeURIComponent(
@@ -164,18 +379,23 @@ export async function generateMetadata({
 
     if (!product) {
       return {
-        title: 'Product Not Found',
+        title:
+          'Product Not Found',
 
         description:
           'This product is currently unavailable on SPOTC.',
 
         alternates: {
-          canonical: productUrl,
+          canonical:
+            productUrl,
         },
 
         robots: {
-          index: false,
-          follow: true,
+          index:
+            false,
+
+          follow:
+            true,
         },
       };
     }
@@ -198,28 +418,47 @@ export async function generateMetadata({
       description,
 
       alternates: {
-        canonical: productUrl,
+        canonical:
+          productUrl,
       },
 
       robots: {
-        index: true,
-        follow: true,
+        index:
+          true,
+
+        follow:
+          true,
 
         googleBot: {
-          index: true,
-          follow: true,
+          index:
+            true,
+
+          follow:
+            true,
+
           'max-image-preview':
             'large',
-          'max-snippet': -1,
-          'max-video-preview': -1,
+
+          'max-snippet':
+            -1,
+
+          'max-video-preview':
+            -1,
         },
       },
 
       openGraph: {
-        type: 'website',
-        locale: 'en_IN',
-        url: productUrl,
-        siteName: 'SPOTC',
+        type:
+          'website',
+
+        locale:
+          'en_IN',
+
+        url:
+          productUrl,
+
+        siteName:
+          'SPOTC',
 
         title:
           `${title} | SPOTC`,
@@ -230,8 +469,11 @@ export async function generateMetadata({
           ? {
               images: [
                 {
-                  url: image,
-                  alt: title,
+                  url:
+                    image,
+
+                  alt:
+                    title,
                 },
               ],
             }
@@ -249,7 +491,9 @@ export async function generateMetadata({
 
         ...(image
           ? {
-              images: [image],
+              images: [
+                image,
+              ],
             }
           : {}),
       },
@@ -261,13 +505,15 @@ export async function generateMetadata({
     );
 
     return {
-      title: 'Shop Product',
+      title:
+        'Shop Product',
 
       description:
-        'Shop kids wear, toys, fancy items and accessories from SPOTC.',
+        "Shop SPOTC's own collection of kids wear, toys, fancy items and accessories in Karamadai.",
 
       alternates: {
-        canonical: productUrl,
+        canonical:
+          productUrl,
       },
     };
   }
@@ -276,7 +522,8 @@ export async function generateMetadata({
 export default async function ProductPage({
   params,
 }: ProductPageProps) {
-  const productId = params.id;
+  const productId =
+    params.id;
 
   let productJsonLd:
     | Record<string, unknown>
@@ -325,6 +572,14 @@ export default async function ProductPage({
             record.sub_category,
         );
 
+      const shippingDetails =
+        getShippingDetails();
+
+      const merchantReturnPolicy =
+        getMerchantReturnPolicy(
+          record,
+        );
+
       productJsonLd = {
         '@context':
           'https://schema.org',
@@ -339,7 +594,9 @@ export default async function ProductPage({
 
         ...(image
           ? {
-              image: [image],
+              image: [
+                image,
+              ],
             }
           : {}),
 
@@ -396,6 +653,11 @@ export default async function ProductPage({
                   url:
                     SITE_URL,
                 },
+
+                shippingDetails,
+
+                hasMerchantReturnPolicy:
+                  merchantReturnPolicy,
               },
             }
           : {}),
