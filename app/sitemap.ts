@@ -55,12 +55,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'daily',
       priority: 0.9,
     },
-    {
-      url: `${BASE_URL}/spots`,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 0.7,
-    },
+    
   ];
 
   try {
