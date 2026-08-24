@@ -280,14 +280,6 @@ export function AppShell({
       return 'Search products';
     }
 
-    const searchPlaceholder = useMemo(() => {
-  if (pathname.startsWith('/shop')) {
-    return 'Search products';
-  }
-
-  return 'Search offers';
-}, [pathname]);
-
     return 'Search offers';
   }, [pathname]);
 
@@ -509,10 +501,14 @@ export function AppShell({
   }, []);
 
   const searchSuggestions = useMemo(() => {
-    const query = searchValue.trim();
+    const query = String(searchValue ?? '').trim();
     if (!query) return [];
 
-    const ranked = searchProducts
+    const products = Array.isArray(searchProducts)
+      ? searchProducts
+      : [];
+
+    const ranked = products
       .map((product) => ({
         product,
         score: suggestionScore(product, query),
