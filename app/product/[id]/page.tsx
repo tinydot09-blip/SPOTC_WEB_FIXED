@@ -724,6 +724,7 @@ export default function ProductDetailPage() {
   const [changingGiftIndex, setChangingGiftIndex] = useState<number | null>(null);
   const giftProductsRef = useRef<HTMLDivElement | null>(null);
   const viewItemTrackedRef = useRef('');
+  const quantityProductIdRef = useRef('');
   const [tryOnOpen, setTryOnOpen] = useState(false);
 const [tryOnImage, setTryOnImage] = useState<File | null>(null);
 const [tryOnPreview, setTryOnPreview] = useState('');
@@ -753,7 +754,6 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     setSelectedMediaUrl('');
     setZoomActive(false);
     setZoomPosition({ x: 50, y: 50 });
-    setQty(1);
     setReviews([]);
     setReviewMessage('');
     setRatingSnapshot(null);
@@ -919,6 +919,17 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     return () => {
       active = false;
     };
+  }, [id]);
+
+  useEffect(() => {
+    const productId = String(id || '');
+
+    if (!productId) return;
+
+    if (quantityProductIdRef.current !== productId) {
+      quantityProductIdRef.current = productId;
+      setQty(1);
+    }
   }, [id]);
 
   useEffect(() => {
@@ -1090,6 +1101,14 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     null;
 
   const price = customerPriceOf(product);
+  const totalPrice = price * qty;
+
+  // MRP/old price must also reflect the selected quantity.
+  const unitOldPrice = oldPriceOf(product);
+  const totalOldPrice =
+    unitOldPrice > 0
+      ? unitOldPrice * qty
+      : 0;
 
   // FREE gift rule:
   // ₹80–₹199 = 1 gift per item
@@ -1224,7 +1243,7 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     selectedGiftIds.includes(String(item.id)),
   );
 
-  const oldPrice = oldPriceOf(product);
+  const oldPrice = unitOldPrice;
   const discount = discountOf(product);
 const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   const hasStockField = record.stock_qty !== undefined || record.stock_quantity !== undefined;
@@ -2855,9 +2874,15 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
           </div>
 
           <div className="pd-price">
-            <strong>₹{Math.round(price)}</strong>
-            {oldPrice > price && <del>₹{Math.round(oldPrice)}</del>}
-            {oldPrice > price && <em>{t('Save')} ₹{Math.round(oldPrice - price)}</em>}
+            <strong>₹{Math.round(totalPrice)}</strong>
+            {totalOldPrice > totalPrice && (
+              <del>₹{Math.round(totalOldPrice)}</del>
+            )}
+            {totalOldPrice > totalPrice && (
+              <em>
+                {t('Save')} ₹{Math.round(totalOldPrice - totalPrice)}
+              </em>
+            )}
           </div>
 {showColorSelector && (
             <div className="pd-option">
