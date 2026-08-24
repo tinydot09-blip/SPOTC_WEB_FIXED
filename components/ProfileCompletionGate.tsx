@@ -135,8 +135,24 @@ export default function ProfileCompletionGate({
   const router =
     useRouter();
 
+  /*
+   * IMPORTANT:
+   * Product pages must never be unmounted by the profile gate.
+   *
+   * The product page contains interactive local state such as quantity,
+   * selected gifts, image selection, etc. If this gate temporarily flips
+   * gateReady to false, the complete product component is destroyed and
+   * recreated, which resets quantity back to 1.
+   *
+   * Authentication is still required inside the individual actions that
+   * need it (checkout, save, reviews, etc.), so the public product page
+   * itself does not need to be blocked by this global gate.
+   */
+  const bypassGate =
+    pathname.startsWith('/product/');
+
   const [gateReady, setGateReady] =
-    useState(false);
+    useState(bypassGate);
 
   /*
    * Prevent duplicate Firestore profile checks for
@@ -165,6 +181,16 @@ export default function ProfileCompletionGate({
     useRef(false);
 
   useEffect(() => {
+    /*
+     * Never attach auth/profile listeners on a product page.
+     * This keeps the product component mounted while the user
+     * changes quantity, gifts, media, etc.
+     */
+    if (bypassGate) {
+      setGateReady(true);
+      return;
+    }
+
     if (
       !firebaseReady ||
       !auth
@@ -172,6 +198,12 @@ export default function ProfileCompletionGate({
       setGateReady(true);
       return;
     }
+
+    /*
+     * We are on a route that really uses the profile gate.
+     * Resolve the gate again for this route.
+     */
+    setGateReady(false);
 
     const firebaseAuth =
       auth;
@@ -370,11 +402,6 @@ export default function ProfileCompletionGate({
               return;
             }
 
-            /*
-             * Important:
-             * Do not redirect from Offers, Shop,
-             * Cart, Address, Checkout, etc.
-             */
             clearStoredReturnPath();
 
             setGateReady(true);
@@ -437,15 +464,6 @@ export default function ProfileCompletionGate({
         }
       };
 
-    /*
-     * ONE auth source only.
-     *
-     * signInWithPopup() updates Firebase Auth and this
-     * callback fires once the user is signed in.
-     *
-     * We intentionally do NOT call
-     * completeGoogleRedirectLogin() here anymore.
-     */
     const unsubscribe =
       onAuthStateChanged(
         firebaseAuth,
@@ -489,14 +507,20 @@ export default function ProfileCompletionGate({
       );
     };
   }, [
+    bypassGate,
     pathname,
     router,
   ]);
 
   /*
-   * Neutral shell while auth/profile state is resolving.
-   * This prevents the previous route from flashing.
+   * Product pages bypass the global gate completely.
+   * This guarantees that changing local product state
+   * cannot be lost because of profile-gate refreshes.
    */
+  if (bypassGate) {
+    return <>{children}</>;
+  }
+
   if (!gateReady) {
     return (
       <div
