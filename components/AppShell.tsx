@@ -169,6 +169,54 @@ const suggestionScore = (
   return matched === queryTokens.length ? 60 : 0;
 };
 
+function DeliveryAvailabilityBanner() {
+  const [closed, setClosed] = useState(false);
+
+  if (delivery.status !== 'outside' || closed) {
+    return null;
+  }
+
+  return (
+    <div
+      className="spotc-delivery-popup-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="spotc-delivery-popup-title"
+    >
+      <div className="spotc-delivery-popup">
+        <button
+          type="button"
+          className="spotc-delivery-popup-close"
+          aria-label="Close"
+          onClick={() => setClosed(true)}
+        >
+          <X size={20} aria-hidden="true" />
+        </button>
+
+        <div className="spotc-delivery-popup-icon">
+          <ShoppingBag size={24} aria-hidden="true" />
+        </div>
+
+        <strong id="spotc-delivery-popup-title">
+          Delivery not available here yet
+        </strong>
+
+        <p>
+          You can browse products. Ordering is available within 5 km only.
+        </p>
+
+        <button
+          type="button"
+          className="spotc-delivery-popup-continue"
+          onClick={() => setClosed(true)}
+        >
+          Continue Browsing
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function AppShell({
   children,
 }: {
@@ -178,7 +226,6 @@ export function AppShell({
   const router = useRouter();
   const delivery = useDeliveryAvailability();
   const { language, setLanguage } = useSpotcLanguage();
-  const [deliveryBannerClosed, setDeliveryBannerClosed] = useState(false);
 
   const [firebaseUser, setFirebaseUser] =
     useState<User | null>(null);
@@ -221,11 +268,6 @@ export function AppShell({
   const mobileNavAtTop =
     pathname.startsWith('/offers') ||
     pathname.startsWith('/spots');
-
-  const showDeliveryBanner =
-    (pathname.startsWith('/offers') || pathname.startsWith('/shop')) &&
-    delivery.status === 'outside' &&
-    !deliveryBannerClosed;
 
   const profileCompletion = useMemo(
     () => getProfileCompletionPercentage(spotcProfile),
@@ -363,7 +405,6 @@ export function AppShell({
   useEffect(() => {
     setSearchValue('');
     setMenuOpen(false);
-    setDeliveryBannerClosed(false);
 
     window.dispatchEvent(
       new CustomEvent(
@@ -634,44 +675,9 @@ if (!signedInUser) {
           : 'spotc-app-shell'
       }
     >
-      {showDeliveryBanner && (
-        <div
-          className="spotc-delivery-popup-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="spotc-delivery-popup-title"
-        >
-          <div className="spotc-delivery-popup">
-            <button
-              type="button"
-              className="spotc-delivery-popup-close"
-              aria-label="Close"
-              onClick={() => setDeliveryBannerClosed(true)}
-            >
-              <X size={20} aria-hidden="true" />
-            </button>
-
-            <div className="spotc-delivery-popup-icon">
-              <ShoppingBag size={24} aria-hidden="true" />
-            </div>
-
-            <strong id="spotc-delivery-popup-title">
-              Delivery not available here yet
-            </strong>
-
-            <p>
-              You can browse products. Ordering is available within 5 km only.
-            </p>
-
-            <button
-              type="button"
-              className="spotc-delivery-popup-continue"
-              onClick={() => setDeliveryBannerClosed(true)}
-            >
-              Continue Browsing
-            </button>
-          </div>
-        </div>
+      {(pathname.startsWith('/offers') ||
+        pathname.startsWith('/shop')) && (
+        <DeliveryAvailabilityBanner />
       )}
 
       <header className="spotc-site-header">
