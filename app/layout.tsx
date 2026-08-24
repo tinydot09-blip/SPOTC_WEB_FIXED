@@ -10,8 +10,10 @@ import RouteShell from '@/components/RouteShell';
 
 const GA_MEASUREMENT_ID = 'G-YLJ3YNCN2C';
 
+const SITE_URL = 'https://www.spotc.in';
+
 export const metadata: Metadata = {
-  metadataBase: new URL('https://www.spotc.in'),
+  metadataBase: new URL(SITE_URL),
 
   title: {
     default: 'SPOTC — Kids Wear, Toys & Fancy Items in Karamadai',
@@ -19,7 +21,7 @@ export const metadata: Metadata = {
   },
 
   description:
-    'Shop kids wear, toys, fancy items, accessories and local offers in Karamadai and nearby areas. Fast local delivery from SPOTC — Namma Area, Namma Kadai.',
+    'Shop kids wear, toys, fancy items and accessories from SPOTC with fast local delivery in Karamadai and nearby areas.',
 
   applicationName: 'SPOTC',
 
@@ -50,10 +52,6 @@ export const metadata: Metadata = {
   creator: 'SPOTC Technologies',
   publisher: 'SPOTC Technologies',
 
-  alternates: {
-    canonical: '/',
-  },
-
   robots: {
     index: true,
     follow: true,
@@ -70,27 +68,59 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_IN',
-
-    url: 'https://www.spotc.in',
-
+    url: SITE_URL,
     siteName: 'SPOTC',
 
-    title: 'SPOTC — Kids Wear, Toys & Fancy Items in Karamadai',
+    title:
+      'SPOTC — Kids Wear, Toys & Fancy Items in Karamadai',
 
     description:
-      'Shop kids wear, toys, fancy items, accessories and local offers in Karamadai and nearby areas. SPOTC — Namma Area, Namma Kadai.',
+      'Shop kids wear, toys, fancy items and accessories from SPOTC with fast local delivery in Karamadai and nearby areas.',
   },
 
   twitter: {
     card: 'summary_large_image',
 
-    title: 'SPOTC — Kids Wear, Toys & Fancy Items in Karamadai',
+    title:
+      'SPOTC — Kids Wear, Toys & Fancy Items in Karamadai',
 
     description:
-      'Shop kids wear, toys, fancy items and accessories locally with SPOTC.',
+      'Shop kids wear, toys, fancy items and accessories from SPOTC with fast local delivery.',
   },
 
   category: 'shopping',
+};
+
+const organizationJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+
+  name: 'SPOTC Technologies',
+
+  alternateName: 'SPOTC',
+
+  url: SITE_URL,
+
+  brand: {
+    '@type': 'Brand',
+    name: 'SPOTC',
+  },
+};
+
+const websiteJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+
+  name: 'SPOTC',
+
+  alternateName: 'SPOTC Technologies',
+
+  url: SITE_URL,
+
+  publisher: {
+    '@type': 'Organization',
+    name: 'SPOTC Technologies',
+  },
 };
 
 export default function RootLayout({
@@ -130,6 +160,24 @@ export default function RootLayout({
             );
           `}
         </Script>
+
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(
+              organizationJsonLd,
+            ).replace(/</g, '\\u003c'),
+          }}
+        />
+
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(
+              websiteJsonLd,
+            ).replace(/</g, '\\u003c'),
+          }}
+        />
       </head>
 
       <body>

@@ -24,7 +24,9 @@ function numberValue(value: unknown): number {
       .trim(),
   );
 
-  return Number.isFinite(parsed) ? parsed : 0;
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0;
 }
 
 function getProductTitle(
@@ -51,7 +53,8 @@ function getProductDescription(
     return description.slice(0, 160);
   }
 
-  const title = getProductTitle(product);
+  const title =
+    getProductTitle(product);
 
   return `Shop ${title} from SPOTC with fast local delivery in Karamadai and nearby areas.`;
 }
@@ -71,13 +74,16 @@ function getProductImage(
   }
 
   if (Array.isArray(product.images)) {
-    const firstImage = product.images.find(
-      (item) =>
-        typeof item === 'string' &&
-        item.startsWith('http'),
-    );
+    const firstImage =
+      product.images.find(
+        (item) =>
+          typeof item === 'string' &&
+          item.startsWith('http'),
+      );
 
-    if (typeof firstImage === 'string') {
+    if (
+      typeof firstImage === 'string'
+    ) {
       return firstImage;
     }
   }
@@ -88,21 +94,20 @@ function getProductImage(
 function getProductPrice(
   product: ProductRecord,
 ): number {
-  const offerPrice = numberValue(
-    product.offer_price,
-  );
+  const offerPrice =
+    numberValue(product.offer_price);
 
-  const sellingPrice = numberValue(
-    product.selling_price,
-  );
+  const sellingPrice =
+    numberValue(product.selling_price);
 
-  const price = numberValue(
-    product.price,
-  );
+  const price =
+    numberValue(product.price);
 
-  const mrp = numberValue(
-    product.mrp ?? product.old_price,
-  );
+  const mrp =
+    numberValue(
+      product.mrp ??
+        product.old_price,
+    );
 
   if (offerPrice > 0) {
     return offerPrice;
@@ -122,7 +127,9 @@ function getProductPrice(
 function productInStock(
   product: ProductRecord,
 ): boolean {
-  if (product.is_in_stock === false) {
+  if (
+    product.is_in_stock === false
+  ) {
     return false;
   }
 
@@ -201,7 +208,8 @@ export async function generateMetadata({
         googleBot: {
           index: true,
           follow: true,
-          'max-image-preview': 'large',
+          'max-image-preview':
+            'large',
           'max-snippet': -1,
           'max-video-preview': -1,
         },
@@ -213,7 +221,8 @@ export async function generateMetadata({
         url: productUrl,
         siteName: 'SPOTC',
 
-        title: `${title} | SPOTC`,
+        title:
+          `${title} | SPOTC`,
 
         description,
 
@@ -230,9 +239,11 @@ export async function generateMetadata({
       },
 
       twitter: {
-        card: 'summary_large_image',
+        card:
+          'summary_large_image',
 
-        title: `${title} | SPOTC`,
+        title:
+          `${title} | SPOTC`,
 
         description,
 
@@ -267,7 +278,11 @@ export default async function ProductPage({
 }: ProductPageProps) {
   const productId = params.id;
 
-  let jsonLd:
+  let productJsonLd:
+    | Record<string, unknown>
+    | null = null;
+
+  let breadcrumbJsonLd:
     | Record<string, unknown>
     | null = null;
 
@@ -303,7 +318,14 @@ export default async function ProductPage({
         text(record.brand) ||
         'SPOTC';
 
-      jsonLd = {
+      const category =
+        text(
+          record.main_category ||
+            record.category ||
+            record.sub_category,
+        );
+
+      productJsonLd = {
         '@context':
           'https://schema.org',
 
@@ -323,6 +345,12 @@ export default async function ProductPage({
 
         sku:
           String(productId),
+
+        ...(category
+          ? {
+              category,
+            }
+          : {}),
 
         brand: {
           '@type':
@@ -364,10 +392,65 @@ export default async function ProductPage({
 
                   name:
                     'SPOTC Technologies',
+
+                  url:
+                    SITE_URL,
                 },
               },
             }
           : {}),
+      };
+
+      breadcrumbJsonLd = {
+        '@context':
+          'https://schema.org',
+
+        '@type':
+          'BreadcrumbList',
+
+        itemListElement: [
+          {
+            '@type':
+              'ListItem',
+
+            position:
+              1,
+
+            name:
+              'SPOTC',
+
+            item:
+              `${SITE_URL}/offers`,
+          },
+
+          {
+            '@type':
+              'ListItem',
+
+            position:
+              2,
+
+            name:
+              'Shop',
+
+            item:
+              `${SITE_URL}/shop`,
+          },
+
+          {
+            '@type':
+              'ListItem',
+
+            position:
+              3,
+
+            name:
+              title,
+
+            item:
+              productUrl,
+          },
+        ],
       };
     }
   } catch (error) {
@@ -379,13 +462,28 @@ export default async function ProductPage({
 
   return (
     <>
-      {jsonLd ? (
+      {productJsonLd ? (
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html:
               JSON.stringify(
-                jsonLd,
+                productJsonLd,
+              ).replace(
+                /</g,
+                '\\u003c',
+              ),
+          }}
+        />
+      ) : null}
+
+      {breadcrumbJsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html:
+              JSON.stringify(
+                breadcrumbJsonLd,
               ).replace(
                 /</g,
                 '\\u003c',
