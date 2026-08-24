@@ -170,6 +170,7 @@ const suggestionScore = (
 };
 
 function DeliveryAvailabilityBanner() {
+  const delivery = useDeliveryAvailability();
   const [closed, setClosed] = useState(false);
 
   if (delivery.status !== 'outside' || closed) {
@@ -224,7 +225,6 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const delivery = useDeliveryAvailability();
   const { language, setLanguage } = useSpotcLanguage();
 
   const [firebaseUser, setFirebaseUser] =
