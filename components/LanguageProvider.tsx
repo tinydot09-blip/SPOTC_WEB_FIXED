@@ -107,33 +107,6 @@ const TA: Record<string, string> = {
   'Age': 'வயது',
   'Measurements': 'அளவுகள்',
   'Product Details': 'பொருள் விவரங்கள்',
-  'Product Description': 'பொருள் விளக்கம்',
-  'Find similar products & best prices': 'ஒத்த பொருட்கள் மற்றும் சிறந்த விலைகளைப் பாருங்கள்',
-  'Share with friends & family to get opinions': 'கருத்து பெற நண்பர்கள் மற்றும் குடும்பத்தினருடன் பகிருங்கள்',
-  'SpotC Price': 'SpotC விலை',
-  'Adorable mustard yellow long-sleeve dress for baby girls, featuring a cute teddy bear applique on the front. Designed with a comfortable ribbed texture and a contrasting navy blue belt that ties at the waist. Perfect for everyday wear and special occasions.': 'பெண் குழந்தைகளுக்கான அழகான மஸ்டர்ட் மஞ்சள் நிற முழுக்கை உடை. முன்புறத்தில் அழகான டெடி பியர் அலங்காரம் உள்ளது. மென்மையான ரிப்ப்ட் துணி அமைப்புடன், இடுப்பில் கட்டிக்கொள்ளும் நேவி ப்ளூ பெல்ட் உள்ளது. தினசரி அணிவதற்கும் சிறப்பு நிகழ்ச்சிகளுக்கும் ஏற்றது.',
-  'Soft Cotton Blend Fabric': 'மென்மையான காடன் கலவை துணி',
-  'Cute Teddy Bear Applique': 'அழகான டெடி பியர் அலங்காரம்',
-  'Comfortable Long Sleeves': 'வசதியான முழுக்கைகள்',
-  'Stylish Navy Blue Belt Detail': 'ஸ்டைலிஷ் நேவி ப்ளூ பெல்ட் வடிவமைப்பு',
-  'Ribbed Texture Design': 'ரிப்ப்ட் டெக்ஸ்சர் வடிவமைப்பு',
-  'Details, brand, colour, size and availability': 'விவரங்கள், பிராண்ட், நிறம், அளவு மற்றும் கிடைப்புநிலை',
-  'Highlights': 'முக்கிய அம்சங்கள்',
-  'Find similar products & best prices.': 'ஒத்த பொருட்கள் மற்றும் சிறந்த விலைகளைப் பாருங்கள்.',
-  'Share with friends & family to get opinions.': 'கருத்து பெற நண்பர்கள் மற்றும் குடும்பத்தினருடன் பகிருங்கள்.',
-  'Delivery / Free Shipping': 'டெலிவரி / இலவச ஷிப்பிங்',
-  'Fast local delivery': 'விரைவான உள்ளூர் டெலிவரி',
-  'Free shipping available': 'இலவச ஷிப்பிங் கிடைக்கிறது',
-  '5-minute doorstep fit check for eligible clothing': 'தகுதியான ஆடைகளுக்கு வீட்டு வாசலில் 5 நிமிட ஃபிட் சரிபார்ப்பு',
-  'Be the first to review': 'முதல் மதிப்புரையை பதிவு செய்யுங்கள்',
-  'Instant': 'உடனடி',
-  'Morning': 'காலை',
-  'Afternoon': 'மதியம்',
-  'Night': 'இரவு',
-  'About 15 mins · ₹20': 'சுமார் 15 நிமிடங்கள் · ₹20',
-  'Order 6 AM–12 PM · Delivery 12–2 PM · FREE': 'காலை 6–12 மணிக்குள் ஆர்டர் · மதியம் 12–2 மணி டெலிவரி · இலவசம்',
-  'Order 12–6 PM · Delivery 6–7 PM · FREE': 'மதியம் 12–6 மணிக்குள் ஆர்டர் · மாலை 6–7 மணி டெலிவரி · இலவசம்',
-  'Order 6 PM–6 AM · Delivery 6–8 AM · FREE': 'மாலை 6–காலை 6 மணிக்குள் ஆர்டர் · காலை 6–8 மணி டெலிவரி · இலவசம்',
   'Description': 'விளக்கம்',
   'Delivery & Return': 'டெலிவரி & ரிட்டர்ன்',
   'Delivery & Returns': 'டெலிவரி & ரிட்டர்ன்',
@@ -210,69 +183,20 @@ const TA: Record<string, string> = {
   'Privacy': 'தனியுரிமை',
   'Terms': 'விதிமுறைகள்',
   'Featured': 'சிறப்பு',
-  'Select': 'தேர்ந்தெடுக்கவும்',
-  'Shopping tools': 'ஷாப்பிங் கருவிகள்',
-  'Contact SPOTC for additional product details.': 'கூடுதல் பொருள் விவரங்களுக்கு SPOTC-ஐ தொடர்பு கொள்ளுங்கள்.',
-  'ratings': 'மதிப்பீடுகள்',
-  'rating': 'மதிப்பீடு',
-  'Please enable location so SPOTC can check delivery availability.': 'டெலிவரி கிடைப்பதை SPOTC சரிபார்க்க இடத்தை இயக்கவும்.',
-  'SPOTC is coming to your area shortly. You can browse all products now, but ordering is not available yet.': 'SPOTC விரைவில் உங்கள் பகுதிக்கு வருகிறது. இப்போது அனைத்து பொருட்களையும் பார்க்கலாம்; ஆனால் இன்னும் ஆர்டர் செய்ய முடியாது.',
-  'Enable location to check delivery availability': 'டெலிவரி கிடைப்பதைச் சரிபார்க்க இடத்தை இயக்கவும்',
-  'Ordering will be available in your area shortly': 'உங்கள் பகுதியில் விரைவில் ஆர்டர் வசதி கிடைக்கும்',
-  '1 product added': '1 பொருள் கார்டில் சேர்க்கப்பட்டது',
-  'Try a different search term or category.': 'வேறு தேடல் சொல் அல்லது வகையை முயற்சிக்கவும்.',
-  'Sort products': 'பொருட்களை வரிசைப்படுத்தவும்',
-  'Main product categories': 'முக்கிய பொருள் வகைகள்',
-  'Open': 'திறக்கவும்',
-  'Added': 'சேர்க்கப்பட்டது',
-  'Creating circle…': 'சர்க்கிள் உருவாக்கப்படுகிறது…',
-  'Select up to 3 products and ask friends.': 'அதிகபட்சம் 3 பொருட்களைத் தேர்ந்தெடுத்து நண்பர்களிடம் கேளுங்கள்.',
-  'products selected': 'பொருட்கள் தேர்ந்தெடுக்கப்பட்டன',
-  'product selected': 'பொருள் தேர்ந்தெடுக்கப்பட்டது',
-  'products': 'பொருட்கள்',
-  'product': 'பொருள்',
-  'Other Toys': 'மற்ற பொம்மைகள்',
-  'Fun & Fidget': 'வேடிக்கை & ஃபிட்ஜெட்',
-  'Balls & Outdoor': 'பந்துகள் & வெளிப்புற விளையாட்டு',
-  'Learning & Creative': 'கற்றல் & படைப்பாற்றல்',
-  'Vehicles & Guns': 'வாகனங்கள் & டாய் கன்கள்',
-  'Dolls & Pretend Play': 'பொம்மைகள் & நடிப்பு விளையாட்டு',
-  '9-12 Years': '9-12 வயது',
-  '6-8 Years': '6-8 வயது',
-  '3-5 Years': '3-5 வயது',
-  '2-3 Years': '2-3 வயது',
-  '1-2 Years': '1-2 வயது',
-  '0-1 Years': '0-1 வயது',
-  'Special': 'சிறப்பு',
-  'Ask friends': 'நண்பர்களிடம் கேளுங்கள்',
-  '15-minute delivery': '15 நிமிட டெலிவரி',
-  'Ready stock': 'தயார் ஸ்டாக்',
-  'In stock': 'ஸ்டாக்கில் உள்ளது',
-  'Out of stock': 'ஸ்டாக் இல்லை',
-  'Add to cart': 'கார்டில் சேர்க்க',
-  'Buy now': 'இப்போது வாங்க',
-  'Creating Shopping Circle…': 'ஷாப்பிங் சர்க்கிள் உருவாக்கப்படுகிறது…',
-  'Dress details & measurements': 'உடை விவரங்கள் மற்றும் அளவுகள்',
-  'Product details': 'பொருள் விவரங்கள்',
-  'PRODUCT DETAILS': 'பொருள் விவரங்கள்',
-  'Colour': 'நிறம்',
-  'Purchase benefits': 'வாங்கும் நன்மைகள்',
+  'Save': 'சேமிப்பு',
   'left': 'மட்டும் உள்ளது',
   'gift included': 'இலவச பரிசு சேர்க்கப்பட்டுள்ளது',
-  'gifts included': 'இலவச பரிசுகள் சேர்க்கப்பட்டுள்ளது',};
+  'gifts included': 'இலவச பரிசுகள் சேர்க்கப்பட்டுள்ளது',
+};
 
 const LanguageContext = createContext<{
   language: SpotcLanguage;
   setLanguage: (language: SpotcLanguage) => void;
   toggleLanguage: () => void;
-  t: (value: string) => string;
-  productTitle: (value: string) => string;
 }>({
   language: 'en',
   setLanguage: () => undefined,
   toggleLanguage: () => undefined,
-  t: (value) => value,
-  productTitle: (value) => value,
 });
 
 const originalText = new WeakMap<Text, string>();
@@ -362,7 +286,7 @@ const translateProductText = (value: string): string => {
     .trim();
 };
 
-const translateString = (value: string, allowProductTranslation = true): string => {
+const translateString = (value: string): string => {
   const leading = value.match(/^\s*/)?.[0] ?? '';
   const trailing = value.match(/\s*$/)?.[0] ?? '';
   const core = value.trim();
@@ -406,52 +330,12 @@ const translateString = (value: string, allowProductTranslation = true): string 
   const kmMatch = core.match(/^([\d.]+)\s*km$/i);
   if (kmMatch) return `${leading}${kmMatch[1]} கி.மீ.${trailing}`;
 
-  /*
-   * Product-word replacement is used only for short/title-like product text.
-   * Never run it through long descriptions, highlights, policies or other
-   * paragraph content. Partial word replacement inside English sentences
-   * produces unreadable mixed Tamil/English text.
-   */
-  if (allowProductTranslation) {
-    const productTranslated = translateProductText(core);
-    if (productTranslated !== core) {
-      return `${leading}${productTranslated}${trailing}`;
-    }
+  const productTranslated = translateProductText(core);
+  if (productTranslated !== core) {
+    return `${leading}${productTranslated}${trailing}`;
   }
 
   return value;
-};
-
-const allowDynamicProductTranslation = (
-  element: Element | null,
-  source: string,
-): boolean => {
-  if (!element) return false;
-
-  if (
-    element.closest(
-      '.pd-accordion-copy, .pd-description-highlights, .product-description, .description, [data-product-description="true"]',
-    )
-  ) {
-    return false;
-  }
-
-  const tag = element.tagName.toLowerCase();
-
-  if (['h1', 'h2', 'h3', 'h4'].includes(tag)) return true;
-
-  if (
-    element.closest(
-      '.product-title-link, .product-card, .spotc-search-suggestion, .pd-title, [data-product-title="true"]',
-    )
-  ) {
-    return source.trim().length <= 180;
-  }
-
-  const wordCount = source.trim().split(/\s+/).filter(Boolean).length;
-  if (source.length > 90 || wordCount > 10) return false;
-
-  return true;
 };
 
 const shouldSkip = (element: Element | null): boolean => {
@@ -474,15 +358,34 @@ const translateTree = (root: ParentNode, language: SpotcLanguage) => {
     const parent = node.parentElement;
     if (shouldSkip(parent)) continue;
 
-    if (!originalText.has(node)) originalText.set(node, node.nodeValue ?? '');
-    const source = originalText.get(node) ?? '';
-    const allowProductTranslation =
-      allowDynamicProductTranslation(parent, source);
-    const target =
-      language === 'ta'
-        ? translateString(source, allowProductTranslation)
-        : source;
-    if (node.nodeValue !== target) node.nodeValue = target;
+    const current = node.nodeValue ?? '';
+
+    /*
+     * IMPORTANT:
+     * In English mode React owns the live text.
+     *
+     * Previously the first value was cached (for example quantity "1").
+     * When React changed that same text node to "2", the MutationObserver
+     * ran translateTree again and restored the cached "1".
+     *
+     * English needs no translation, so never rewrite React's current text.
+     * Refresh the stored source instead.
+     */
+    if (language === 'en') {
+      originalText.set(node, current);
+      continue;
+    }
+
+    if (!originalText.has(node)) {
+      originalText.set(node, current);
+    }
+
+    const source = originalText.get(node) ?? current;
+    const target = translateString(source);
+
+    if (current !== target) {
+      node.nodeValue = target;
+    }
   }
 
   const elements: Element[] = [];
@@ -502,10 +405,7 @@ const translateTree = (root: ParentNode, language: SpotcLanguage) => {
       if (currentValue == null) continue;
       if (!saved.has(attr)) saved.set(attr, currentValue);
       const source = saved.get(attr) ?? currentValue;
-      const target =
-        language === 'ta'
-          ? translateString(source, false)
-          : source;
+      const target = language === 'ta' ? translateString(source) : source;
       if (currentValue !== target) element.setAttribute(attr, target);
     }
   }
@@ -527,18 +427,6 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const toggleLanguage = useCallback(() => {
     setLanguage(language === 'en' ? 'ta' : 'en');
   }, [language, setLanguage]);
-
-  const t = useCallback(
-    (value: string) =>
-      language === 'ta' ? translateString(value, false) : value,
-    [language],
-  );
-
-  const productTitle = useCallback(
-    (value: string) =>
-      language === 'ta' ? translateString(value, true) : value,
-    [language],
-  );
 
   useEffect(() => {
     document.documentElement.lang = language === 'ta' ? 'ta' : 'en';
@@ -572,8 +460,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, [language]);
 
   const value = useMemo(
-    () => ({ language, setLanguage, toggleLanguage, t, productTitle }),
-    [language, setLanguage, toggleLanguage, t, productTitle],
+    () => ({ language, setLanguage, toggleLanguage }),
+    [language, setLanguage, toggleLanguage],
   );
 
   return (
