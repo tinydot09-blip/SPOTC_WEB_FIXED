@@ -1,4 +1,4 @@
-﻿import type { Metadata } from 'next';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
@@ -71,7 +71,7 @@ export default function ContactPage() {
 
         <section className="contact-trust-card">
           <div className="contact-trust-icon">
-            âœ“
+            OK
           </div>
 
           <div>
@@ -102,7 +102,7 @@ export default function ContactPage() {
               href={PHONE_LINK}
             >
               <span className="contact-method-icon">
-                â˜Ž
+                Call
               </span>
 
               <div>
@@ -116,7 +116,7 @@ export default function ContactPage() {
               href={`mailto:${SUPPORT_EMAIL}`}
             >
               <span className="contact-method-icon">
-                âœ‰
+                Email
               </span>
 
               <div>
@@ -140,7 +140,7 @@ export default function ContactPage() {
               </span>
 
               <span className="whatsapp-arrow">
-                â–¾
+                v
               </span>
             </summary>
 
@@ -171,9 +171,22 @@ export default function ContactPage() {
                         {question.label}
                       </span>
 
-                      <span aria-hidden="true">
-                        â€º
-                      </span>
+                      <a
+  key={question.label}
+  href={whatsappUrl(
+    question.message,
+  )}
+  target="_blank"
+  rel="noopener noreferrer"
+>
+  <span>
+    {question.label}
+  </span>
+
+  <span aria-hidden="true">
+    &gt;
+  </span>
+</a>
                     </a>
                   ),
                 )}
@@ -195,18 +208,18 @@ export default function ContactPage() {
               <br />
               Near EB Colony Bus Stop,
               <br />
-              Karamadai, Coimbatore â€“ 641104,
+              Karamadai, Coimbatore - 641104,
               <br />
               Tamil Nadu, India
             </address>
 
             <a
               className="contact-map-link"
-              href="https://www.google.com/maps/search/?api=1&query=41-1+Kembe+Gowder+Colony+1st+Street+Near+EB+Colony+Bus+Stop+Karamadai+Coimbatore+641104"
+              href="https://www.google.com/maps/dir/?api=1&destination=41-1%20Kembe%20Gowder%20Colony%201st%20Street%2C%20Near%20EB%20Colony%20Bus%20Stop%2C%20Karamadai%2C%20Coimbatore%20641104&travelmode=driving"
               target="_blank"
               rel="noopener noreferrer"
             >
-              View on Google Maps â†’
+              Get Directions to SPOTC
             </a>
           </div>
         </section>
