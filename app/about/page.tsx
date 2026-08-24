@@ -60,7 +60,7 @@ export default function AboutPage() {
       </h2>
 
       <p>
-        SPOTC is operated by SPOTC TECHNOLOGIES PRIVATE LIMITED.
+        SPOTC is operated by SPOTC TECHNOLOGIES.
       </p>
 
       <p style={{ marginTop: '40px' }}>

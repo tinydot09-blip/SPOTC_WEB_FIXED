@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+﻿import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
@@ -71,7 +71,7 @@ export default function ContactPage() {
 
         <section className="contact-trust-card">
           <div className="contact-trust-icon">
-            ✓
+            âœ“
           </div>
 
           <div>
@@ -102,7 +102,7 @@ export default function ContactPage() {
               href={PHONE_LINK}
             >
               <span className="contact-method-icon">
-                ☎
+                â˜Ž
               </span>
 
               <div>
@@ -116,7 +116,7 @@ export default function ContactPage() {
               href={`mailto:${SUPPORT_EMAIL}`}
             >
               <span className="contact-method-icon">
-                ✉
+                âœ‰
               </span>
 
               <div>
@@ -140,7 +140,7 @@ export default function ContactPage() {
               </span>
 
               <span className="whatsapp-arrow">
-                ▾
+                â–¾
               </span>
             </summary>
 
@@ -172,7 +172,7 @@ export default function ContactPage() {
                       </span>
 
                       <span aria-hidden="true">
-                        ›
+                        â€º
                       </span>
                     </a>
                   ),
@@ -187,7 +187,7 @@ export default function ContactPage() {
 
           <div className="contact-address-card">
             <strong>
-              SPOTC Technologies Private Limited
+              SPOTC TECHNOLOGIES
             </strong>
 
             <address>
@@ -195,7 +195,7 @@ export default function ContactPage() {
               <br />
               Near EB Colony Bus Stop,
               <br />
-              Karamadai, Coimbatore – 641104,
+              Karamadai, Coimbatore â€“ 641104,
               <br />
               Tamil Nadu, India
             </address>
@@ -206,7 +206,7 @@ export default function ContactPage() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              View on Google Maps →
+              View on Google Maps â†’
             </a>
           </div>
         </section>

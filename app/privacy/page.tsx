@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+﻿import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
@@ -22,7 +22,7 @@ export default function PrivacyPage() {
       <p>Last updated: August 24, 2026</p>
 
       <p>
-        SPOTC TECHNOLOGIES PRIVATE LIMITED respects your privacy.
+        SPOTC TECHNOLOGIES respects your privacy.
         This Privacy Policy explains how information may be collected
         and used when you use SPOTC.
       </p>

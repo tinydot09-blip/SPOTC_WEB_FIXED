@@ -23,7 +23,7 @@ export default function TermsPage() {
 
       <p>
         These Terms & Conditions apply when you access or use SPOTC
-        services provided by SPOTC TECHNOLOGIES PRIVATE LIMITED.
+        services provided by SPOTC TECHNOLOGIES.
       </p>
 
       <h2>Products</h2>

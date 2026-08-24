@@ -31,7 +31,7 @@ const SUPPORT_EMAIL = 'support@spotc.in';
 const SUPPORT_ADDRESS =
   '#41-1, Kembe Gowder Colony 1st Street, Near EB Colony Bus Stop, Karamadai, Coimbatore - 641104, Tamil Nadu, India';
 const SUPPORT_MAP_URL =
-  'https://www.google.com/maps/search/?api=1&query=41-1+Kembe+Gowder+Colony+1st+Street+Near+EB+Colony+Bus+Stop+Karamadai+Coimbatore+641104';
+  'https://www.google.com/maps/dir/?api=1&destination=41-1%20Kembe%20Gowder%20Colony%201st%20Street%2C%20Near%20EB%20Colony%20Bus%20Stop%2C%20Karamadai%2C%20Coimbatore%20641104&travelmode=driving';
 
 type OrderItem = {
   id?: string;
@@ -528,7 +528,7 @@ export default function OrderSuccessPage() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              View support location on Google Maps
+              Get Directions to SPOTC
             </a>
           </div>
         </section>
