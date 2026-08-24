@@ -32,6 +32,12 @@ type FormState = {
   vehicleNumber: string;
 };
 
+type CreatedLoginInfo = {
+  name: string;
+  phone: string;
+  pin: string;
+};
+
 const emptyForm: FormState = {
   name: '',
   phone: '',
@@ -128,6 +134,9 @@ export default function AdminDeliveryPage() {
 
   const [search, setSearch] =
     useState('');
+
+  const [createdLoginInfo, setCreatedLoginInfo] =
+    useState<CreatedLoginInfo | null>(null);
 
   async function loadDeliveryBoys(
     showLoader = true,
@@ -268,6 +277,74 @@ export default function AdminDeliveryPage() {
     });
   }
 
+  function openWhatsAppLoginDetails(
+    details: {
+      name: string;
+      phone: string;
+      pin?: string;
+    },
+  ) {
+    const phone = cleanPhone(details.phone);
+
+    if (!phone) {
+      setMessage(
+        'Delivery boy mobile number is missing.',
+      );
+      return;
+    }
+
+    const lines = [
+      'SPOTC Delivery Login',
+      '',
+      `Hi ${details.name || 'Delivery Partner'},`,
+      '',
+      'Your SPOTC delivery account is ready.',
+      '',
+      'Login:',
+      'https://spotc.in/delivery/login',
+      '',
+      `Mobile: ${phone}`,
+    ];
+
+    if (details.pin) {
+      lines.push(
+        '',
+        `PIN: ${details.pin}`,
+        '',
+        'Please keep your PIN private.',
+      );
+    } else {
+      lines.push(
+        '',
+        'Use the PIN given to you by SPOTC Admin.',
+        '',
+        'If you forgot the PIN, contact SPOTC Admin.',
+      );
+    }
+
+    const url =
+      `https://wa.me/${phone}?text=${encodeURIComponent(
+        lines.join('\n'),
+      )}`;
+
+    window.open(
+      url,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  }
+
+  function sendExistingLoginLink(
+    row: DeliveryBoyRow,
+  ) {
+    openWhatsAppLoginDetails({
+      name:
+        text(row.data.name) ||
+        'Delivery Partner',
+      phone: text(row.data.phone),
+    });
+  }
+
   async function saveDeliveryBoy() {
     if (!db || saving) return;
 
@@ -382,8 +459,14 @@ export default function AdminDeliveryPage() {
           );
         }
 
+        setCreatedLoginInfo({
+          name,
+          phone,
+          pin,
+        });
+
         setMessage(
-          'Delivery boy created successfully. Login account is ready.',
+          'Delivery boy created successfully. Send the login details to the delivery boy now.',
         );
       }
 
@@ -590,6 +673,49 @@ export default function AdminDeliveryPage() {
           >
             ×
           </button>
+        </div>
+      )}
+
+      {createdLoginInfo && (
+        <div style={loginShareCard}>
+          <div>
+            <div style={loginShareTitle}>
+              Login details ready
+            </div>
+
+            <div style={loginShareText}>
+              {createdLoginInfo.name} • {createdLoginInfo.phone}
+            </div>
+
+            <div style={loginShareNote}>
+              The PIN is not stored on this page after you close this message.
+              Send it now, or reset the PIN later if needed.
+            </div>
+          </div>
+
+          <div style={loginShareActions}>
+            <button
+              type="button"
+              onClick={() =>
+                openWhatsAppLoginDetails(
+                  createdLoginInfo,
+                )
+              }
+              style={whatsAppButton}
+            >
+              WhatsApp Login Details
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setCreatedLoginInfo(null)
+              }
+              style={secondaryButton}
+            >
+              Done
+            </button>
+          </div>
         </div>
       )}
 
@@ -966,6 +1092,35 @@ export default function AdminDeliveryPage() {
                             <button
                               type="button"
                               disabled={
+                                busy ||
+                                !text(
+                                  row.data
+                                    .phone,
+                                )
+                              }
+                              onClick={() =>
+                                sendExistingLoginLink(
+                                  row,
+                                )
+                              }
+                              style={{
+                                ...whatsAppSmallButton,
+                                opacity:
+                                  busy ||
+                                  !text(
+                                    row.data
+                                      .phone,
+                                  )
+                                    ? 0.5
+                                    : 1,
+                              }}
+                            >
+                              WhatsApp Login
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={
                                 busy
                               }
                               onClick={() =>
@@ -1131,6 +1286,56 @@ const messageClose: React.CSSProperties = {
   background: 'transparent',
   cursor: 'pointer',
   fontSize: 20,
+};
+
+const loginShareCard: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 16,
+  padding: 16,
+  marginBottom: 16,
+  border: '1px solid #abefc6',
+  borderRadius: 12,
+  background: '#ecfdf3',
+};
+
+const loginShareTitle: React.CSSProperties = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: '#05603a',
+};
+
+const loginShareText: React.CSSProperties = {
+  marginTop: 4,
+  fontSize: 13,
+  color: '#344054',
+};
+
+const loginShareNote: React.CSSProperties = {
+  marginTop: 5,
+  maxWidth: 620,
+  fontSize: 11,
+  lineHeight: 1.45,
+  color: '#667085',
+};
+
+const loginShareActions: React.CSSProperties = {
+  display: 'flex',
+  gap: 8,
+  alignItems: 'center',
+  flexWrap: 'wrap',
+};
+
+const whatsAppButton: React.CSSProperties = {
+  minHeight: 42,
+  padding: '0 16px',
+  border: 0,
+  borderRadius: 9,
+  background: '#128c7e',
+  color: '#fff',
+  fontWeight: 700,
+  cursor: 'pointer',
 };
 
 const formCard: React.CSSProperties = {
@@ -1347,6 +1552,17 @@ const actionRow: React.CSSProperties = {
   justifyContent: 'flex-end',
   gap: 7,
   flexWrap: 'wrap',
+};
+
+const whatsAppSmallButton: React.CSSProperties = {
+  minHeight: 34,
+  padding: '0 11px',
+  border: '1px solid #12b76a',
+  borderRadius: 7,
+  background: '#ecfdf3',
+  color: '#027a48',
+  cursor: 'pointer',
+  fontWeight: 600,
 };
 
 const editButton: React.CSSProperties = {
