@@ -27,7 +27,9 @@ function numberValue(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function getProductTitle(product: ProductRecord): string {
+function getProductTitle(
+  product: ProductRecord,
+): string {
   return (
     text(product.title) ||
     text(product.product_name) ||
@@ -36,7 +38,9 @@ function getProductTitle(product: ProductRecord): string {
   );
 }
 
-function getProductDescription(product: ProductRecord): string {
+function getProductDescription(
+  product: ProductRecord,
+): string {
   const description =
     text(product.description) ||
     text(product.product_description) ||
@@ -52,7 +56,9 @@ function getProductDescription(product: ProductRecord): string {
   return `Shop ${title} from SPOTC with fast local delivery in Karamadai and nearby areas.`;
 }
 
-function getProductImage(product: ProductRecord): string {
+function getProductImage(
+  product: ProductRecord,
+): string {
   const directImage =
     text(product.product_thumbnail) ||
     text(product.studio_image_url) ||
@@ -66,7 +72,9 @@ function getProductImage(product: ProductRecord): string {
 
   if (Array.isArray(product.images)) {
     const firstImage = product.images.find(
-      (item) => typeof item === 'string' && item.startsWith('http'),
+      (item) =>
+        typeof item === 'string' &&
+        item.startsWith('http'),
     );
 
     if (typeof firstImage === 'string') {
@@ -77,26 +85,50 @@ function getProductImage(product: ProductRecord): string {
   return '';
 }
 
-function getProductPrice(product: ProductRecord): number {
-  const offerPrice = numberValue(product.offer_price);
-  const sellingPrice = numberValue(product.selling_price);
-  const price = numberValue(product.price);
-  const mrp = numberValue(product.mrp ?? product.old_price);
+function getProductPrice(
+  product: ProductRecord,
+): number {
+  const offerPrice = numberValue(
+    product.offer_price,
+  );
 
-  if (offerPrice > 0) return offerPrice;
-  if (sellingPrice > 0) return sellingPrice;
-  if (price > 0) return price;
+  const sellingPrice = numberValue(
+    product.selling_price,
+  );
+
+  const price = numberValue(
+    product.price,
+  );
+
+  const mrp = numberValue(
+    product.mrp ?? product.old_price,
+  );
+
+  if (offerPrice > 0) {
+    return offerPrice;
+  }
+
+  if (sellingPrice > 0) {
+    return sellingPrice;
+  }
+
+  if (price > 0) {
+    return price;
+  }
 
   return mrp;
 }
 
-function productInStock(product: ProductRecord): boolean {
+function productInStock(
+  product: ProductRecord,
+): boolean {
   if (product.is_in_stock === false) {
     return false;
   }
 
   const stockValue =
-    product.stock_qty ?? product.stock_quantity;
+    product.stock_qty ??
+    product.stock_quantity;
 
   if (
     stockValue !== undefined &&
@@ -115,10 +147,13 @@ export async function generateMetadata({
   const productId = params.id;
 
   const productUrl =
-    `${SITE_URL}/product/${encodeURIComponent(productId)}`;
+    `${SITE_URL}/product/${encodeURIComponent(
+      productId,
+    )}`;
 
   try {
-    const product = await getProductById(productId);
+    const product =
+      await getProductById(productId);
 
     if (!product) {
       return {
@@ -138,11 +173,17 @@ export async function generateMetadata({
       };
     }
 
-    const record = product as unknown as ProductRecord;
+    const record =
+      product as unknown as ProductRecord;
 
-    const title = getProductTitle(record);
-    const description = getProductDescription(record);
-    const image = getProductImage(record);
+    const title =
+      getProductTitle(record);
+
+    const description =
+      getProductDescription(record);
+
+    const image =
+      getProductImage(record);
 
     return {
       title,
@@ -171,7 +212,9 @@ export async function generateMetadata({
         locale: 'en_IN',
         url: productUrl,
         siteName: 'SPOTC',
+
         title: `${title} | SPOTC`,
+
         description,
 
         ...(image
@@ -188,7 +231,9 @@ export async function generateMetadata({
 
       twitter: {
         card: 'summary_large_image',
+
         title: `${title} | SPOTC`,
+
         description,
 
         ...(image
@@ -222,31 +267,51 @@ export default async function ProductPage({
 }: ProductPageProps) {
   const productId = params.id;
 
-  let jsonLd: Record<string, unknown> | null = null;
+  let jsonLd:
+    | Record<string, unknown>
+    | null = null;
 
   try {
-    const product = await getProductById(productId);
+    const product =
+      await getProductById(productId);
 
     if (product) {
-      const record = product as unknown as ProductRecord;
+      const record =
+        product as unknown as ProductRecord;
 
-      const title = getProductTitle(record);
-      const description = getProductDescription(record);
-      const image = getProductImage(record);
-      const price = getProductPrice(record);
-      const inStock = productInStock(record);
+      const title =
+        getProductTitle(record);
+
+      const description =
+        getProductDescription(record);
+
+      const image =
+        getProductImage(record);
+
+      const price =
+        getProductPrice(record);
+
+      const inStock =
+        productInStock(record);
 
       const productUrl =
-        `${SITE_URL}/product/${encodeURIComponent(productId)}`;
+        `${SITE_URL}/product/${encodeURIComponent(
+          productId,
+        )}`;
 
       const brand =
-        text(record.brand) || 'SPOTC';
+        text(record.brand) ||
+        'SPOTC';
 
       jsonLd = {
-        '@context': 'https://schema.org',
-        '@type': 'Product',
+        '@context':
+          'https://schema.org',
 
-        name: title,
+        '@type':
+          'Product',
+
+        name:
+          title,
 
         description,
 
@@ -256,36 +321,49 @@ export default async function ProductPage({
             }
           : {}),
 
-        sku: String(productId),
+        sku:
+          String(productId),
 
         brand: {
-          '@type': 'Brand',
-          name: brand,
+          '@type':
+            'Brand',
+
+          name:
+            brand,
         },
 
-        url: productUrl,
+        url:
+          productUrl,
 
         ...(price > 0
           ? {
               offers: {
-                '@type': 'Offer',
+                '@type':
+                  'Offer',
 
-                url: productUrl,
+                url:
+                  productUrl,
 
-                priceCurrency: 'INR',
+                priceCurrency:
+                  'INR',
 
-                price: price.toFixed(2),
+                price:
+                  price.toFixed(2),
 
-                availability: inStock
-                  ? 'https://schema.org/InStock'
-                  : 'https://schema.org/OutOfStock',
+                availability:
+                  inStock
+                    ? 'https://schema.org/InStock'
+                    : 'https://schema.org/OutOfStock',
 
                 itemCondition:
                   'https://schema.org/NewCondition',
 
                 seller: {
-                  '@type': 'Organization',
-                  name: 'SPOTC Technologies',
+                  '@type':
+                    'Organization',
+
+                  name:
+                    'SPOTC Technologies',
                 },
               },
             }
@@ -305,7 +383,13 @@ export default async function ProductPage({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c'),
+            __html:
+              JSON.stringify(
+                jsonLd,
+              ).replace(
+                /</g,
+                '\\u003c',
+              ),
           }}
         />
       ) : null}
