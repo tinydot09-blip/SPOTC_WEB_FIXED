@@ -176,6 +176,12 @@ export default function CartPage() {
 
   const [giftBundles, setGiftBundles] =
     useState<Record<string, SavedGiftBundle>>({});
+  const [pendingGiftQuantity, setPendingGiftQuantity] =
+    useState<{
+      itemIndex: number;
+      productId: string;
+      nextQuantity: number;
+    } | null>(null);
   const [selectedDeliveryId, setSelectedDeliveryId] =
     useState<DeliveryOptionId>('instant');
 
@@ -235,6 +241,98 @@ export default function CartPage() {
       );
     }
 
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const pendingProductId =
+      window.localStorage.getItem(
+        'spotc-cart-pending-qty-product-id',
+      );
+
+    const pendingQty = Number(
+      window.localStorage.getItem(
+        'spotc-cart-pending-qty',
+      ),
+    );
+
+    const pendingIndex = Number(
+      window.localStorage.getItem(
+        'spotc-cart-pending-item-index',
+      ),
+    );
+
+    if (
+      !pendingProductId ||
+      !Number.isFinite(pendingQty) ||
+      pendingQty < 2 ||
+      !Number.isFinite(pendingIndex)
+    ) {
+      return;
+    }
+
+    const cartItems = readCart();
+    const currentItem = cartItems[pendingIndex];
+
+    if (
+      !currentItem ||
+      currentItem.id !== pendingProductId
+    ) {
+      return;
+    }
+
+    const bundle =
+      readSavedGifts(pendingProductId);
+
+    /*
+     * Only commit the higher quantity after the required
+     * number of gifts have actually been selected.
+     */
+    if (
+      !bundle ||
+      bundle.gifts.length < pendingQty
+    ) {
+      return;
+    }
+
+    const nextItems = cartItems.map(
+      (item, index) =>
+        index === pendingIndex
+          ? {
+              ...item,
+              qty: Math.floor(pendingQty),
+            }
+          : item,
+    );
+
+    writeCart(nextItems);
+    setItems(nextItems);
+
+    setGiftBundles((current) => ({
+      ...current,
+      [pendingProductId]: {
+        ...bundle,
+        quantity: Math.floor(pendingQty),
+        entitlement: Math.floor(pendingQty),
+        gifts: bundle.gifts.slice(
+          0,
+          Math.floor(pendingQty),
+        ),
+      },
+    }));
+
+    window.localStorage.removeItem(
+      'spotc-cart-pending-qty-product-id',
+    );
+    window.localStorage.removeItem(
+      'spotc-cart-pending-qty',
+    );
+    window.localStorage.removeItem(
+      'spotc-cart-pending-item-index',
+    );
+
+    setPendingGiftQuantity(null);
   }, []);
 
   useEffect(() => {
@@ -302,6 +400,46 @@ export default function CartPage() {
     0,
   );
 
+  const chooseGiftForAddedQuantity = (
+    itemIndex: number,
+    productId: string,
+    nextQuantity: number,
+  ) => {
+    if (typeof window === 'undefined') return;
+
+    setPendingGiftQuantity({
+      itemIndex,
+      productId,
+      nextQuantity,
+    });
+
+    window.localStorage.setItem(
+      'spotc-cart-pending-qty-product-id',
+      productId,
+    );
+
+    window.localStorage.setItem(
+      'spotc-cart-pending-qty',
+      String(nextQuantity),
+    );
+
+    window.localStorage.setItem(
+      'spotc-cart-pending-item-index',
+      String(itemIndex),
+    );
+
+    /*
+     * Re-use the product page's existing free-gift picker.
+     * We are adding a NEW gift slot, so giftIndex is the
+     * zero-based index of the newly-required gift.
+     */
+    const newGiftIndex = Math.max(0, nextQuantity - 1);
+
+    router.push(
+      `/product/${encodeURIComponent(productId)}?changeGift=1&giftIndex=${newGiftIndex}&fromCart=1`,
+    );
+  };
+
   const changeFreeGift = (
     productId: string,
     giftId: string,
@@ -338,13 +476,43 @@ export default function CartPage() {
     const item = items[itemIndex];
     if (!item) return;
 
+    const currentQuantity = Math.max(
+      1,
+      Number(item.qty) || 1,
+    );
+
     const safeQuantity = Math.max(
       1,
       Math.floor(nextQuantity),
     );
 
-    if (safeQuantity === item.qty) return;
+    if (safeQuantity === currentQuantity) return;
 
+    const currentBundle =
+      giftBundles[item.id];
+
+    /*
+     * INCREASE:
+     * If this product has free gifts, do not increase the
+     * paid quantity until the customer selects the additional gift.
+     */
+    if (
+      safeQuantity > currentQuantity &&
+      currentBundle
+    ) {
+      chooseGiftForAddedQuantity(
+        itemIndex,
+        item.id,
+        safeQuantity,
+      );
+      return;
+    }
+
+    /*
+     * DECREASE:
+     * Quantity can reduce immediately. Extra gifts are trimmed
+     * so 2 -> 1 also becomes 2 gifts -> 1 gift.
+     */
     const nextItems = items.map(
       (currentItem, index) =>
         index === itemIndex
@@ -357,28 +525,15 @@ export default function CartPage() {
 
     updateCart(nextItems);
 
-    /*
-     * Keep free-gift entitlement in sync with paid quantity.
-     * Current product flow gives 1 free gift per item.
-     */
-    const currentBundle =
-      giftBundles[item.id];
-
     if (currentBundle) {
-      const nextEntitlement =
-        safeQuantity;
-
-      const nextGifts =
-        currentBundle.gifts.slice(
-          0,
-          nextEntitlement,
-        );
-
       const nextBundle: SavedGiftBundle = {
         ...currentBundle,
         quantity: safeQuantity,
-        entitlement: nextEntitlement,
-        gifts: nextGifts,
+        entitlement: safeQuantity,
+        gifts: currentBundle.gifts.slice(
+          0,
+          safeQuantity,
+        ),
       };
 
       window.localStorage.setItem(
@@ -1160,13 +1315,13 @@ const styles = `
     min-height: 38px;
   }
 
-  .spotc-delivery-section {
-    margin-top: 16px;
-    padding: 16px;
-    border: 1px solid #d8eddf;
-    border-radius: 17px;
-    background: #f5fbf7;
-  }
+ .spotc-delivery-section {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #d8eddf;
+  border-radius: 17px;
+  background: #ffffff;
+}
 
   .spotc-delivery-section-head {
     display: flex;
@@ -1278,14 +1433,13 @@ const styles = `
   }
 
   .spotc-delivery-option-copy em {
-    margin-top: 4px;
-    color: #177a42;
-    font-size: 11px;
-    font-style: normal;
-    font-weight: 700;
-    line-height: 1.35;
-  }
-
+  margin-top: 4px;
+  color: #177a42;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.35;
+}
   .spotc-delivery-radio {
     width: 22px;
     height: 22px;
