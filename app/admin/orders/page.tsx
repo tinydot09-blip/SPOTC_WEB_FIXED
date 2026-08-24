@@ -9,6 +9,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  updateDoc,
   writeBatch,
   type DocumentData,
   type DocumentReference,
@@ -34,6 +35,14 @@ type ProductInfo = {
   reserved: number;
   sold: number;
   available: number;
+};
+
+type DeliveryBoyInfo = {
+  id: string;
+  name: string;
+  phone: string;
+  vehicleNumber: string;
+  isActive: boolean;
 };
 
 type OrderStatus =
@@ -540,6 +549,12 @@ export default function AdminOrdersPage() {
     Record<string, ProductInfo>
   >({});
 
+  const [deliveryBoys, setDeliveryBoys] =
+    useState<DeliveryBoyInfo[]>([]);
+
+  const [selectedDeliveryBoyByOrder, setSelectedDeliveryBoyByOrder] =
+    useState<Record<string, string>>({});
+
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
   const [message, setMessage] = useState('');
@@ -590,6 +605,28 @@ export default function AdminOrdersPage() {
       const productSnap = await getDocs(
         collection(db, 'BusinessProducts'),
       );
+
+      const deliveryBoySnap = await getDocs(
+        collection(db, 'DeliveryBoys'),
+      );
+
+      const activeDeliveryBoys: DeliveryBoyInfo[] =
+        deliveryBoySnap.docs
+          .map((item) => {
+            const data = item.data();
+
+            return {
+              id: item.id,
+              name: text(data.name) || 'Delivery Boy',
+              phone: text(data.phone),
+              vehicleNumber: text(data.vehicle_number),
+              isActive: data.is_active !== false,
+            };
+          })
+          .filter((item) => item.isActive)
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+      setDeliveryBoys(activeDeliveryBoys);
 
       const productMap: Record<
         string,
@@ -1363,6 +1400,106 @@ export default function AdminOrdersPage() {
     }
   }
 
+  async function assignDeliveryBoy(
+    row: OrderRow,
+  ) {
+    if (!db || busyId) return;
+
+    const selectedId =
+      selectedDeliveryBoyByOrder[row.id] ||
+      text(row.data.delivery_boy_id);
+
+    if (!selectedId) {
+      setMessage(
+        'Select a delivery boy before assigning this order.',
+      );
+      return;
+    }
+
+    const deliveryBoy = deliveryBoys.find(
+      (item) => item.id === selectedId,
+    );
+
+    if (!deliveryBoy) {
+      setMessage(
+        'The selected delivery boy is not active. Choose another delivery boy.',
+      );
+      return;
+    }
+
+    const status = normalizeStatus(
+      row.data.order_status,
+    );
+
+    if (
+      status !== 'packed' &&
+      status !== 'out_for_delivery'
+    ) {
+      setMessage(
+        'A delivery boy can be assigned after the order is packed.',
+      );
+      return;
+    }
+
+    setBusyId(row.id);
+    setMessage('');
+
+    try {
+      await updateDoc(
+        doc(db, 'Orders', row.id),
+        {
+          delivery_boy_id:
+            deliveryBoy.id,
+          delivery_boy_name:
+            deliveryBoy.name,
+          delivery_boy_phone:
+            deliveryBoy.phone,
+          delivery_boy_vehicle:
+            deliveryBoy.vehicleNumber,
+          delivery_assigned_at:
+            serverTimestamp(),
+          delivery_assignment_status:
+            'assigned',
+          updated_at:
+            serverTimestamp(),
+        },
+      );
+
+      setSelectedDeliveryBoyByOrder(
+        (current) => {
+          const next = {
+            ...current,
+          };
+
+          delete next[row.id];
+
+          return next;
+        },
+      );
+
+      await loadData(false);
+
+      setMessage(
+        `Order ${orderNumber(
+          row,
+        )} assigned to ${deliveryBoy.name}.`,
+      );
+    } catch (error) {
+      console.error(
+        'Assign delivery boy failed:',
+        error,
+      );
+
+      setMessage(
+        error instanceof Error
+          ? `Assignment failed: ${error.message}`
+          : 'Failed to assign delivery boy.',
+      );
+    } finally {
+      setBusyId('');
+    }
+  }
+
   function nextPrimaryStatus(
     status: OrderStatus,
   ): OrderStatus | null {
@@ -1374,9 +1511,8 @@ export default function AdminOrdersPage() {
       case 'picking':
         return 'packed';
       case 'packed':
-        return 'out_for_delivery';
       case 'out_for_delivery':
-        return 'delivered';
+        return null;
       default:
         return null;
     }
@@ -1973,6 +2109,28 @@ export default function AdminOrdersPage() {
 
                   <div>
                     <span style={metaLabel}>
+                      Delivery Boy
+                    </span>
+
+                    <div>
+                      {text(
+                        row.data.delivery_boy_name,
+                      ) || 'Not assigned'}
+                    </div>
+
+                    {text(
+                      row.data.delivery_boy_phone,
+                    ) && (
+                      <div style={mutedText}>
+                        {text(
+                          row.data.delivery_boy_phone,
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <span style={metaLabel}>
                       Items
                     </span>
                     <div>
@@ -2264,6 +2422,91 @@ export default function AdminOrdersPage() {
                 )}
 
                 <div style={orderActions}>
+                  {(status === 'packed' ||
+                    status === 'out_for_delivery') && (
+                    <div style={deliveryAssignWrap}>
+                      <select
+                        value={
+                          selectedDeliveryBoyByOrder[
+                            row.id
+                          ] ||
+                          text(
+                            row.data.delivery_boy_id,
+                          )
+                        }
+                        onChange={(event) =>
+                          setSelectedDeliveryBoyByOrder(
+                            (current) => ({
+                              ...current,
+                              [row.id]:
+                                event.target.value,
+                            }),
+                          )
+                        }
+                        style={deliveryBoySelect}
+                        disabled={busy}
+                      >
+                        <option value="">
+                          Select delivery boy
+                        </option>
+
+                        {deliveryBoys.map(
+                          (deliveryBoy) => (
+                            <option
+                              key={deliveryBoy.id}
+                              value={deliveryBoy.id}
+                            >
+                              {deliveryBoy.name}
+                              {deliveryBoy.phone
+                                ? ` • ${deliveryBoy.phone}`
+                                : ''}
+                            </option>
+                          ),
+                        )}
+                      </select>
+
+                      <button
+                        type="button"
+                        disabled={
+                          busy ||
+                          deliveryBoys.length === 0
+                        }
+                        onClick={() =>
+                          void assignDeliveryBoy(
+                            row,
+                          )
+                        }
+                        style={{
+                          ...assignDeliveryButton,
+                          opacity:
+                            busy ||
+                            deliveryBoys.length ===
+                              0
+                              ? 0.5
+                              : 1,
+                        }}
+                      >
+                        {text(
+                          row.data.delivery_boy_id,
+                        )
+                          ? 'Reassign Delivery Boy'
+                          : 'Assign Delivery Boy'}
+                      </button>
+
+                      {deliveryBoys.length ===
+                        0 && (
+                        <span
+                          style={
+                            noDeliveryBoyText
+                          }
+                        >
+                          Create an active delivery
+                          boy in Delivery first.
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   {nextStatus && (
                     <button
                       type="button"
@@ -3096,6 +3339,43 @@ const freeGiftOldPrice: React.CSSProperties = {
   textDecoration: 'line-through',
 };
 
+const deliveryAssignWrap: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  flexWrap: 'wrap',
+  marginRight: 'auto',
+};
+
+const deliveryBoySelect: React.CSSProperties = {
+  minWidth: 220,
+  minHeight: 38,
+  border: '1px solid #d7d7d7',
+  borderRadius: 9,
+  padding: '0 10px',
+  background: '#fff',
+  color: '#222',
+  fontSize: 12,
+  outline: 'none',
+};
+
+const assignDeliveryButton: React.CSSProperties = {
+  minHeight: 38,
+  border: 0,
+  borderRadius: 9,
+  padding: '0 13px',
+  background: '#111',
+  color: '#fff',
+  fontSize: 12,
+  fontWeight: 500,
+  cursor: 'pointer',
+};
+
+const noDeliveryBoyText: React.CSSProperties = {
+  color: '#a34a00',
+  fontSize: 10,
+};
+
 const deleteOrderButton: React.CSSProperties = {
   border: '1px solid #efb7b3',
   background: '#fff1f0',
@@ -3109,6 +3389,8 @@ const orderActions: React.CSSProperties = {
   display: 'flex',
   gap: 8,
   justifyContent: 'flex-end',
+  alignItems: 'center',
+  flexWrap: 'wrap',
   padding: '12px 16px',
   background: '#fafafa',
 };

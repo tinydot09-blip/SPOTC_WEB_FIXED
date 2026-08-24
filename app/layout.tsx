@@ -3,18 +3,19 @@ import Script from 'next/script';
 
 import './globals.css';
 
-import { AppShell } from '@/components/AppShell';
 import { LanguageProvider } from '@/components/LanguageProvider';
-import FooterWrapper from '@/components/FooterWrapper';
 import GoogleAnalyticsPageView from '@/components/GoogleAnalyticsPageView';
 import NavigationLoader from '@/components/NavigationLoader';
-import ProfileCompletionGate from '@/components/ProfileCompletionGate';
+import RouteShell from '@/components/RouteShell';
 
-const GA_MEASUREMENT_ID = 'G-YLJ3YNCN2C';
+const GA_MEASUREMENT_ID =
+  'G-YLJ3YNCN2C';
 
 export const metadata: Metadata = {
-  title: 'SPOTC — Namma Area, Namma Kadai',
-  description: 'Local offers, products and spots.',
+  title:
+    'SPOTC — Namma Area, Namma Kadai',
+  description:
+    'Local offers, products and spots.',
 };
 
 export default function RootLayout({
@@ -30,15 +31,28 @@ export default function RootLayout({
           strategy="afterInteractive"
         />
 
-        <Script id="google-analytics" strategy="afterInteractive">
+        <Script
+          id="google-analytics"
+          strategy="afterInteractive"
+        >
           {`
             window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
+
+            function gtag(){
+              dataLayer.push(arguments);
+            }
+
             window.gtag = gtag;
+
             gtag('js', new Date());
-            gtag('config', '${GA_MEASUREMENT_ID}', {
-              send_page_view: false
-            });
+
+            gtag(
+              'config',
+              '${GA_MEASUREMENT_ID}',
+              {
+                send_page_view: false
+              }
+            );
           `}
         </Script>
       </head>
@@ -49,10 +63,9 @@ export default function RootLayout({
         <LanguageProvider>
           <NavigationLoader />
 
-          <ProfileCompletionGate>
-            <AppShell>{children}</AppShell>
-            <FooterWrapper />
-          </ProfileCompletionGate>
+          <RouteShell>
+            {children}
+          </RouteShell>
         </LanguageProvider>
       </body>
     </html>

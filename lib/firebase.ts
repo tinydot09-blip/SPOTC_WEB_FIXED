@@ -1,5 +1,4 @@
 import {
-  getApp,
   getApps,
   initializeApp,
   type FirebaseApp,
@@ -21,33 +20,73 @@ import {
 } from 'firebase/storage';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyD88tq10uSyzJO-F55KRlg9p8NqWn-15Xw',
-  authDomain: 'spotit-9lnwv9.firebaseapp.com',
-  projectId: 'spotit-9lnwv9',
-  storageBucket: 'spotit-9lnwv9.firebasestorage.app',
-  messagingSenderId: '457147494277',
-  appId: '1:457147494277:web:be35b6dcad2a7c31831eec',
+  apiKey:
+    'AIzaSyD88tq10uSyzJO-F55KRlg9p8NqWn-15Xw',
+
+  authDomain:
+    'spotit-9lnwv9.firebaseapp.com',
+
+  projectId:
+    'spotit-9lnwv9',
+
+  storageBucket:
+    'spotit-9lnwv9.firebasestorage.app',
+
+  messagingSenderId:
+    '457147494277',
+
+  appId:
+    '1:457147494277:web:be35b6dcad2a7c31831eec',
 };
 
 export const firebaseReady = true;
 
-// IMPORTANT:
-// SPOTC existing code expects Firebase's DEFAULT app.
-// Do not create a separately named app here.
+/*
+ * IMPORTANT:
+ *
+ * SPOTC's normal website uses Firebase's DEFAULT app.
+ *
+ * Delivery uses a separate named Firebase app:
+ * "spotc-delivery".
+ *
+ * getApps().length > 0 is NOT enough because the
+ * delivery app may exist while the DEFAULT app does not.
+ */
+
+const existingDefaultApp =
+  getApps().find(
+    (firebaseApp) =>
+      firebaseApp.name ===
+      '[DEFAULT]',
+  );
+
 let app: FirebaseApp;
 
-if (getApps().length > 0) {
-  app = getApp();
+if (existingDefaultApp) {
+  app = existingDefaultApp;
 } else {
-  app = initializeApp(firebaseConfig);
+  app = initializeApp(
+    firebaseConfig,
+  );
 }
 
-const authInstance: Auth = getAuth(app);
-const firestoreInstance: Firestore = getFirestore(app);
-const storageInstance: FirebaseStorage = getStorage(app);
+const authInstance: Auth =
+  getAuth(app);
 
-export const auth = authInstance;
-export const db = firestoreInstance;
-export const storage = storageInstance;
+const firestoreInstance: Firestore =
+  getFirestore(app);
 
-export const firebaseProjectId = firebaseConfig.projectId;
+const storageInstance: FirebaseStorage =
+  getStorage(app);
+
+export const auth =
+  authInstance;
+
+export const db =
+  firestoreInstance;
+
+export const storage =
+  storageInstance;
+
+export const firebaseProjectId =
+  firebaseConfig.projectId;
