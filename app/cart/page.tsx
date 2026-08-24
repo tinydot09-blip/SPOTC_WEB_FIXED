@@ -635,16 +635,46 @@ export default function CartPage() {
                         <div className="spotc-free-gifts">
                           <div className="spotc-free-gifts-title">
                             <div className="spotc-free-gifts-title-copy">
-                              <span>🎁</span>
-                              <strong>
-                                FREE Gift
-                                {freeGifts.length === 1 ? '' : 's'} Included
-                              </strong>
+                              <span
+                                className="spotc-free-gifts-title-icon"
+                                aria-hidden="true"
+                              >
+                                🎁
+                              </span>
+
+                              <div>
+                                <strong>
+                                  {freeGifts.length} FREE Gift
+                                  {freeGifts.length === 1 ? '' : 's'} Included
+                                </strong>
+
+                                <small>
+                                  Your selected gifts are included at no extra cost
+                                </small>
+                              </div>
                             </div>
+
+                            <button
+                              type="button"
+                              className="spotc-change-gift-button spotc-change-gift-button-header"
+                              onClick={() => {
+                                const firstGift = freeGifts[0];
+
+                                if (!firstGift) return;
+
+                                changeFreeGift(
+                                  item.id,
+                                  firstGift.id,
+                                  0,
+                                );
+                              }}
+                            >
+                              Change
+                            </button>
                           </div>
 
                           <div className="spotc-free-gifts-list">
-                            {freeGifts.map((gift, giftIndex) => (
+                            {freeGifts.map((gift) => (
                               <div
                                 className="spotc-free-gift"
                                 key={`${item.id}-${gift.id}`}
@@ -665,30 +695,10 @@ export default function CartPage() {
 
                                   <div className="spotc-free-gift-price">
                                     <strong>FREE</strong>
-
-                                    {gift.original_price > 0 && (
-                                      <span>
-                                        {money(gift.original_price)}
-                                      </span>
-                                    )}
                                   </div>
                                 </div>
-
-                                <button
-                                  type="button"
-                                  className="spotc-change-gift-button"
-                                  onClick={() =>
-                                    changeFreeGift(
-                                      item.id,
-                                      gift.id,
-                                      giftIndex,
-                                    )
-                                  }
-                                >
-                                  Change
-                                </button>
                               </div>
-                           ))}
+                            ))}
                           </div>
                         </div>
                       )}
@@ -1013,59 +1023,83 @@ const styles = `
   }
 
   .spotc-free-gifts {
-    margin-left: 24px;
-    padding: 13px 14px;
-    border: 1px solid #cfe8d6;
-    border-radius: 16px;
-    background: #f1faf4;
+    margin-left: 0;
+    padding: 18px 20px;
+    border: 1px solid #e3dbd2;
+    border-radius: 18px;
+    background: #ffffff;
   }
 
   .spotc-free-gifts-title {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 10px;
-    color: #137333;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+    color: #211d19;
   }
 
   .spotc-free-gifts-title-copy {
     min-width: 0;
     display: flex;
-    align-items: center;
-    gap: 7px;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .spotc-free-gifts-title-icon {
+    flex: 0 0 auto;
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .spotc-free-gifts-title-copy > div {
+    min-width: 0;
   }
 
   .spotc-free-gifts-title strong {
+    display: block;
+    color: #211d19;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+
+  .spotc-free-gifts-title small {
+    display: block;
+    margin-top: 4px;
+    color: #756b62;
     font-size: 12px;
-    font-weight: 750;
+    font-weight: 400;
+    line-height: 1.35;
   }
 
   .spotc-free-gifts-list {
     display: grid;
-    gap: 8px;
+    gap: 10px;
   }
 
   .spotc-free-gift {
+    width: min(430px, 100%);
     min-width: 0;
-    padding: 9px;
+    padding: 10px;
     display: grid;
-    grid-template-columns: 58px minmax(0, 1fr) auto;
-    gap: 11px;
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 12px;
     align-items: center;
-    border: 1px solid #dcecdf;
-    border-radius: 12px;
-    background: #ffffff;
+    border: 1px solid #d6eadb;
+    border-radius: 13px;
+    background: #f7fcf8;
   }
 
   .spotc-free-gift-image {
-    width: 58px;
-    height: 58px;
+    width: 64px;
+    height: 64px;
     overflow: hidden;
     display: grid;
     place-items: center;
     border-radius: 10px;
     color: #7f9685;
-    background: #f6faf7;
+    background: #eef7f0;
   }
 
   .spotc-free-gift-image img {
@@ -1078,49 +1112,52 @@ const styles = `
     min-width: 0;
   }
 
-  .spotc-change-gift-button {
-    flex: 0 0 auto;
-    padding: 7px 10px;
-    border: 1px solid #b9dfc6;
-    border-radius: 999px;
-    color: #137333;
-    background: #ffffff;
-    font-family: inherit;
-    font-size: 12px;
-    font-weight: 800;
-    line-height: 1;
-    cursor: pointer;
-  }
-
-  .spotc-change-gift-button:hover {
-    background: #eaf7ef;
-  }
-
   .spotc-free-gift-copy h4 {
     margin: 0;
     color: #24201c;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 500;
     line-height: 1.35;
   }
 
   .spotc-free-gift-price {
-    margin-top: 6px;
+    margin-top: 5px;
     display: flex;
     align-items: center;
     gap: 8px;
   }
 
   .spotc-free-gift-price strong {
-    color: #137333;
-    font-size: 14px;
-    font-weight: 800;
+    color: #168648;
+    font-size: 12px;
+    font-weight: 600;
   }
 
   .spotc-free-gift-price span {
-    color: #8b948d;
-    font-size: 11px;
-    text-decoration: line-through;
+    display: none;
+  }
+
+  .spotc-change-gift-button {
+    flex: 0 0 auto;
+    padding: 7px 13px;
+    border: 1px solid #d8d0c7;
+    border-radius: 10px;
+    color: #167a42;
+    background: #ffffff;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.2;
+    cursor: pointer;
+  }
+
+  .spotc-change-gift-button:hover {
+    background: #f8faf8;
+  }
+
+  .spotc-change-gift-button-header {
+    min-width: 88px;
+    min-height: 38px;
   }
 
   .spotc-delivery-section {
@@ -1648,39 +1685,43 @@ const styles = `
     }
 
     .spotc-free-gifts {
-      margin-left: 0;
-      padding: 12px;
+      padding: 15px;
     }
 
     .spotc-free-gifts-title {
-      gap: 8px;
+      gap: 12px;
     }
 
     .spotc-free-gifts-title strong {
-      font-size: 13px;
+      font-size: 15px;
     }
 
-    .spotc-free-gift {
-      grid-template-columns: 62px minmax(0, 1fr) auto;
-      padding: 10px;
-    }
-
-    .spotc-change-gift-button {
-      padding: 6px 8px;
+    .spotc-free-gifts-title small {
       font-size: 11px;
     }
 
+    .spotc-free-gift {
+      width: 100%;
+      grid-template-columns: 58px minmax(0, 1fr);
+      padding: 9px;
+    }
+
+    .spotc-change-gift-button {
+      padding: 7px 11px;
+      font-size: 12px;
+    }
+
     .spotc-free-gift-image {
-      width: 62px;
-      height: 62px;
+      width: 58px;
+      height: 58px;
     }
 
     .spotc-free-gift-copy h4 {
-      font-size: 14px;
+      font-size: 13px;
     }
 
     .spotc-free-gift-price strong {
-      font-size: 15px;
+      font-size: 12px;
     }
 
     .spotc-order-delivery {
