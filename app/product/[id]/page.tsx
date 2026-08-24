@@ -644,6 +644,8 @@ const isTryOnSupported = (product: ProductRecord): boolean => {
   );
 };
 
+const productQuantityCache = new Map<string, number>();
+
 function ProductPageLoader() {
   return (
     <main className="pd-page pd-page-loading" aria-label="Loading product" aria-busy="true">
@@ -688,14 +690,14 @@ export default function ProductDetailPage() {
   const [size, setSize] = useState('');
   const [color, setColor] = useState('');
 
-  // Keep quantity across an unexpected page remount.
-  const quantityStorageKey = `spotc-product-qty:${String(id || '')}`;
+  const quantityProductKey = String(id || '');
+
+  // Starts at 1 on a fresh page load.
+  // If this component is unexpectedly remounted while staying on the same
+  // product page, the in-memory cache keeps the customer's current quantity.
   const [qty, setQty] = useState(() => {
-    if (typeof window === 'undefined') return 1;
-    const stored = Number(
-      window.sessionStorage.getItem(`spotc-product-qty:${String(id || '')}`),
-    );
-    return Number.isFinite(stored) && stored >= 1 ? Math.floor(stored) : 1;
+    const cached = productQuantityCache.get(quantityProductKey);
+    return cached && cached >= 1 ? cached : 1;
   });
   const [saved, setSaved] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
@@ -742,12 +744,9 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const stored = Number(window.sessionStorage.getItem(quantityStorageKey));
-    const restored =
-      Number.isFinite(stored) && stored >= 1 ? Math.floor(stored) : 1;
-    setQty(restored);
-  }, [quantityStorageKey]);
+    const cached = productQuantityCache.get(quantityProductKey);
+    setQty(cached && cached >= 1 ? cached : 1);
+  }, [quantityProductKey]);
 
   useEffect(() => {
     if (!giftPreviewOpen) return;
@@ -1258,12 +1257,12 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   const maximumQuantity = stockQuantity !== null ? Math.min(99, stockQuantity) : 99;
 
   const commitQuantity = (nextQty: number) => {
-    const safeQty = Math.max(1, Math.min(maximumQuantity, Math.floor(nextQty)));
+    const safeQty = Math.max(
+      1,
+      Math.min(maximumQuantity, Math.floor(nextQty)),
+    );
 
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.setItem(quantityStorageKey, String(safeQty));
-    }
-
+    productQuantityCache.set(quantityProductKey, safeQty);
     setQty(safeQty);
   };
 
