@@ -1311,12 +1311,15 @@ const styles = `
   }
 
   .spotc-free-gifts-list {
-    display: grid;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
     gap: 10px;
   }
 
   .spotc-free-gift {
-    width: min(430px, 100%);
+    width: 100%;
     min-width: 0;
     padding: 10px;
     display: grid;
