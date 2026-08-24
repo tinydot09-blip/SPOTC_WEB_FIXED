@@ -1,53 +1,37 @@
 'use client';
 
+import Link from 'next/link';
+import {
+  CheckCircle2,
+  Gift,
+  Loader2,
+  Mail,
+  MapPin,
+  MessageCircle,
+  Package,
+  Phone,
+  ReceiptText,
+  Truck,
+  X,
+} from 'lucide-react';
 import {
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
-import Link from 'next/link';
-import {
-  CheckCircle2,
-  ExternalLink,
-  Gift,
-  Loader2,
-  MapPin,
-  MessageCircle,
-  Navigation,
-  Package,
-  Phone,
-  ReceiptText,
-  Store,
-  Truck,
-} from 'lucide-react';
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  query,
-  where,
-  type DocumentData,
-  type DocumentReference,
-} from 'firebase/firestore';
 
-import {
-  db,
-  firebaseReady,
-} from '@/lib/firebase';
+import { db, firebaseReady } from '@/lib/firebase';
 import { readOrderById } from '@/lib/orders';
 
-type GeoLike =
-  | {
-      latitude?: number;
-      longitude?: number;
-      _lat?: number;
-      _long?: number;
-    }
-  | null
-  | undefined;
+const SUPPORT_PHONE = '8072098066';
+const SUPPORT_PHONE_HREF = 'tel:+918072098066';
+const SUPPORT_WHATSAPP = '918072098066';
+const SUPPORT_EMAIL = 'support@spotc.in';
+const SUPPORT_ADDRESS =
+  '#41-1, Kembe Gowder Colony 1st Street, Near EB Colony Bus Stop, Karamadai, Coimbatore - 641104, Tamil Nadu, India';
+const SUPPORT_MAP_URL =
+  'https://www.google.com/maps/search/?api=1&query=41-1+Kembe+Gowder+Colony+1st+Street+Near+EB+Colony+Bus+Stop+Karamadai+Coimbatore+641104';
 
 type OrderItem = {
   id?: string;
@@ -57,6 +41,16 @@ type OrderItem = {
   qty?: number;
   price?: number;
   subtotal?: number;
+};
+
+type OrderData = {
+  id: string;
+  order_number?: string;
+  order_status?: string;
+  payment_method?: string;
+  total?: number;
+  estimated_delivery?: string;
+  items?: OrderItem[];
 };
 
 type SavedFreeGift = {
@@ -75,6 +69,54 @@ type SavedGiftBundle = {
   gifts: SavedFreeGift[];
 };
 
+type WhatsAppQuestion = {
+  label: string;
+  message: (orderNumber: string) => string;
+};
+
+const whatsappQuestions: WhatsAppQuestion[] = [
+  {
+    label: 'Where is my order?',
+    message: (orderNumber) =>
+      `Hi SPOTC, I would like to check the status of my order ${orderNumber}.`,
+  },
+  {
+    label: 'When will my order be delivered?',
+    message: (orderNumber) =>
+      `Hi SPOTC, please let me know the expected delivery time for my order ${orderNumber}.`,
+  },
+  {
+    label: 'I need help with a product',
+    message: (orderNumber) =>
+      `Hi SPOTC, I need help with a product in my order ${orderNumber}.`,
+  },
+  {
+    label: 'I have a payment question',
+    message: (orderNumber) =>
+      `Hi SPOTC, I have a payment question regarding my order ${orderNumber}.`,
+  },
+  {
+    label: 'I need help with size / exchange',
+    message: (orderNumber) =>
+      `Hi SPOTC, I need help regarding size or exchange for my order ${orderNumber}.`,
+  },
+  {
+    label: 'Other question',
+    message: (orderNumber) =>
+      `Hi SPOTC, I need help with my order ${orderNumber}.`,
+  },
+];
+
+const text = (value: unknown): string =>
+  typeof value === 'string'
+    ? value.trim()
+    : value == null
+      ? ''
+      : String(value).trim();
+
+const money = (value: number): string =>
+  `₹${Math.round(value).toLocaleString('en-IN')}`;
+
 const readSavedGifts = (
   productId: string,
 ): SavedGiftBundle | null => {
@@ -86,10 +128,9 @@ const readSavedGifts = (
   }
 
   try {
-    const raw =
-      window.localStorage.getItem(
-        `spotc-free-gifts:${productId}`,
-      );
+    const raw = window.localStorage.getItem(
+      `spotc-free-gifts:${productId}`,
+    );
 
     if (!raw) {
       return null;
@@ -106,19 +147,14 @@ const readSavedGifts = (
     }
 
     return {
-      product_id:
-        String(
-          parsed.product_id ||
-            productId,
-        ),
-
+      product_id: String(
+        parsed.product_id || productId,
+      ),
       quantity:
         Number(parsed.quantity) || 1,
-
       entitlement:
         Number(parsed.entitlement) ||
         parsed.gifts.length,
-
       gifts: parsed.gifts
         .filter(
           (
@@ -126,24 +162,18 @@ const readSavedGifts = (
           ): gift is SavedFreeGift =>
             Boolean(
               gift &&
-                typeof gift ===
-                  'object' &&
+                typeof gift === 'object' &&
                 'id' in gift,
             ),
         )
         .map((gift) => ({
           id: String(gift.id),
-          title:
-            String(
-              gift.title ||
-                'FREE Gift',
-            ),
-          image:
-            String(gift.image || ''),
+          title: String(
+            gift.title || 'FREE Gift',
+          ),
+          image: String(gift.image || ''),
           original_price:
-            Number(
-              gift.original_price,
-            ) || 0,
+            Number(gift.original_price) || 0,
           price: 0,
           is_free_gift: true,
         })),
@@ -153,758 +183,12 @@ const readSavedGifts = (
   }
 };
 
-type AddressSnapshot = {
-  full_name?: string;
-  phone?: string;
-  address_type?: string;
-  house_no?: string;
-  street?: string;
-  landmark?: string;
-  area?: string;
-  city?: string;
-  pincode?: string;
-  state?: string;
-  country?: string;
-  latitude?: number | null;
-  longitude?: number | null;
-};
-
-type OrderData = {
-  id: string;
-  order_number?: string;
-
-  business_id?: string;
-  business_ref?: unknown;
-  business_name?: string;
-  business_logo?: string;
-  business_logo_url?: string;
-  business_address?: string;
-  business_phone?: string;
-  business_whatsapp?: string;
-  business_location?: GeoLike;
-
-  address?: AddressSnapshot;
-  delivery_address?: string;
-
-  order_status?: string;
-  payment_method?: string;
-  total?: number;
-  estimated_delivery?: string;
-
-  items?: OrderItem[];
-
-};
-
-type BusinessData = {
-  id: string;
-  name: string;
-  logo: string;
-  address: string;
-  phone: string;
-  whatsapp: string;
-  location: GeoLike;
-};
-
-type HydratedOrder = OrderData & {
-  resolvedBusiness: BusinessData;
-};
-
-const text = (
-  value: unknown,
-): string =>
-  typeof value === 'string'
-    ? value.trim()
-    : value == null
-      ? ''
-      : String(value).trim();
-
-const numberValue = (
-  value: unknown,
-): number | null => {
-  const parsed = Number(value);
-
-  return Number.isFinite(parsed)
-    ? parsed
-    : null;
-};
-
-const money = (value: number): string =>
-  `₹${Math.round(value).toLocaleString(
-    'en-IN',
-  )}`;
-
-const normalize = (
-  value: unknown,
-): string =>
-  text(value)
-    .toLowerCase()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, '')
-    .trim();
-
-const refId = (
-  value: unknown,
-): string => {
-  if (!value) return '';
-
-  if (typeof value === 'string') {
-    return (
-      value
-        .split('/')
-        .filter(Boolean)
-        .pop() || ''
-    );
-  }
-
-  if (
-    typeof value === 'object' &&
-    value !== null
-  ) {
-    if ('id' in value) {
-      return text(
-        (value as {
-          id?: unknown;
-        }).id,
-      );
-    }
-
-    if ('path' in value) {
-      return (
-        text(
-          (value as {
-            path?: unknown;
-          }).path,
-        )
-          .split('/')
-          .filter(Boolean)
-          .pop() || ''
-      );
-    }
-  }
-
-  return '';
-};
-
-const businessFromData = (
-  id: string,
-  data: DocumentData,
-): BusinessData => ({
-  id,
-
-  name:
-    text(data.business_name) ||
-    text(data.shop_name) ||
-    text(data.name) ||
-    'SPOTC Business',
-
-  logo:
-    text(data.logo_url) ||
-    text(data.business_logo_url) ||
-    text(data.business_logo) ||
-    text(data.logo) ||
-    text(data.photo_url) ||
-    text(data.profile_photo_url) ||
-    text(data.image_url) ||
-    text(data.thumbnail_url),
-
-  address:
-    text(data.address) ||
-    text(data.business_address) ||
-    text(data.businessAddress) ||
-    text(data.full_address) ||
-    text(data.address_text) ||
-    [
-      text(data.house_no),
-      text(data.street),
-      text(data.landmark),
-      text(data.area),
-      text(data.city),
-      text(data.district),
-      text(data.pincode),
-    ]
-      .filter(Boolean)
-      .join(', '),
-
-  phone:
-    text(data.business_phone) ||
-    text(data.phone) ||
-    text(data.contact_number) ||
-    text(data.mobile) ||
-    text(data.mobile_number) ||
-    text(data.phone_number) ||
-    text(data.contact_phone),
-
-  whatsapp:
-    text(data.business_whatsapp) ||
-    text(data.whatsapp) ||
-    text(data.whatsapp_number) ||
-    text(data.phone) ||
-    text(data.business_phone),
-
-  location:
-    (data.business_location ??
-      data.location ??
-      data.capturedLocation ??
-      data.captured_location ??
-      null) as GeoLike,
-});
-
-const fallbackBusinessFromOrder = (
-  order: OrderData,
-): BusinessData => ({
-  id:
-    text(order.business_id) ||
-    refId(order.business_ref),
-
-  name:
-    text(order.business_name) ||
-    'SPOTC Business',
-
-  logo:
-    text(order.business_logo) ||
-    text(order.business_logo_url),
-
-  address:
-    text(order.business_address),
-
-  phone:
-    text(order.business_phone),
-
-  whatsapp:
-    text(order.business_whatsapp) ||
-    text(order.business_phone),
-
-  location:
-    order.business_location ?? null,
-});
-
-async function readBusinessById(
-  businessId: string,
-): Promise<BusinessData | null> {
-  if (!db || !businessId) return null;
-
-  try {
-    const snapshot = await getDoc(
-      doc(
-        db,
-        'BusinessListings',
-        businessId,
-      ),
-    );
-
-    if (!snapshot.exists()) {
-      return null;
-    }
-
-    return businessFromData(
-      snapshot.id,
-      snapshot.data(),
-    );
-  } catch (error) {
-    console.error(
-      'Business lookup by id failed:',
-      error,
-    );
-
-    return null;
-  }
-}
-
-async function productBusinessHints(
-  order: OrderData,
-): Promise<{
-  businessIds: string[];
-  ownerUids: string[];
-  businessNames: string[];
-}> {
-  const businessIds = new Set<string>();
-  const ownerUids = new Set<string>();
-  const businessNames = new Set<string>();
-
-  if (!db) {
-    return {
-      businessIds: [],
-      ownerUids: [],
-      businessNames: [],
-    };
-  }
-
-  for (const item of order.items || []) {
-    const productId = text(item.id);
-
-    if (!productId) continue;
-
-    try {
-      const snapshot = await getDoc(
-        doc(
-          db,
-          'BusinessProducts',
-          productId,
-        ),
-      );
-
-      if (!snapshot.exists()) continue;
-
-      const data = snapshot.data();
-
-      const linkedBusinessId =
-        text(data.business_id) ||
-        text(data.parent_business_id) ||
-        refId(data.business_ref);
-
-      if (linkedBusinessId) {
-        businessIds.add(linkedBusinessId);
-      }
-
-      const ownerUid = text(data.owner_uid);
-
-      if (ownerUid) {
-        ownerUids.add(ownerUid);
-      }
-
-      const productBusinessName =
-        text(data.business_name) ||
-        text(data.shop_name);
-
-      if (productBusinessName) {
-        businessNames.add(
-          productBusinessName,
-        );
-      }
-    } catch (error) {
-      console.error(
-        `Product business lookup failed for ${productId}:`,
-        error,
-      );
-    }
-  }
-
-  return {
-    businessIds: [...businessIds],
-    ownerUids: [...ownerUids],
-    businessNames: [
-      ...businessNames,
-    ],
-  };
-}
-
-async function scanBusinessListings(
-  order: OrderData,
-  hints: {
-    businessIds: string[];
-    ownerUids: string[];
-    businessNames: string[];
-  },
-): Promise<BusinessData | null> {
-  if (!db) return null;
-
-  try {
-    const snapshot = await getDocs(
-      query(
-        collection(
-          db,
-          'BusinessListings',
-        ),
-        limit(500),
-      ),
-    );
-
-    const idTargets = new Set(
-      [
-        text(order.business_id),
-        refId(order.business_ref),
-        ...hints.businessIds,
-      ].filter(Boolean),
-    );
-
-    const ownerTargets = new Set(
-      hints.ownerUids.filter(Boolean),
-    );
-
-    const nameTargets = new Set(
-      [
-        text(order.business_name),
-        ...hints.businessNames,
-      ]
-        .map(normalize)
-        .filter(Boolean),
-    );
-
-    const matched =
-      snapshot.docs.find(
-        (businessDoc) => {
-          const data =
-            businessDoc.data();
-
-          if (
-            idTargets.has(
-              businessDoc.id,
-            )
-          ) {
-            return true;
-          }
-
-          const ownerUid =
-            text(data.owner_uid);
-
-          if (
-            ownerUid &&
-            ownerTargets.has(ownerUid)
-          ) {
-            return true;
-          }
-
-          return [
-            businessDoc.id,
-            data.business_name,
-            data.shop_name,
-            data.name,
-            data.businessName,
-          ].some((candidate) =>
-            nameTargets.has(
-              normalize(candidate),
-            ),
-          );
-        },
-      );
-
-    return matched
-      ? businessFromData(
-          matched.id,
-          matched.data(),
-        )
-      : null;
-  } catch (error) {
-    console.error(
-      'BusinessListings scan failed:',
-      error,
-    );
-
-    return null;
-  }
-}
-
-async function resolveBusiness(
-  order: OrderData,
-): Promise<BusinessData> {
-  const fallback =
-    fallbackBusinessFromOrder(order);
-
-  if (!db) return fallback;
-
-  /*
-   * 1. Use the business directly saved on the order.
-   */
-  const directIds = [
-    text(order.business_id),
-    refId(order.business_ref),
-  ].filter(Boolean);
-
-  for (const id of directIds) {
-    const direct =
-      await readBusinessById(id);
-
-    if (direct) {
-      return {
-        ...fallback,
-        ...direct,
-      };
-    }
-  }
-
-  /*
-   * 2. Resolve the business through each ordered product.
-   * BusinessProducts commonly contains the reliable business_ref.
-   */
-  const hints =
-    await productBusinessHints(order);
-
-  for (const id of hints.businessIds) {
-    const linked =
-      await readBusinessById(id);
-
-    if (linked) {
-      return {
-        ...fallback,
-        ...linked,
-      };
-    }
-  }
-
-  /*
-   * 3. Try exact Firestore queries using every available name.
-   */
-  const names = [
-    text(order.business_name),
-    ...hints.businessNames,
-  ].filter(Boolean);
-
-  for (const businessName of names) {
-    const exactQueries = [
-      query(
-        collection(
-          db,
-          'BusinessListings',
-        ),
-        where(
-          'business_name',
-          '==',
-          businessName,
-        ),
-        limit(1),
-      ),
-      query(
-        collection(
-          db,
-          'BusinessListings',
-        ),
-        where(
-          'shop_name',
-          '==',
-          businessName,
-        ),
-        limit(1),
-      ),
-    ];
-
-    for (const businessQuery of exactQueries) {
-      try {
-        const snapshot =
-          await getDocs(
-            businessQuery,
-          );
-
-        const first =
-          snapshot.docs[0];
-
-        if (first) {
-          return {
-            ...fallback,
-            ...businessFromData(
-              first.id,
-              first.data(),
-            ),
-          };
-        }
-      } catch (error) {
-        console.error(
-          'Exact business query failed:',
-          error,
-        );
-      }
-    }
-  }
-
-  /*
-   * 4. Final fallback: scan BusinessListings and match by:
-   * document id, product-linked owner_uid, or normalized name.
-   */
-  const scanned =
-    await scanBusinessListings(
-      order,
-      hints,
-    );
-
-  return scanned
-    ? {
-        ...fallback,
-        ...scanned,
-      }
-    : fallback;
-}
-
-const phoneHref = (
-  value: string,
-): string => {
-  const normalized = value.replace(
-    /[^\d+]/g,
-    '',
-  );
-
-  return normalized
-    ? `tel:${normalized}`
-    : '';
-};
-
 const whatsappHref = (
-  value: string,
-  businessName: string,
-  orderNumber: string,
-): string => {
-  const digits = value.replace(
-    /\D/g,
-    '',
-  );
-
-  if (!digits) return '';
-
-  const withCountryCode =
-    digits.length === 10
-      ? `91${digits}`
-      : digits;
-
-  const message = encodeURIComponent(
-    `Hello ${businessName}, I placed SPOTC order ${orderNumber}.`,
-  );
-
-  return `https://wa.me/${withCountryCode}?text=${message}`;
-};
-
-const coordinatesOf = (
-  value: GeoLike,
-): {
-  lat: number;
-  lng: number;
-} | null => {
-  if (!value) return null;
-
-  const lat = numberValue(
-    value.latitude ?? value._lat,
-  );
-
-  const lng = numberValue(
-    value.longitude ?? value._long,
-  );
-
-  if (lat == null || lng == null) {
-    return null;
-  }
-
-  return {
-    lat,
-    lng,
-  };
-};
-
-const addressCoordinatesOf = (
-  address: AddressSnapshot | undefined,
-): {
-  lat: number;
-  lng: number;
-} | null => {
-  if (!address) return null;
-
-  const lat = numberValue(
-    address.latitude,
-  );
-
-  const lng = numberValue(
-    address.longitude,
-  );
-
-  if (lat == null || lng == null) {
-    return null;
-  }
-
-  return {
-    lat,
-    lng,
-  };
-};
-
-const distanceKm = (
-  from: {
-    lat: number;
-    lng: number;
-  },
-  to: {
-    lat: number;
-    lng: number;
-  },
-): number => {
-  const radius = 6371;
-
-  const toRadians = (
-    degrees: number,
-  ) => (degrees * Math.PI) / 180;
-
-  const latitudeDelta = toRadians(
-    to.lat - from.lat,
-  );
-
-  const longitudeDelta = toRadians(
-    to.lng - from.lng,
-  );
-
-  const a =
-    Math.sin(latitudeDelta / 2) ** 2 +
-    Math.cos(
-      toRadians(from.lat),
-    ) *
-      Math.cos(
-        toRadians(to.lat),
-      ) *
-      Math.sin(
-        longitudeDelta / 2,
-      ) **
-        2;
-
-  return (
-    radius *
-    2 *
-    Math.atan2(
-      Math.sqrt(a),
-      Math.sqrt(1 - a),
-    )
-  );
-};
-
-const distanceLabel = (
-  order: HydratedOrder,
-): string => {
-  const customer =
-    addressCoordinatesOf(
-      order.address,
-    );
-
-  const business =
-    coordinatesOf(
-      order.resolvedBusiness
-        .location,
-    );
-
-  if (!customer || !business) {
-    return '';
-  }
-
-  const distance = distanceKm(
-    customer,
-    business,
-  );
-
-  if (distance < 1) {
-    return `${Math.round(
-      distance * 1000,
-    )} m away`;
-  }
-
-  return `${distance.toFixed(
-    1,
-  )} km away`;
-};
-
-const mapsHref = (
-  order: HydratedOrder,
-): string => {
-  const business =
-    coordinatesOf(
-      order.resolvedBusiness
-        .location,
-    );
-
-  if (business) {
-    return `https://www.google.com/maps/dir/?api=1&destination=${business.lat},${business.lng}`;
-  }
-
-  const address =
-    order.resolvedBusiness.address;
-
-  if (!address) return '';
-
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-    address,
+  message: string,
+): string =>
+  `https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(
+    message,
   )}`;
-};
 
 const sendGa4Event = (
   eventName: string,
@@ -923,7 +207,9 @@ const sendGa4Event = (
   }
 };
 
-const ga4ItemFromOrder = (item: OrderItem) => {
+const ga4ItemFromOrder = (
+  item: OrderItem,
+) => {
   const quantity = Math.max(
     1,
     Number(item.quantity ?? item.qty) || 1,
@@ -937,7 +223,9 @@ const ga4ItemFromOrder = (item: OrderItem) => {
 
   return {
     item_id: String(item.id || ''),
-    item_name: String(item.title || 'SPOTC Product'),
+    item_name: String(
+      item.title || 'SPOTC Product',
+    ),
     price,
     quantity,
   };
@@ -945,10 +233,11 @@ const ga4ItemFromOrder = (item: OrderItem) => {
 
 export default function OrderSuccessPage() {
   const [orders, setOrders] =
-    useState<HydratedOrder[]>([]);
-
+    useState<OrderData[]>([]);
   const [loading, setLoading] =
     useState(true);
+  const [whatsappOrderNumber, setWhatsappOrderNumber] =
+    useState<string | null>(null);
   const purchaseTrackedRef = useRef(false);
 
   useEffect(() => {
@@ -956,59 +245,51 @@ export default function OrderSuccessPage() {
 
     async function loadOrders() {
       if (!firebaseReady || !db) {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
         return;
       }
 
-      const params =
-        new URLSearchParams(
+      try {
+        const params = new URLSearchParams(
           window.location.search,
         );
 
-      const rawIds =
-        params.get('ids') ||
-        params.get('id') ||
-        '';
+        const rawIds =
+          params.get('ids') ||
+          params.get('id') ||
+          '';
 
-      const ids = rawIds
-        .split(',')
-        .map((id) => id.trim())
-        .filter(Boolean);
+        const ids = rawIds
+          .split(',')
+          .map((id) => id.trim())
+          .filter(Boolean);
 
-      const firestore = db;
-
-      const loadedOrders =
-        await Promise.all(
-          ids.map((id) =>
-            readOrderById(
-              firestore,
-              id,
+        const loadedOrders =
+          await Promise.all(
+            ids.map((id) =>
+              readOrderById(db, id),
             ),
-          ),
+          );
+
+        if (!active) return;
+
+        setOrders(
+          loadedOrders.filter(
+            Boolean,
+          ) as OrderData[],
         );
-
-      const validOrders =
-        loadedOrders.filter(
-          Boolean,
-        ) as OrderData[];
-
-      const hydrated =
-        await Promise.all(
-          validOrders.map(
-            async (order) => ({
-              ...order,
-              resolvedBusiness:
-                await resolveBusiness(
-                  order,
-                ),
-            }),
-          ),
+      } catch (error) {
+        console.error(
+          'Unable to load order confirmation:',
+          error,
         );
-
-      if (!active) return;
-
-      setOrders(hydrated);
-      setLoading(false);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
     }
 
     void loadOrders();
@@ -1030,320 +311,265 @@ export default function OrderSuccessPage() {
 
     orders.forEach((order) => {
       const transactionId =
-        text(order.order_number) || text(order.id);
+        text(order.order_number) ||
+        text(order.id);
 
       if (!transactionId) return;
 
-      const storageKey = `spotc-ga4-purchase:${transactionId}`;
+      const storageKey =
+        `spotc-ga4-purchase:${transactionId}`;
 
-      if (window.localStorage.getItem(storageKey) === '1') {
+      if (
+        window.localStorage.getItem(
+          storageKey,
+        ) === '1'
+      ) {
         return;
       }
 
-      const gtag = (
-        window as typeof window & {
-          gtag?: (...args: unknown[]) => void;
-        }
-      ).gtag;
-
-      if (typeof gtag !== 'function') {
-        return;
-      }
-
-      gtag('event', 'purchase', {
+      sendGa4Event('purchase', {
         transaction_id: transactionId,
         currency: 'INR',
         value: Number(order.total || 0),
-        payment_type: text(order.payment_method) || 'Cash on Delivery',
-        items: (order.items || []).map(ga4ItemFromOrder),
+        payment_type:
+          text(order.payment_method) ||
+          'Cash on Delivery',
+        items: (order.items || []).map(
+          ga4ItemFromOrder,
+        ),
       });
 
-      window.localStorage.setItem(storageKey, '1');
+      window.localStorage.setItem(
+        storageKey,
+        '1',
+      );
     });
 
     purchaseTrackedRef.current = true;
-    window.sessionStorage.removeItem('spotc-ga4-checkout-snapshot');
+    window.sessionStorage.removeItem(
+      'spotc-ga4-checkout-snapshot',
+    );
   }, [loading, orders]);
+
+  useEffect(() => {
+    if (!whatsappOrderNumber) {
+      return;
+    }
+
+    const closeOnEscape = (
+      event: KeyboardEvent,
+    ) => {
+      if (event.key === 'Escape') {
+        setWhatsappOrderNumber(null);
+      }
+    };
+
+    document.addEventListener(
+      'keydown',
+      closeOnEscape,
+    );
+
+    return () => {
+      document.removeEventListener(
+        'keydown',
+        closeOnEscape,
+      );
+    };
+  }, [whatsappOrderNumber]);
 
   const totals = useMemo(
     () => ({
       amount: orders.reduce(
         (sum, order) =>
-          sum +
-          Number(order.total || 0),
+          sum + Number(order.total || 0),
         0,
       ),
     }),
     [orders],
   );
 
-  const selectedFreeGifts =
-    useMemo(() => {
-      const giftMap =
-        new Map<string, SavedFreeGift>();
+  const selectedFreeGifts = useMemo(() => {
+    const giftMap =
+      new Map<string, SavedFreeGift>();
 
-      for (const order of orders) {
-        for (const item of order.items || []) {
-          const productId =
-            text(item.id);
+    for (const order of orders) {
+      for (const item of order.items || []) {
+        const productId = text(item.id);
+        const bundle =
+          readSavedGifts(productId);
 
-          const bundle =
-            readSavedGifts(productId);
-
-          for (const gift of
-            bundle?.gifts || []) {
-            giftMap.set(
-              gift.id,
-              gift,
-            );
-          }
+        for (const gift of
+          bundle?.gifts || []) {
+          giftMap.set(gift.id, gift);
         }
       }
+    }
 
-      return [...giftMap.values()];
-    }, [orders]);
+    return [...giftMap.values()];
+  }, [orders]);
 
   if (loading) {
     return (
-      <main className="spotc-success-v6-state">
+      <main className="spotc-success-state">
         <Loader2
-          className="spotc-success-v6-spin"
+          className="spotc-success-spin"
           size={36}
         />
-
-        <p>
-          Loading your order confirmation…
-        </p>
-
-        <style jsx global>
-          {styles}
-        </style>
+        <p>Loading your order confirmation…</p>
+        <style jsx global>{styles}</style>
       </main>
     );
   }
 
   if (!orders.length) {
     return (
-      <main className="spotc-success-v6-state">
+      <main className="spotc-success-state">
         <Package size={44} />
-
         <h1>Order details not found</h1>
-
         <p>
           Open My Orders to view your latest
           purchases.
         </p>
-
         <Link
           href="/dashboard?tab=orders"
-          className="spotc-success-v6-state-link"
+          className="spotc-success-state-link"
         >
           View My Orders
         </Link>
-
-        <style jsx global>
-          {styles}
-        </style>
+        <style jsx global>{styles}</style>
       </main>
     );
   }
 
   return (
-    <main className="spotc-order-success-v6">
-      <div className="spotc-order-success-v6__shell">
-        <section className="spotc-order-success-v6__hero">
-          <div className="spotc-order-success-v6__check">
-            <CheckCircle2 size={60} />
+    <main className="spotc-order-success">
+      <div className="spotc-order-success__shell">
+        <section className="spotc-order-success__hero">
+          <div className="spotc-order-success__check">
+            <CheckCircle2 size={58} />
           </div>
 
-          <small>
-            ORDER CONFIRMED
-          </small>
+          <small>ORDER CONFIRMED</small>
 
           <h1>
-            Thank you for shopping nearby.
+            Thank you for shopping with SPOTC.
           </h1>
 
           <p>
-            Your COD order
-            {orders.length > 1
-              ? 's have'
-              : ' has'}{' '}
-            been sent to the selected shop
-            {orders.length > 1
-              ? 's'
-              : ''}
-            .
+            Your Cash on Delivery order
+            {orders.length > 1 ? 's are' : ' is'}{' '}
+            confirmed. Our local SPOTC team will
+            handle your order and delivery.
           </p>
 
-          <div className="spotc-order-success-v6__grand-total">
+          <div className="spotc-order-success__grand-total">
             <span>Total Amount</span>
-
-            <strong>
-              {money(totals.amount)}
-            </strong>
+            <strong>{money(totals.amount)}</strong>
           </div>
         </section>
 
-        <section className="spotc-order-success-v6__orders">
-          {orders.map((order) => {
-            const business =
-              order.resolvedBusiness;
+        <section className="spotc-order-success__support-card">
+          <div className="spotc-order-success__support-head">
+            <div className="spotc-order-success__support-logo">
+              S
+            </div>
 
+            <div>
+              <small>LOCAL ORDER SUPPORT</small>
+              <h2>SPOTC Karamadai</h2>
+              <span>
+                Local business. Local support.
+              </span>
+            </div>
+          </div>
+
+          <div className="spotc-order-success__address">
+            <MapPin size={18} />
+            <span>{SUPPORT_ADDRESS}</span>
+          </div>
+
+          <div className="spotc-order-success__support-actions">
+            <a href={SUPPORT_PHONE_HREF}>
+              <Phone size={17} />
+              <span>Call</span>
+            </a>
+
+            <button
+              type="button"
+              className="spotc-order-success__whatsapp-button"
+              onClick={() =>
+                setWhatsappOrderNumber(
+                  text(orders[0]?.order_number) ||
+                    text(orders[0]?.id),
+                )
+              }
+            >
+              <MessageCircle size={17} />
+              <span>WhatsApp</span>
+            </button>
+
+            <a href={`mailto:${SUPPORT_EMAIL}`}>
+              <Mail size={17} />
+              <span>Email</span>
+            </a>
+          </div>
+
+          <div className="spotc-order-success__support-details">
+            <span>
+              <strong>Phone:</strong>{' '}
+              {SUPPORT_PHONE}
+            </span>
+            <span>
+              <strong>Email:</strong>{' '}
+              {SUPPORT_EMAIL}
+            </span>
+            <a
+              href={SUPPORT_MAP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View support location on Google Maps
+            </a>
+          </div>
+        </section>
+
+        <section className="spotc-order-success__orders">
+          {orders.map((order) => {
             const orderNumber =
               text(order.order_number) ||
               order.id;
 
-            const callLink =
-              phoneHref(business.phone);
-
-            const whatsappLink =
-              whatsappHref(
-                business.whatsapp,
-                business.name,
-                orderNumber,
-              );
-
-            const directionLink =
-              mapsHref(order);
-
-            const distance =
-              distanceLabel(order);
-
             return (
               <article
-                className="spotc-order-success-v6__order-card"
+                className="spotc-order-success__order-card"
                 key={order.id}
               >
-                <header className="spotc-order-success-v6__order-head">
-                  <div className="spotc-order-success-v6__business">
-                    {business.logo ? (
-                      <img
-                        src={business.logo}
-                        alt={
-                          business.name
-                        }
-                      />
-                    ) : (
-                      <span className="spotc-order-success-v6__business-fallback">
-                        <Store size={24} />
-                      </span>
-                    )}
-
-                    <div>
-                      <small>
-                        Order sent to
-                      </small>
-
-                      <h2>
-                        {business.name}
-                      </h2>
-
-                      {distance && (
-                        <span className="spotc-order-success-v6__distance">
-                          <MapPin size={13} />
-                          {distance}
-                        </span>
-                      )}
-                    </div>
+                <header className="spotc-order-success__order-head">
+                  <div>
+                    <small>ORDER NUMBER</small>
+                    <strong>{orderNumber}</strong>
                   </div>
 
-                  <div className="spotc-order-success-v6__order-number">
-                    <small>
-                      ORDER NUMBER
-                    </small>
-
-                    <strong>
-                      {orderNumber}
-                    </strong>
-                  </div>
+                  <button
+                    type="button"
+                    className="spotc-order-success__order-whatsapp"
+                    onClick={() =>
+                      setWhatsappOrderNumber(
+                        orderNumber,
+                      )
+                    }
+                  >
+                    <MessageCircle size={16} />
+                    Need help?
+                  </button>
                 </header>
 
-                {business.address ? (
-                  <div className="spotc-order-success-v6__business-address">
-                    <MapPin size={18} />
-
-                    <span>
-                      {business.address}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="spotc-order-success-v6__business-address spotc-order-success-v6__business-address--missing">
-                    <MapPin size={18} />
-
-                    <span>
-                      Business address has not
-                      been added yet.
-                    </span>
-                  </div>
-                )}
-
-                <div className="spotc-order-success-v6__business-actions">
-                  {callLink ? (
-                    <a href={callLink}>
-                      <Phone size={17} />
-                      Call
-                    </a>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled
-                    >
-                      <Phone size={17} />
-                      Call unavailable
-                    </button>
-                  )}
-
-                  {whatsappLink ? (
-                    <a
-                      href={whatsappLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <MessageCircle
-                        size={17}
-                      />
-                      WhatsApp
-                    </a>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled
-                    >
-                      <MessageCircle
-                        size={17}
-                      />
-                      WhatsApp unavailable
-                    </button>
-                  )}
-
-                  {directionLink ? (
-                    <a
-                      href={directionLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Navigation size={17} />
-                      Directions
-                      <ExternalLink size={13} />
-                    </a>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled
-                    >
-                      <Navigation size={17} />
-                      Directions unavailable
-                    </button>
-                  )}
-                </div>
-
-                <div className="spotc-order-success-v6__meta">
+                <div className="spotc-order-success__meta">
                   <span>
                     Status:{' '}
                     <strong>
                       {order.order_status ||
-                        'placed'}
+                        'Placed'}
                     </strong>
                   </span>
 
@@ -1357,46 +583,38 @@ export default function OrderSuccessPage() {
 
                   <b>
                     {money(
-                      Number(
-                        order.total || 0,
-                      ),
+                      Number(order.total || 0),
                     )}
                   </b>
                 </div>
 
-                <div className="spotc-order-success-v6__delivery">
+                <div className="spotc-order-success__delivery">
                   <Truck size={19} />
-
                   <span>
                     Estimated delivery:{' '}
                     {order.estimated_delivery ||
-                      '15–45 mins'}
+                      'As selected at checkout'}
                   </span>
                 </div>
 
-                <div className="spotc-order-success-v6__products">
+                <div className="spotc-order-success__products">
                   {(order.items || []).map(
                     (item, index) => {
-                      const quantity =
-                        Number(
-                          item.quantity ||
-                            item.qty ||
-                            1,
-                        );
+                      const quantity = Number(
+                        item.quantity ||
+                          item.qty ||
+                          1,
+                      );
 
-                      const itemTotal =
-                        Number(
-                          item.subtotal ||
-                            Number(
-                              item.price ||
-                                0,
-                            ) *
-                              quantity,
-                        );
+                      const itemTotal = Number(
+                        item.subtotal ||
+                          Number(item.price || 0) *
+                            quantity,
+                      );
 
                       return (
                         <div
-                          className="spotc-order-success-v6__product"
+                          className="spotc-order-success__product"
                           key={`${item.id || 'item'}-${index}`}
                         >
                           {item.image ? (
@@ -1408,10 +626,8 @@ export default function OrderSuccessPage() {
                               }
                             />
                           ) : (
-                            <span className="spotc-order-success-v6__product-fallback">
-                              <Package
-                                size={23}
-                              />
+                            <span className="spotc-order-success__product-fallback">
+                              <Package size={23} />
                             </span>
                           )}
 
@@ -1420,17 +636,12 @@ export default function OrderSuccessPage() {
                               {item.title ||
                                 'Product'}
                             </strong>
-
                             <small>
                               Qty {quantity}
                             </small>
                           </div>
 
-                          <b>
-                            {money(
-                              itemTotal,
-                            )}
-                          </b>
+                          <b>{money(itemTotal)}</b>
                         </div>
                       );
                     },
@@ -1442,29 +653,31 @@ export default function OrderSuccessPage() {
         </section>
 
         {selectedFreeGifts.length > 0 && (
-          <section className="spotc-order-success-v6__free-gifts">
-            <div className="spotc-order-success-v6__free-gifts-head">
+          <section className="spotc-order-success__free-gifts">
+            <div className="spotc-order-success__free-gifts-head">
               <Gift size={22} />
-
               <div>
                 <strong>
                   {selectedFreeGifts.length} FREE Gift
-                  {selectedFreeGifts.length === 1 ? '' : 's'} Included
+                  {selectedFreeGifts.length === 1
+                    ? ''
+                    : 's'}{' '}
+                  Included
                 </strong>
-
                 <p>
-                  Your selected gifts are included at no extra cost.
+                  Your selected gifts are included
+                  at no extra cost.
                 </p>
               </div>
             </div>
 
-            <div className="spotc-order-success-v6__free-gifts-list">
+            <div className="spotc-order-success__free-gifts-list">
               {selectedFreeGifts.map((gift) => (
                 <article
-                  className="spotc-order-success-v6__free-gift"
+                  className="spotc-order-success__free-gift"
                   key={gift.id}
                 >
-                  <div className="spotc-order-success-v6__free-gift-image">
+                  <div className="spotc-order-success__free-gift-image">
                     {gift.image ? (
                       <img
                         src={gift.image}
@@ -1485,10 +698,10 @@ export default function OrderSuccessPage() {
           </section>
         )}
 
-        <nav className="spotc-order-success-v6__actions">
+        <nav className="spotc-order-success__actions">
           <Link
             href="/dashboard?tab=orders"
-            className="spotc-order-success-v6__orders-button"
+            className="spotc-order-success__orders-button"
           >
             <ReceiptText size={19} />
             View My Orders
@@ -1496,801 +709,754 @@ export default function OrderSuccessPage() {
 
           <Link
             href="/shop"
-            className="spotc-order-success-v6__shopping-button"
+            className="spotc-order-success__shopping-button"
           >
             Continue Shopping
           </Link>
         </nav>
       </div>
 
-      <style jsx global>
-        {styles}
-      </style>
+      {whatsappOrderNumber && (
+        <div
+          className="spotc-whatsapp-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="spotc-whatsapp-title"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) {
+              setWhatsappOrderNumber(null);
+            }
+          }}
+        >
+          <div className="spotc-whatsapp-modal">
+            <button
+              type="button"
+              className="spotc-whatsapp-close"
+              aria-label="Close WhatsApp support"
+              onClick={() =>
+                setWhatsappOrderNumber(null)
+              }
+            >
+              <X size={20} />
+            </button>
+
+            <div className="spotc-whatsapp-modal-icon">
+              <MessageCircle size={23} />
+            </div>
+
+            <div className="spotc-whatsapp-modal-heading">
+              <small>SPOTC WHATSAPP SUPPORT</small>
+              <h2 id="spotc-whatsapp-title">
+                How can we help?
+              </h2>
+              <p>
+                Order: {whatsappOrderNumber}
+              </p>
+            </div>
+
+            <div className="spotc-whatsapp-questions">
+              {whatsappQuestions.map(
+                (question) => (
+                  <a
+                    key={question.label}
+                    href={whatsappHref(
+                      question.message(
+                        whatsappOrderNumber,
+                      ),
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() =>
+                      setWhatsappOrderNumber(null)
+                    }
+                  >
+                    <span>{question.label}</span>
+                    <span aria-hidden="true">›</span>
+                  </a>
+                ),
+              )}
+            </div>
+
+            <p className="spotc-whatsapp-number">
+              WhatsApp support: {SUPPORT_PHONE}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <style jsx global>{styles}</style>
     </main>
   );
 }
 
 const styles = `
-  .spotc-order-success-v6,
-  .spotc-order-success-v6 *,
-  .spotc-order-success-v6 *::before,
-  .spotc-order-success-v6 *::after {
-    box-sizing: border-box !important;
+  .spotc-order-success,
+  .spotc-order-success *,
+  .spotc-order-success *::before,
+  .spotc-order-success *::after {
+    box-sizing: border-box;
   }
 
-  .spotc-order-success-v6 {
-    width: 100% !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding:
-      46px 20px
-      max(
-        24px,
-        env(safe-area-inset-bottom)
-      ) !important;
-
-    display: block !important;
-
-    color: #24201c !important;
-
+  .spotc-order-success {
+    width: 100%;
+    min-height: 100vh;
+    padding: 42px 20px 32px;
+    color: #24201c;
     background:
-      radial-gradient(
-        circle at top center,
-        rgba(34, 197, 94, 0.07),
-        transparent 28rem
-      ),
-      #f7f5f1 !important;
+      radial-gradient(circle at top center, rgba(34, 197, 94, 0.07), transparent 30rem),
+      #f7f5f1;
   }
 
-  .spotc-order-success-v6__shell {
-    width: min(980px, 100%) !important;
-    margin: 0 auto !important;
-    padding: 0 !important;
-
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: stretch !important;
+  .spotc-order-success__shell {
+    width: min(980px, 100%);
+    margin: 0 auto;
   }
 
-  .spotc-order-success-v6__hero {
-    width: 100% !important;
-
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-
-    text-align: center !important;
+  .spotc-order-success__hero {
+    text-align: center;
   }
 
-  .spotc-order-success-v6__check {
-    width: 94px !important;
-    height: 94px !important;
-
-    display: grid !important;
-    place-items: center !important;
-
-    border: 2px solid
-      rgba(
-        25,
-        157,
-        79,
-        0.28
-      ) !important;
-
-    border-radius: 50% !important;
-
-    color: #199d4f !important;
-    background: #edf9f1 !important;
+  .spotc-order-success__check {
+    width: 86px;
+    height: 86px;
+    margin: 0 auto;
+    display: grid;
+    place-items: center;
+    border: 2px solid rgba(25, 157, 79, 0.28);
+    border-radius: 50%;
+    color: #199d4f;
+    background: #edf9f1;
   }
 
-  .spotc-order-success-v6__hero
-    > small {
-    margin-top: 20px !important;
-
-    color: #ad620d !important;
-
-    font-size: 11px !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.15em !important;
+  .spotc-order-success__hero > small {
+    display: block;
+    margin-top: 16px;
+    color: #ad620d;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.15em;
   }
 
-  .spotc-order-success-v6__hero h1 {
-    max-width: 720px !important;
-    margin: 18px auto 10px !important;
-
-    color: #211d19 !important;
-
-    font-size: clamp(
-      38px,
-      6vw,
-      64px
-    ) !important;
-
-    line-height: 1.02 !important;
-    font-weight: 650 !important;
-    letter-spacing: -0.045em !important;
+  .spotc-order-success__hero h1 {
+    max-width: 760px;
+    margin: 14px auto 8px;
+    color: #211d19;
+    font-size: clamp(36px, 5vw, 58px);
+    line-height: 1.04;
+    font-weight: 750;
+    letter-spacing: -0.04em;
   }
 
-  .spotc-order-success-v6__hero p {
-    max-width: 680px !important;
-    margin: 0 auto !important;
-
-    color: #6f665e !important;
-
-    font-size: 16px !important;
-    line-height: 1.5 !important;
+  .spotc-order-success__hero p {
+    max-width: 700px;
+    margin: 0 auto;
+    color: #6f665e;
+    font-size: 15px;
+    line-height: 1.55;
   }
 
-  .spotc-order-success-v6__grand-total {
-    width: min(
-      370px,
-      100%
-    ) !important;
-
-    min-height: 56px !important;
-
-    margin: 24px auto 0 !important;
-    padding: 14px 16px !important;
-
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    gap: 16px !important;
-
-    border: 1px solid
-      #d9eee0 !important;
-
-    border-radius: 16px !important;
-
-    background: #eaf8ef !important;
+  .spotc-order-success__grand-total {
+    width: min(370px, 100%);
+    min-height: 56px;
+    margin: 22px auto 0;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border: 1px solid #d9eee0;
+    border-radius: 16px;
+    background: #eaf8ef;
   }
 
-  .spotc-order-success-v6__grand-total
-    span {
-    color: #4d5f54 !important;
-    font-size: 14px !important;
+  .spotc-order-success__grand-total span {
+    color: #4d5f54;
+    font-size: 14px;
   }
 
-  .spotc-order-success-v6__grand-total
-    strong {
-    color: #167b42 !important;
-    font-size: 19px !important;
-    font-weight: 700 !important;
+  .spotc-order-success__grand-total strong {
+    color: #167b42;
+    font-size: 20px;
   }
 
-  .spotc-order-success-v6__orders {
-    width: 100% !important;
-    margin-top: 30px !important;
-
-    display: grid !important;
-    grid-template-columns:
-      1fr !important;
-    gap: 18px !important;
+  .spotc-order-success__support-card,
+  .spotc-order-success__order-card,
+  .spotc-order-success__free-gifts {
+    border: 1px solid #e3dbd2;
+    border-radius: 20px;
+    background: #fff;
+    box-shadow: 0 14px 36px rgba(48, 34, 22, 0.05);
   }
 
-  .spotc-order-success-v6__order-card {
-    width: 100% !important;
-    padding: 22px !important;
-
-    display: block !important;
-
-    border: 1px solid
-      #e3dbd2 !important;
-
-    border-radius: 22px !important;
-
-    background: #ffffff !important;
-
-    box-shadow:
-      0 14px 36px
-      rgba(
-        48,
-        34,
-        22,
-        0.06
-      ) !important;
+  .spotc-order-success__support-card {
+    margin-top: 28px;
+    padding: 20px;
   }
 
-  .spotc-order-success-v6__order-head {
-    width: 100% !important;
-
-    display: flex !important;
-    align-items: flex-start !important;
-    justify-content: space-between !important;
-    gap: 22px !important;
+  .spotc-order-success__support-head {
+    display: flex;
+    align-items: center;
+    gap: 13px;
   }
 
-  .spotc-order-success-v6__business {
-    min-width: 0 !important;
-
-    display: flex !important;
-    align-items: flex-start !important;
-    gap: 13px !important;
+  .spotc-order-success__support-logo {
+    width: 54px;
+    height: 54px;
+    flex: 0 0 54px;
+    display: grid;
+    place-items: center;
+    border-radius: 15px;
+    color: #fff;
+    background: #4b1715;
+    font-size: 22px;
+    font-weight: 900;
   }
 
-  .spotc-order-success-v6__business
-    img,
-  .spotc-order-success-v6__business-fallback {
-    width: 72px !important;
-    height: 72px !important;
-    flex: 0 0 72px !important;
-
-    display: grid !important;
-    place-items: center !important;
-
-    object-fit: cover !important;
-
-    border-radius: 18px !important;
-
-    color: #6f655c !important;
-    background: #f1eee9 !important;
+  .spotc-order-success__support-head small {
+    display: block;
+    color: #876f62;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
   }
 
-  .spotc-order-success-v6__business
-    small,
-  .spotc-order-success-v6__order-number
-    small {
-    display: block !important;
-
-    color: #776d64 !important;
-
-    font-size: 10px !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.07em !important;
+  .spotc-order-success__support-head h2 {
+    margin: 2px 0 2px;
+    font-size: 20px;
+    line-height: 1.2;
   }
 
-  .spotc-order-success-v6__business
-    h2 {
-    margin: 4px 0 0 !important;
-
-    color: #211d19 !important;
-
-    font-size: 23px !important;
-    font-weight: 650 !important;
+  .spotc-order-success__support-head span {
+    color: #677066;
+    font-size: 12px;
   }
 
-  .spotc-order-success-v6__distance {
-    margin-top: 7px !important;
-
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 4px !important;
-
-    color: #157c41 !important;
-
-    font-size: 11px !important;
-    font-weight: 600 !important;
+  .spotc-order-success__address {
+    margin-top: 16px;
+    padding: 13px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    border-radius: 13px;
+    color: #675e56;
+    background: #faf8f5;
+    font-size: 13px;
+    line-height: 1.5;
   }
 
-  .spotc-order-success-v6__order-number {
-    min-width: 0 !important;
-    text-align: right !important;
+  .spotc-order-success__address svg {
+    flex: 0 0 auto;
+    color: #d06c12;
   }
 
-  .spotc-order-success-v6__order-number
-    strong {
-    display: block !important;
-
-    max-width: 300px !important;
-
-    margin-top: 4px !important;
-
-    overflow-wrap: anywhere !important;
-
-    color: #29241f !important;
-
-    font-size: 15px !important;
-    font-weight: 650 !important;
+  .spotc-order-success__support-actions {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px;
   }
 
-  .spotc-order-success-v6__business-address {
-    margin-top: 16px !important;
-    padding: 13px 14px !important;
-
-    display: flex !important;
-    align-items: flex-start !important;
-    gap: 9px !important;
-
-    border-radius: 14px !important;
-
-    color: #675e56 !important;
-    background: #faf8f5 !important;
-
-    font-size: 13px !important;
-    line-height: 1.45 !important;
+  .spotc-order-success__support-actions a,
+  .spotc-order-success__support-actions button {
+    min-height: 44px;
+    padding: 9px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid #ded6ce;
+    border-radius: 13px;
+    color: #29241f;
+    background: #fff;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 750;
+    text-decoration: none;
+    cursor: pointer;
   }
 
-  .spotc-order-success-v6__business-address
-    svg {
-    flex: 0 0 auto !important;
-    color: #d06c12 !important;
-  }
-
-  .spotc-order-success-v6__business-address--missing {
-    color: #8d837a !important;
-    background: #fbfaf8 !important;
-  }
-
-  .spotc-order-success-v6__business-actions {
-    margin-top: 12px !important;
-
-    display: grid !important;
-    grid-template-columns:
-      repeat(
-        3,
-        minmax(0, 1fr)
-      ) !important;
-
-    gap: 9px !important;
-  }
-
-  .spotc-order-success-v6__business-actions
-    a,
-  .spotc-order-success-v6__business-actions
-    button {
-    min-height: 44px !important;
-    padding: 9px 12px !important;
-
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 7px !important;
-
-    border: 1px solid
-      #ded6ce !important;
-
-    border-radius: 13px !important;
-
-    color: #29241f !important;
-    background: #ffffff !important;
-
-    text-decoration: none !important;
-
-    font-size: 12px !important;
-    font-weight: 650 !important;
-
-    white-space: nowrap !important;
-  }
-
-  .spotc-order-success-v6__business-actions
-    a:nth-child(2) {
+  .spotc-order-success__whatsapp-button {
     color: #137a40 !important;
     border-color: #c8e8d3 !important;
     background: #eff9f2 !important;
   }
 
-  .spotc-order-success-v6__business-actions
-    button:disabled {
-    opacity: 0.45 !important;
-    cursor: not-allowed !important;
+  .spotc-order-success__support-details {
+    margin-top: 13px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    color: #6b625a;
+    font-size: 12px;
   }
 
-  .spotc-order-success-v6__meta {
-    width: 100% !important;
-
-    margin-top: 14px !important;
-    padding: 14px 15px !important;
-
-    display: flex !important;
-    align-items: center !important;
-    flex-wrap: wrap !important;
-
-    gap: 12px 22px !important;
-
-    border-radius: 14px !important;
-
-    background: #faf8f5 !important;
+  .spotc-order-success__support-details a {
+    color: #7c5819;
+    font-weight: 750;
+    text-decoration: none;
   }
 
-  .spotc-order-success-v6__meta
-    span {
-    color: #625951 !important;
-    font-size: 13px !important;
+  .spotc-order-success__orders {
+    margin-top: 18px;
+    display: grid;
+    gap: 18px;
   }
 
-  .spotc-order-success-v6__meta
-    span strong {
-    color: #28231f !important;
-    text-transform: capitalize !important;
+  .spotc-order-success__order-card {
+    padding: 20px;
   }
 
-  .spotc-order-success-v6__meta
-    > b {
-    margin-left: auto !important;
-
-    color: #211d19 !important;
-
-    font-size: 17px !important;
+  .spotc-order-success__order-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
   }
 
-  .spotc-order-success-v6__delivery {
-    width: 100% !important;
-
-    margin-top: 14px !important;
-    padding: 13px 14px !important;
-
-    display: flex !important;
-    align-items: center !important;
-    gap: 9px !important;
-
-    border-radius: 14px !important;
-
-    color: #137b40 !important;
-    background: #edf9f1 !important;
-
-    font-size: 13px !important;
-    font-weight: 550 !important;
+  .spotc-order-success__order-head small {
+    display: block;
+    color: #776d64;
+    font-size: 9px;
+    font-weight: 750;
+    letter-spacing: 0.08em;
   }
 
-  .spotc-order-success-v6__products {
-    width: 100% !important;
-    margin-top: 14px !important;
-
-    display: grid !important;
-    grid-template-columns:
-      1fr !important;
-
-    gap: 10px !important;
+  .spotc-order-success__order-head strong {
+    display: block;
+    margin-top: 3px;
+    overflow-wrap: anywhere;
+    font-size: 15px;
   }
 
-  .spotc-order-success-v6__product {
-    width: 100% !important;
-    padding: 10px !important;
-
-    display: grid !important;
-    grid-template-columns:
-      56px minmax(
-        0,
-        1fr
-      ) auto !important;
-
-    align-items: center !important;
-    gap: 12px !important;
-
-    border: 1px solid
-      #ebe5de !important;
-
-    border-radius: 15px !important;
-
-    background: #ffffff !important;
+  .spotc-order-success__order-whatsapp {
+    min-height: 38px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #c8e8d3;
+    border-radius: 11px;
+    color: #137a40;
+    background: #eff9f2;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
   }
 
-  .spotc-order-success-v6__product
-    img,
-  .spotc-order-success-v6__product-fallback {
-    width: 56px !important;
-    height: 56px !important;
-
-    display: grid !important;
-    place-items: center !important;
-
-    object-fit: cover !important;
-
-    border-radius: 12px !important;
-
-    color: #9d9288 !important;
-    background: #f1eee9 !important;
+  .spotc-order-success__meta {
+    margin-top: 14px;
+    padding: 13px 14px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px 22px;
+    border-radius: 13px;
+    background: #faf8f5;
   }
 
-  .spotc-order-success-v6__product
-    > div {
-    min-width: 0 !important;
+  .spotc-order-success__meta span {
+    color: #625951;
+    font-size: 13px;
   }
 
-  .spotc-order-success-v6__product
-    > div strong {
-    display: block !important;
-
-    overflow: hidden !important;
-
-    color: #24201c !important;
-
-    font-size: 14px !important;
-    font-weight: 600 !important;
-
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
+  .spotc-order-success__meta span strong {
+    color: #28231f;
+    text-transform: capitalize;
   }
 
-  .spotc-order-success-v6__product
-    small {
-    display: block !important;
-    margin-top: 4px !important;
-
-    color: #756b62 !important;
-
-    font-size: 11px !important;
+  .spotc-order-success__meta > b {
+    margin-left: auto;
+    font-size: 17px;
   }
 
-  .spotc-order-success-v6__product
-    > b {
-    color: #24201c !important;
-
-    font-size: 14px !important;
-    font-weight: 650 !important;
+  .spotc-order-success__delivery {
+    margin-top: 12px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border-radius: 13px;
+    color: #137b40;
+    background: #edf9f1;
+    font-size: 13px;
+    font-weight: 650;
   }
 
-  .spotc-order-success-v6__free-gifts {
-    width: 100% !important;
-    margin-top: 20px !important;
-    padding: 18px 20px !important;
-
-    border: 1px solid
-      #cfe8d7 !important;
-
-    border-radius: 18px !important;
-
-    background: #f7fcf8 !important;
+  .spotc-order-success__products {
+    margin-top: 12px;
+    display: grid;
+    gap: 9px;
   }
 
-  .spotc-order-success-v6__free-gifts-head {
-    display: flex !important;
-    align-items: flex-start !important;
-    gap: 12px !important;
-
-    color: #176d3d !important;
+  .spotc-order-success__product {
+    padding: 9px;
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid #ebe5de;
+    border-radius: 14px;
+    background: #fff;
   }
 
-  .spotc-order-success-v6__free-gifts-head
-    strong {
-    display: block !important;
-    font-size: 15px !important;
-    font-weight: 600 !important;
+  .spotc-order-success__product img,
+  .spotc-order-success__product-fallback {
+    width: 56px;
+    height: 56px;
+    display: grid;
+    place-items: center;
+    object-fit: cover;
+    border-radius: 11px;
+    color: #9d9288;
+    background: #f1eee9;
   }
 
-  .spotc-order-success-v6__free-gifts-head
-    p {
-    margin: 4px 0 0 !important;
-    color: #5e7465 !important;
-    font-size: 13px !important;
+  .spotc-order-success__product > div {
+    min-width: 0;
   }
 
-  .spotc-order-success-v6__free-gifts-list {
-    margin-top: 14px !important;
-
-    display: grid !important;
-    grid-template-columns:
-      repeat(
-        2,
-        minmax(0, 1fr)
-      ) !important;
-    gap: 10px !important;
+  .spotc-order-success__product strong {
+    display: block;
+    overflow: hidden;
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .spotc-order-success-v6__free-gift {
-    min-width: 0 !important;
-    padding: 10px !important;
-
-    display: grid !important;
-    grid-template-columns:
-      54px minmax(0, 1fr) !important;
-    align-items: center !important;
-    gap: 11px !important;
-
-    border: 1px solid
-      #dcecdf !important;
-    border-radius: 13px !important;
-
-    background: #ffffff !important;
+  .spotc-order-success__product small {
+    display: block;
+    margin-top: 3px;
+    color: #756b62;
+    font-size: 11px;
   }
 
-  .spotc-order-success-v6__free-gift-image {
-    width: 54px !important;
-    height: 54px !important;
-
-    overflow: hidden !important;
-
-    display: grid !important;
-    place-items: center !important;
-
-    border-radius: 10px !important;
-
-    color: #6f9178 !important;
-    background: #f7fcf8 !important;
+  .spotc-order-success__product > b {
+    font-size: 14px;
   }
 
-  .spotc-order-success-v6__free-gift-image
-    img {
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: contain !important;
+  .spotc-order-success__free-gifts {
+    margin-top: 18px;
+    padding: 18px 20px;
+    border-color: #cfe8d7;
+    background: #f7fcf8;
   }
 
-  .spotc-order-success-v6__free-gift
-    strong {
-    display: block !important;
-
-    overflow: hidden !important;
-
-    color: #24201c !important;
-
-    font-size: 13px !important;
-    font-weight: 500 !important;
-
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
+  .spotc-order-success__free-gifts-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    color: #176d3d;
   }
 
-  .spotc-order-success-v6__free-gift
-    span {
-    display: inline-block !important;
-    margin-top: 5px !important;
-
-    color: #168648 !important;
-
-    font-size: 12px !important;
-    font-weight: 600 !important;
+  .spotc-order-success__free-gifts-head strong {
+    display: block;
+    font-size: 15px;
   }
 
-  .spotc-order-success-v6__actions {
-    width: 100% !important;
-    margin-top: 22px !important;
-
-    display: grid !important;
-    grid-template-columns:
-      repeat(
-        2,
-        minmax(0, 1fr)
-      ) !important;
-
-    gap: 12px !important;
+  .spotc-order-success__free-gifts-head p {
+    margin: 3px 0 0;
+    color: #5e7465;
+    font-size: 12px;
   }
 
-  .spotc-order-success-v6__actions
-    a {
-    width: 100% !important;
-    min-height: 54px !important;
-    padding: 12px 18px !important;
-
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 9px !important;
-
-    border-radius: 15px !important;
-
-    text-decoration: none !important;
-
-    writing-mode: horizontal-tb !important;
-    white-space: nowrap !important;
-
-    font-size: 14px !important;
-    font-weight: 700 !important;
+  .spotc-order-success__free-gifts-list {
+    margin-top: 13px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
 
-  .spotc-order-success-v6__orders-button {
-    color: #ffffff !important;
-    border: 1px solid
-      #171717 !important;
-    background: #171717 !important;
+  .spotc-order-success__free-gift {
+    min-width: 0;
+    padding: 9px;
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    border: 1px solid #dcecdf;
+    border-radius: 12px;
+    background: #fff;
   }
 
-  .spotc-order-success-v6__shopping-button {
-    color: #29241f !important;
-    border: 1px solid
-      #d9d1c9 !important;
-    background: #ffffff !important;
+  .spotc-order-success__free-gift-image {
+    width: 54px;
+    height: 54px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    color: #6f9178;
+    background: #f7fcf8;
   }
 
-  .spotc-success-v6-state {
-    min-height: 100vh !important;
-    padding: 30px !important;
-
-    display: grid !important;
-    place-content: center !important;
-    justify-items: center !important;
-
-    gap: 12px !important;
-
-    color: #24201c !important;
-    text-align: center !important;
-
-    background: #f7f5f1 !important;
+  .spotc-order-success__free-gift-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
   }
 
-  .spotc-success-v6-state-link {
-    margin-top: 8px !important;
-    padding: 12px 18px !important;
-
-    border-radius: 13px !important;
-
-    color: #ffffff !important;
-    background: #171717 !important;
-
-    text-decoration: none !important;
-    font-weight: 650 !important;
+  .spotc-order-success__free-gift strong {
+    display: block;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .spotc-success-v6-spin {
-    color: #199d4f !important;
-
-    animation:
-      spotcSuccessV6Spin
-      0.8s linear infinite !important;
+  .spotc-order-success__free-gift span {
+    display: inline-block;
+    margin-top: 4px;
+    color: #168648;
+    font-size: 12px;
+    font-weight: 800;
   }
 
-  @keyframes spotcSuccessV6Spin {
+  .spotc-order-success__actions {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .spotc-order-success__actions a {
+    min-height: 52px;
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    border-radius: 14px;
+    font-size: 14px;
+    font-weight: 800;
+    text-decoration: none;
+  }
+
+  .spotc-order-success__orders-button {
+    color: #fff;
+    background: #171717;
+  }
+
+  .spotc-order-success__shopping-button {
+    border: 1px solid #d9d1c9;
+    color: #29241f;
+    background: #fff;
+  }
+
+  .spotc-whatsapp-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    padding: 18px;
+    display: grid;
+    place-items: center;
+    background: rgba(18, 16, 14, 0.58);
+    backdrop-filter: blur(3px);
+  }
+
+  .spotc-whatsapp-modal {
+    position: relative;
+    width: min(440px, 100%);
+    max-height: calc(100vh - 36px);
+    overflow-y: auto;
+    padding: 24px;
+    border-radius: 20px;
+    background: #fff;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  }
+
+  .spotc-whatsapp-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    color: #4f4841;
+    background: #f2eee8;
+    cursor: pointer;
+  }
+
+  .spotc-whatsapp-modal-icon {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: #fff;
+    background: #168b3c;
+  }
+
+  .spotc-whatsapp-modal-heading {
+    margin-top: 12px;
+  }
+
+  .spotc-whatsapp-modal-heading small {
+    color: #168b3c;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+  }
+
+  .spotc-whatsapp-modal-heading h2 {
+    margin: 3px 0 3px;
+    font-size: 24px;
+  }
+
+  .spotc-whatsapp-modal-heading p {
+    margin: 0;
+    color: #756e66;
+    font-size: 12px;
+  }
+
+  .spotc-whatsapp-questions {
+    margin-top: 16px;
+    display: grid;
+    gap: 7px;
+  }
+
+  .spotc-whatsapp-questions a {
+    min-height: 48px;
+    padding: 0 13px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid #e8e2da;
+    border-radius: 11px;
+    color: #24211d;
+    background: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .spotc-whatsapp-questions a:hover {
+    border-color: #cfe1d2;
+    background: #f4fbf5;
+  }
+
+  .spotc-whatsapp-questions a span:last-child {
+    color: #168b3c;
+    font-size: 22px;
+  }
+
+  .spotc-whatsapp-number {
+    margin: 14px 0 0;
+    color: #766e67;
+    font-size: 11px;
+    text-align: center;
+  }
+
+  .spotc-success-state {
+    min-height: 100vh;
+    padding: 30px;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 12px;
+    color: #24201c;
+    text-align: center;
+    background: #f7f5f1;
+  }
+
+  .spotc-success-state-link {
+    margin-top: 8px;
+    padding: 12px 18px;
+    border-radius: 13px;
+    color: #fff;
+    background: #171717;
+    text-decoration: none;
+    font-weight: 700;
+  }
+
+  .spotc-success-spin {
+    color: #199d4f;
+    animation: spotcSuccessSpin 0.8s linear infinite;
+  }
+
+  @keyframes spotcSuccessSpin {
     to {
-      transform: rotate(
-        360deg
-      );
+      transform: rotate(360deg);
     }
   }
 
-  body:has(.spotc-order-success-v6)
-    .spotc-footer {
+  body:has(.spotc-order-success) .spotc-footer {
     margin-top: 0 !important;
   }
 
   @media (max-width: 680px) {
-    .spotc-order-success-v6 {
-      padding:
-        28px 12px
-        max(
-          18px,
-          env(
-            safe-area-inset-bottom
-          )
-        ) !important;
+    .spotc-order-success {
+      padding: 26px 12px max(18px, env(safe-area-inset-bottom));
     }
 
-    .spotc-order-success-v6__free-gifts-list {
-      grid-template-columns:
-        1fr !important;
+    .spotc-order-success__hero h1 {
+      font-size: 38px;
     }
 
-    .spotc-order-success-v6__hero
-      h1 {
-      font-size: 40px !important;
+    .spotc-order-success__support-card,
+    .spotc-order-success__order-card {
+      padding: 16px;
     }
 
-    .spotc-order-success-v6__order-card {
-      padding: 16px !important;
+    .spotc-order-success__support-actions {
+      grid-template-columns: 1fr;
     }
 
-    .spotc-order-success-v6__order-head {
-      display: block !important;
+    .spotc-order-success__support-details {
+      display: grid;
+      gap: 5px;
     }
 
-    .spotc-order-success-v6__order-number {
-      margin-top: 15px !important;
-      text-align: left !important;
+    .spotc-order-success__order-head {
+      align-items: flex-start;
     }
 
-    .spotc-order-success-v6__business-actions {
-      grid-template-columns:
-        1fr !important;
+    .spotc-order-success__meta > b {
+      width: 100%;
+      margin-left: 0;
     }
 
-    .spotc-order-success-v6__meta
-      > b {
-      width: 100% !important;
-      margin-left: 0 !important;
+    .spotc-order-success__product {
+      grid-template-columns: 52px minmax(0, 1fr);
     }
 
-    .spotc-order-success-v6__product {
-      grid-template-columns:
-        52px minmax(
-          0,
-          1fr
-        ) !important;
+    .spotc-order-success__product img,
+    .spotc-order-success__product-fallback {
+      width: 52px;
+      height: 52px;
     }
 
-    .spotc-order-success-v6__product
-      img,
-    .spotc-order-success-v6__product-fallback {
-      width: 52px !important;
-      height: 52px !important;
+    .spotc-order-success__product > b {
+      grid-column: 2;
     }
 
-    .spotc-order-success-v6__product
-      > b {
-      grid-column: 2 !important;
+    .spotc-order-success__free-gifts-list,
+    .spotc-order-success__actions {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 430px) {
+    .spotc-order-success__hero h1 {
+      font-size: 32px;
     }
 
-    .spotc-order-success-v6__actions {
-      grid-template-columns:
-        1fr !important;
+    .spotc-order-success__order-head {
+      display: grid;
+    }
+
+    .spotc-order-success__order-whatsapp {
+      width: fit-content;
+    }
+
+    .spotc-whatsapp-modal {
+      padding: 20px 16px 16px;
+      border-radius: 18px;
     }
   }
 `;
