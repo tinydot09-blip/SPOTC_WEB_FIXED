@@ -687,7 +687,20 @@ export default function ProductDetailPage() {
   });
   const [size, setSize] = useState('');
   const [color, setColor] = useState('');
-  const [qty, setQty] = useState(1);
+
+  const quantityStorageKey = `spotc-product-qty:${String(id || '')}`;
+
+  const [qty, setQty] = useState(() => {
+    if (typeof window === 'undefined') return 1;
+
+    const storedQty = Number(
+      window.sessionStorage.getItem(quantityStorageKey),
+    );
+
+    return Number.isFinite(storedQty) && storedQty >= 1
+      ? Math.floor(storedQty)
+      : 1;
+  });
   const [saved, setSaved] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [openAccordion, setOpenAccordion] = useState<AccordionKey>('description');
@@ -724,7 +737,6 @@ export default function ProductDetailPage() {
   const [changingGiftIndex, setChangingGiftIndex] = useState<number | null>(null);
   const giftProductsRef = useRef<HTMLDivElement | null>(null);
   const viewItemTrackedRef = useRef('');
-  const quantityProductIdRef = useRef('');
   const [tryOnOpen, setTryOnOpen] = useState(false);
 const [tryOnImage, setTryOnImage] = useState<File | null>(null);
 const [tryOnPreview, setTryOnPreview] = useState('');
@@ -922,15 +934,19 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
   }, [id]);
 
   useEffect(() => {
-    const productId = String(id || '');
+    if (typeof window === 'undefined') return;
 
-    if (!productId) return;
+    const storedQty = Number(
+      window.sessionStorage.getItem(quantityStorageKey),
+    );
 
-    if (quantityProductIdRef.current !== productId) {
-      quantityProductIdRef.current = productId;
-      setQty(1);
-    }
-  }, [id]);
+    const nextQty =
+      Number.isFinite(storedQty) && storedQty >= 1
+        ? Math.floor(storedQty)
+        : 1;
+
+    setQty(nextQty);
+  }, [quantityStorageKey]);
 
   useEffect(() => {
     if (!product || !firebaseReady) return;
@@ -1103,7 +1119,6 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
   const price = customerPriceOf(product);
   const totalPrice = price * qty;
 
-  // MRP/old price must also reflect the selected quantity.
   const unitOldPrice = oldPriceOf(product);
   const totalOldPrice =
     unitOldPrice > 0
@@ -1257,8 +1272,16 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     setQty((currentQty) => {
       const nextQty = Math.max(1, currentQty - 1);
 
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(
+          quantityStorageKey,
+          String(nextQty),
+        );
+      }
+
       if (nextQty !== currentQty) {
-        const nextGiftLimit = freeGiftCountPerItem * nextQty;
+        const nextGiftLimit =
+          freeGiftCountPerItem * nextQty;
 
         setSelectedGiftIds((selected) =>
           selected.slice(0, nextGiftLimit),
@@ -1270,9 +1293,21 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   };
 
   const increaseQuantity = () => {
-    setQty((currentQty) =>
-      Math.min(maximumQuantity, currentQty + 1),
-    );
+    setQty((currentQty) => {
+      const nextQty = Math.min(
+        maximumQuantity,
+        currentQty + 1,
+      );
+
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(
+          quantityStorageKey,
+          String(nextQty),
+        );
+      }
+
+      return nextQty;
+    });
   };
 
   /*
@@ -2875,9 +2910,11 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
 
           <div className="pd-price">
             <strong>₹{Math.round(totalPrice)}</strong>
+
             {totalOldPrice > totalPrice && (
               <del>₹{Math.round(totalOldPrice)}</del>
             )}
+
             {totalOldPrice > totalPrice && (
               <em>
                 {t('Save')} ₹{Math.round(totalOldPrice - totalPrice)}
