@@ -688,19 +688,10 @@ export default function ProductDetailPage() {
   const [size, setSize] = useState('');
   const [color, setColor] = useState('');
 
-  const quantityStorageKey = `spotc-product-qty:${String(id || '')}`;
-
-  const [qty, setQty] = useState(() => {
-    if (typeof window === 'undefined') return 1;
-
-    const storedQty = Number(
-      window.sessionStorage.getItem(quantityStorageKey),
-    );
-
-    return Number.isFinite(storedQty) && storedQty >= 1
-      ? Math.floor(storedQty)
-      : 1;
-  });
+  // Quantity is page-local React state.
+  // Do not restore it from sessionStorage: the previous persistence effect could
+  // replay an older value and visually reset 2 back to 1 after a click.
+  const [qty, setQty] = useState(1);
   const [saved, setSaved] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [openAccordion, setOpenAccordion] = useState<AccordionKey>('description');
@@ -932,21 +923,6 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
       active = false;
     };
   }, [id]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const storedQty = Number(
-      window.sessionStorage.getItem(quantityStorageKey),
-    );
-
-    const nextQty =
-      Number.isFinite(storedQty) && storedQty >= 1
-        ? Math.floor(storedQty)
-        : 1;
-
-    setQty(nextQty);
-  }, [quantityStorageKey]);
 
   useEffect(() => {
     if (!product || !firebaseReady) return;
@@ -1269,45 +1245,20 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   const maximumQuantity = stockQuantity !== null ? Math.min(99, stockQuantity) : 99;
 
   const decreaseQuantity = () => {
-    setQty((currentQty) => {
-      const nextQty = Math.max(1, currentQty - 1);
+    const nextQty = Math.max(1, qty - 1);
+    if (nextQty === qty) return;
 
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(
-          quantityStorageKey,
-          String(nextQty),
-        );
-      }
+    setQty(nextQty);
 
-      if (nextQty !== currentQty) {
-        const nextGiftLimit =
-          freeGiftCountPerItem * nextQty;
-
-        setSelectedGiftIds((selected) =>
-          selected.slice(0, nextGiftLimit),
-        );
-      }
-
-      return nextQty;
-    });
+    const nextGiftLimit = freeGiftCountPerItem * nextQty;
+    setSelectedGiftIds((selected) => selected.slice(0, nextGiftLimit));
   };
 
   const increaseQuantity = () => {
-    setQty((currentQty) => {
-      const nextQty = Math.min(
-        maximumQuantity,
-        currentQty + 1,
-      );
+    const nextQty = Math.min(maximumQuantity, qty + 1);
+    if (nextQty === qty) return;
 
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(
-          quantityStorageKey,
-          String(nextQty),
-        );
-      }
-
-      return nextQty;
-    });
+    setQty(nextQty);
   };
 
   /*
@@ -1888,7 +1839,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
       spotc_action: 'add_to_cart',
     });
 
-    alert('1 product added to cart');
+    alert(`${qty} ${qty === 1 ? 'product' : 'products'} added to cart`);
   };
 
   const buyNow = () => {
