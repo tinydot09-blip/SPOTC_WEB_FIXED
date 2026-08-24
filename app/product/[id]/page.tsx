@@ -1234,6 +1234,28 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   const stockQuantity = rawStock !== null && rawStock > 0 ? Math.floor(rawStock) : null;
   const maximumQuantity = stockQuantity !== null ? Math.min(99, stockQuantity) : 99;
 
+  const decreaseQuantity = () => {
+    setQty((currentQty) => {
+      const nextQty = Math.max(1, currentQty - 1);
+
+      if (nextQty !== currentQty) {
+        const nextGiftLimit = freeGiftCountPerItem * nextQty;
+
+        setSelectedGiftIds((selected) =>
+          selected.slice(0, nextGiftLimit),
+        );
+      }
+
+      return nextQty;
+    });
+  };
+
+  const increaseQuantity = () => {
+    setQty((currentQty) =>
+      Math.min(maximumQuantity, currentQty + 1),
+    );
+  };
+
   /*
    * Show a Colour selector only when the customer genuinely has a choice:
    * - never for a single remaining piece;
@@ -2932,20 +2954,8 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
                   <button
                     type="button"
                     aria-label="Decrease quantity"
-                    onClick={() => {
-                      const nextQty = Math.max(1, qty - 1);
-
-                      if (nextQty === qty) return;
-
-                      setQty(nextQty);
-
-                      const nextGiftLimit =
-                        freeGiftCountPerItem * nextQty;
-
-                      setSelectedGiftIds((selected) =>
-                        selected.slice(0, nextGiftLimit),
-                      );
-                    }}
+                    disabled={qty <= 1}
+                    onClick={decreaseQuantity}
                   >
                     <Minus />
                   </button>
@@ -2957,21 +2967,8 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
                   <button
                     type="button"
                     aria-label="Increase quantity"
-                    onClick={() => {
-                      const maxQty =
-                        stockQuantity !== null && stockQuantity > 0
-                          ? stockQuantity
-                          : 99;
-
-                      const nextQty = Math.min(
-                        maxQty,
-                        qty + 1,
-                      );
-
-                      if (nextQty === qty) return;
-
-                      setQty(nextQty);
-                    }}
+                    disabled={qty >= maximumQuantity}
+                    onClick={increaseQuantity}
                   >
                     <Plus />
                   </button>
