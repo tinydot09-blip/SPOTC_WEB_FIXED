@@ -688,10 +688,15 @@ export default function ProductDetailPage() {
   const [size, setSize] = useState('');
   const [color, setColor] = useState('');
 
-  // Quantity is page-local React state.
-  // Do not restore it from sessionStorage: the previous persistence effect could
-  // replay an older value and visually reset 2 back to 1 after a click.
-  const [qty, setQty] = useState(1);
+  // Keep quantity across an unexpected page remount.
+  const quantityStorageKey = `spotc-product-qty:${String(id || '')}`;
+  const [qty, setQty] = useState(() => {
+    if (typeof window === 'undefined') return 1;
+    const stored = Number(
+      window.sessionStorage.getItem(`spotc-product-qty:${String(id || '')}`),
+    );
+    return Number.isFinite(stored) && stored >= 1 ? Math.floor(stored) : 1;
+  });
   const [saved, setSaved] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [openAccordion, setOpenAccordion] = useState<AccordionKey>('description');
@@ -735,6 +740,14 @@ const [tryOnResult, setTryOnResult] = useState('');
 const [tryOnLoading, setTryOnLoading] = useState(false);
 const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = Number(window.sessionStorage.getItem(quantityStorageKey));
+    const restored =
+      Number.isFinite(stored) && stored >= 1 ? Math.floor(stored) : 1;
+    setQty(restored);
+  }, [quantityStorageKey]);
 
   useEffect(() => {
     if (!giftPreviewOpen) return;
@@ -1244,11 +1257,21 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   const stockQuantity = rawStock !== null && rawStock > 0 ? Math.floor(rawStock) : null;
   const maximumQuantity = stockQuantity !== null ? Math.min(99, stockQuantity) : 99;
 
+  const commitQuantity = (nextQty: number) => {
+    const safeQty = Math.max(1, Math.min(maximumQuantity, Math.floor(nextQty)));
+
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(quantityStorageKey, String(safeQty));
+    }
+
+    setQty(safeQty);
+  };
+
   const decreaseQuantity = () => {
     const nextQty = Math.max(1, qty - 1);
     if (nextQty === qty) return;
 
-    setQty(nextQty);
+    commitQuantity(nextQty);
 
     const nextGiftLimit = freeGiftCountPerItem * nextQty;
     setSelectedGiftIds((selected) => selected.slice(0, nextGiftLimit));
@@ -1258,7 +1281,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     const nextQty = Math.min(maximumQuantity, qty + 1);
     if (nextQty === qty) return;
 
-    setQty(nextQty);
+    commitQuantity(nextQty);
   };
 
   /*
