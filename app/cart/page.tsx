@@ -11,6 +11,8 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Clock3,
+  Minus,
+  Plus,
   ShoppingBag,
   Trash2,
   Truck,
@@ -164,7 +166,7 @@ const ga4ItemFromCart = (item: CartItem) => ({
       .filter(Boolean)
       .join(' / ') || undefined,
   price: Number(item.price) || 0,
-  quantity: 1,
+  quantity: Math.max(1, Number(item.qty) || 1),
 });
 
 export default function CartPage() {
@@ -218,7 +220,9 @@ export default function CartPage() {
       currency: 'INR',
       value: items.reduce(
         (sum, item) =>
-          sum + (Number(item.price) || 0),
+          sum +
+          (Number(item.price) || 0) *
+            Math.max(1, Number(item.qty) || 1),
         0,
       ),
       items: items.map(ga4ItemFromCart),
@@ -238,7 +242,9 @@ export default function CartPage() {
     () =>
       items.reduce(
         (sum, item) =>
-          sum + item.price,
+          sum +
+          item.price *
+            Math.max(1, Number(item.qty) || 1),
         0,
       ),
     [items],
@@ -301,6 +307,68 @@ export default function CartPage() {
     );
   };
 
+  const updateItemQuantity = (
+    itemIndex: number,
+    nextQuantity: number,
+  ) => {
+    const item = items[itemIndex];
+    if (!item) return;
+
+    const safeQuantity = Math.max(
+      1,
+      Math.floor(nextQuantity),
+    );
+
+    if (safeQuantity === item.qty) return;
+
+    const nextItems = items.map(
+      (currentItem, index) =>
+        index === itemIndex
+          ? {
+              ...currentItem,
+              qty: safeQuantity,
+            }
+          : currentItem,
+    );
+
+    updateCart(nextItems);
+
+    /*
+     * Keep free-gift entitlement in sync with paid quantity.
+     * Current product flow gives 1 free gift per item.
+     */
+    const currentBundle =
+      giftBundles[item.id];
+
+    if (currentBundle) {
+      const nextEntitlement =
+        safeQuantity;
+
+      const nextGifts =
+        currentBundle.gifts.slice(
+          0,
+          nextEntitlement,
+        );
+
+      const nextBundle: SavedGiftBundle = {
+        ...currentBundle,
+        quantity: safeQuantity,
+        entitlement: nextEntitlement,
+        gifts: nextGifts,
+      };
+
+      window.localStorage.setItem(
+        `spotc-free-gifts:${item.id}`,
+        JSON.stringify(nextBundle),
+      );
+
+      setGiftBundles((current) => ({
+        ...current,
+        [item.id]: nextBundle,
+      }));
+    }
+  };
+
   const removeItem = (
     itemIndex: number,
   ) => {
@@ -316,7 +384,9 @@ export default function CartPage() {
     if (itemToRemove) {
       sendGa4Event('remove_from_cart', {
         currency: 'INR',
-        value: Number(itemToRemove.price) || 0,
+        value:
+          (Number(itemToRemove.price) || 0) *
+          Math.max(1, Number(itemToRemove.qty) || 1),
         items: [ga4ItemFromCart(itemToRemove)],
       });
     }
@@ -453,11 +523,76 @@ export default function CartPage() {
                           )}
 
                           <strong>
-                            {money(item.price)}
+                            {money(
+                              item.price *
+                                Math.max(
+                                  1,
+                                  Number(item.qty) || 1,
+                                ),
+                            )}
                           </strong>
+
+                          {Math.max(
+                            1,
+                            Number(item.qty) || 1,
+                          ) > 1 && (
+                            <small className="spotc-line-price-note">
+                              {money(item.price)} each
+                            </small>
+                          )}
                         </div>
 
                         <div className="spotc-cart-controls">
+                          <div
+                            className="spotc-cart-quantity"
+                            aria-label="Product quantity"
+                          >
+                            <button
+                              type="button"
+                              aria-label="Decrease quantity"
+                              disabled={
+                                Math.max(
+                                  1,
+                                  Number(item.qty) || 1,
+                                ) <= 1
+                              }
+                              onClick={() =>
+                                updateItemQuantity(
+                                  index,
+                                  Math.max(
+                                    1,
+                                    Number(item.qty) || 1,
+                                  ) - 1,
+                                )
+                              }
+                            >
+                              <Minus size={16} />
+                            </button>
+
+                            <strong>
+                              {Math.max(
+                                1,
+                                Number(item.qty) || 1,
+                              )}
+                            </strong>
+
+                            <button
+                              type="button"
+                              aria-label="Increase quantity"
+                              onClick={() =>
+                                updateItemQuantity(
+                                  index,
+                                  Math.max(
+                                    1,
+                                    Number(item.qty) || 1,
+                                  ) + 1,
+                                )
+                              }
+                            >
+                              <Plus size={16} />
+                            </button>
+                          </div>
+
                           <button
                             type="button"
                             className="spotc-remove-button"
@@ -1187,12 +1322,55 @@ const styles = `
     font-weight: 650;
   }
 
+  .spotc-line-price-note {
+    display: block;
+    margin-top: 4px;
+    color: #81766d;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
   .spotc-cart-controls {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 11px;
+  }
+
+  .spotc-cart-quantity {
+    min-width: 126px;
+    height: 42px;
+    display: grid;
+    grid-template-columns: 38px minmax(38px, 1fr) 38px;
+    align-items: center;
+    overflow: hidden;
+    border: 1px solid #d6cec5;
+    border-radius: 12px;
+    background: #ffffff;
+  }
+
+  .spotc-cart-quantity button {
+    height: 100%;
+    display: grid;
+    place-items: center;
+    border: 0;
+    color: #25211d;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .spotc-cart-quantity button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .spotc-cart-quantity > strong {
+    margin: 0;
+    color: #171717;
+    font-size: 16px;
+    font-weight: 800;
+    text-align: center;
   }
 
   .spotc-remove-button {
@@ -1583,6 +1761,12 @@ const styles = `
       gap: 10px;
     }
 
+    .spotc-cart-quantity {
+      min-width: 116px;
+      height: 40px;
+      grid-template-columns: 36px minmax(36px, 1fr) 36px;
+    }
+
     .spotc-remove-button {
       min-height: 40px;
       margin: 0;
@@ -1639,6 +1823,12 @@ const styles = `
 
     .spotc-cart-controls {
       gap: 8px;
+    }
+
+    .spotc-cart-quantity {
+      min-width: 108px;
+      height: 38px;
+      grid-template-columns: 34px minmax(34px, 1fr) 34px;
     }
 
     .spotc-remove-button {
