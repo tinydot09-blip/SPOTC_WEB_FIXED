@@ -282,19 +282,92 @@ export default function CartPage() {
       return;
     }
 
-    const bundle =
+    const returnedBundle =
       readSavedGifts(pendingProductId);
 
+    let previousBundle:
+      SavedGiftBundle | null = null;
+
+    try {
+      const previousRaw =
+        window.localStorage.getItem(
+          'spotc-cart-pending-existing-gift-bundle',
+        );
+
+      if (previousRaw) {
+        const parsed =
+          JSON.parse(previousRaw) as SavedGiftBundle;
+
+        if (
+          parsed &&
+          Array.isArray(parsed.gifts)
+        ) {
+          previousBundle = parsed;
+        }
+      }
+    } catch {
+      previousBundle = null;
+    }
+
+    if (!returnedBundle) {
+      return;
+    }
+
     /*
-     * Only commit the higher quantity after the required
-     * number of gifts have actually been selected.
+     * The product page's normal Change Gift flow can replace the
+     * stored gift bundle with only the newly selected gift.
+     *
+     * For cart quantity increase we must APPEND the new gift:
+     *
+     * qty 1: [old gift]
+     * tap + and choose new gift
+     * qty 2: [old gift, new gift]
      */
+    let mergedGifts: SavedFreeGift[] =
+      returnedBundle.gifts;
+
+    const previousGifts =
+      previousBundle?.gifts || [];
+
     if (
-      !bundle ||
-      bundle.gifts.length < pendingQty
+      previousGifts.length > 0 &&
+      returnedBundle.gifts.length < pendingQty
+    ) {
+      const newGift =
+        returnedBundle.gifts[
+          returnedBundle.gifts.length - 1
+        ];
+
+      if (!newGift) {
+        return;
+      }
+
+      mergedGifts = [
+        ...previousGifts,
+        newGift,
+      ];
+    }
+
+    if (
+      mergedGifts.length < pendingQty
     ) {
       return;
     }
+
+    const finalBundle: SavedGiftBundle = {
+      product_id: pendingProductId,
+      quantity: Math.floor(pendingQty),
+      entitlement: Math.floor(pendingQty),
+      gifts: mergedGifts.slice(
+        0,
+        Math.floor(pendingQty),
+      ),
+    };
+
+    window.localStorage.setItem(
+      `spotc-free-gifts:${pendingProductId}`,
+      JSON.stringify(finalBundle),
+    );
 
     const nextItems = cartItems.map(
       (item, index) =>
@@ -311,15 +384,7 @@ export default function CartPage() {
 
     setGiftBundles((current) => ({
       ...current,
-      [pendingProductId]: {
-        ...bundle,
-        quantity: Math.floor(pendingQty),
-        entitlement: Math.floor(pendingQty),
-        gifts: bundle.gifts.slice(
-          0,
-          Math.floor(pendingQty),
-        ),
-      },
+      [pendingProductId]: finalBundle,
     }));
 
     window.localStorage.removeItem(
@@ -330,6 +395,9 @@ export default function CartPage() {
     );
     window.localStorage.removeItem(
       'spotc-cart-pending-item-index',
+    );
+    window.localStorage.removeItem(
+      'spotc-cart-pending-existing-gift-bundle',
     );
 
     setPendingGiftQuantity(null);
@@ -427,6 +495,20 @@ export default function CartPage() {
       'spotc-cart-pending-item-index',
       String(itemIndex),
     );
+
+    const existingBundle =
+      giftBundles[productId];
+
+    if (existingBundle) {
+      window.localStorage.setItem(
+        'spotc-cart-pending-existing-gift-bundle',
+        JSON.stringify(existingBundle),
+      );
+    } else {
+      window.localStorage.removeItem(
+        'spotc-cart-pending-existing-gift-bundle',
+      );
+    }
 
     /*
      * Re-use the product page's existing free-gift picker.
