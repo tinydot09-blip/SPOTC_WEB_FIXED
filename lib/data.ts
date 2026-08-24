@@ -1,21 +1,56 @@
-import { collection, getDocs, limit, query } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  query,
+} from 'firebase/firestore';
+
 import { db, firebaseReady } from './firebase';
-import type { BusinessListing, BusinessProduct, SpotItem } from './types';
+import type {
+  BusinessListing,
+  BusinessProduct,
+  SpotItem,
+} from './types';
 
 function timestampMillis(value: unknown): number {
   if (!value) return 0;
-  if (typeof value === 'object' && value !== null && 'toMillis' in value) {
-    const toMillis = (value as { toMillis?: () => number }).toMillis;
-    if (typeof toMillis === 'function') return toMillis.call(value);
+
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'toMillis' in value
+  ) {
+    const toMillis = (
+      value as {
+        toMillis?: () => number;
+      }
+    ).toMillis;
+
+    if (typeof toMillis === 'function') {
+      return toMillis.call(value);
+    }
   }
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === 'number') return value;
+
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  if (typeof value === 'number') {
+    return value;
+  }
+
   return 0;
 }
 
-function newestFirst<T extends { created_at?: unknown }>(items: T[]): T[] {
+function newestFirst<T extends { created_at?: unknown }>(
+  items: T[],
+): T[] {
   return [...items].sort(
-    (a, b) => timestampMillis(b.created_at) - timestampMillis(a.created_at),
+    (a, b) =>
+      timestampMillis(b.created_at) -
+      timestampMillis(a.created_at),
   );
 }
 
@@ -25,6 +60,7 @@ function ensureFirestore() {
       'Firebase is not configured. Check .env.local and restart npm run dev.',
     );
   }
+
   return db;
 }
 
@@ -32,7 +68,10 @@ export async function getOffers(): Promise<BusinessListing[]> {
   const firestore = ensureFirestore();
 
   const snapshot = await getDocs(
-    query(collection(firestore, 'BusinessListings'), limit(100)),
+    query(
+      collection(firestore, 'BusinessListings'),
+      limit(100),
+    ),
   );
 
   const items = snapshot.docs.map((item) => ({
@@ -42,42 +81,51 @@ export async function getOffers(): Promise<BusinessListing[]> {
   })) as BusinessListing[];
 
   return newestFirst(items)
-  .filter((item) => item.isActive !== false)
-  .filter((item) => item.isDeleted !== true)
-  .filter((item) => item.isHidden !== true)
-  .filter((item) => item.offer_is_active !== false)
-  .filter((item) => {
-    const approvalStatus = String(
-      item.approval_status ?? item.status ?? '',
-    )
-      .trim()
-      .toLowerCase();
+    .filter((item) => item.isActive !== false)
+    .filter((item) => item.isDeleted !== true)
+    .filter((item) => item.isHidden !== true)
+    .filter((item) => item.offer_is_active !== false)
+    .filter((item) => {
+      const approvalStatus = String(
+        item.approval_status ?? item.status ?? '',
+      )
+        .trim()
+        .toLowerCase();
 
-    return (
-      item.approved === true ||
-      item.isApproved === true ||
-      approvalStatus === 'approved'
-    );
-  })
-  .filter((item) => {
-    const processingStatus = String(
-      item.processing_status ?? '',
-    )
-      .trim()
-      .toLowerCase();
+      return (
+        item.approved === true ||
+        item.isApproved === true ||
+        approvalStatus === 'approved'
+      );
+    })
+    .filter((item) => {
+      const processingStatus = String(
+        item.processing_status ?? '',
+      )
+        .trim()
+        .toLowerCase();
 
-    return !processingStatus || processingStatus === 'ready';
-  })
-  .slice(0, 30);
+      return (
+        !processingStatus ||
+        processingStatus === 'ready'
+      );
+    })
+    .slice(0, 30);
 }
 
-export async function getProducts(): Promise<BusinessProduct[]> {
+export async function getProducts(): Promise<
+  BusinessProduct[]
+> {
   const firestore = ensureFirestore();
 
-  // Do not cut this to 40. Offer-linked products can be older than the
-  // newest 40 products and would disappear from the offer feed.
+  // Do not cut this to 40.
+  // Offer-linked products can be older than the newest
+  // products and would disappear from the offer feed.
   const snapshot = await getDocs(
-    query(collection(firestore, 'BusinessProducts'), limit(500)),
+    query(
+      collection(firestore, 'BusinessProducts'),
+      limit(500),
+    ),
   );
 
   const items = snapshot.docs.map((item) => ({
@@ -86,6 +134,15 @@ export async function getProducts(): Promise<BusinessProduct[]> {
     ...item.data(),
   })) as BusinessProduct[];
 
+  /*
+   * PRODUCT LIST / SHOP BEHAVIOUR
+   * -----------------------------
+   * Keep sold-out products hidden from normal product lists.
+   *
+   * Direct product pages are handled separately by
+   * getProductById() below, so a sold-out product can still
+   * exist at /product/[id] for Google SEO and show OutOfStock.
+   */
   return newestFirst(items)
     .filter((item) => item.isActive !== false)
     .filter((item) => item.is_in_stock !== false)
@@ -98,8 +155,12 @@ export async function getProducts(): Promise<BusinessProduct[]> {
 
 export async function getSpots(): Promise<SpotItem[]> {
   const firestore = ensureFirestore();
+
   const snapshot = await getDocs(
-    query(collection(firestore, 'Spot'), limit(100)),
+    query(
+      collection(firestore, 'Spot'),
+      limit(100),
+    ),
   );
 
   const items = snapshot.docs.map((item) => ({
@@ -143,7 +204,8 @@ export async function getBusinessBySlug(
           item.business_name ||
             item.shop_name ||
             item.id,
-        ) === slug || item.id === slug,
+        ) === slug ||
+        item.id === slug,
     ) ?? null
   );
 }
@@ -152,10 +214,17 @@ export async function getBusinessProducts(
   business: BusinessListing,
 ): Promise<BusinessProduct[]> {
   const products = await getProducts();
+
   const businessId = business.id;
-  const owner = String(business.owner_uid ?? '');
+
+  const owner = String(
+    business.owner_uid ?? '',
+  );
+
   const name = String(
-    business.business_name || business.shop_name || '',
+    business.business_name ||
+      business.shop_name ||
+      '',
   ).toLowerCase();
 
   return products.filter((product) => {
@@ -164,7 +233,11 @@ export async function getBusinessProducts(
       product.business_ref !== null &&
       'id' in product.business_ref
         ? String(
-            (product.business_ref as { id?: string }).id ?? '',
+            (
+              product.business_ref as {
+                id?: string;
+              }
+            ).id ?? '',
           )
         : String(product.business_ref ?? '');
 
@@ -183,6 +256,48 @@ export async function getBusinessProducts(
 export async function getProductById(
   id: string,
 ): Promise<BusinessProduct | null> {
-  const products = await getProducts();
-  return products.find((product) => product.id === id) ?? null;
+  const firestore = ensureFirestore();
+
+  /*
+   * IMPORTANT
+   * ---------
+   * Fetch the individual Firestore document directly.
+   *
+   * Do NOT call getProducts() here because getProducts()
+   * intentionally removes sold-out products.
+   *
+   * This lets an existing sold-out product page remain
+   * available at /product/[id] and allows SEO structured
+   * data to correctly report OutOfStock.
+   */
+  const productSnapshot = await getDoc(
+    doc(
+      firestore,
+      'BusinessProducts',
+      id,
+    ),
+  );
+
+  if (!productSnapshot.exists()) {
+    return null;
+  }
+
+  const product = {
+    id: productSnapshot.id,
+    ref: productSnapshot.ref,
+    ...productSnapshot.data(),
+  } as BusinessProduct;
+
+  /*
+   * Completely disabled products should not remain public.
+   *
+   * A product with stock_qty = 0 or is_in_stock = false
+   * is still returned here so the product page can show
+   * Sold Out / OutOfStock.
+   */
+  if (product.isActive === false) {
+    return null;
+  }
+
+  return product;
 }
