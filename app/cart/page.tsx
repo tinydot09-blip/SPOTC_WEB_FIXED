@@ -188,6 +188,13 @@ export default function CartPage() {
     option: DeliveryOption,
   ) => {
     setSelectedDeliveryId(option.id);
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(
+        'spotc-delivery-option',
+        option.id,
+      );
+    }
   };
   const viewCartTrackedRef = useRef(false);
 
@@ -210,6 +217,23 @@ export default function CartPage() {
     });
 
     setGiftBundles(nextGiftBundles);
+
+    const savedDeliveryId =
+      window.localStorage.getItem(
+        'spotc-delivery-option',
+      ) as DeliveryOptionId | null;
+
+    if (
+      savedDeliveryId &&
+      DELIVERY_OPTIONS.some(
+        (option) =>
+          option.id === savedDeliveryId,
+      )
+    ) {
+      setSelectedDeliveryId(
+        savedDeliveryId,
+      );
+    }
 
   }, []);
 
