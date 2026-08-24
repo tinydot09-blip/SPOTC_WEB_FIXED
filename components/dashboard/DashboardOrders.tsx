@@ -16,6 +16,8 @@ import {
   getFirestore,
   limit,
   query,
+  runTransaction,
+  serverTimestamp,
   Timestamp,
   where,
   type DocumentData,
@@ -63,6 +65,8 @@ type OrderRecord = {
   createdAt: Date | null;
   address: string;
   phone: string;
+  deliveryAssigned: boolean;
+  instantDelivery: boolean;
 };
 
 type SavedFreeGift = {
@@ -557,6 +561,26 @@ function mapOrder(
         data.customer_phone ??
           data.phone,
       ),
+
+    deliveryAssigned: Boolean(
+      textOf(data.delivery_boy_id) ||
+        textOf(data.delivery_partner_id) ||
+        textOf(data.assigned_delivery_boy_id) ||
+        textOf(data.delivery_assignment_status) === 'assigned' ||
+        dateOf(data.delivery_assigned_at),
+    ),
+
+    instantDelivery: [
+      data.delivery_type,
+      data.delivery_mode,
+      data.delivery_speed,
+      data.delivery_slot,
+      data.estimated_delivery,
+    ]
+      .map(textOf)
+      .join(' ')
+      .toLowerCase()
+      .match(/instant|15\s*(?:-|–|to)?\s*45\s*mins?|15\s*mins?/) !== null,
   };
 }
 
@@ -669,6 +693,25 @@ export default function DashboardOrders() {
     search,
     setSearch,
   ] = useState('');
+
+  const [
+    cancellingId,
+    setCancellingId,
+  ] = useState('');
+
+  const [
+    nowMs,
+    setNowMs,
+  ] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setNowMs(Date.now()),
+      1000,
+    );
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (
@@ -852,6 +895,249 @@ export default function DashboardOrders() {
     authChecked,
     user,
   ]);
+
+  function instantCancelSecondsLeft(
+    order: OrderRecord,
+  ): number {
+    if (
+      !order.instantDelivery ||
+      !order.createdAt
+    ) {
+      return 0;
+    }
+
+    const expiresAt =
+      order.createdAt.getTime() +
+      2 * 60 * 1000;
+
+    return Math.max(
+      0,
+      Math.ceil((expiresAt - nowMs) / 1000),
+    );
+  }
+
+  function canCancelOrder(
+    order: OrderRecord,
+  ): boolean {
+    if (
+      ['cancelled', 'delivered', 'out for delivery'].includes(
+        order.status,
+      )
+    ) {
+      return false;
+    }
+
+    if (order.deliveryAssigned) {
+      return false;
+    }
+
+    if (order.instantDelivery) {
+      return instantCancelSecondsLeft(order) > 0;
+    }
+
+    return true;
+  }
+
+  function cancelHelpText(
+    order: OrderRecord,
+  ): string {
+    if (order.status === 'cancelled') {
+      return 'This order has been cancelled.';
+    }
+
+    if (
+      order.status === 'delivered' ||
+      order.status === 'out for delivery'
+    ) {
+      return 'Cancellation is no longer available.';
+    }
+
+    if (order.deliveryAssigned) {
+      return 'Cancellation closed because delivery has been assigned.';
+    }
+
+    if (order.instantDelivery) {
+      const seconds =
+        instantCancelSecondsLeft(order);
+
+      if (seconds <= 0) {
+        return 'The 2-minute cancellation window has ended.';
+      }
+
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+
+      return `Instant delivery: cancel within ${minutes}:${String(
+        remainingSeconds,
+      ).padStart(2, '0')}.`;
+    }
+
+    return 'You can cancel until a delivery boy is assigned.';
+  }
+
+  async function cancelOrder(
+    order: OrderRecord,
+  ) {
+    if (
+      cancellingId ||
+      !canCancelOrder(order)
+    ) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Cancel order ${order.orderNumber}?\n\nThis cannot be undone.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setCancellingId(order.id);
+
+    try {
+      const db = getFirestore();
+      const orderRef = doc(
+        db,
+        'Orders',
+        order.id,
+      );
+
+      await runTransaction(
+        db,
+        async (transaction) => {
+          const snapshot =
+            await transaction.get(orderRef);
+
+          if (!snapshot.exists()) {
+            throw new Error(
+              'Order no longer exists.',
+            );
+          }
+
+          const data = snapshot.data();
+
+          const liveStatus =
+            normalizeStatus(
+              data.order_status ??
+                data.status ??
+                data.delivery_status,
+            );
+
+          const deliveryAssigned =
+            Boolean(
+              textOf(data.delivery_boy_id) ||
+                textOf(data.delivery_partner_id) ||
+                textOf(
+                  data.assigned_delivery_boy_id,
+                ) ||
+                textOf(
+                  data.delivery_assignment_status,
+                ) === 'assigned' ||
+                dateOf(
+                  data.delivery_assigned_at,
+                ),
+            );
+
+          if (
+            ['cancelled', 'delivered', 'out for delivery'].includes(
+              liveStatus,
+            )
+          ) {
+            throw new Error(
+              'This order can no longer be cancelled.',
+            );
+          }
+
+          if (deliveryAssigned) {
+            throw new Error(
+              'Delivery has already been assigned, so this order can no longer be cancelled.',
+            );
+          }
+
+          const instantDelivery = [
+            data.delivery_type,
+            data.delivery_mode,
+            data.delivery_speed,
+            data.delivery_slot,
+            data.estimated_delivery,
+          ]
+            .map(textOf)
+            .join(' ')
+            .toLowerCase()
+            .match(
+              /instant|15\s*(?:-|–|to)?\s*45\s*mins?|15\s*mins?/,
+            ) !== null;
+
+          if (instantDelivery) {
+            const createdAt =
+              dateOf(
+                data.created_at ??
+                  data.order_date,
+              );
+
+            if (
+              !createdAt ||
+              Date.now() -
+                createdAt.getTime() >=
+                2 * 60 * 1000
+            ) {
+              throw new Error(
+                'The 2-minute cancellation window for instant delivery has ended.',
+              );
+            }
+          }
+
+          transaction.update(
+            orderRef,
+            {
+              order_status: 'cancelled',
+              status: 'cancelled',
+              cancelled_at:
+                serverTimestamp(),
+              cancelled_by:
+                'customer',
+              updated_at:
+                serverTimestamp(),
+            },
+          );
+        },
+      );
+
+      setOrders((current) =>
+        current.map((item) =>
+          item.id === order.id
+            ? {
+                ...item,
+                status: 'cancelled',
+              }
+            : item,
+        ),
+      );
+
+      setSelected((current) =>
+        current?.id === order.id
+          ? {
+              ...current,
+              status: 'cancelled',
+            }
+          : current,
+      );
+    } catch (error) {
+      console.error(
+        'Cancel order failed:',
+        error,
+      );
+
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : 'Unable to cancel this order. Please try again.',
+      );
+    } finally {
+      setCancellingId('');
+    }
+  }
 
   const filteredOrders =
     useMemo(() => {
@@ -1557,6 +1843,32 @@ export default function DashboardOrders() {
                 }
               </strong>
             </div>
+
+            <div className="simple-details-cancel">
+              <p>
+                {cancelHelpText(selected)}
+              </p>
+
+              {canCancelOrder(selected) && (
+                <button
+                  type="button"
+                  disabled={
+                    cancellingId ===
+                    selected.id
+                  }
+                  onClick={() =>
+                    void cancelOrder(
+                      selected,
+                    )
+                  }
+                >
+                  {cancellingId ===
+                  selected.id
+                    ? 'Cancelling…'
+                    : 'Cancel Order'}
+                </button>
+              )}
+            </div>
           </section>
         </div>
       )}
@@ -2174,6 +2486,41 @@ export default function DashboardOrders() {
         .simple-details-bill .total > span {
           color: #191612;
           font-weight: 600;
+        }
+
+        .simple-details-cancel {
+          margin-top: 14px;
+          padding-top: 14px;
+          border-top: 1px solid #ece5de;
+        }
+
+        .simple-details-cancel p {
+          margin: 0 0 10px;
+          color: #776f67;
+          font-size: 11px;
+          line-height: 1.45;
+        }
+
+        .simple-details-cancel button {
+          width: 100%;
+          min-height: 42px;
+          border: 1px solid #e1a6aa;
+          border-radius: 11px;
+          color: #a72f38;
+          background: #fff5f5;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .simple-details-cancel button:hover {
+          border-color: #cc737a;
+          background: #ffeded;
+        }
+
+        .simple-details-cancel button:disabled {
+          opacity: .6;
+          cursor: wait;
         }
 
         @media (max-width: 650px) {
