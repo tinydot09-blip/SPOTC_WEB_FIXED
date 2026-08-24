@@ -644,8 +644,6 @@ const isTryOnSupported = (product: ProductRecord): boolean => {
   );
 };
 
-const productQuantityCache = new Map<string, number>();
-
 function ProductPageLoader() {
   return (
     <main className="pd-page pd-page-loading" aria-label="Loading product" aria-busy="true">
@@ -690,15 +688,7 @@ export default function ProductDetailPage() {
   const [size, setSize] = useState('');
   const [color, setColor] = useState('');
 
-  const quantityProductKey = String(id || '');
-
-  // Starts at 1 on a fresh page load.
-  // If this component is unexpectedly remounted while staying on the same
-  // product page, the in-memory cache keeps the customer's current quantity.
-  const [qty, setQty] = useState(() => {
-    const cached = productQuantityCache.get(quantityProductKey);
-    return cached && cached >= 1 ? cached : 1;
-  });
+  const [qty, setQty] = useState(1);
   const [saved, setSaved] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [openAccordion, setOpenAccordion] = useState<AccordionKey>('description');
@@ -744,11 +734,6 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     
 
   useEffect(() => {
-    const cached = productQuantityCache.get(quantityProductKey);
-    setQty(cached && cached >= 1 ? cached : 1);
-  }, [quantityProductKey]);
-
-  useEffect(() => {
     if (!giftPreviewOpen) return;
 
     const frame = window.requestAnimationFrame(() => {
@@ -769,6 +754,7 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     setSelectedMediaUrl('');
     setZoomActive(false);
     setZoomPosition({ x: 50, y: 50 });
+    setQty(1);
     setReviews([]);
     setReviewMessage('');
     setRatingSnapshot(null);
@@ -1256,31 +1242,26 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   const stockQuantity = rawStock !== null && rawStock > 0 ? Math.floor(rawStock) : null;
   const maximumQuantity = stockQuantity !== null ? Math.min(99, stockQuantity) : 99;
 
-  const commitQuantity = (nextQty: number) => {
-    const safeQty = Math.max(
-      1,
-      Math.min(maximumQuantity, Math.floor(nextQty)),
-    );
-
-    productQuantityCache.set(quantityProductKey, safeQty);
-    setQty(safeQty);
-  };
-
   const decreaseQuantity = () => {
-    const nextQty = Math.max(1, qty - 1);
-    if (nextQty === qty) return;
+    setQty((current) => {
+      const nextQty = Math.max(1, current - 1);
 
-    commitQuantity(nextQty);
+      if (nextQty !== current) {
+        const nextGiftLimit = freeGiftCountPerItem * nextQty;
 
-    const nextGiftLimit = freeGiftCountPerItem * nextQty;
-    setSelectedGiftIds((selected) => selected.slice(0, nextGiftLimit));
+        setSelectedGiftIds((selected) =>
+          selected.slice(0, nextGiftLimit),
+        );
+      }
+
+      return nextQty;
+    });
   };
 
   const increaseQuantity = () => {
-    const nextQty = Math.min(maximumQuantity, qty + 1);
-    if (nextQty === qty) return;
-
-    commitQuantity(nextQty);
+    setQty((current) =>
+      Math.min(maximumQuantity, current + 1),
+    );
   };
 
   /*
