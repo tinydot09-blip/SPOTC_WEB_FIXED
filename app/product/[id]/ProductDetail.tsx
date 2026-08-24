@@ -10,7 +10,6 @@ import {
   ChevronDown,
   ChevronLeft,
   FileText,
-  GitCompareArrows,
   Gift,
   Heart,
   Info,
@@ -342,6 +341,36 @@ type OnlineProductRecord = {
 };
 
 type CompareState = 'closed' | 'loading' | 'ready' | 'error';
+
+const PRODUCT_SUPPORT_PHONE = '8072098066';
+const PRODUCT_SUPPORT_WHATSAPP = '918072098066';
+
+const productSupportQuestions = [
+  {
+    label: 'Size & Fit',
+    message: 'I need help choosing the correct size / fit.',
+  },
+  {
+    label: 'Product Details',
+    message: 'I have a question about this product.',
+  },
+  {
+    label: 'Delivery',
+    message: 'I would like to know about delivery for this product.',
+  },
+  {
+    label: 'FREE Gift',
+    message: 'I have a question about the FREE gift for this product.',
+  },
+  {
+    label: 'Stock / Availability',
+    message: 'I would like to confirm stock availability for this product.',
+  },
+  {
+    label: 'Other Question',
+    message: 'I need help with this product.',
+  },
+] as const;
 
 type AccordionKey = 'description' | 'delivery' | 'returns' | 'reviews';
 
@@ -712,6 +741,7 @@ export default function ProductDetailPage() {
   const [compareState, setCompareState] = useState<CompareState>('closed');
   const [compareProducts, setCompareProducts] = useState<OnlineProductRecord[]>([]);
   const [compareError, setCompareError] = useState('');
+  const [productSupportOpen, setProductSupportOpen] = useState(false);
   const [askFriendsLoading, setAskFriendsLoading] = useState(false);
   const [circleResult, setCircleResult] = useState<{
     id: string;
@@ -1882,6 +1912,34 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     router.push(`/compare-online?id=${encodeURIComponent(product.id)}`);
   };
 
+  const productSupportHref = (message: string): string => {
+    const productUrl = `https://www.spotc.in/product/${encodeURIComponent(
+      String(product.id),
+    )}`;
+
+    const selectedOptions = [
+      size ? `Selected size: ${size}` : '',
+      showColorSelector && color ? `Selected colour: ${color}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const supportMessage = [
+      'Hi SPOTC,',
+      message,
+      '',
+      `Product: ${displayProductTitle}`,
+      selectedOptions,
+      `Product link: ${productUrl}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    return `https://wa.me/${PRODUCT_SUPPORT_WHATSAPP}?text=${encodeURIComponent(
+      supportMessage,
+    )}`;
+  };
+
   const openShoppingCircle = async () => {
     if (!firebaseReady || askFriendsLoading) return;
 
@@ -3046,15 +3104,14 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
       <section className="pd-commerce-tools" aria-label="Shopping tools">
         <button
           type="button"
-          className="pd-tool-card pd-tool-compare"
-          onClick={openCompareOnline}
-          disabled={compareState === 'loading'}
+          className="pd-tool-card pd-tool-support"
+          onClick={() => setProductSupportOpen(true)}
         >
-          <span className="pd-tool-icon"><GitCompareArrows /></span>
+          <span className="pd-tool-icon"><MessageSquareText /></span>
           <span className="pd-tool-copy">
-            <strong>{t('Compare Online')}</strong>
-            <small>{t('Find similar products & best prices')}</small>
-            <em>{t('SpotC Price')} ₹{Math.round(price)}</em>
+            <strong>Customer Support</strong>
+            <small>Questions about size, fit, product or delivery?</small>
+            <em>Chat with SPOTC now</em>
           </span>
           <ChevronLeft className="pd-tool-arrow" />
         </button>
@@ -3380,6 +3437,89 @@ const relatedFreeGiftCount =
           </div>,
           document.body,
         )}
+
+      {productSupportOpen && (
+        <div
+          className="pd-modal-backdrop"
+          role="presentation"
+          onMouseDown={() => setProductSupportOpen(false)}
+        >
+          <section
+            className="pd-modal pd-product-support-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="SPOTC Customer Support"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              className="pd-modal-close"
+              type="button"
+              aria-label="Close customer support"
+              onClick={() => setProductSupportOpen(false)}
+            >
+              <X />
+            </button>
+
+            <div className="pd-modal-handle" />
+
+            <div className="pd-product-support-heading">
+              <span className="pd-product-support-icon">
+                <MessageSquareText />
+              </span>
+
+              <div>
+                <small>SPOTC LOCAL SUPPORT</small>
+                <h2>How can we help?</h2>
+                <p>
+                  Choose a question below. WhatsApp will open with this
+                  product already included in the message.
+                </p>
+              </div>
+            </div>
+
+            <div className="pd-product-support-product">
+              {productImage ? (
+                <img src={productImage} alt={displayProductTitle} />
+              ) : (
+                <span className="pd-product-support-product-placeholder">
+                  <ShoppingBag />
+                </span>
+              )}
+
+              <div>
+                <strong>{displayProductTitle}</strong>
+                <small>SPOTC Product Support</small>
+              </div>
+            </div>
+
+            <div className="pd-product-support-questions">
+              {productSupportQuestions.map((question) => (
+                <a
+                  key={question.label}
+                  href={productSupportHref(question.message)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setProductSupportOpen(false)}
+                >
+                  <span>{question.label}</span>
+                  <span aria-hidden="true">&gt;</span>
+                </a>
+              ))}
+            </div>
+
+            <a
+              className="pd-product-support-call"
+              href={`tel:+91${PRODUCT_SUPPORT_PHONE}`}
+            >
+              Call SPOTC: {PRODUCT_SUPPORT_PHONE}
+            </a>
+
+            <p className="pd-product-support-note">
+              Local support for size, fit, product, delivery and shopping questions.
+            </p>
+          </section>
+        </div>
+      )}
 
       {compareState !== 'closed' && (
         <div className="pd-modal-backdrop" role="presentation" onMouseDown={() => setCompareState('closed')}>
@@ -7070,6 +7210,155 @@ width:200px;
 @media (max-width:430px){
   .pd-inline-details-grid{
     grid-template-columns:1fr;
+  }
+}
+
+/* CUSTOMER SUPPORT CARD + POPUP */
+.pd-tool-support{
+  background:linear-gradient(135deg,#f3fbf5 0%,#e6f7eb 100%) !important;
+  border-color:#cfe6d5 !important;
+}
+.pd-tool-support .pd-tool-icon{
+  background:#d7f1df !important;
+  color:#166f3a !important;
+}
+.pd-tool-support .pd-tool-copy em{
+  color:#168146 !important;
+}
+.pd-product-support-modal{
+  width:min(500px,100%) !important;
+}
+.pd-product-support-heading{
+  display:grid;
+  grid-template-columns:50px minmax(0,1fr);
+  gap:13px;
+  align-items:start;
+  margin-bottom:16px;
+}
+.pd-product-support-icon{
+  width:50px;
+  height:50px;
+  display:grid;
+  place-items:center;
+  border-radius:15px;
+  background:#e7f8ed;
+  color:#168146;
+}
+.pd-product-support-icon svg{
+  width:25px;
+  height:25px;
+}
+.pd-product-support-heading small{
+  display:block;
+  margin-bottom:4px;
+  color:#48d27a;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.1em;
+}
+.pd-product-support-heading h2{
+  margin:0 42px 4px 0 !important;
+  font-size:25px;
+}
+.pd-product-support-heading p{
+  margin:0;
+  color:#b7b8bc;
+  font-size:13px;
+  line-height:1.5;
+}
+.pd-product-support-product{
+  display:grid;
+  grid-template-columns:58px minmax(0,1fr);
+  gap:11px;
+  align-items:center;
+  padding:10px;
+  border:1px solid #2e3135;
+  border-radius:14px;
+  background:#15161a;
+}
+.pd-product-support-product img,
+.pd-product-support-product-placeholder{
+  width:58px;
+  height:58px;
+  display:grid;
+  place-items:center;
+  object-fit:cover;
+  border-radius:11px;
+  background:#25262a;
+  color:#a6a7ab;
+}
+.pd-product-support-product-placeholder svg{
+  width:23px;
+}
+.pd-product-support-product strong{
+  display:block;
+  overflow:hidden;
+  font-size:14px;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.pd-product-support-product small{
+  display:block;
+  margin-top:3px;
+  color:#92949a;
+  font-size:11px;
+}
+.pd-product-support-questions{
+  display:grid;
+  gap:8px;
+  margin-top:14px;
+}
+.pd-product-support-questions a{
+  min-height:48px;
+  padding:0 14px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  border:1px solid #2e3135;
+  border-radius:12px;
+  background:#15161a;
+  color:#fff;
+  font-size:13px;
+  font-weight:800;
+  text-decoration:none;
+}
+.pd-product-support-questions a:hover{
+  border-color:#3f7653;
+  background:#18231c;
+}
+.pd-product-support-questions a span:last-child{
+  color:#48d27a;
+  font-size:20px;
+}
+.pd-product-support-call{
+  min-height:48px;
+  margin-top:12px;
+  padding:0 14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:12px;
+  background:#e4a044;
+  color:#20150a;
+  font-size:13px;
+  font-weight:900;
+  text-decoration:none;
+}
+.pd-product-support-note{
+  margin:11px 0 0;
+  color:#8f9196;
+  font-size:11px;
+  line-height:1.5;
+  text-align:center;
+}
+
+@media(max-width:620px){
+  .pd-product-support-modal{
+    width:100% !important;
+  }
+  .pd-product-support-heading h2{
+    font-size:23px;
   }
 }
       `}
