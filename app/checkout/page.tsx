@@ -699,12 +699,7 @@ export default function CheckoutPage() {
                     </small>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => router.push('/cart')}
-                  >
-                    Change
-                  </button>
+
                 </div>
 
                 <div className="free-gift-checkout-list">
@@ -1007,7 +1002,7 @@ export default function CheckoutPage() {
 
         .free-gift-card-head {
           display: grid;
-          grid-template-columns: auto minmax(0, 1fr) auto;
+          grid-template-columns: auto minmax(0, 1fr);
           align-items: center;
           gap: 13px;
         }
@@ -1028,17 +1023,6 @@ export default function CheckoutPage() {
         .free-gift-card-head small {
           margin-top: 4px;
           color: #766d64;
-        }
-
-        .free-gift-card-head button {
-          height: 36px;
-          padding: 0 13px;
-          border: 1px solid #d9d1c9;
-          border-radius: 10px;
-          color: #168648;
-          background: #ffffff;
-          font-weight: 500;
-          cursor: pointer;
         }
 
         .free-gift-checkout-list {
@@ -1211,10 +1195,6 @@ export default function CheckoutPage() {
               auto minmax(0, 1fr);
           }
 
-          .free-gift-card-head button {
-            grid-column: 1 / -1;
-            width: 100%;
-          }
         }
       `}</style>
     </main>
