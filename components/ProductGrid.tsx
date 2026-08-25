@@ -2061,9 +2061,9 @@ export function ProductGrid({
                     <img
                       src={image}
                       alt={localizedTitleOf(item)}
-                      loading={itemIndex < 4 ? 'eager' : 'lazy'}
+                      loading={itemIndex < 2 ? 'eager' : 'lazy'}
                       decoding="async"
-                      fetchPriority={itemIndex < 2 ? 'high' : 'low'}
+                      fetchPriority={itemIndex === 0 ? 'high' : 'auto'}
                       width={640}
                       height={800}
                     />
@@ -2268,6 +2268,18 @@ export function ProductGrid({
       )}
 
       <style jsx global>{`
+        /*
+         * PERFORMANCE
+         * -----------
+         * Let the browser skip layout/paint work for product cards that are
+         * far below the viewport. This keeps category changes and scrolling
+         * responsive even when a category contains many products.
+         */
+        .shop-product-grid > .product-card.rich {
+          content-visibility: auto;
+          contain-intrinsic-size: 520px;
+        }
+
         .product-card.rich .product-image {
           display: block;
           overflow: hidden;
