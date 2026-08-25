@@ -435,8 +435,8 @@ function productVideoUrl(product: BusinessProduct): string {
   const direct = text(
     raw.product_video_url ||
       raw.video_url ||
-      raw.playback_720_url ||
       raw.playback_480_url ||
+      raw.playback_720_url ||
       raw.playback_url ||
       raw.business_video_url,
   ).trim();
@@ -608,8 +608,8 @@ function OfferCard({
   const [playing, setPlaying] = useState(false);
 
   const video = text(
-    item.playback_720_url ||
-      item.playback_480_url ||
+    item.playback_480_url ||
+      item.playback_720_url ||
       item.playback_url ||
       item.business_video_url,
   );
@@ -1421,8 +1421,8 @@ export function OfferFeed() {
       regularOffers
         .map((item) =>
           text(
-            item.playback_720_url ||
-              item.playback_480_url ||
+            item.playback_480_url ||
+              item.playback_720_url ||
               item.playback_url ||
               item.business_video_url,
           ).trim(),
@@ -1459,8 +1459,8 @@ export function OfferFeed() {
 
     return combinedItems.filter((item) => {
       const videoUrl = text(
-        item.playback_720_url ||
-          item.playback_480_url ||
+        item.playback_480_url ||
+          item.playback_720_url ||
           item.playback_url ||
           item.business_video_url,
       );
