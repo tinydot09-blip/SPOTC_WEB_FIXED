@@ -339,6 +339,10 @@ function linkedMainProduct(
   item: BusinessListing,
   allProducts: BusinessProduct[],
 ): OfferProduct | null {
+  useEffect(() => {
+    setVideoSourceIndex(0);
+  }, [item.id, videoCandidates]);
+
   const offerId = text(item.id).trim();
   if (!offerId) return null;
 
@@ -641,12 +645,28 @@ function OfferCard({
   const [muted, setMuted] = useState(true);
   const [playing, setPlaying] = useState(false);
 
-  const video = text(
-    item.playback_480_url ||
-      item.playback_720_url ||
-      item.playback_url ||
+  const videoCandidates = useMemo(
+    () =>
+      [
+        text(item.playback_480_url).trim(),
+        text(item.playback_720_url).trim(),
+        text(item.playback_url).trim(),
+        text(item.business_video_url).trim(),
+      ].filter(
+        (url, candidateIndex, urls) =>
+          Boolean(url) && urls.indexOf(url) === candidateIndex,
+      ),
+    [
       item.business_video_url,
+      item.playback_480_url,
+      item.playback_720_url,
+      item.playback_url,
+    ],
   );
+
+  const [videoSourceIndex, setVideoSourceIndex] = useState(0);
+
+  const video = videoCandidates[videoSourceIndex] || "";
 
   const offerId = text(item.id).trim();
 
@@ -899,14 +919,34 @@ function OfferCard({
       <article className="offer-slide spotc-product-offer-slide">
         <div className="offer-media" onClick={togglePlayback}>
           {video ? (
-           <video
-  ref={videoRef}
-  src={video}
-  playsInline
-  loop
-  muted={muted}
-  preload={index < 2 ? "auto" : "metadata"}
-/>
+            <video
+              ref={videoRef}
+              src={video}
+              playsInline
+              loop
+              muted={muted}
+              autoPlay={index === 0}
+              preload={index < 2 ? "auto" : "metadata"}
+              onCanPlay={() => {
+                if (index !== 0) return;
+
+                const element = videoRef.current;
+                if (!element || !element.paused) return;
+
+                void element
+                  .play()
+                  .then(() => setPlaying(true))
+                  .catch(() => undefined);
+              }}
+              onError={() => {
+                setPlaying(false);
+
+                setVideoSourceIndex((current) => {
+                  const next = current + 1;
+                  return next < videoCandidates.length ? next : current;
+                });
+              }}
+            />
           ) : (
             <div className="offer-video-missing">Video unavailable</div>
           )}
