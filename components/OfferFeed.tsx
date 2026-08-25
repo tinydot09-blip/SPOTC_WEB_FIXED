@@ -834,9 +834,18 @@ function OfferCard({
     const videoElement = videoRef.current;
     if (!videoElement) return;
 
+    if (index < 2) {
+      videoElement.load();
+    }
+  }, [index, video]);
+
+  useEffect(() => {
+    const videoElement = videoRef.current;
+    if (!videoElement) return;
+
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && entry.intersectionRatio >= 0.72) {
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.45) {
           videoElement
             .play()
             .then(() => setPlaying(true))
@@ -846,7 +855,7 @@ function OfferCard({
           setPlaying(false);
         }
       },
-      { threshold: [0.3, 0.72] },
+      { threshold: [0.2, 0.45] },
     );
 
     observer.observe(videoElement);
@@ -890,14 +899,14 @@ function OfferCard({
       <article className="offer-slide spotc-product-offer-slide">
         <div className="offer-media" onClick={togglePlayback}>
           {video ? (
-            <video
-              ref={videoRef}
-              src={video}
-              playsInline
-              loop
-              muted={muted}
-              preload="metadata"
-            />
+           <video
+  ref={videoRef}
+  src={video}
+  playsInline
+  loop
+  muted={muted}
+  preload={index < 2 ? "auto" : "metadata"}
+/>
           ) : (
             <div className="offer-video-missing">Video unavailable</div>
           )}
