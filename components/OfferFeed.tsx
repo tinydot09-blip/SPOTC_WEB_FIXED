@@ -339,10 +339,6 @@ function linkedMainProduct(
   item: BusinessListing,
   allProducts: BusinessProduct[],
 ): OfferProduct | null {
-  useEffect(() => {
-    setVideoSourceIndex(0);
-  }, [item.id, videoCandidates]);
-
   const offerId = text(item.id).trim();
   if (!offerId) return null;
 
@@ -667,6 +663,10 @@ function OfferCard({
   const [videoSourceIndex, setVideoSourceIndex] = useState(0);
 
   const video = videoCandidates[videoSourceIndex] || "";
+
+  useEffect(() => {
+    setVideoSourceIndex(0);
+  }, [item.id, videoCandidates]);
 
   const offerId = text(item.id).trim();
 
