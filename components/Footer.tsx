@@ -12,7 +12,7 @@ export default function Footer() {
             aria-label="SPOTC Home"
           >
             <img
-              src="/images/web%20logo%20color.png"
+              src="/images/web%20logo%20color%footer.png"
               alt="Spotc.in"
               className="spotc-footer-logo"
             />
