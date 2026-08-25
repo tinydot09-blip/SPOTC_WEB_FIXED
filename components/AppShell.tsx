@@ -681,12 +681,17 @@ if (!signedInUser) {
 
       <header className="spotc-site-header">
         <div className="spotc-header-inner">
-          <Link
-            href="/offers"
-            className="spotc-header-brand"
-          >
-            <strong>SpotC.in</strong>
-          </Link>
+        <Link
+  href="/offers"
+  className="spotc-header-brand"
+  aria-label="SPOTC Home"
+>
+  <img
+    src="/images/web%20logo%20color.png"
+    alt="Spotc.in"
+    className="spotc-header-logo"
+  />
+</Link>
 
           <nav className="spotc-desktop-navigation">
   {navigation.map((item) => {
@@ -1294,12 +1299,12 @@ if (!signedInUser) {
           line-height: 1;
         }
 
-        .spotc-header-brand strong {
-          font-size: 24px;
-          font-weight: 900;
-          letter-spacing: 0px;
-          line-height: 1;
-          white-space: nowrap;
+        .spotc-header-logo {
+          display: block;
+          width: 150px;
+          height: auto;
+          max-height: 48px;
+          object-fit: contain;
         }
 
         .spotc-desktop-navigation{
@@ -1913,6 +1918,11 @@ if (!signedInUser) {
         ) {
           .spotc-site-header {
             height: 62px;
+          }
+
+          .spotc-header-logo {
+            width: 105px;
+            max-height: 40px;
           }
 
           .spotc-global-delivery-banner {
