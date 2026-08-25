@@ -632,7 +632,7 @@ function OfferCard({
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRef = useRef<HTMLDivElement>(null);
 
-  const [shouldLoadVideo, setShouldLoadVideo] = useState(index <= 1);
+  const [shouldLoadVideo, setShouldLoadVideo] = useState(index === 0);
 
   const [user, setUser] = useState<User | null>(
     auth?.currentUser && !auth.currentUser.isAnonymous
@@ -861,24 +861,19 @@ function OfferCard({
   };
 
   useEffect(() => {
-    if (index <= 1) {
-      setShouldLoadVideo(true);
-      return;
-    }
-
     const mediaElement = mediaRef.current;
     if (!mediaElement) return;
 
     const preloadObserver = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          setShouldLoadVideo(true);
-          preloadObserver.disconnect();
-        }
+        // Keep only videos close to the current viewport loaded.
+        // This prevents 20+ previously viewed videos from staying buffered
+        // in memory and competing for decoding/network resources.
+        setShouldLoadVideo(entry.isIntersecting);
       },
       {
         root: null,
-        rootMargin: "100% 0px",
+        rootMargin: "110% 0px",
         threshold: 0.01,
       },
     );
@@ -886,7 +881,19 @@ function OfferCard({
     preloadObserver.observe(mediaElement);
 
     return () => preloadObserver.disconnect();
-  }, [index]);
+  }, []);
+
+  useEffect(() => {
+    const videoElement = videoRef.current;
+    if (!videoElement) return;
+
+    if (!shouldLoadVideo) {
+      videoElement.pause();
+      videoElement.removeAttribute("src");
+      videoElement.load();
+      setPlaying(false);
+    }
+  }, [shouldLoadVideo]);
 
   useEffect(() => {
     const videoElement = videoRef.current;
@@ -1008,7 +1015,7 @@ function OfferCard({
               muted={muted}
               preload={
                 activeVideo
-                  ? index <= 1
+                  ? index === 0
                     ? "auto"
                     : "metadata"
                   : "none"
