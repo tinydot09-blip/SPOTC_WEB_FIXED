@@ -630,6 +630,9 @@ function OfferCard({
   delivery: ReturnType<typeof useDeliveryAvailability>;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaRef = useRef<HTMLDivElement>(null);
+
+  const [shouldLoadVideo, setShouldLoadVideo] = useState(index <= 1);
 
   const [user, setUser] = useState<User | null>(
     auth?.currentUser && !auth.currentUser.isAnonymous
@@ -663,6 +666,13 @@ function OfferCard({
   const [videoSourceIndex, setVideoSourceIndex] = useState(0);
 
   const video = videoCandidates[videoSourceIndex] || "";
+  const activeVideo = shouldLoadVideo ? video : "";
+
+  const videoPoster = text(
+    item.thumbnail_url ||
+      (item as BusinessListing & Record<string, unknown>).thumbnail ||
+      (item as BusinessListing & Record<string, unknown>).poster_url,
+  ).trim();
 
   useEffect(() => {
     setVideoSourceIndex(0);
@@ -851,17 +861,45 @@ function OfferCard({
   };
 
   useEffect(() => {
+    if (index <= 1) {
+      setShouldLoadVideo(true);
+      return;
+    }
+
+    const mediaElement = mediaRef.current;
+    if (!mediaElement) return;
+
+    const preloadObserver = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShouldLoadVideo(true);
+          preloadObserver.disconnect();
+        }
+      },
+      {
+        root: null,
+        rootMargin: "100% 0px",
+        threshold: 0.01,
+      },
+    );
+
+    preloadObserver.observe(mediaElement);
+
+    return () => preloadObserver.disconnect();
+  }, [index]);
+
+  useEffect(() => {
     const videoElement = videoRef.current;
-    if (!videoElement) return;
+    if (!videoElement || !activeVideo) return;
 
     if (index === 0) {
       videoElement.load();
     }
-  }, [index, video]);
+  }, [activeVideo, index]);
 
   useEffect(() => {
     const videoElement = videoRef.current;
-    if (!videoElement) return;
+    if (!videoElement || !activeVideo) return;
 
     const playbackKey = `${offerId || resolvedProductId || index}`;
 
@@ -909,11 +947,16 @@ function OfferCard({
         stopIfAnotherVideoStarts as EventListener,
       );
     };
-  }, [index, offerId, resolvedProductId]);
+  }, [activeVideo, index, offerId, resolvedProductId]);
 
   const togglePlayback = () => {
+    if (!shouldLoadVideo) {
+      setShouldLoadVideo(true);
+      return;
+    }
+
     const videoElement = videoRef.current;
-    if (!videoElement) return;
+    if (!videoElement || !activeVideo) return;
 
     if (videoElement.paused) {
       const playbackKey = `${offerId || resolvedProductId || index}`;
@@ -954,15 +997,22 @@ function OfferCard({
       aria-label={`${productTitle} offer ${index + 1}`}
     >
       <article className="offer-slide spotc-product-offer-slide">
-        <div className="offer-media" onClick={togglePlayback}>
+        <div ref={mediaRef} className="offer-media" onClick={togglePlayback}>
           {video ? (
             <video
               ref={videoRef}
-              src={video}
+              src={activeVideo || undefined}
+              poster={videoPoster || undefined}
               playsInline
               loop
               muted={muted}
-              preload={index === 0 ? "auto" : "metadata"}
+              preload={
+                activeVideo
+                  ? index <= 1
+                    ? "auto"
+                    : "metadata"
+                  : "none"
+              }
               onError={() => {
                 setPlaying(false);
 
@@ -978,7 +1028,7 @@ function OfferCard({
 
           <div className="offer-shade" />
 
-          {!playing && video && (
+          {!playing && activeVideo && (
             <div className="offer-play">
               <Play fill="currentColor" />
             </div>
