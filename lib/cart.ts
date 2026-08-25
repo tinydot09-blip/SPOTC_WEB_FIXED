@@ -7,6 +7,7 @@ export type CartItem = {
   image: string;
   price: number;
   qty: number;
+  stockQty?: number;
   businessId?: string;
   businessName?: string;
   size?: string;
@@ -33,6 +34,38 @@ function safeQuantity(
   }
 
   return Math.floor(quantity);
+}
+
+function normalizeStockQuantity(
+  value: unknown,
+): number | undefined {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ''
+  ) {
+    return undefined;
+  }
+
+  const quantity = Number(value);
+
+  if (!Number.isFinite(quantity)) {
+    return undefined;
+  }
+
+  return Math.max(
+    0,
+    Math.floor(quantity),
+  );
+}
+
+function stockQuantityOf(
+  product: BusinessProduct,
+): number | undefined {
+  return normalizeStockQuantity(
+    product.stock_qty ??
+      product.stock_quantity,
+  );
 }
 
 const businessIdOf = (
@@ -167,6 +200,11 @@ export function readCart(): CartItem[] {
               item.qty,
             ),
 
+            stockQty:
+              normalizeStockQuantity(
+                item.stockQty,
+              ),
+
             businessId:
               String(
                 item.businessId ||
@@ -202,8 +240,24 @@ export function readCart(): CartItem[] {
          * combine their quantities.
          */
         if (existing) {
-          existing.qty +=
+          const mergedQuantity =
+            existing.qty +
             normalizedItem.qty;
+
+          const stockQty =
+            existing.stockQty ??
+            normalizedItem.stockQty;
+
+          existing.stockQty =
+            stockQty;
+
+          existing.qty =
+            stockQty === undefined
+              ? mergedQuantity
+              : Math.min(
+                  mergedQuantity,
+                  Math.max(1, stockQty),
+                );
 
           return;
         }
@@ -339,6 +393,11 @@ export function writeCart(
             item.qty,
           ),
 
+          stockQty:
+            normalizeStockQuantity(
+              item.stockQty,
+            ),
+
           businessId:
             item.businessId ||
             '',
@@ -363,8 +422,24 @@ export function writeCart(
         merged.get(key);
 
       if (existing) {
-        existing.qty +=
+        const mergedQuantity =
+          existing.qty +
           normalizedItem.qty;
+
+        const stockQty =
+          existing.stockQty ??
+          normalizedItem.stockQty;
+
+        existing.stockQty =
+          stockQty;
+
+        existing.qty =
+          stockQty === undefined
+            ? mergedQuantity
+            : Math.min(
+                mergedQuantity,
+                Math.max(1, stockQty),
+              );
 
         return;
       }
@@ -424,6 +499,16 @@ export function addProduct(
       options?.qty,
     );
 
+  const availableStock =
+    stockQuantityOf(product);
+
+  if (
+    availableStock !== undefined &&
+    availableStock <= 0
+  ) {
+    return;
+  }
+
   const productId =
     String(
       product.id,
@@ -442,19 +527,25 @@ export function addProduct(
 
   if (existingItem) {
     /*
-     * Add selected quantity to
-     * existing quantity.
-     *
-     * Example:
-     * cart already 1
-     * product page qty 2
-     * result becomes 3
+     * Keep the cart quantity within the
+     * product's current available stock.
      */
-    existingItem.qty =
+    existingItem.stockQty =
+      availableStock;
+
+    const requestedQuantity =
       safeQuantity(
         existingItem.qty,
       ) +
       quantityToAdd;
+
+    existingItem.qty =
+      availableStock === undefined
+        ? requestedQuantity
+        : Math.min(
+            requestedQuantity,
+            availableStock,
+          );
   } else {
     items.push({
       id: productId,
@@ -475,7 +566,15 @@ export function addProduct(
         ),
 
       qty:
-        quantityToAdd,
+        availableStock === undefined
+          ? quantityToAdd
+          : Math.min(
+              quantityToAdd,
+              availableStock,
+            ),
+
+      stockQty:
+        availableStock,
 
       businessId:
         businessIdOf(
@@ -537,10 +636,21 @@ export function updateCartQuantity(
     return;
   }
 
-  item.qty =
+  const requestedQuantity =
     safeQuantity(
       quantity,
     );
+
+  item.qty =
+    item.stockQty === undefined
+      ? requestedQuantity
+      : Math.min(
+          requestedQuantity,
+          Math.max(
+            1,
+            item.stockQty,
+          ),
+        );
 
   writeCart(
     items,

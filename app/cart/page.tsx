@@ -563,9 +563,16 @@ export default function CartPage() {
       Number(item.qty) || 1,
     );
 
+    const availableStock =
+      item.stockQty;
+
     const safeQuantity = Math.max(
       1,
-      Math.floor(nextQuantity),
+      Math.min(
+        Math.floor(nextQuantity),
+        availableStock ??
+          Number.MAX_SAFE_INTEGER,
+      ),
     );
 
     if (safeQuantity === currentQuantity) return;
@@ -804,55 +811,67 @@ export default function CartPage() {
                         </div>
 
                         <div className="spotc-cart-controls">
-                          <div
-                            className="spotc-cart-quantity"
-                            aria-label="Product quantity"
-                          >
-                            <button
-                              type="button"
-                              aria-label="Decrease quantity"
-                              disabled={
-                                Math.max(
+                          {(
+                            item.stockQty === undefined ||
+                            item.stockQty > 1
+                          ) && (
+                            <div
+                              className="spotc-cart-quantity"
+                              aria-label="Product quantity"
+                            >
+                              <button
+                                type="button"
+                                aria-label="Decrease quantity"
+                                disabled={
+                                  Math.max(
+                                    1,
+                                    Number(item.qty) || 1,
+                                  ) <= 1
+                                }
+                                onClick={() =>
+                                  updateItemQuantity(
+                                    index,
+                                    Math.max(
+                                      1,
+                                      Number(item.qty) || 1,
+                                    ) - 1,
+                                  )
+                                }
+                              >
+                                <Minus size={16} />
+                              </button>
+
+                              <strong>
+                                {Math.max(
                                   1,
                                   Number(item.qty) || 1,
-                                ) <= 1
-                              }
-                              onClick={() =>
-                                updateItemQuantity(
-                                  index,
+                                )}
+                              </strong>
+
+                              <button
+                                type="button"
+                                aria-label="Increase quantity"
+                                disabled={
+                                  item.stockQty !== undefined &&
                                   Math.max(
                                     1,
                                     Number(item.qty) || 1,
-                                  ) - 1,
-                                )
-                              }
-                            >
-                              <Minus size={16} />
-                            </button>
-
-                            <strong>
-                              {Math.max(
-                                1,
-                                Number(item.qty) || 1,
-                              )}
-                            </strong>
-
-                            <button
-                              type="button"
-                              aria-label="Increase quantity"
-                              onClick={() =>
-                                updateItemQuantity(
-                                  index,
-                                  Math.max(
-                                    1,
-                                    Number(item.qty) || 1,
-                                  ) + 1,
-                                )
-                              }
-                            >
-                              <Plus size={16} />
-                            </button>
-                          </div>
+                                  ) >= item.stockQty
+                                }
+                                onClick={() =>
+                                  updateItemQuantity(
+                                    index,
+                                    Math.max(
+                                      1,
+                                      Number(item.qty) || 1,
+                                    ) + 1,
+                                  )
+                                }
+                              >
+                                <Plus size={16} />
+                              </button>
+                            </div>
+                          )}
 
                           <button
                             type="button"
