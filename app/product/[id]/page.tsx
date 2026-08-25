@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { cache } from 'react';
 
 import ProductDetail from './ProductDetail';
 import { getProductById } from '@/lib/data';
@@ -12,6 +13,76 @@ type ProductPageProps = {
 };
 
 type ProductRecord = Record<string, unknown>;
+
+/*
+ * React cache deduplicates the product read used by generateMetadata()
+ * and ProductPage() during the same server render.
+ */
+const getProduct = cache((id: string) => getProductById(id));
+
+/*
+ * ProductDetail is a Client Component. Firestore values such as
+ * DocumentReference / Timestamp cannot be passed to it directly.
+ * Convert them to plain serializable values first.
+ */
+function toClientValue(value: unknown): unknown {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(toClientValue);
+  }
+
+  if (typeof value === 'object') {
+    const candidate = value as {
+      id?: unknown;
+      path?: unknown;
+      toDate?: () => Date;
+    };
+
+    if (typeof candidate.toDate === 'function') {
+      try {
+        return candidate.toDate().toISOString();
+      } catch {
+        return null;
+      }
+    }
+
+    if (
+      typeof candidate.id === 'string' &&
+      typeof candidate.path === 'string'
+    ) {
+      return {
+        id: candidate.id,
+        path: candidate.path,
+      };
+    }
+
+    const output: Record<string, unknown> = {};
+
+    Object.entries(value as Record<string, unknown>).forEach(
+      ([key, item]) => {
+        if (typeof item === 'function') return;
+        output[key] = toClientValue(item);
+      },
+    );
+
+    return output;
+  }
+
+  return String(value);
+}
 
 function text(value: unknown): string {
   return String(value ?? '').trim();
@@ -375,7 +446,7 @@ export async function generateMetadata({
 
   try {
     const product =
-      await getProductById(productId);
+      await getProduct(productId);
 
     if (!product) {
       return {
@@ -533,9 +604,13 @@ export default async function ProductPage({
     | Record<string, unknown>
     | null = null;
 
+  let initialProduct: import('@/lib/types').BusinessProduct | null = null;
+
   try {
     const product =
-      await getProductById(productId);
+      await getProduct(productId);
+
+    initialProduct = product;
 
     if (product) {
       const record =
@@ -754,7 +829,11 @@ export default async function ProductPage({
         />
       ) : null}
 
-      <ProductDetail />
+      <ProductDetail
+        initialProduct={
+          toClientValue(initialProduct) as import('@/lib/types').BusinessProduct | null
+        }
+      />
     </>
   );
 }

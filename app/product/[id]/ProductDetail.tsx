@@ -698,13 +698,15 @@ function ProductPageLoader() {
   );
 }
 
-export default function ProductDetailPage() {
+export default function ProductDetailPage({ initialProduct }: { initialProduct?: BusinessProduct | null }) {
   const params = useParams<{ id: string | string[] }>();
   const router = useRouter();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { language, t, productTitle } = useSpotcLanguage();
 
-  const [product, setProduct] = useState<BusinessProduct | null | undefined>(undefined);
+  const [product, setProduct] = useState<BusinessProduct | null | undefined>(
+    initialProduct === undefined ? undefined : initialProduct,
+  );
   const [related, setRelated] = useState<BusinessProduct[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState('');
@@ -778,7 +780,9 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
   useEffect(() => {
     let active = true;
 
-    setProduct(undefined);
+    if (initialProduct === undefined || String(initialProduct?.id || '') !== String(id)) {
+      setProduct(undefined);
+    }
     setRelated([]);
     setSelectedImage('');
     setSelectedMediaUrl('');
@@ -795,7 +799,12 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     setSelectedGiftIds([]);
     setChangingGiftIndex(null);
 
-    getProductById(id)
+    const productRequest =
+      initialProduct !== undefined && String(initialProduct?.id || '') === String(id)
+        ? Promise.resolve(initialProduct)
+        : getProductById(id);
+
+    productRequest
       .then((loadedProduct) => {
         if (!active) return;
         setProduct(loadedProduct);
@@ -950,7 +959,7 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, initialProduct]);
 
   useEffect(() => {
     if (!product || !firebaseReady) return;
