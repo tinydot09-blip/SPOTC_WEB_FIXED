@@ -16,7 +16,6 @@ import {
   Flag,
   Gift,
   Heart,
-  Play,
   Share2,
   ShoppingBag,
   Volume2,
@@ -621,18 +620,22 @@ function productOfferListing(
 function OfferCard({
   item,
   index,
+  activeIndex,
   allProducts,
   delivery,
 }: {
   item: BusinessListing;
   index: number;
+  activeIndex: number;
   allProducts: BusinessProduct[];
   delivery: ReturnType<typeof useDeliveryAvailability>;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRef = useRef<HTMLDivElement>(null);
 
-  const [shouldLoadVideo, setShouldLoadVideo] = useState(index === 0);
+  // Rolling 5-video window: current + 2 before + 2 after.
+  // This preloads upcoming videos without keeping the whole feed in memory.
+  const shouldLoadVideo = Math.abs(index - activeIndex) <= 2;
 
   const [user, setUser] = useState<User | null>(
     auth?.currentUser && !auth.currentUser.isAnonymous
@@ -861,29 +864,6 @@ function OfferCard({
   };
 
   useEffect(() => {
-    const mediaElement = mediaRef.current;
-    if (!mediaElement) return;
-
-    const preloadObserver = new IntersectionObserver(
-      ([entry]) => {
-        // Keep only videos close to the current viewport loaded.
-        // This prevents 20+ previously viewed videos from staying buffered
-        // in memory and competing for decoding/network resources.
-        setShouldLoadVideo(entry.isIntersecting);
-      },
-      {
-        root: null,
-        rootMargin: "110% 0px",
-        threshold: 0.01,
-      },
-    );
-
-    preloadObserver.observe(mediaElement);
-
-    return () => preloadObserver.disconnect();
-  }, []);
-
-  useEffect(() => {
     const videoElement = videoRef.current;
     if (!videoElement) return;
 
@@ -957,10 +937,7 @@ function OfferCard({
   }, [activeVideo, index, offerId, resolvedProductId]);
 
   const togglePlayback = () => {
-    if (!shouldLoadVideo) {
-      setShouldLoadVideo(true);
-      return;
-    }
+    if (!shouldLoadVideo) return;
 
     const videoElement = videoRef.current;
     if (!videoElement || !activeVideo) return;
@@ -1015,7 +992,7 @@ function OfferCard({
               muted={muted}
               preload={
                 activeVideo
-                  ? index === 0
+                  ? index >= activeIndex && index <= activeIndex + 2
                     ? "auto"
                     : "metadata"
                   : "none"
@@ -1035,11 +1012,6 @@ function OfferCard({
 
           <div className="offer-shade" />
 
-          {!playing && activeVideo && (
-            <div className="offer-play">
-              <Play fill="currentColor" />
-            </div>
-          )}
         </div>
 
         <div className="offer-top-overlay">
@@ -1527,6 +1499,7 @@ export function OfferFeed() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [visitorSeed, setVisitorSeed] = useState("server");
+  const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
     setVisitorSeed(getOrCreateVisitorSessionSeed());
@@ -1695,6 +1668,44 @@ export function OfferFeed() {
 
     return shuffleOffersForVisitor(result, visitorSeed);
   }, [allProducts, combinedItems, search, visitorSeed]);
+
+  useEffect(() => {
+    const container = feedRef.current;
+    if (!container || filtered.length === 0) return;
+
+    const slides = Array.from(
+      container.querySelectorAll<HTMLElement>(".offer-desktop-layout"),
+    );
+
+    const activeObserver = new IntersectionObserver(
+      (entries) => {
+        let bestIndex = -1;
+        let bestRatio = 0;
+
+        for (const entry of entries) {
+          if (!entry.isIntersecting || entry.intersectionRatio < bestRatio) continue;
+
+          const slideIndex = slides.indexOf(entry.target as HTMLElement);
+          if (slideIndex >= 0) {
+            bestIndex = slideIndex;
+            bestRatio = entry.intersectionRatio;
+          }
+        }
+
+        if (bestIndex >= 0 && bestRatio >= 0.45) {
+          setActiveIndex(bestIndex);
+        }
+      },
+      {
+        root: null,
+        threshold: [0.25, 0.45, 0.6, 0.8],
+      },
+    );
+
+    slides.forEach((slide) => activeObserver.observe(slide));
+
+    return () => activeObserver.disconnect();
+  }, [filtered.length]);
 
   useEffect(() => {
     const container = feedRef.current;
@@ -1880,6 +1891,7 @@ export function OfferFeed() {
           <OfferCard
             item={item}
             index={index}
+            activeIndex={activeIndex}
             allProducts={allProducts}
             delivery={delivery}
             key={item.id}
