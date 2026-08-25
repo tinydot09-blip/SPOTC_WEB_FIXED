@@ -894,23 +894,25 @@ const discountOf = (product: BusinessProduct): number => {
 
 
 /*
- * FEATURED SHUFFLE
- * ----------------
- * Mix all visible products so upload order / similar colour variants
- * do not appear one after another.
- *
- * This is deterministic, so the order stays stable during refreshes
- * instead of jumping around every time React renders.
+ * VISITOR-SESSION FEATURED SHUFFLE
+ * --------------------------------
+ * Each browser session gets its own seed, so different visitors see a
+ * different Featured product order. The order remains stable while that
+ * visitor browses, opens a product, and comes back during the same session.
  */
-const featuredShuffleScore = (product: BusinessProduct): number => {
-  const value = [
-    textValue(product.id),
-    titleOf(product),
-    textValue(product.color),
-    textValue(product.sub_category),
-    textValue(product.age_group),
-  ].join('|');
+const getOrCreateVisitorSessionSeed = (): string => {
+  if (typeof window === 'undefined') return 'server';
 
+  const key = 'spotc-visitor-session-seed';
+  const existing = window.sessionStorage.getItem(key);
+  if (existing) return existing;
+
+  const seed = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  window.sessionStorage.setItem(key, seed);
+  return seed;
+};
+
+const seededHash = (value: string): number => {
   let hash = 2166136261;
 
   for (let index = 0; index < value.length; index += 1) {
@@ -923,12 +925,31 @@ const featuredShuffleScore = (product: BusinessProduct): number => {
 
 const shuffleFeaturedProducts = (
   products: BusinessProduct[],
+  visitorSeed: string,
 ): BusinessProduct[] =>
-  [...products].sort(
-    (a, b) =>
-      featuredShuffleScore(a) -
-      featuredShuffleScore(b),
-  );
+  [...products].sort((a, b) => {
+    const aValue = [
+      visitorSeed,
+      'shop',
+      textValue(a.id),
+      titleOf(a),
+      textValue(a.color),
+      textValue(a.sub_category),
+      textValue(a.age_group),
+    ].join('|');
+
+    const bValue = [
+      visitorSeed,
+      'shop',
+      textValue(b.id),
+      titleOf(b),
+      textValue(b.color),
+      textValue(b.sub_category),
+      textValue(b.age_group),
+    ].join('|');
+
+    return seededHash(aValue) - seededHash(bValue);
+  });
 
 const businessIdOf = (product: BusinessProduct): string => {
   const value =
@@ -1073,6 +1094,11 @@ export function ProductGrid({
 
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('Featured');
+  const [visitorSeed, setVisitorSeed] = useState('server');
+
+  useEffect(() => {
+    setVisitorSeed(getOrCreateVisitorSessionSeed());
+  }, []);
 
   const [categoryConfigs, setCategoryConfigs] =
     useState<ProductCategoryConfig[]>(FALLBACK_CATEGORY_CONFIGS);
@@ -1530,7 +1556,7 @@ export function ProductGrid({
      * Search and explicit sort choices keep their own order.
      */
     if (sort === 'Featured' && !searchQuery) {
-      return shuffleFeaturedProducts(result);
+      return shuffleFeaturedProducts(result, visitorSeed);
     }
 
     return result;
@@ -1541,6 +1567,7 @@ export function ProductGrid({
     mainCategory,
     subCategory,
     mainCategories,
+    visitorSeed,
   ]);
 
   const toggleCompare = (id: string) => {

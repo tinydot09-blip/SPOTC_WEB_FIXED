@@ -40,6 +40,40 @@ type OfferProduct = {
   productId: string;
 };
 
+function getOrCreateVisitorSessionSeed(): string {
+  if (typeof window === "undefined") return "server";
+
+  const key = "spotc-visitor-session-seed";
+  const existing = window.sessionStorage.getItem(key);
+  if (existing) return existing;
+
+  const seed = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  window.sessionStorage.setItem(key, seed);
+  return seed;
+}
+
+function seededHash(value: string): number {
+  let hash = 2166136261;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+}
+
+function shuffleOffersForVisitor(
+  offers: BusinessListing[],
+  visitorSeed: string,
+): BusinessListing[] {
+  return [...offers].sort((a, b) => {
+    const aKey = `${visitorSeed}|offer|${text(a.id)}|${offerProductId(a)}`;
+    const bKey = `${visitorSeed}|offer|${text(b.id)}|${offerProductId(b)}`;
+    return seededHash(aKey) - seededHash(bKey);
+  });
+}
+
 function dateValue(value: unknown): Date | null {
   if (!value) return null;
 
@@ -1361,6 +1395,11 @@ export function OfferFeed() {
   const [allProducts, setAllProducts] = useState<BusinessProduct[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [visitorSeed, setVisitorSeed] = useState("server");
+
+  useEffect(() => {
+    setVisitorSeed(getOrCreateVisitorSessionSeed());
+  }, []);
 
   useEffect(() => {
     const onSearch = (event: Event) =>
@@ -1457,7 +1496,7 @@ export function OfferFeed() {
     const seenVideos = new Set<string>();
     const now = new Date();
 
-    return combinedItems.filter((item) => {
+    const result = combinedItems.filter((item) => {
       const videoUrl = text(
         item.playback_480_url ||
           item.playback_720_url ||
@@ -1519,7 +1558,12 @@ export function OfferFeed() {
       seenVideos.add(normalizedVideo);
       return true;
     });
-  }, [allProducts, combinedItems, search]);
+
+    // Keep search results predictable. Normal offer browsing is mixed per visitor session.
+    if (query) return result;
+
+    return shuffleOffersForVisitor(result, visitorSeed);
+  }, [allProducts, combinedItems, search, visitorSeed]);
 
   useEffect(() => {
     const container = feedRef.current;
