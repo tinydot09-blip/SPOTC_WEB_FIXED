@@ -854,7 +854,7 @@ function OfferCard({
     const videoElement = videoRef.current;
     if (!videoElement) return;
 
-    if (index < 2) {
+    if (index === 0) {
       videoElement.load();
     }
   }, [index, video]);
@@ -863,10 +863,32 @@ function OfferCard({
     const videoElement = videoRef.current;
     if (!videoElement) return;
 
+    const playbackKey = `${offerId || resolvedProductId || index}`;
+
+    const stopIfAnotherVideoStarts = (event: Event) => {
+      const detail = (event as CustomEvent<string>).detail;
+
+      if (detail !== playbackKey) {
+        videoElement.pause();
+        setPlaying(false);
+      }
+    };
+
+    window.addEventListener(
+      "spotc-offer-video-playing",
+      stopIfAnotherVideoStarts as EventListener,
+    );
+
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && entry.intersectionRatio >= 0.45) {
-          videoElement
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+          window.dispatchEvent(
+            new CustomEvent("spotc-offer-video-playing", {
+              detail: playbackKey,
+            }),
+          );
+
+          void videoElement
             .play()
             .then(() => setPlaying(true))
             .catch(() => undefined);
@@ -875,19 +897,34 @@ function OfferCard({
           setPlaying(false);
         }
       },
-      { threshold: [0.2, 0.45] },
+      { threshold: [0.25, 0.6] },
     );
 
     observer.observe(videoElement);
-    return () => observer.disconnect();
-  }, []);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener(
+        "spotc-offer-video-playing",
+        stopIfAnotherVideoStarts as EventListener,
+      );
+    };
+  }, [index, offerId, resolvedProductId]);
 
   const togglePlayback = () => {
     const videoElement = videoRef.current;
     if (!videoElement) return;
 
     if (videoElement.paused) {
-      videoElement
+      const playbackKey = `${offerId || resolvedProductId || index}`;
+
+      window.dispatchEvent(
+        new CustomEvent("spotc-offer-video-playing", {
+          detail: playbackKey,
+        }),
+      );
+
+      void videoElement
         .play()
         .then(() => setPlaying(true))
         .catch(() => undefined);
@@ -925,19 +962,7 @@ function OfferCard({
               playsInline
               loop
               muted={muted}
-              autoPlay={index === 0}
-              preload={index < 2 ? "auto" : "metadata"}
-              onCanPlay={() => {
-                if (index !== 0) return;
-
-                const element = videoRef.current;
-                if (!element || !element.paused) return;
-
-                void element
-                  .play()
-                  .then(() => setPlaying(true))
-                  .catch(() => undefined);
-              }}
+              preload={index === 0 ? "auto" : "metadata"}
               onError={() => {
                 setPlaying(false);
 
