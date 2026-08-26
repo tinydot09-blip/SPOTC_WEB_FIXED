@@ -2710,39 +2710,39 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
   ];
 
   return (
-    <main className="pd-page">
-      <div className="pd-shop-category-bar" aria-label="Shop categories">
-        <div className="pd-shop-category-list">
-          {[
-            'Girl Dress',
-            'Earrings',
-            'Fancy Items',
-            'Toys',
-            'Keychains',
-          ].map((categoryName) => {
-            const isActive =
-              mainCategoryText.trim().toLowerCase() ===
-              categoryName.trim().toLowerCase();
+  <main className="pd-page">
+    <div className="pd-shop-category-bar" aria-label="Shop categories">
+      <div className="pd-shop-category-list">
+        {[
+          'Girl Dress',
+          'Earrings',
+          'Fancy Items',
+          'Toys',
+          'Keychains',
+        ].map((categoryName) => {
+          const isActive =
+            mainCategoryText.trim().toLowerCase() ===
+            categoryName.trim().toLowerCase();
 
-            return (
-              <button
-                key={categoryName}
-                type="button"
-                className={`pd-shop-category-pill${isActive ? ' active' : ''}`}
-                onClick={() =>
-                  router.push(
-                    `/shop?category=${encodeURIComponent(categoryName)}`,
-                  )
-                }
-              >
-                {categoryName}
-              </button>
-            );
-          })}
-        </div>
+          return (
+            <button
+              key={categoryName}
+              type="button"
+              className={`pd-shop-category-pill${isActive ? ' active' : ''}`}
+              onClick={() =>
+                router.push(
+                  `/shop?category=${encodeURIComponent(categoryName)}`,
+                )
+              }
+            >
+              {categoryName}
+            </button>
+          );
+        })}
+      </div>
+    </div>
 
-       
-      <section className="pd-main">
+    <section className="pd-main">
         <div className="pd-gallery">
           {selectedMedia?.type === 'video' ? (
             <div className="pd-image pd-media-video-shell">
