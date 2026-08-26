@@ -874,8 +874,7 @@ const oldPriceOf = (product: BusinessProduct): number =>
   );
 
 const freeGiftCount = (price: number): number => {
-  if (price < 80) return 0;
-  if (price < 200) return 1;
+  if (price < 100) return 0;
   return Math.floor(price / 100);
 };
 
@@ -1570,22 +1569,6 @@ export function ProductGrid({
     visitorSeed,
   ]);
 
-  const toggleCompare = (id: string) => {
-    setCompare((current) => {
-      const next = new Set(current);
-
-      if (next.has(id)) {
-        next.delete(id);
-      } else if (next.size < 3) {
-        next.add(id);
-      } else {
-        alert('You can select a maximum of 3 products.');
-      }
-
-      return next;
-    });
-  };
-
   const openComparisonShoppingCircle = async () => {
     if (!db || compareBusy) return;
 
@@ -2126,21 +2109,21 @@ export function ProductGrid({
 />
                 </button>
 
-                <button
-                  type="button"
-                  className={`compare-check ${
-                    compare.has(item.id) ? 'on' : ''
-                  }`}
-                  onClick={() =>
-                    toggleCompare(item.id)
-                  }
-                >
-                  <GitCompareArrows size={15} />
-
-                  {compare.has(item.id)
-                    ? t('Added')
-                    : t('Ask Friends')}
-                </button>
+                {giftCount > 0 && (
+                  <Link
+                    href={`/product/${item.id}?gift=1`}
+                    className="product-image-gift-badge"
+                    aria-label={`${giftCount} ${
+                      giftCount === 1 ? 'FREE Gift' : 'FREE Gifts'
+                    } included · ${localizedTitleOf(item)}`}
+                  >
+                    <Gift size={16} strokeWidth={2.4} aria-hidden="true" />
+                    <span>
+                      <strong>{giftCount} FREE</strong>{' '}
+                      {giftCount === 1 ? 'GIFT' : 'GIFTS'}
+                    </span>
+                  </Link>
+                )}
               </div>
 
               <div className="product-copy">
@@ -2169,21 +2152,6 @@ export function ProductGrid({
                       : t('Out of stock')}
                   </small>
                 </div>
-
-                {giftCount > 0 && (
-                  <Link
-                    href={`/product/${item.id}?gift=1`}
-                    className="product-free-gift-chip"
-                    aria-label={`${t('Select')} ${giftCount} ${giftCount === 1 ? t('FREE Gift') : t('FREE Gifts')} · ${localizedTitleOf(item)}`}
-                  >
-                    <Gift size={14} strokeWidth={2.2} aria-hidden="true" />
-                    <span>
-                      {language === 'ta'
-                        ? `${giftCount} ${giftCount === 1 ? 'இலவச பரிசு சேர்க்கப்பட்டுள்ளது' : 'இலவச பரிசுகள் சேர்க்கப்பட்டுள்ளன'}`
-                        : `${giftCount} FREE ${giftCount === 1 ? 'gift' : 'gifts'} included`}
-                    </span>
-                  </Link>
-                )}
 
                 <div className="price">
                   <strong>
@@ -2399,6 +2367,74 @@ export function ProductGrid({
             padding: 0 8px !important;
             font-size: 11px !important;
             border-radius: 9px !important;
+          }
+        }
+
+        /*
+         * SHOP PRODUCT CARD — FREE GIFT BADGE ON PRODUCT IMAGE
+         * Replaces the previous Ask Friends pill and makes the gift offer
+         * immediately visible without adding extra height below the image.
+         */
+        .product-card.rich .product-image-gift-badge {
+          position: absolute;
+          left: 14px;
+          bottom: 14px;
+          z-index: 6;
+          width: fit-content;
+          max-width: calc(100% - 28px);
+          min-height: 34px;
+          padding: 0 12px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          border: 2px solid #ffffff;
+          border-radius: 999px;
+          color: #171717;
+          background: linear-gradient(135deg, #ffd84d 0%, #ffb800 100%);
+          box-shadow: 0 5px 15px rgba(0, 0, 0, 0.22);
+          font-size: 13px;
+          font-weight: 800;
+          line-height: 1;
+          text-decoration: none;
+          white-space: nowrap;
+          box-sizing: border-box;
+        }
+
+        .product-card.rich .product-image-gift-badge:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 7px 18px rgba(0, 0, 0, 0.24);
+        }
+
+        .product-card.rich .product-image-gift-badge:active {
+          transform: translateY(0);
+        }
+
+        .product-card.rich .product-image-gift-badge strong {
+          font-weight: 900;
+        }
+
+        .product-card.rich .product-image-gift-badge svg {
+          width: 16px;
+          height: 16px;
+          flex: 0 0 16px;
+        }
+
+        @media (max-width: 700px) {
+          .product-card.rich .product-image-gift-badge {
+            left: 10px;
+            bottom: 10px;
+            max-width: calc(100% - 20px);
+            min-height: 31px;
+            padding: 0 10px;
+            gap: 5px;
+            font-size: 11px;
+          }
+
+          .product-card.rich .product-image-gift-badge svg {
+            width: 14px;
+            height: 14px;
+            flex-basis: 14px;
           }
         }
 

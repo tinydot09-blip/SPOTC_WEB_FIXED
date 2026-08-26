@@ -6,10 +6,9 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { readCart } from '@/lib/cart';
 
-const links = [
-  ['/offers', 'Offers'],
-  ['/shop', 'Shop'],
-  ['/spots', 'Spots'],
+const links = [ 
+  ['/shop', 'Shop'], 
+  ['/offers', 'Offers'], 
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
