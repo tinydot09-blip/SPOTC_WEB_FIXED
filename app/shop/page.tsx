@@ -42,33 +42,40 @@ export default function ShopPage() {
       {/* EXISTING PRODUCT GRID */}
       <ProductGrid />
 
+      {/* GAP BETWEEN PRODUCTS AND SEO */}
+      <div
+        aria-hidden="true"
+        style={{
+          width: '100%',
+          height: '28px',
+          minHeight: '28px',
+        }}
+      />
+
       {/* FULL WIDTH SEO SECTION */}
       <section
         style={{
           position: 'relative',
           left: '50%',
-          right: '50%',
           marginLeft: '-50vw',
-          marginRight: '-50vw',
           width: '100vw',
           backgroundColor: '#f8f6f1',
           boxSizing: 'border-box',
-          padding: '26px 0 34px',
+          padding: '30px 0 36px',
         }}
       >
-        {/* SAME CONTENT WIDTH / ALIGNMENT AS SITE */}
+        {/* ALIGNED CONTENT */}
         <div
           style={{
             width: '100%',
-            maxWidth: '1280px',
-            margin: '0 auto',
-            padding: '0 20px',
+            paddingLeft: 'clamp(20px, 12.8vw, 245px)',
+            paddingRight: 'clamp(20px, 12.8vw, 245px)',
             boxSizing: 'border-box',
           }}
         >
           <h2
             style={{
-              margin: '0 0 12px',
+              margin: '0 0 14px',
               fontSize: 'clamp(22px, 3vw, 30px)',
               lineHeight: 1.2,
               fontWeight: 800,
@@ -80,8 +87,8 @@ export default function ShopPage() {
 
           <p
             style={{
-              width: '100%',
               margin: 0,
+              width: '100%',
               fontSize: '16px',
               lineHeight: 1.7,
               color: '#333',
@@ -99,8 +106,8 @@ export default function ShopPage() {
 
           <p
             style={{
+              margin: '14px 0 0',
               width: '100%',
-              margin: '12px 0 0',
               fontSize: '15px',
               lineHeight: 1.7,
               color: '#555',
