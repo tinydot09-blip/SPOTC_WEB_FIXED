@@ -42,21 +42,27 @@ export default function ShopPage() {
       {/* EXISTING PRODUCT GRID */}
       <ProductGrid />
 
-      {/* SEO CONTENT - ALIGNED WITH PRODUCT GRID */}
+      {/* FULL WIDTH SEO SECTION */}
       <section
         style={{
-          width: '100%',
+          position: 'relative',
+          left: '50%',
+          right: '50%',
+          marginLeft: '-50vw',
+          marginRight: '-50vw',
+          width: '100vw',
           backgroundColor: '#f8f6f1',
-          padding: '20px 0 24px',
           boxSizing: 'border-box',
+          padding: '26px 0 34px',
         }}
       >
+        {/* SAME CONTENT WIDTH / ALIGNMENT AS SITE */}
         <div
           style={{
             width: '100%',
             maxWidth: '1280px',
             margin: '0 auto',
-            padding: '0 16px',
+            padding: '0 20px',
             boxSizing: 'border-box',
           }}
         >
@@ -66,6 +72,7 @@ export default function ShopPage() {
               fontSize: 'clamp(22px, 3vw, 30px)',
               lineHeight: 1.2,
               fontWeight: 800,
+              color: '#111',
             }}
           >
             Kids Wear, Toys & Fancy Items in Karamadai
@@ -73,8 +80,8 @@ export default function ShopPage() {
 
           <p
             style={{
-              margin: 0,
               width: '100%',
+              margin: 0,
               fontSize: '16px',
               lineHeight: 1.7,
               color: '#333',
@@ -92,8 +99,8 @@ export default function ShopPage() {
 
           <p
             style={{
-              margin: '12px 0 0',
               width: '100%',
+              margin: '12px 0 0',
               fontSize: '15px',
               lineHeight: 1.7,
               color: '#555',
@@ -106,19 +113,6 @@ export default function ShopPage() {
           </p>
         </div>
       </section>
-
-      {/* SMALL GAP BEFORE FOOTER */}
-      <div
-        aria-hidden="true"
-        style={{
-          display: 'block',
-          width: '100%',
-          height: '16px',
-          minHeight: '16px',
-          flexShrink: 0,
-          backgroundColor: '#f8f6f1',
-        }}
-      />
     </main>
   );
 }
