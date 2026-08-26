@@ -46,14 +46,14 @@ import { useSpotcLanguage } from '@/components/LanguageProvider';
 
 const navigation = [
   {
-    href: '/offers',
-    label: 'Offers',
-    icon: Tag,
-  },
-  {
     href: '/shop',
     label: 'Shop',
     icon: ShoppingBag,
+  },
+  {
+    href: '/offers',
+    label: 'Offers',
+    icon: Tag,
   },
 ] as const;
 
@@ -682,7 +682,7 @@ if (!signedInUser) {
       <header className="spotc-site-header">
         <div className="spotc-header-inner">
         <Link
-  href="/offers"
+  href="/shop"
   className="spotc-header-brand"
   aria-label="SPOTC Home"
 >
@@ -1008,27 +1008,7 @@ if (!signedInUser) {
                       <span>
                         Dashboard
                       </span>
-                    </Link>
-
-                    <Link
-                      href={
-                        firebaseUser
-                          ? '/dashboard?tab=circles'
-                          : '/dashboard?guest=1&tab=circles'
-                      }
-                      className="spotc-dropdown-item"
-                      onClick={() =>
-                        setMenuOpen(false)
-                      }
-                    >
-                      <UsersRound
-                        size={18}
-                      />
-
-                      <span>
-                        Shopping Circles
-                      </span>
-                    </Link>
+                    </Link>                   
 
 
                     {firebaseUser && (
