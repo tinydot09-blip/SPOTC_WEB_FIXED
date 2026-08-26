@@ -42,19 +42,22 @@ export default function ShopPage() {
       {/* EXISTING PRODUCT GRID */}
       <ProductGrid />
 
-      {/* SEO CONTENT - BEFORE FOOTER */}
+      {/* SEO CONTENT - ALIGNED WITH PRODUCT GRID */}
       <section
         style={{
           width: '100%',
           backgroundColor: '#f8f6f1',
-          padding: '34px 20px 30px',
+          padding: '20px 0 24px',
           boxSizing: 'border-box',
         }}
       >
         <div
           style={{
+            width: '100%',
             maxWidth: '1280px',
             margin: '0 auto',
+            padding: '0 16px',
+            boxSizing: 'border-box',
           }}
         >
           <h2
@@ -71,7 +74,7 @@ export default function ShopPage() {
           <p
             style={{
               margin: 0,
-              maxWidth: '1050px',
+              width: '100%',
               fontSize: '16px',
               lineHeight: 1.7,
               color: '#333',
@@ -82,14 +85,15 @@ export default function ShopPage() {
             items at SPOTC in Karamadai and Mettupalayam.
             Find kids party dresses, girls frocks, casual
             wear, toys and accessories with special offers,
-            free gifts and fast local 15 minutes delivery in Karamadai,
-            Teacher Colony, EB Colony and nearby areas.
+            free gifts and fast local 15 minutes delivery in
+            Karamadai, Teacher Colony, EB Colony and nearby
+            areas.
           </p>
 
           <p
             style={{
               margin: '12px 0 0',
-              maxWidth: '1050px',
+              width: '100%',
               fontSize: '15px',
               lineHeight: 1.7,
               color: '#555',
@@ -109,8 +113,8 @@ export default function ShopPage() {
         style={{
           display: 'block',
           width: '100%',
-          height: '24px',
-          minHeight: '24px',
+          height: '16px',
+          minHeight: '16px',
           flexShrink: 0,
           backgroundColor: '#f8f6f1',
         }}
