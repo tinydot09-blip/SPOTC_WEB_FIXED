@@ -56,7 +56,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="site-shell">
       <header className="topbar">
-        <Link className="brand" href="/offers">
+        <Link className="brand" href="/shop">
           <span>SPOTC</span>
           <small>Namma Area, Namma Kadai</small>
         </Link>
