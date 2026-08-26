@@ -7,7 +7,6 @@ import {
   Home,
   LogIn,
   Menu,
-  Share2,
   ShieldCheck,
   Sparkles,
   UserRound,
@@ -20,13 +19,12 @@ import { requireGoogleLogin, logoutUser } from '@/lib/auth';
 import { auth, firebaseReady } from '@/lib/firebase';
 import DashboardOrders from './DashboardOrders';
 import DashboardSaved from './DashboardSaved';
-import DashboardShoppingCircles from './DashboardShoppingCircles';
+
 import DashboardSidebar, { type DashboardTab } from './DashboardSidebar';
 
 const VALID_TABS: DashboardTab[] = [
   'orders',
   'saved',
-  'circles',
 ];
 
 function DashboardAuthStyles() {
@@ -320,11 +318,9 @@ export default function DashboardClient() {
             </h1>
 
             <p>
-              Sign in to view your
-              orders, saved products,
-              partner activity and
-              Shopping Circles.
-            </p>
+  Sign in to view your
+  orders and saved products.
+</p>
 
             <div className="dash-login-benefits">
               <span>
@@ -335,11 +331,6 @@ export default function DashboardClient() {
               <span>
                 <CheckCircle2 />
                 Track your orders
-              </span>
-
-              <span>
-                <Share2 />
-                Shopping Circles
               </span>
             </div>
 
@@ -373,12 +364,7 @@ export default function DashboardClient() {
       case 'saved':
         return <DashboardSaved />;
 
-      case 'circles':
-        return (
-          <DashboardShoppingCircles />
-        );
-
-      default:
+            default:
         return <DashboardOrders />;
     }
   })();
@@ -538,28 +524,7 @@ export default function DashboardClient() {
                     </span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() =>
-                      changeTab(
-                        'circles',
-                      )
-                    }
-                  >
-                    <Share2 />
-
-                    <span>
-                      <strong>
-                        Shopping Circle
-                      </strong>
-
-                      <small>
-                        Votes, replies and
-                        friend activity
-                      </small>
-                    </span>
-                  </button>
-                </div>
+                                  </div>
               )}
             </div>
 
