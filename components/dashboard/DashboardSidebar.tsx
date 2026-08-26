@@ -4,13 +4,11 @@ import {
   Heart,
   LogOut,
   Package,
-  Users,
 } from 'lucide-react';
 
 export type DashboardTab =
   | 'orders'
-  | 'saved'
-  | 'circles';
+  | 'saved';
 
 type Props = {
   activeTab: DashboardTab;
@@ -34,11 +32,6 @@ const items: Array<{
     id: 'saved',
     label: 'Saved',
     icon: Heart,
-  },
-  {
-    id: 'circles',
-    label: 'Shopping Circles',
-    icon: Users,
   },
 ];
 

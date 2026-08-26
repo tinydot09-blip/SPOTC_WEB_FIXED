@@ -2741,28 +2741,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
           })}
         </div>
 
-        <select
-          className="pd-shop-sort"
-          aria-label="Sort shop products"
-          defaultValue="Featured"
-          onChange={(event) => {
-            const sortValue = event.target.value;
-            router.push(
-              `/shop?sort=${encodeURIComponent(sortValue)}${
-                mainCategoryText
-                  ? `&category=${encodeURIComponent(mainCategoryText)}`
-                  : ''
-              }`,
-            );
-          }}
-        >
-          <option value="Featured">Sort</option>
-          <option value="Low Price">Low Price</option>
-          <option value="High Price">High Price</option>
-          <option value="Discount">Discount</option>
-        </select>
-      </div>
-
+       
       <section className="pd-main">
         <div className="pd-gallery">
           {selectedMedia?.type === 'video' ? (
