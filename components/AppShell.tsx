@@ -1063,42 +1063,11 @@ if (!signedInUser) {
         }
       >
         <Link
-          href="/offers"
-          className={
-            pathname.startsWith('/offers')
-              ? 'spotc-mobile-nav-link spotc-mobile-nav-link-active'
-              : 'spotc-mobile-nav-link'
-          }
-          aria-current={pathname.startsWith('/offers') ? 'page' : undefined}
-        >
-          <Tag
-            className="spotc-mobile-nav-icon"
-            aria-hidden="true"
-          />
-          <span>Offers</span>
-        </Link>
-
-        <button
-          type="button"
-          className="spotc-mobile-nav-link spotc-mobile-ai-nav-button"
-          aria-label="Open SPOTC AI Assistant"
-          aria-haspopup="dialog"
-          aria-expanded={aiAssistantOpen}
-          onClick={() => setAiAssistantOpen(true)}
-        >
-          <span className="spotc-mobile-ai-icon">
-            <Sparkles aria-hidden="true" />
-          </span>
-          <span>AI Assistance</span>
-          <small>Ask Anything</small>
-        </button>
-
-        <Link
           href="/shop"
           className={
             pathname.startsWith('/shop') || pathname.startsWith('/product/')
-              ? 'spotc-mobile-nav-link spotc-mobile-nav-link-active'
-              : 'spotc-mobile-nav-link'
+              ? 'spotc-mobile-nav-link spotc-mobile-shop-link spotc-mobile-nav-link-active'
+              : 'spotc-mobile-nav-link spotc-mobile-shop-link'
           }
           aria-current={
             pathname.startsWith('/shop') || pathname.startsWith('/product/')
@@ -1111,6 +1080,37 @@ if (!signedInUser) {
             aria-hidden="true"
           />
           <span>Shop</span>
+        </Link>
+
+        <button
+          type="button"
+          className="spotc-mobile-nav-link spotc-mobile-ai-nav-button spotc-mobile-ai-link"
+          aria-label="Open SPOTC AI Assistant"
+          aria-haspopup="dialog"
+          aria-expanded={aiAssistantOpen}
+          onClick={() => setAiAssistantOpen(true)}
+        >
+          <span className="spotc-mobile-ai-icon" aria-hidden="true">
+            <Sparkles />
+          </span>
+          <span className="spotc-mobile-ai-label">AI Assistance</span>
+          <small>Ask Anything</small>
+        </button>
+
+        <Link
+          href="/offers"
+          className={
+            pathname.startsWith('/offers')
+              ? 'spotc-mobile-nav-link spotc-mobile-offers-link spotc-mobile-nav-link-active'
+              : 'spotc-mobile-nav-link spotc-mobile-offers-link'
+          }
+          aria-current={pathname.startsWith('/offers') ? 'page' : undefined}
+        >
+          <Tag
+            className="spotc-mobile-nav-icon"
+            aria-hidden="true"
+          />
+          <span>Offers</span>
         </Link>
       </nav>
 
@@ -2081,6 +2081,7 @@ if (!signedInUser) {
 
 .spotc-mobile-navigation {
   position: fixed;
+  direction: ltr !important;
   right: 0;
   left: 0;
   z-index: 3500;
@@ -2093,6 +2094,7 @@ if (!signedInUser) {
   display: grid;
   grid-template-columns:
     repeat(3, minmax(0, 1fr));
+  grid-template-areas: "shop ai offers";
   align-items: stretch;
   gap: 0;
 
@@ -2144,6 +2146,18 @@ if (!signedInUser) {
       rgba(24, 17, 12, 0.96) 0%,
       rgba(17, 12, 9, 1) 100%
     );
+}
+
+.spotc-mobile-shop-link {
+  grid-area: shop;
+}
+
+.spotc-mobile-ai-link {
+  grid-area: ai;
+}
+
+.spotc-mobile-offers-link {
+  grid-area: offers;
 }
 
 .spotc-mobile-nav-link {
@@ -2209,42 +2223,109 @@ if (!signedInUser) {
 }
 
 .spotc-mobile-ai-nav-button {
+  width: 100%;
+  min-width: 0;
+  height: 67px;
+  margin: 0 !important;
+  padding: 3px 0 6px !important;
+
   border: 0;
   border-radius: 0;
   appearance: none;
   -webkit-appearance: none;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center !important;
+  justify-content: center !important;
+  justify-self: stretch;
+  align-self: stretch;
+
+  gap: 2px;
+  color: rgba(255, 255, 255, 0.94);
+  background: transparent;
   font-family: inherit;
+  text-align: center;
   cursor: pointer;
+  box-sizing: border-box;
+}
+
+.spotc-mobile-ai-icon {
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  max-width: 38px !important;
+  flex: 0 0 38px !important;
+
+  margin: 0 auto 1px !important;
+  padding: 0 !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  overflow: visible !important;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 50%;
+
+  color: #ffffff;
+  background: linear-gradient(145deg, #22c55e, #0f8f3d);
+
+  box-shadow:
+    0 0 0 5px rgba(34, 197, 94, 0.10),
+    0 5px 18px rgba(34, 197, 94, 0.30);
+
+  box-sizing: border-box;
+}
+
+.spotc-mobile-ai-icon svg {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  max-width: 22px !important;
+
+  display: block !important;
+  flex: 0 0 22px !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  transform: translateX(-0.5px);
+  transform-origin: center;
+  stroke-width: 2.35;
+}
+
+.spotc-mobile-ai-label {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+
+  display: block !important;
+  overflow: visible !important;
+
+  color: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.05;
+  text-align: center !important;
+  text-overflow: clip !important;
+  white-space: nowrap;
 }
 
 .spotc-mobile-ai-nav-button small {
-  display: block;
-  margin-top: -2px;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+
+  display: block !important;
+
   color: #4ade80;
   font-size: 10px;
   font-weight: 800;
   line-height: 1;
+  text-align: center !important;
   white-space: nowrap;
-}
-
-.spotc-mobile-ai-icon {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 50%;
-  color: #ffffff;
-  background: linear-gradient(145deg, #22c55e, #0f8f3d);
-  box-shadow:
-    0 0 0 5px rgba(34, 197, 94, 0.10),
-    0 5px 18px rgba(34, 197, 94, 0.30);
-}
-
-.spotc-mobile-ai-icon svg {
-  width: 20px;
-  height: 20px;
-  stroke-width: 2.3;
 }
 
 .spotc-mobile-nav-link-active {
