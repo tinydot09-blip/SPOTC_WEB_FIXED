@@ -1832,7 +1832,26 @@ export default function AddressPage() {
           flex: 1;
         }
 
-        .continue-address,
+        .continue-address {
+          width: 100%;
+          min-height: 52px;
+          margin: 0 0 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 0;
+          border-radius: 15px;
+          color: #ffffff;
+          background: #22c55e;
+          font-size: 16px;
+          font-weight: 800;
+          line-height: 1.2;
+          text-align: center;
+          transition:
+            background 0.18s ease,
+            opacity 0.18s ease;
+        }
+
         .delivery-check-note {
           margin: 0 0 10px;
           color: #6f675f;
