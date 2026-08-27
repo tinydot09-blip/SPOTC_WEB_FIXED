@@ -30,10 +30,16 @@ type AiProduct = {
   url: string;
 };
 
+type AiAction = {
+  label: string;
+  href: string;
+};
+
 type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
   products?: AiProduct[];
+  actions?: AiAction[];
 };
 
 type SpeechRecognitionEventLike = Event & {
@@ -192,6 +198,7 @@ export function AiAssistant({
         answer?: unknown;
         error?: unknown;
         products?: AiProduct[];
+        actions?: AiAction[];
       };
 
       if (!response.ok) {
@@ -214,6 +221,7 @@ export function AiAssistant({
           role: 'assistant',
           content: answer,
           products: Array.isArray(data.products) ? data.products : [],
+          actions: Array.isArray(data.actions) ? data.actions : [],
         },
       ]);
 
@@ -446,7 +454,7 @@ export function AiAssistant({
                   Array.isArray(message.products) &&
                   message.products.length > 0 && (
                     <div className="spotc-ai-products">
-                      {message.products.map((product) => (
+                      {[...new Map(message.products.map((product) => [product.id, product])).values()].map((product) => (
                         <a
                           key={product.id}
                           href={product.url}
@@ -474,6 +482,32 @@ export function AiAssistant({
                             </small>
                             <b>View Product →</b>
                           </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                {message.role === 'assistant' &&
+                  Array.isArray(message.actions) &&
+                  message.actions.length > 0 && (
+                    <div className="spotc-ai-actions">
+                      {message.actions.map((action) => (
+                        <a
+                          key={`${action.label}-${action.href}`}
+                          href={action.href}
+                          className="spotc-ai-action"
+                          target={
+                            action.href.startsWith('http')
+                              ? '_blank'
+                              : undefined
+                          }
+                          rel={
+                            action.href.startsWith('http')
+                              ? 'noopener noreferrer'
+                              : undefined
+                          }
+                        >
+                          {action.label}
                         </a>
                       ))}
                     </div>
@@ -857,6 +891,33 @@ export function AiAssistant({
           font-size: 12px;
           font-weight: 700;
           cursor: pointer;
+        }
+
+
+        .spotc-ai-actions {
+          margin-top: 9px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 7px;
+        }
+
+        .spotc-ai-action {
+          min-height: 34px;
+          padding: 7px 12px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid #b9e7c6;
+          border-radius: 999px;
+          color: #126b31;
+          background: #effbf2;
+          font-size: 12px;
+          font-weight: 800;
+          text-decoration: none;
+        }
+
+        .spotc-ai-action:active {
+          transform: translateY(1px);
         }
 
         .spotc-ai-thinking {
