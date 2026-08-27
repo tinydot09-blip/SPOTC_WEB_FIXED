@@ -69,8 +69,22 @@ const ADDRESS_TYPES: AddressTypeOption[] = [
   'Other',
 ];
 
-const cleanPhone = (value: string) =>
-  value.replace(/\D/g, '').slice(0, 10);
+const cleanPhone = (value: string) => {
+  const trimmed = value.trim();
+
+  // Allow Indian numbers in either format:
+  // 9876543210 or +919876543210
+  if (trimmed.startsWith('+')) {
+    return `+${trimmed
+      .slice(1)
+      .replace(/\D/g, '')
+      .slice(0, 12)}`;
+  }
+
+  return trimmed
+    .replace(/\D/g, '')
+    .slice(0, 10);
+};
 
 const cleanPincode = (value: string) =>
   value.replace(/\D/g, '').slice(0, 6);
@@ -759,8 +773,15 @@ export default function AddressPage() {
       return 'Enter the phone number.';
     }
 
-    if (!/^[6-9]\d{9}$/.test(form.phone)) {
-      return 'Enter a valid 10-digit Indian mobile number.';
+    const phoneDigits =
+      form.phone.replace(/\D/g, '');
+
+    const validPhone =
+      /^[6-9]\d{9}$/.test(phoneDigits) ||
+      /^91[6-9]\d{9}$/.test(phoneDigits);
+
+    if (!validPhone) {
+      return 'Enter a valid mobile number.';
     }
 
     if (!form.houseNo.trim()) {
@@ -1348,10 +1369,10 @@ export default function AddressPage() {
 
                 <input
                   type="tel"
-                  inputMode="numeric"
+                  inputMode="tel"
                   autoComplete="tel"
                   required
-                  maxLength={10}
+                  maxLength={13}
                   value={form.phone}
                   onChange={(
                     event,
