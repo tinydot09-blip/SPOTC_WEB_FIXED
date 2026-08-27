@@ -15,10 +15,16 @@ import {
   Home,
   Loader2,
   MapPin,
+  Pencil,
   Plus,
 } from 'lucide-react';
 
 import type { User } from 'firebase/auth';
+import {
+  doc,
+  serverTimestamp,
+  updateDoc,
+} from 'firebase/firestore';
 
 import {
   createAddress,
@@ -33,6 +39,10 @@ import {
 import { requireGoogleLogin } from '@/lib/auth';
 import { db, firebaseReady } from '@/lib/firebase';
 import PageLoader from '@/components/PageLoader';
+import {
+  distanceKm,
+  SPOTC_DELIVERY_CENTER,
+} from '@/lib/delivery-radius';
 
 const EMPTY: AddressInput = {
   fullName: '',
@@ -121,6 +131,125 @@ const reverseGeocode = async (
   return (await response.json()) as ReverseGeocodeResponse;
 };
 
+
+type ForwardGeocodeResponse = Array<{
+  lat?: string;
+  lon?: string;
+  display_name?: string;
+}>;
+
+const SERVICE_AREA_MESSAGE =
+  'Delivery is currently available only in Karamadai, Teacher Colony, EB Colony and Gandhinagar. This address is outside our delivery area.';
+
+const BROWSE_MESSAGE =
+  'You can still browse all SPOTC products.';
+
+const forwardGeocode = async (
+  address: AddressInput,
+): Promise<{ latitude: number; longitude: number } | null> => {
+  const query = [
+    address.houseNo,
+    address.street,
+    address.landmark,
+    address.area,
+    address.city,
+    address.pincode,
+    address.state || 'Tamil Nadu',
+    address.country || 'India',
+  ]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(', ');
+
+  const params = new URLSearchParams({
+    format: 'jsonv2',
+    q: query,
+    limit: '1',
+    countrycodes: 'in',
+    'accept-language': 'en',
+  });
+
+  const response = await fetch(
+    `https://nominatim.openstreetmap.org/search?${params.toString()}`,
+    {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Address lookup failed with status ${response.status}.`,
+    );
+  }
+
+  const results =
+    (await response.json()) as ForwardGeocodeResponse;
+
+  const first = results[0];
+
+  if (!first?.lat || !first?.lon) {
+    return null;
+  }
+
+  const latitude = Number(first.lat);
+  const longitude = Number(first.lon);
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
+  ) {
+    return null;
+  }
+
+  return { latitude, longitude };
+};
+
+const coordinatesFromAddress = (
+  address: SavedAddress,
+): { latitude: number; longitude: number } | null => {
+  const raw =
+    address as SavedAddress & Record<string, unknown>;
+
+  const latitude = Number(
+    raw.latitude ??
+      raw.lat ??
+      raw.delivery_lat,
+  );
+
+  const longitude = Number(
+    raw.longitude ??
+      raw.lng ??
+      raw.lon ??
+      raw.delivery_lng,
+  );
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude === 0 ||
+    longitude === 0
+  ) {
+    return null;
+  }
+
+  return { latitude, longitude };
+};
+
+const isInsideDeliveryArea = (
+  latitude: number,
+  longitude: number,
+): boolean =>
+  distanceKm(
+    { latitude, longitude },
+    {
+      latitude: SPOTC_DELIVERY_CENTER.latitude,
+      longitude: SPOTC_DELIVERY_CENTER.longitude,
+    },
+  ) <= SPOTC_DELIVERY_CENTER.radiusKm;
+
 export default function AddressPage() {
   const router = useRouter();
 
@@ -150,6 +279,9 @@ export default function AddressPage() {
 
   const [locating, setLocating] =
     useState(false);
+
+  const [editingId, setEditingId] =
+    useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -230,9 +362,26 @@ export default function AddressPage() {
     key: K,
     value: AddressInput[K],
   ) => {
+    const locationFields: Array<keyof AddressInput> = [
+      'houseNo',
+      'street',
+      'landmark',
+      'area',
+      'city',
+      'pincode',
+      'state',
+      'country',
+    ];
+
     setForm((current) => ({
       ...current,
       [key]: value,
+      ...(locationFields.includes(key)
+        ? {
+            latitude: null,
+            longitude: null,
+          }
+        : {}),
     }));
 
     if (formError) {
@@ -247,6 +396,29 @@ export default function AddressPage() {
       return;
     }
 
+    const coordinates =
+      coordinatesFromAddress(address);
+
+    if (!coordinates) {
+      setFormError(
+        'Please edit this address and verify its location before using it for delivery.',
+      );
+      return;
+    }
+
+    if (
+      !isInsideDeliveryArea(
+        coordinates.latitude,
+        coordinates.longitude,
+      )
+    ) {
+      setFormError(
+        `${SERVICE_AREA_MESSAGE} ${BROWSE_MESSAGE}`,
+      );
+      return;
+    }
+
+    setFormError('');
     setSelectedId(address.id);
 
     await setDefaultAddress(
@@ -266,6 +438,8 @@ export default function AddressPage() {
   };
 
   const openNewAddress = () => {
+    setEditingId(null);
+
     setForm((current) => ({
       ...EMPTY,
       fullName:
@@ -278,7 +452,35 @@ export default function AddressPage() {
     setFormOpen(true);
   };
 
+  const editAddress = (
+    address: SavedAddress,
+  ) => {
+    setEditingId(address.id);
+
+    setForm({
+      fullName: address.fullName || '',
+      phone: cleanPhone(address.phone || ''),
+      addressType:
+        address.addressType || 'Home',
+      houseNo: address.houseNo || '',
+      street: address.street || '',
+      landmark: address.landmark || '',
+      area: address.area || '',
+      city: address.city || '',
+      pincode: cleanPincode(address.pincode || ''),
+      state: address.state || 'Tamil Nadu',
+      country: address.country || 'India',
+      deliveryNote: address.deliveryNote || '',
+      latitude: address.latitude ?? null,
+      longitude: address.longitude ?? null,
+    });
+
+    setFormError('');
+    setFormOpen(true);
+  };
+
   const cancelNewAddress = () => {
+    setEditingId(null);
     setFormError('');
     setFormOpen(false);
 
@@ -411,6 +613,8 @@ export default function AddressPage() {
           '',
 
         addressType:
+          selectedAddress?.addressType ||
+          form.addressType ||
           'Home',
 
         houseNo,
@@ -554,7 +758,7 @@ export default function AddressPage() {
     setFormError('');
 
     try {
-      const nextAddress: AddressInput = {
+      let nextAddress: AddressInput = {
         ...form,
         fullName: form.fullName.trim(),
         phone: form.phone.trim(),
@@ -564,27 +768,149 @@ export default function AddressPage() {
         area: form.area.trim(),
         city: form.city.trim(),
         pincode: form.pincode.trim(),
+        state:
+          String(form.state || 'Tamil Nadu').trim(),
+        country:
+          String(form.country || 'India').trim(),
         deliveryNote:
           form.deliveryNote.trim(),
       };
 
-      const address =
-        await createAddress(
-          db,
-          user,
-          nextAddress,
-          addresses,
+      let latitude = Number(nextAddress.latitude);
+      let longitude = Number(nextAddress.longitude);
+
+      const hasCoordinates =
+        Number.isFinite(latitude) &&
+        Number.isFinite(longitude) &&
+        latitude !== 0 &&
+        longitude !== 0;
+
+      if (!hasCoordinates) {
+        const coordinates =
+          await forwardGeocode(nextAddress);
+
+        if (!coordinates) {
+          setFormError(
+            'We could not verify this address location. Please check the area, city and pincode, or use Current Location.',
+          );
+          return;
+        }
+
+        latitude = coordinates.latitude;
+        longitude = coordinates.longitude;
+
+        nextAddress = {
+          ...nextAddress,
+          latitude,
+          longitude,
+        };
+      }
+
+      if (
+        !isInsideDeliveryArea(
+          latitude,
+          longitude,
+        )
+      ) {
+        setFormError(
+          `${SERVICE_AREA_MESSAGE} ${BROWSE_MESSAGE}`,
+        );
+        return;
+      }
+
+      if (editingId) {
+        await updateDoc(
+          doc(
+            db,
+            'UserAddresses',
+            editingId,
+          ),
+          {
+            full_name: nextAddress.fullName,
+            phone: nextAddress.phone,
+            address_type: nextAddress.addressType,
+            house_no: nextAddress.houseNo,
+            street: nextAddress.street,
+            landmark: nextAddress.landmark,
+            area: nextAddress.area,
+            city: nextAddress.city,
+            pincode: nextAddress.pincode,
+            state: nextAddress.state,
+            country: nextAddress.country,
+            delivery_note:
+              nextAddress.deliveryNote,
+            latitude,
+            longitude,
+            is_active: true,
+            updated_at: serverTimestamp(),
+          },
         );
 
-      setAddresses((current) => [
-        address,
-        ...current.map((item) => ({
-          ...item,
-          isDefault: false,
-        })),
-      ]);
+        const previous =
+          addresses.find(
+            (item) =>
+              item.id === editingId,
+          );
 
-      setSelectedId(address.id);
+        const updatedAddress: SavedAddress = {
+          ...(previous || ({} as SavedAddress)),
+          ...nextAddress,
+          id: editingId,
+          latitude,
+          longitude,
+          isDefault: true,
+        };
+
+        await setDefaultAddress(
+          db,
+          user,
+          addresses,
+          updatedAddress,
+        );
+
+        setAddresses((current) =>
+          current.map((item) =>
+            item.id === editingId
+              ? {
+                  ...item,
+                  ...nextAddress,
+                  latitude,
+                  longitude,
+                  isDefault: true,
+                }
+              : {
+                  ...item,
+                  isDefault: false,
+                },
+          ),
+        );
+
+        setSelectedId(editingId);
+      } else {
+        const savedAddress =
+          await createAddress(
+            db,
+            user,
+            {
+              ...nextAddress,
+              latitude,
+              longitude,
+            },
+            addresses,
+          );
+
+        setAddresses((current) => [
+          savedAddress,
+          ...current.map((item) => ({
+            ...item,
+            isDefault: false,
+          })),
+        ]);
+
+        setSelectedId(savedAddress.id);
+      }
+
+      setEditingId(null);
       setFormOpen(false);
 
       setForm({
@@ -616,6 +942,28 @@ export default function AddressPage() {
     );
   }
 
+  const selectedSavedAddress =
+    addresses.find(
+      (item) =>
+        item.id === selectedId,
+    ) || null;
+
+  const selectedCoordinates =
+    selectedSavedAddress
+      ? coordinatesFromAddress(
+          selectedSavedAddress,
+        )
+      : null;
+
+  const selectedAddressIsDeliverable =
+    Boolean(
+      selectedCoordinates &&
+        isInsideDeliveryArea(
+          selectedCoordinates.latitude,
+          selectedCoordinates.longitude,
+        ),
+    );
+
   return (
     <main className="address-page">
       <div className="address-shell">
@@ -637,6 +985,16 @@ export default function AddressPage() {
 
         {!formOpen ? (
           <>
+            {formError && (
+              <div
+                className="address-list-error"
+                role="alert"
+              >
+                <strong>Check delivery address</strong>
+                <span>{formError}</span>
+              </div>
+            )}
+
             <button
               type="button"
               className="location-card"
@@ -660,54 +1018,98 @@ export default function AddressPage() {
 
             <section className="saved-addresses">
               {addresses.map(
-                (address) => (
-                  <button
-                    type="button"
-                    className={
-                      selectedId ===
-                      address.id
-                        ? 'saved-address selected'
-                        : 'saved-address'
-                    }
-                    key={address.id}
-                    onClick={() =>
-                      void select(
-                        address,
-                      )
-                    }
-                  >
-                    <Home />
+                (address) => {
+                  const coordinates =
+                    coordinatesFromAddress(
+                      address,
+                    );
 
-                    <span>
-                      <strong>
-                        {address.addressType}
+                  const available =
+                    Boolean(
+                      coordinates &&
+                        isInsideDeliveryArea(
+                          coordinates.latitude,
+                          coordinates.longitude,
+                        ),
+                    );
 
-                        {address.isDefault && (
-                          <em>
-                            Default
-                          </em>
+                  return (
+                    <article
+                      className={
+                        selectedId ===
+                        address.id &&
+                        available
+                          ? 'saved-address selected'
+                          : available
+                            ? 'saved-address'
+                            : 'saved-address unavailable'
+                      }
+                      key={address.id}
+                    >
+                      <button
+                        type="button"
+                        className="saved-address-select"
+                        onClick={() =>
+                          void select(
+                            address,
+                          )
+                        }
+                      >
+                        <Home />
+
+                        <span className="saved-address-copy">
+                          <strong>
+                            {address.addressType}
+
+                            {address.isDefault && (
+                              <em>
+                                Default
+                              </em>
+                            )}
+                          </strong>
+
+                          <small>
+                            {formatAddress(
+                              address,
+                            )}
+                          </small>
+
+                          <small>
+                            {address.phone}
+                          </small>
+
+                          {!available && (
+                            <small className="address-unavailable-text">
+                              Not available for delivery — edit this address.
+                            </small>
+                          )}
+                        </span>
+
+                        {selectedId ===
+                          address.id &&
+                        available ? (
+                          <CheckCircle2 />
+                        ) : (
+                          <span className="radio" />
                         )}
-                      </strong>
+                      </button>
 
-                      <small>
-                        {formatAddress(
-                          address,
-                        )}
-                      </small>
-
-                      <small>
-                        {address.phone}
-                      </small>
-                    </span>
-
-                    {selectedId ===
-                    address.id ? (
-                      <CheckCircle2 />
-                    ) : (
-                      <span className="radio" />
-                    )}
-                  </button>
-                ),
+                      <button
+                        type="button"
+                        className="edit-address-button"
+                        onClick={() =>
+                          editAddress(
+                            address,
+                          )
+                        }
+                        aria-label={`Edit ${address.addressType} address`}
+                      >
+                        <Pencil size={15} />
+                        Edit
+                      </button>
+                    </article>
+                  );
+                },
               )}
             </section>
 
@@ -727,12 +1129,24 @@ export default function AddressPage() {
             <button
               type="button"
               className="continue-address"
-              disabled={!selectedId}
-              onClick={() =>
+              disabled={
+                !selectedId ||
+                !selectedAddressIsDeliverable
+              }
+              onClick={() => {
+                if (
+                  !selectedAddressIsDeliverable
+                ) {
+                  setFormError(
+                    `${SERVICE_AREA_MESSAGE} ${BROWSE_MESSAGE}`,
+                  );
+                  return;
+                }
+
                 router.push(
                   '/checkout',
-                )
-              }
+                );
+              }}
             >
               Continue to Checkout
             </button>
@@ -746,12 +1160,15 @@ export default function AddressPage() {
             <header className="address-form-head">
               <div>
                 <small>
-                  NEW ADDRESS
+                  {editingId
+                    ? 'EDIT ADDRESS'
+                    : 'NEW ADDRESS'}
                 </small>
 
                 <h2>
-                  Add delivery
-                  address
+                  {editingId
+                    ? 'Edit delivery address'
+                    : 'Add delivery address'}
                 </h2>
               </div>
 
@@ -1039,7 +1456,9 @@ export default function AddressPage() {
                   Saving…
                 </>
               ) : (
-                'Save & Use Address'
+                editingId
+                  ? 'Update & Use Address'
+                  : 'Save & Use Address'
               )}
             </button>
           </form>
@@ -1169,7 +1588,26 @@ export default function AddressPage() {
             rgba(56, 39, 24, 0.05);
         }
 
-        .saved-address > span {
+        .saved-address {
+          position: relative;
+          padding: 0;
+          overflow: hidden;
+        }
+
+        .saved-address-select {
+          width: 100%;
+          min-width: 0;
+          padding: 18px 112px 18px 18px;
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          border: 0;
+          color: inherit;
+          background: transparent;
+          text-align: left;
+        }
+
+        .saved-address-copy {
           min-width: 0;
           flex: 1;
         }
@@ -1203,6 +1641,59 @@ export default function AddressPage() {
           box-shadow:
             0 0 0 1px
             rgba(34, 166, 90, 0.05);
+        }
+
+        .saved-address.unavailable {
+          border-color: #efb0a7;
+          background: #fff8f7;
+        }
+
+        .address-unavailable-text {
+          color: #b33b2e !important;
+          font-weight: 750;
+        }
+
+        .edit-address-button {
+          position: absolute;
+          top: 50%;
+          right: 16px;
+          transform: translateY(-50%);
+          min-width: 74px;
+          height: 36px;
+          padding: 0 11px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          border: 1px solid #d9d0c7;
+          border-radius: 10px;
+          color: #17120d;
+          background: #ffffff;
+          font-size: 12px;
+          font-weight: 800;
+          z-index: 2;
+        }
+
+        .edit-address-button:hover {
+          border-color: #22a65a;
+          color: #168648;
+        }
+
+        .address-list-error {
+          margin: 0 0 14px;
+          padding: 13px 15px;
+          display: grid;
+          gap: 4px;
+          border: 1px solid #efb0a7;
+          border-radius: 14px;
+          color: #9b3025;
+          background: #fff4f2;
+          font-size: 13px;
+          line-height: 1.4;
+        }
+
+        .address-list-error strong {
+          font-size: 14px;
         }
 
         .radio {
@@ -1462,6 +1953,18 @@ export default function AddressPage() {
             height: 36px;
             padding: 0 12px;
             font-size: 12px;
+          }
+
+          .saved-address-select {
+            padding:
+              16px 92px 16px 14px;
+          }
+
+          .edit-address-button {
+            right: 10px;
+            min-width: 68px;
+            height: 34px;
+            padding: 0 9px;
           }
         }
       `}</style>

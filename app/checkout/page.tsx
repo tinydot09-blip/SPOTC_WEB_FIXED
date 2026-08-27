@@ -431,7 +431,7 @@ export default function CheckoutPage() {
     if (!canDeliverToAddress) {
       if (addressDeliveryCheck.status === 'outside') {
         window.alert(
-          'Delivery is not available at this address yet. SPOTC currently delivers within 5 km of our Karamadai dispatch point.',
+          'Delivery is currently available only in Karamadai, Teacher Colony, EB Colony and Gandhinagar. This address is outside our delivery area.',
         );
       } else {
         window.alert(
@@ -588,14 +588,12 @@ export default function CheckoutPage() {
 
               <p>
                 {addressDeliveryCheck.status === 'outside'
-                  ? `This address is ${
-                      addressDeliveryCheck.distanceKm?.toFixed(1) ?? ''
-                    } km from our current SPOTC delivery point. We currently deliver within ${SPOTC_DELIVERY_CENTER.radiusKm} km.`
-                  : 'This saved address does not have a verified map location. Select or update the address location before ordering.'}
+                  ? 'Delivery is currently available only in Karamadai, Teacher Colony, EB Colony and Gandhinagar. This address is outside our delivery area.'
+                  : 'This saved address does not have a verified map location. Please edit and verify the address before ordering.'}
               </p>
 
               <small>
-                SPOTC is coming to your area shortly. You can continue browsing all products.
+                You can still browse all SPOTC products.
               </small>
             </div>
 
