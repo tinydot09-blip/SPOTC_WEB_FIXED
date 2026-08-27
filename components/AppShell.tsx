@@ -1056,63 +1056,76 @@ if (!signedInUser) {
       />
 
       <nav
-        className={
-          mobileNavAtTop
-            ? 'spotc-mobile-navigation spotc-mobile-navigation-top'
-            : 'spotc-mobile-navigation spotc-mobile-navigation-bottom'
-        }
-      >
-        <Link
-          href="/offers"
-          className={
-            pathname.startsWith('/offers')
-              ? 'spotc-mobile-nav-link spotc-mobile-nav-link-active'
-              : 'spotc-mobile-nav-link'
-          }
-          aria-current={pathname.startsWith('/offers') ? 'page' : undefined}
-        >
-          <Tag
-            className="spotc-mobile-nav-icon"
-            aria-hidden="true"
-          />
-          <span>Offers</span>
-        </Link>
+  className={
+    mobileNavAtTop
+      ? 'spotc-mobile-navigation spotc-mobile-navigation-top'
+      : 'spotc-mobile-navigation spotc-mobile-navigation-bottom'
+  }
+>
+  {/* SHOP - LEFT */}
+  <Link
+    href="/shop"
+    className={
+      pathname.startsWith('/shop') ||
+      pathname.startsWith('/product/')
+        ? 'spotc-mobile-nav-link spotc-mobile-nav-link-active'
+        : 'spotc-mobile-nav-link'
+    }
+    aria-current={
+      pathname.startsWith('/shop') ||
+      pathname.startsWith('/product/')
+        ? 'page'
+        : undefined
+    }
+  >
+    <ShoppingBag
+      className="spotc-mobile-nav-icon"
+      aria-hidden="true"
+    />
 
-        <button
-          type="button"
-          className="spotc-mobile-nav-link spotc-mobile-ai-nav-button"
-          aria-label="Open SPOTC AI Assistant"
-          aria-haspopup="dialog"
-          aria-expanded={aiAssistantOpen}
-          onClick={() => setAiAssistantOpen(true)}
-        >
-          <span className="spotc-mobile-ai-icon">
-            <Bot aria-hidden="true" />
-          </span>
-          <span>AI Assistance</span>
-          <small>Ask Anything</small>
-        </button>
+    <span>Shop</span>
+  </Link>
 
-        <Link
-          href="/shop"
-          className={
-            pathname.startsWith('/shop') || pathname.startsWith('/product/')
-              ? 'spotc-mobile-nav-link spotc-mobile-nav-link-active'
-              : 'spotc-mobile-nav-link'
-          }
-          aria-current={
-            pathname.startsWith('/shop') || pathname.startsWith('/product/')
-              ? 'page'
-              : undefined
-          }
-        >
-          <ShoppingBag
-            className="spotc-mobile-nav-icon"
-            aria-hidden="true"
-          />
-          <span>Shop</span>
-        </Link>
-      </nav>
+  {/* AI ASSISTANCE - CENTER */}
+  <button
+    type="button"
+    className="spotc-mobile-nav-link spotc-mobile-ai-nav-button"
+    aria-label="Open SPOTC AI Assistant"
+    aria-haspopup="dialog"
+    aria-expanded={aiAssistantOpen}
+    onClick={() => setAiAssistantOpen(true)}
+  >
+    <span className="spotc-mobile-ai-icon">
+      <Bot aria-hidden="true" />
+    </span>
+
+    <span>AI Assistance</span>
+
+    <small>Ask Anything</small>
+  </button>
+
+  {/* OFFERS - RIGHT */}
+  <Link
+    href="/offers"
+    className={
+      pathname.startsWith('/offers')
+        ? 'spotc-mobile-nav-link spotc-mobile-nav-link-active'
+        : 'spotc-mobile-nav-link'
+    }
+    aria-current={
+      pathname.startsWith('/offers')
+        ? 'page'
+        : undefined
+    }
+  >
+    <Tag
+      className="spotc-mobile-nav-icon"
+      aria-hidden="true"
+    />
+
+    <span>Offers</span>
+  </Link>
+</nav>
 
       <style jsx global>{`
         .spotc-app-shell {
