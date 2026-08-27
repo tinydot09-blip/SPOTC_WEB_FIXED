@@ -49,10 +49,7 @@ export default function Footer() {
             Saved
           </Link>
 
-          <Link href="/dashboard?tab=circles">
-            Shopping Circles
-          </Link>
-        </div>
+                 </div>
 
         {/* COMPANY */}
         <div className="spotc-footer-column">

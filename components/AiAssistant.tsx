@@ -869,27 +869,46 @@ export function AiAssistant({
         }
 
         @media (max-width: 700px) {
-          .spotc-ai-overlay {
-            padding: 0;
-          }
+  .spotc-ai-overlay {
+    padding: 0 0 108px;
+    align-items: flex-end;
+  }
 
-          .spotc-ai-panel {
-            width: 100%;
-            max-height: 86dvh;
-            border-right: 0;
-            border-bottom: 0;
-            border-left: 0;
-            border-radius: 24px 24px 0 0;
-          }
+  .spotc-ai-panel {
+    width: 100%;
+    height: min(72dvh, 650px);
+    max-height: calc(100dvh - 108px);
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 24px 24px 0 0;
+    overflow: hidden;
+  }
 
-          .spotc-ai-body {
-            min-height: 280px;
-          }
+  .spotc-ai-header {
+    flex: 0 0 auto;
+  }
 
-          .spotc-ai-quick-questions {
-            margin-left: 0;
-          }
-        }
+  .spotc-ai-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: 18px;
+  }
+
+  .spotc-ai-composer {
+    position: relative;
+    z-index: 5;
+    flex: 0 0 auto;
+    padding: 10px 12px;
+    border-top: 1px solid #e8e3dc;
+    background: #ffffff;
+  }
+
+  .spotc-ai-quick-questions {
+    margin-left: 0;
+  }
+}
 
         @media (max-width: 380px) {
           .spotc-ai-heading strong {
