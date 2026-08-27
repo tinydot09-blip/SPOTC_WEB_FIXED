@@ -3104,20 +3104,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
           <ChevronLeft className="pd-tool-arrow" />
         </button>
 
-        <button
-          type="button"
-          className="pd-tool-card pd-tool-friends"
-          onClick={openShoppingCircle}
-          disabled={askFriendsLoading}
-        >
-          <span className="pd-tool-icon"><Users /></span>
-          <span className="pd-tool-copy">
-            <strong>{t('Ask Friends & Family')}</strong>
-            <small>{askFriendsLoading ? t('Creating Shopping Circle…') : t('Share with friends & family to get opinions')}</small>
-          </span>
-          <ChevronLeft className="pd-tool-arrow" />
-        </button>
-</section>
+       </section>
 
       <section className="pd-accordions" aria-label="Product information">
         {accordionItems.map((item) => {
@@ -6910,7 +6897,7 @@ width:200px;
         .pd-commerce-tools{
           width:100% !important;
           display:grid !important;
-          grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+        grid-template-columns:1fr !important;
           gap:14px !important;
           overflow:visible !important;
           box-sizing:border-box !important;
