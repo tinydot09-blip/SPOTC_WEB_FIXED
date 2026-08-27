@@ -139,7 +139,7 @@ type ForwardGeocodeResponse = Array<{
 }>;
 
 const SERVICE_AREA_MESSAGE =
-  'This location is outside our current delivery area. Delivery is available in Karamadai, Teacher Colony, EB Colony and Gandhinagar.';
+  'Delivery is available only in Karamadai, Teacher Colony, EB Colony and Gandhinagar. This address is outside our current delivery area.';
 
 const BROWSE_MESSAGE =
   'You can still browse all SPOTC products.';
@@ -824,19 +824,70 @@ export default function AddressPage() {
       let latitude = Number(nextAddress.latitude);
       let longitude = Number(nextAddress.longitude);
 
-      const hasCoordinates =
+      let hasCoordinates =
         Number.isFinite(latitude) &&
         Number.isFinite(longitude) &&
         latitude !== 0 &&
         longitude !== 0;
 
+      /*
+       * Keep the flow simple for the customer:
+       * when Save is tapped, try browser GPS automatically once.
+       * No separate "Verify Current Location" button.
+       */
+      if (
+        !hasCoordinates &&
+        typeof navigator !== 'undefined' &&
+        navigator.geolocation
+      ) {
+        try {
+          const position =
+            await new Promise<GeolocationPosition>(
+              (resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(
+                  resolve,
+                  reject,
+                  {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60_000,
+                  },
+                );
+              },
+            );
+
+          latitude =
+            position.coords.latitude;
+          longitude =
+            position.coords.longitude;
+
+          hasCoordinates = true;
+
+          nextAddress = {
+            ...nextAddress,
+            latitude,
+            longitude,
+          };
+        } catch (error) {
+          console.warn(
+            'Automatic location check failed:',
+            error,
+          );
+        }
+      }
+
+      /*
+       * If GPS is not available/allowed, fall back to address lookup.
+       * The lookup is only a backup; delivery approval is still based
+       * on coordinates, never on the city name returned by the map.
+       */
       if (!hasCoordinates) {
         const coordinates =
           await forwardGeocode(nextAddress);
 
         if (!coordinates) {
           setFormError(
-            'We could not confirm this exact address on the map. If you are in Karamadai, Teacher Colony, EB Colony or Gandhinagar, tap “Verify Current Location” below and then save.',
+            'We could not check this address location automatically. Please allow location access and tap Save & Use Address again.',
           );
           return;
         }
@@ -1478,37 +1529,20 @@ export default function AddressPage() {
               </label>
             </div>
 
-            <button
-              type="button"
-              className="verify-location"
-              onClick={() =>
-                void useCurrentLocation()
-              }
-              disabled={locating || saving}
-            >
-              {locating ? (
-                <>
-                  <Loader2 className="spin" />
-                  Verifying location…
-                </>
-              ) : (
-                <>
-                  <MapPin size={18} />
-                  Verify Current Location
-                </>
-              )}
-            </button>
-
-            {formError && (
+            {formError ? (
               <div
                 className="form-error bottom-error"
                 role="alert"
               >
                 <strong>
-                  Address location needs verification
+                  Check delivery area
                 </strong>
                 <span>{formError}</span>
               </div>
+            ) : (
+              <p className="delivery-check-note">
+                Delivery area will be checked automatically when you save.
+              </p>
             )}
 
             <button
@@ -1778,39 +1812,14 @@ export default function AddressPage() {
         }
 
         .continue-address,
-        .verify-location {
-          width: 100%;
-          min-height: 48px;
-          margin: 4px 0 10px;
-          padding: 0 16px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          border: 1px solid #cfc7bd;
-          border-radius: 12px;
-          color: #17120d;
-          background: #ffffff;
-          font-size: 14px;
-          font-weight: 800;
-          cursor: pointer;
+        .delivery-check-note {
+          margin: 0 0 10px;
+          color: #6f675f;
+          font-size: 12px;
+          line-height: 1.4;
+          text-align: center;
         }
 
-        .verify-location:hover {
-          border-color: #22a65a;
-          color: #168648;
-        }
-
-        .verify-location:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .bottom-error {
-          margin: 0 0 12px !important;
-          display: grid;
-          gap: 4px;
-        }
 
         .bottom-error strong,
         .bottom-error span {
