@@ -700,17 +700,24 @@ if (!signedInUser) {
 
       <header className="spotc-site-header">
         <div className="spotc-header-inner">
-        <Link
+        <a
   href="/shop"
   className="spotc-header-brand"
-  aria-label="SPOTC Home"
+  aria-label="SPOTC Shop"
+  onClick={(event) => {
+    event.preventDefault();
+
+    // Logo must always open a clean Shop page immediately.
+    // A hard navigation also clears stale product/category history state.
+    window.location.assign('/shop');
+  }}
 >
   <img
     src="/images/web%20logo%20color.png"
     alt="Spotc.in"
     className="spotc-header-logo"
   />
-</Link>
+</a>
 
           <nav className="spotc-desktop-navigation">
   {navigation.map((item) => {
