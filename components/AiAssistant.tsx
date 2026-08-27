@@ -205,11 +205,32 @@ export function AiAssistant({
     } catch (reason) {
       console.error('SPOTC AI Assistant failed:', reason);
 
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : 'AI Assistant is unavailable right now.',
-      );
+      const rawMessage = reason instanceof Error ? reason.message : '';
+
+      if (rawMessage.toLowerCase().includes('empty answer')) {
+        setError(
+          isTamil
+            ? 'பதில் கிடைக்கவில்லை. மீண்டும் கேளுங்கள்.'
+            : 'I could not complete that answer. Please ask again.',
+        );
+      } else if (
+        rawMessage.toLowerCase().includes('quota') ||
+        rawMessage.toLowerCase().includes('billing') ||
+        rawMessage.toLowerCase().includes('rate limit')
+      ) {
+        setError(
+          isTamil
+            ? 'AI Assistant தற்போது பிஸியாக உள்ளது. சிறிது நேரம் கழித்து முயற்சிக்கவும்.'
+            : 'AI Assistant is temporarily busy. Please try again shortly.',
+        );
+      } else {
+        setError(
+          rawMessage ||
+            (isTamil
+              ? 'AI Assistant தற்போது கிடைக்கவில்லை. மீண்டும் முயற்சிக்கவும்.'
+              : 'AI Assistant is temporarily unavailable. Please try again.'),
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -869,46 +890,46 @@ export function AiAssistant({
         }
 
         @media (max-width: 700px) {
-  .spotc-ai-overlay {
-    padding: 0 0 108px;
-    align-items: flex-end;
-  }
+          .spotc-ai-overlay {
+            padding: 0 0 calc(84px + env(safe-area-inset-bottom, 0px));
+            align-items: flex-end;
+          }
 
-  .spotc-ai-panel {
-    width: 100%;
-    height: min(72dvh, 650px);
-    max-height: calc(100dvh - 108px);
-    border-right: 0;
-    border-bottom: 0;
-    border-left: 0;
-    border-radius: 24px 24px 0 0;
-    overflow: hidden;
-  }
+          .spotc-ai-panel {
+            width: 100%;
+            height: min(74dvh, 680px);
+            max-height: calc(100dvh - 84px - env(safe-area-inset-bottom, 0px));
+            border-right: 0;
+            border-bottom: 0;
+            border-left: 0;
+            border-radius: 24px 24px 0 0;
+            overflow: hidden;
+          }
 
-  .spotc-ai-header {
-    flex: 0 0 auto;
-  }
+          .spotc-ai-header {
+            flex: 0 0 auto;
+          }
 
-  .spotc-ai-body {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    padding-bottom: 18px;
-  }
+          .spotc-ai-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            padding: 14px;
+            overflow-y: auto;
+          }
 
-  .spotc-ai-composer {
-    position: relative;
-    z-index: 5;
-    flex: 0 0 auto;
-    padding: 10px 12px;
-    border-top: 1px solid #e8e3dc;
-    background: #ffffff;
-  }
+          .spotc-ai-composer {
+            position: relative;
+            z-index: 5;
+            flex: 0 0 auto;
+            padding: 10px 12px;
+            border-top: 1px solid #e8e3dc;
+            background: #ffffff;
+          }
 
-  .spotc-ai-quick-questions {
-    margin-left: 0;
-  }
-}
+          .spotc-ai-quick-questions {
+            margin-left: 0;
+          }
+        }
 
         @media (max-width: 380px) {
           .spotc-ai-heading strong {

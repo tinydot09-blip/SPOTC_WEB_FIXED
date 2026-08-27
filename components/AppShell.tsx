@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import {
-  Bot,
+  Sparkles,
   CircleUserRound,
   LayoutDashboard,
   LogOut,
@@ -1056,76 +1056,63 @@ if (!signedInUser) {
       />
 
       <nav
-  className={
-    mobileNavAtTop
-      ? 'spotc-mobile-navigation spotc-mobile-navigation-top'
-      : 'spotc-mobile-navigation spotc-mobile-navigation-bottom'
-  }
->
-  {/* SHOP - LEFT */}
-  <Link
-    href="/shop"
-    className={
-      pathname.startsWith('/shop') ||
-      pathname.startsWith('/product/')
-        ? 'spotc-mobile-nav-link spotc-mobile-nav-link-active'
-        : 'spotc-mobile-nav-link'
-    }
-    aria-current={
-      pathname.startsWith('/shop') ||
-      pathname.startsWith('/product/')
-        ? 'page'
-        : undefined
-    }
-  >
-    <ShoppingBag
-      className="spotc-mobile-nav-icon"
-      aria-hidden="true"
-    />
+        className={
+          mobileNavAtTop
+            ? 'spotc-mobile-navigation spotc-mobile-navigation-top'
+            : 'spotc-mobile-navigation spotc-mobile-navigation-bottom'
+        }
+      >
+        <Link
+          href="/offers"
+          className={
+            pathname.startsWith('/offers')
+              ? 'spotc-mobile-nav-link spotc-mobile-nav-link-active'
+              : 'spotc-mobile-nav-link'
+          }
+          aria-current={pathname.startsWith('/offers') ? 'page' : undefined}
+        >
+          <Tag
+            className="spotc-mobile-nav-icon"
+            aria-hidden="true"
+          />
+          <span>Offers</span>
+        </Link>
 
-    <span>Shop</span>
-  </Link>
+        <button
+          type="button"
+          className="spotc-mobile-nav-link spotc-mobile-ai-nav-button"
+          aria-label="Open SPOTC AI Assistant"
+          aria-haspopup="dialog"
+          aria-expanded={aiAssistantOpen}
+          onClick={() => setAiAssistantOpen(true)}
+        >
+          <span className="spotc-mobile-ai-icon">
+            <Sparkles aria-hidden="true" />
+          </span>
+          <span>AI Assistance</span>
+          <small>Ask Anything</small>
+        </button>
 
-  {/* AI ASSISTANCE - CENTER */}
-  <button
-    type="button"
-    className="spotc-mobile-nav-link spotc-mobile-ai-nav-button"
-    aria-label="Open SPOTC AI Assistant"
-    aria-haspopup="dialog"
-    aria-expanded={aiAssistantOpen}
-    onClick={() => setAiAssistantOpen(true)}
-  >
-    <span className="spotc-mobile-ai-icon">
-      <Bot aria-hidden="true" />
-    </span>
-
-    <span>AI Assistance</span>
-
-    <small>Ask Anything</small>
-  </button>
-
-  {/* OFFERS - RIGHT */}
-  <Link
-    href="/offers"
-    className={
-      pathname.startsWith('/offers')
-        ? 'spotc-mobile-nav-link spotc-mobile-nav-link-active'
-        : 'spotc-mobile-nav-link'
-    }
-    aria-current={
-      pathname.startsWith('/offers')
-        ? 'page'
-        : undefined
-    }
-  >
-    <Tag
-      className="spotc-mobile-nav-icon"
-      aria-hidden="true"
-    />
-
-    <span>Offers</span>
-  </Link>
-</nav>
+        <Link
+          href="/shop"
+          className={
+            pathname.startsWith('/shop') || pathname.startsWith('/product/')
+              ? 'spotc-mobile-nav-link spotc-mobile-nav-link-active'
+              : 'spotc-mobile-nav-link'
+          }
+          aria-current={
+            pathname.startsWith('/shop') || pathname.startsWith('/product/')
+              ? 'page'
+              : undefined
+          }
+        >
+          <ShoppingBag
+            className="spotc-mobile-nav-icon"
+            aria-hidden="true"
+          />
+          <span>Shop</span>
+        </Link>
+      </nav>
 
       <style jsx global>{`
         .spotc-app-shell {
@@ -2241,22 +2228,23 @@ if (!signedInUser) {
 }
 
 .spotc-mobile-ai-icon {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 50%;
   color: #ffffff;
-  background: linear-gradient(145deg, #22c55e, #15803d);
+  background: linear-gradient(145deg, #22c55e, #0f8f3d);
   box-shadow:
-    0 0 0 5px rgba(34, 197, 94, 0.12),
-    0 5px 16px rgba(34, 197, 94, 0.28);
+    0 0 0 5px rgba(34, 197, 94, 0.10),
+    0 5px 18px rgba(34, 197, 94, 0.30);
 }
 
 .spotc-mobile-ai-icon svg {
-  width: 19px;
-  height: 19px;
-  stroke-width: 2.15;
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.3;
 }
 
 .spotc-mobile-nav-link-active {
