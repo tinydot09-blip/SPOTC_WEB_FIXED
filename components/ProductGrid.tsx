@@ -1860,6 +1860,17 @@ export function ProductGrid({
 
   return (
     <>
+      <div
+        className="spotc-shop-trust-strip"
+        aria-label="Shopping assurances"
+      >
+        <span>🔒 Secure Checkout</span>
+        <i aria-hidden="true">•</i>
+        <span>🤝 Cash on Delivery</span>
+        <i aria-hidden="true">•</i>
+        <span>📍 Local Delivery Only</span>
+      </div>
+
       <section className="spotc-shop-category-toolbar">
         <div
           className="spotc-main-category-strip"
@@ -2943,6 +2954,45 @@ export function ProductGrid({
              Girl Dress: fixed age groups from 0-12 Years
           ===================================================== */
 
+          .spotc-shop-trust-strip {
+            width: 100%;
+            min-height: 38px;
+            margin: 0 0 12px;
+            padding: 8px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            border: 1px solid #e8e1d7;
+            border-radius: 12px;
+            color: #4d4943;
+            background: #fffaf2;
+            box-sizing: border-box;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.2;
+            white-space: nowrap;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .spotc-shop-trust-strip::-webkit-scrollbar {
+            display: none;
+          }
+
+          .spotc-shop-trust-strip span {
+            flex: 0 0 auto;
+          }
+
+          .spotc-shop-trust-strip i {
+            flex: 0 0 auto;
+            color: #b8afa4;
+            font-style: normal;
+            font-weight: 800;
+          }
+
           .spotc-shop-category-toolbar {
             width: 100%;
             margin: 0 0 10px;
@@ -3033,6 +3083,16 @@ export function ProductGrid({
           }
 
           @media (max-width: 700px) {
+            .spotc-shop-trust-strip {
+              min-height: 34px;
+              margin-bottom: 10px;
+              padding: 7px 10px;
+              justify-content: flex-start;
+              gap: 7px;
+              border-radius: 10px;
+              font-size: 10.5px;
+            }
+
             .spotc-shop-category-toolbar {
               display: flex;
               align-items: center;
