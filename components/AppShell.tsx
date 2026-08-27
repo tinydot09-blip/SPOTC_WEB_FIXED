@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import {
+  Bot,
   CircleUserRound,
   LayoutDashboard,
   LogOut,
@@ -43,6 +44,7 @@ import { useDeliveryAvailability } from '@/lib/delivery-radius';
 import { getProducts } from '@/lib/data';
 import type { BusinessProduct } from '@/lib/types';
 import { useSpotcLanguage } from '@/components/LanguageProvider';
+import { AiAssistant } from '@/components/AiAssistant';
 
 const navigation = [
   {
@@ -237,6 +239,9 @@ export function AppShell({
     useState<Partial<SpotcUserProfile> | null>(null);
 
   const [menuOpen, setMenuOpen] =
+    useState(false);
+
+  const [aiAssistantOpen, setAiAssistantOpen] =
     useState(false);
 
   const [cartCount, setCartCount] =
@@ -1044,6 +1049,12 @@ if (!signedInUser) {
         {children}
       </main>
 
+      <AiAssistant
+        open={aiAssistantOpen}
+        onClose={() => setAiAssistantOpen(false)}
+        language={language}
+      />
+
       <nav
         className={
           mobileNavAtTop
@@ -1051,36 +1062,56 @@ if (!signedInUser) {
             : 'spotc-mobile-navigation spotc-mobile-navigation-bottom'
         }
       >
-        {navigation.map((item) => {
-          const Icon = item.icon;
-          const active =
-            pathname.startsWith(item.href) ||
-            (item.href === '/shop' && pathname.startsWith('/product/'));
+        <Link
+          href="/offers"
+          className={
+            pathname.startsWith('/offers')
+              ? 'spotc-mobile-nav-link spotc-mobile-nav-link-active'
+              : 'spotc-mobile-nav-link'
+          }
+          aria-current={pathname.startsWith('/offers') ? 'page' : undefined}
+        >
+          <Tag
+            className="spotc-mobile-nav-icon"
+            aria-hidden="true"
+          />
+          <span>Offers</span>
+        </Link>
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={
-                active
-                  ? 'spotc-mobile-nav-link spotc-mobile-nav-link-active'
-                  : 'spotc-mobile-nav-link'
-              }
-              aria-current={
-                active ? 'page' : undefined
-              }
-            >
-              <Icon
-                className="spotc-mobile-nav-icon"
-                aria-hidden="true"
-              />
+        <button
+          type="button"
+          className="spotc-mobile-nav-link spotc-mobile-ai-nav-button"
+          aria-label="Open SPOTC AI Assistant"
+          aria-haspopup="dialog"
+          aria-expanded={aiAssistantOpen}
+          onClick={() => setAiAssistantOpen(true)}
+        >
+          <span className="spotc-mobile-ai-icon">
+            <Bot aria-hidden="true" />
+          </span>
+          <span>AI Assistance</span>
+          <small>Ask Anything</small>
+        </button>
 
-              <span>
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
+        <Link
+          href="/shop"
+          className={
+            pathname.startsWith('/shop') || pathname.startsWith('/product/')
+              ? 'spotc-mobile-nav-link spotc-mobile-nav-link-active'
+              : 'spotc-mobile-nav-link'
+          }
+          aria-current={
+            pathname.startsWith('/shop') || pathname.startsWith('/product/')
+              ? 'page'
+              : undefined
+          }
+        >
+          <ShoppingBag
+            className="spotc-mobile-nav-icon"
+            aria-hidden="true"
+          />
+          <span>Shop</span>
+        </Link>
       </nav>
 
       <style jsx global>{`
@@ -2061,7 +2092,7 @@ if (!signedInUser) {
 
   display: grid;
   grid-template-columns:
-    repeat(2, minmax(0, 1fr));
+    repeat(3, minmax(0, 1fr));
   align-items: stretch;
   gap: 0;
 
@@ -2177,6 +2208,44 @@ if (!signedInUser) {
   white-space: nowrap;
 }
 
+.spotc-mobile-ai-nav-button {
+  border: 0;
+  border-radius: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.spotc-mobile-ai-nav-button small {
+  display: block;
+  margin-top: -2px;
+  color: #4ade80;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.spotc-mobile-ai-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #ffffff;
+  background: linear-gradient(145deg, #22c55e, #15803d);
+  box-shadow:
+    0 0 0 5px rgba(34, 197, 94, 0.12),
+    0 5px 16px rgba(34, 197, 94, 0.28);
+}
+
+.spotc-mobile-ai-icon svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 2.15;
+}
+
 .spotc-mobile-nav-link-active {
   color: #f5bd4d;
 
@@ -2286,6 +2355,14 @@ body {
             height: 62px;
             gap: 4px;
             font-size: 14px;
+          }
+
+          .spotc-mobile-ai-nav-button {
+            font-size: 12px;
+          }
+
+          .spotc-mobile-ai-nav-button small {
+            font-size: 9px;
           }
 
           .spotc-mobile-nav-link-active {
