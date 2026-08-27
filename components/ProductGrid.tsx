@@ -1087,7 +1087,22 @@ export function ProductGrid({
   const { language, t, productTitle } = useSpotcLanguage();
 
   const [items, setItems] =
-    useState<BusinessProduct[] | null>(null);
+    useState<BusinessProduct[] | null>(() => {
+      if (typeof window === 'undefined') {
+        return null;
+      }
+
+      const cached = (
+        window as typeof window & {
+          __spotcProductsCache?: BusinessProduct[];
+          __spotcProductsCacheAt?: number;
+        }
+      ).__spotcProductsCache;
+
+      return Array.isArray(cached) && cached.length > 0
+        ? cached
+        : null;
+    });
   const [error, setError] =
     useState<string | null>(null);
 
@@ -1274,9 +1289,52 @@ export function ProductGrid({
   }, [searchParams]);
 
   useEffect(() => {
+    const browserCache =
+      typeof window !== 'undefined'
+        ? (
+            window as typeof window & {
+              __spotcProductsCache?: BusinessProduct[];
+              __spotcProductsCacheAt?: number;
+            }
+          )
+        : null;
+
+    const cachedProducts =
+      browserCache?.__spotcProductsCache;
+
+    const cachedAt =
+      browserCache?.__spotcProductsCacheAt || 0;
+
+    const cacheIsFresh =
+      Array.isArray(cachedProducts) &&
+      cachedProducts.length > 0 &&
+      Date.now() - cachedAt < 5 * 60 * 1000;
+
+    if (cacheIsFresh) {
+      setItems(cachedProducts);
+      setError(null);
+      return;
+    }
+
+    let active = true;
+
     getProducts()
-      .then(setItems)
+      .then((products) => {
+        if (!active) return;
+
+        setItems(products);
+        setError(null);
+
+        if (browserCache) {
+          browserCache.__spotcProductsCache =
+            products;
+          browserCache.__spotcProductsCacheAt =
+            Date.now();
+        }
+      })
       .catch((reason: unknown) => {
+        if (!active) return;
+
         setError(
           reason instanceof Error
             ? reason.message
@@ -1284,6 +1342,10 @@ export function ProductGrid({
         );
         setItems([]);
       });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -1935,7 +1997,7 @@ export function ProductGrid({
                 params.delete('subcategory');
                 params.set('category', categoryName);
 
-                window.history.pushState(
+                window.history.replaceState(
                   window.history.state,
                   '',
                   `/shop?${params.toString()}`,
@@ -2038,7 +2100,7 @@ export function ProductGrid({
                   params.set('subcategory', categoryName);
                 }
 
-                window.history.pushState(
+                window.history.replaceState(
                   window.history.state,
                   '',
                   `/shop?${params.toString()}`,

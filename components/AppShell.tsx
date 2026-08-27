@@ -447,6 +447,20 @@ export function AppShell({
       .then((products) => {
         if (!cancelled) {
           setSearchProducts(products);
+
+          (
+            window as typeof window & {
+              __spotcProductsCache?: BusinessProduct[];
+              __spotcProductsCacheAt?: number;
+            }
+          ).__spotcProductsCache = products;
+
+          (
+            window as typeof window & {
+              __spotcProductsCache?: BusinessProduct[];
+              __spotcProductsCacheAt?: number;
+            }
+          ).__spotcProductsCacheAt = Date.now();
         }
       })
       .catch((error) => {
@@ -690,11 +704,6 @@ if (!signedInUser) {
   href="/shop"
   className="spotc-header-brand"
   aria-label="SPOTC Home"
-  onClick={(event) => {
-    event.preventDefault();
-    window.dispatchEvent(new CustomEvent('spotc-shop-reset'));
-    router.push('/shop');
-  }}
 >
   <img
     src="/images/web%20logo%20color.png"
@@ -1069,11 +1078,6 @@ if (!signedInUser) {
       >
         <Link
           href="/shop"
-          onClick={(event) => {
-            event.preventDefault();
-            window.dispatchEvent(new CustomEvent('spotc-shop-reset'));
-            router.push('/shop');
-          }}
           className={
             pathname.startsWith('/shop') || pathname.startsWith('/product/')
               ? 'spotc-mobile-nav-link spotc-mobile-shop-link spotc-mobile-nav-link-active'
