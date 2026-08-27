@@ -1935,7 +1935,7 @@ export function ProductGrid({
                 params.delete('subcategory');
                 params.set('category', categoryName);
 
-                window.history.replaceState(
+                window.history.pushState(
                   window.history.state,
                   '',
                   `/shop?${params.toString()}`,
@@ -2038,7 +2038,7 @@ export function ProductGrid({
                   params.set('subcategory', categoryName);
                 }
 
-                window.history.replaceState(
+                window.history.pushState(
                   window.history.state,
                   '',
                   `/shop?${params.toString()}`,
