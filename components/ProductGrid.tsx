@@ -2956,23 +2956,45 @@ export function ProductGrid({
 
           .spotc-shop-trust-strip {
             width: 100%;
-            min-height: 38px;
-            margin: 0 0 12px;
-            padding: 8px 14px;
+            min-height: 42px;
+
+            /*
+             * Pull the assurance strip up to the top edge of the Shop content.
+             * The Shop page/container has spacing above ProductGrid; this removes
+             * that visible cream gap so the trust strip sits directly below the
+             * site header.
+             */
+            margin: -24px 0 12px;
+            padding: 9px 16px;
+
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 12px;
+
             overflow-x: auto;
             overflow-y: hidden;
-            border: 1px solid #e8e1d7;
-            border-radius: 12px;
-            color: #4d4943;
-            background: #fffaf2;
+
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+
+            color: #ffffff;
+            background:
+              linear-gradient(
+                180deg,
+                #211a14 0%,
+                #15110e 100%
+              );
+
+            box-shadow:
+              0 5px 16px rgba(0, 0, 0, 0.10);
+
             box-sizing: border-box;
+
             font-size: 12px;
-            font-weight: 700;
+            font-weight: 750;
             line-height: 1.2;
+
             white-space: nowrap;
             scrollbar-width: none;
             -webkit-overflow-scrolling: touch;
@@ -2984,11 +3006,12 @@ export function ProductGrid({
 
           .spotc-shop-trust-strip span {
             flex: 0 0 auto;
+            color: #ffffff;
           }
 
           .spotc-shop-trust-strip i {
             flex: 0 0 auto;
-            color: #b8afa4;
+            color: rgba(255, 255, 255, 0.42);
             font-style: normal;
             font-weight: 800;
           }
@@ -3084,12 +3107,39 @@ export function ProductGrid({
 
           @media (max-width: 700px) {
             .spotc-shop-trust-strip {
-              min-height: 34px;
-              margin-bottom: 10px;
-              padding: 7px 10px;
-              justify-content: flex-start;
+              /*
+               * Mobile: remove the full gap between the 62px sticky header and
+               * the first Shop control. The strip becomes the first dark band
+               * immediately below the header.
+               */
+              width: calc(100% + 32px);
+              min-height: 40px;
+
+              margin:
+                -24px
+                -16px
+                10px;
+
+              padding: 8px 14px;
+
+              justify-content: center;
               gap: 7px;
-              border-radius: 10px;
+
+              border-right: 0;
+              border-left: 0;
+              border-radius: 0;
+
+              color: #ffffff;
+              background:
+                linear-gradient(
+                  180deg,
+                  #211a14 0%,
+                  #15110e 100%
+                );
+
+              box-shadow:
+                0 4px 12px rgba(0, 0, 0, 0.10);
+
               font-size: 10.5px;
             }
 
@@ -3192,6 +3242,19 @@ export function ProductGrid({
               height: 40px;
               min-height: 40px;
             }
+          }
+
+
+          /* PRODUCT TITLE: ONE LINE + ELLIPSIS */
+          .product-card.rich .product-title-link,
+          .product-card.rich .product-title-link h3 {
+            display: block !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            overflow: hidden !important;
+            white-space: nowrap !important;
+            text-overflow: ellipsis !important;
           }
 
       `}</style>
