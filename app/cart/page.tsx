@@ -1027,11 +1027,6 @@ export default function CartPage() {
                 </div>
               </section>
 
-              <footer className="spotc-order-footer">
-                <span>Products subtotal</span>
-
-                <strong>{money(subtotal)}</strong>
-              </footer>
             </article>
           </section>
 
