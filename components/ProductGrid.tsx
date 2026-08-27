@@ -1990,17 +1990,16 @@ export function ProductGrid({
                   }),
                 );
 
-                // Keep the URL shareable/bookmarkable without allowing the
-                // previous URL category to briefly overwrite local state.
-                const params = new URLSearchParams(searchParams.toString());
-                params.delete('search');
-                params.delete('subcategory');
+                // IMPORTANT:
+                // Main-category changes must create a REAL browser history entry.
+                // Using replaceState removes the previous category from history,
+                // which makes Android swipe-back jump to an older product/page.
+                const params = new URLSearchParams();
                 params.set('category', categoryName);
 
-                window.history.replaceState(
-                  window.history.state,
-                  '',
+                router.push(
                   `/shop?${params.toString()}`,
+                  { scroll: false },
                 );
               }}
             >
@@ -2090,20 +2089,18 @@ export function ProductGrid({
                   );
                 }
 
-                const params = new URLSearchParams(searchParams.toString());
-                params.delete('search');
+                const params = new URLSearchParams();
                 params.set('category', mainCategory);
 
-                if (categoryName === 'All') {
-                  params.delete('subcategory');
-                } else {
+                if (categoryName !== 'All') {
                   params.set('subcategory', categoryName);
                 }
 
-                window.history.replaceState(
-                  window.history.state,
-                  '',
+                // Subcategory changes also need a real history entry so
+                // mobile swipe-back restores the exact previous Shop state.
+                router.push(
                   `/shop?${params.toString()}`,
+                  { scroll: false },
                 );
               }}
             >
