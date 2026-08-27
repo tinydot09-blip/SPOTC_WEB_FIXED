@@ -17,9 +17,23 @@ type AiAssistantProps = {
   language: 'en' | 'ta' | string;
 };
 
+type AiProduct = {
+  id: string;
+  title: string;
+  price: number;
+  image: string;
+  category: string;
+  ageGroup: string;
+  color: string;
+  stock: number | null;
+  freeGiftCount: number;
+  url: string;
+};
+
 type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
+  products?: AiProduct[];
 };
 
 type SpeechRecognitionEventLike = Event & {
@@ -177,6 +191,7 @@ export function AiAssistant({
       const data = (await response.json()) as {
         answer?: unknown;
         error?: unknown;
+        products?: AiProduct[];
       };
 
       if (!response.ok) {
@@ -198,6 +213,7 @@ export function AiAssistant({
         {
           role: 'assistant',
           content: answer,
+          products: Array.isArray(data.products) ? data.products : [],
         },
       ]);
 
@@ -423,7 +439,46 @@ export function AiAssistant({
                 </span>
               )}
 
-              <p>{message.content}</p>
+              <div className="spotc-ai-answer-wrap">
+                <p>{message.content}</p>
+
+                {message.role === 'assistant' &&
+                  Array.isArray(message.products) &&
+                  message.products.length > 0 && (
+                    <div className="spotc-ai-products">
+                      {message.products.map((product) => (
+                        <a
+                          key={product.id}
+                          href={product.url}
+                          className="spotc-ai-product-card"
+                        >
+                          {product.image ? (
+                            <img
+                              src={product.image}
+                              alt={product.title}
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="spotc-ai-product-placeholder">SPOTC</div>
+                          )}
+
+                          <div className="spotc-ai-product-info">
+                            <strong>{product.title}</strong>
+                            <span className="spotc-ai-product-price">
+                              ₹{Math.round(product.price)}
+                            </span>
+                            <small>
+                              {product.freeGiftCount > 0
+                                ? `🎁 ${product.freeGiftCount} Free Gift${product.freeGiftCount > 1 ? 's' : ''}`
+                                : 'View product details'}
+                            </small>
+                            <b>View Product →</b>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+              </div>
 
               {message.role === 'assistant' && (
                 <button
@@ -648,6 +703,86 @@ export function AiAssistant({
           font-weight: 520;
           line-height: 1.45;
           white-space: pre-wrap;
+        }
+
+        .spotc-ai-answer-wrap {
+          min-width: 0;
+          max-width: 100%;
+        }
+
+        .spotc-ai-products {
+          margin-top: 8px;
+          display: grid;
+          gap: 8px;
+        }
+
+        .spotc-ai-product-card {
+          width: min(100%, 340px);
+          min-height: 92px;
+          display: grid;
+          grid-template-columns: 88px minmax(0, 1fr);
+          overflow: hidden;
+          border: 1px solid #e1ddd6;
+          border-radius: 14px;
+          color: #211f1c;
+          background: #ffffff;
+          text-decoration: none;
+          box-shadow: 0 4px 14px rgba(30, 24, 16, 0.06);
+        }
+
+        .spotc-ai-product-card img,
+        .spotc-ai-product-placeholder {
+          width: 88px;
+          height: 100%;
+          min-height: 92px;
+          object-fit: cover;
+          background: #f2efe9;
+        }
+
+        .spotc-ai-product-placeholder {
+          display: grid;
+          place-items: center;
+          color: #77716a;
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .spotc-ai-product-info {
+          min-width: 0;
+          padding: 9px 10px;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 3px;
+        }
+
+        .spotc-ai-product-info strong {
+          width: 100%;
+          overflow: hidden;
+          color: #1f1c18;
+          font-size: 13px;
+          line-height: 1.25;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .spotc-ai-product-price {
+          color: #111111;
+          font-size: 14px;
+          font-weight: 850;
+        }
+
+        .spotc-ai-product-info small {
+          color: #26733e;
+          font-size: 10px;
+          font-weight: 700;
+        }
+
+        .spotc-ai-product-info b {
+          margin-top: 2px;
+          color: #16863a;
+          font-size: 11px;
+          font-weight: 850;
         }
 
         .spotc-ai-message-assistant p {
