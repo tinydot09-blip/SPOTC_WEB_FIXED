@@ -1104,11 +1104,14 @@ export function ProductGrid({
   const [categoriesLoaded, setCategoriesLoaded] = useState(false);
 
   const initialCategoryParam = searchParams.get('category');
+  const initialSubCategoryParam = searchParams.get('subcategory');
+
   const [mainCategory, setMainCategory] =
     useState<ShopMainCategory>(
       initialCategoryParam || 'Girl Dress',
     );
-  const [subCategory, setSubCategory] = useState('All');
+  const [subCategory, setSubCategory] =
+    useState(initialSubCategoryParam || 'All');
 
   const [user, setUser] =
     useState<User | null>(auth?.currentUser ?? null);
@@ -1210,28 +1213,51 @@ export function ProductGrid({
   );
 
   useEffect(() => {
-    if (!categoriesLoaded) return;
+    if (!categoriesLoaded || mainCategories.length === 0) return;
 
     const categoryParam = searchParams.get('category');
+    const subCategoryParam = searchParams.get('subcategory');
 
-    if (!categoryParam) return;
+    if (!categoryParam) {
+      const defaultCategory = mainCategories.includes('Girl Dress')
+        ? 'Girl Dress'
+        : mainCategories[0];
+
+      setMainCategory(defaultCategory);
+      setSubCategory('All');
+      return;
+    }
 
     const matched = mainCategories.find(
       (category) =>
-        category.toLowerCase() ===
-        categoryParam.toLowerCase(),
+        category.toLowerCase() === categoryParam.toLowerCase(),
     );
 
     if (!matched) return;
 
-    setMainCategory((current) => {
-      if (current === matched) {
-        return current;
-      }
-
-      return matched;
-    });
+    setMainCategory(matched);
+    setSubCategory(subCategoryParam || 'All');
   }, [searchParams, mainCategories, categoriesLoaded]);
+
+  useEffect(() => {
+    const resetShop = () => {
+      const defaultCategory = mainCategories.includes('Girl Dress')
+        ? 'Girl Dress'
+        : mainCategories[0] || 'Girl Dress';
+
+      setMainCategory(defaultCategory);
+      setSubCategory('All');
+      setSearch('');
+      setSort('Featured');
+
+      window.dispatchEvent(
+        new CustomEvent('spotc-search-sync', { detail: '' }),
+      );
+    };
+
+    window.addEventListener('spotc-shop-reset', resetShop);
+    return () => window.removeEventListener('spotc-shop-reset', resetShop);
+  }, [mainCategories]);
 
   useEffect(() => {
     const querySearch = searchParams.get('search') || '';
@@ -1906,6 +1932,7 @@ export function ProductGrid({
                 // previous URL category to briefly overwrite local state.
                 const params = new URLSearchParams(searchParams.toString());
                 params.delete('search');
+                params.delete('subcategory');
                 params.set('category', categoryName);
 
                 window.history.replaceState(
@@ -2000,6 +2027,22 @@ export function ProductGrid({
                     }),
                   );
                 }
+
+                const params = new URLSearchParams(searchParams.toString());
+                params.delete('search');
+                params.set('category', mainCategory);
+
+                if (categoryName === 'All') {
+                  params.delete('subcategory');
+                } else {
+                  params.set('subcategory', categoryName);
+                }
+
+                window.history.replaceState(
+                  window.history.state,
+                  '',
+                  `/shop?${params.toString()}`,
+                );
               }}
             >
               {categoryLabel(categoryName)}
