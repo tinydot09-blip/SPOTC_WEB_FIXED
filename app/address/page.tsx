@@ -139,7 +139,7 @@ type ForwardGeocodeResponse = Array<{
 }>;
 
 const SERVICE_AREA_MESSAGE =
-  'Delivery is currently available only in Karamadai, Teacher Colony, EB Colony and Gandhinagar. This address is outside our delivery area.';
+  'This location is outside our current delivery area. Delivery is available in Karamadai, Teacher Colony, EB Colony and Gandhinagar.';
 
 const BROWSE_MESSAGE =
   'You can still browse all SPOTC products.';
@@ -147,64 +147,109 @@ const BROWSE_MESSAGE =
 const forwardGeocode = async (
   address: AddressInput,
 ): Promise<{ latitude: number; longitude: number } | null> => {
-  const query = [
-    address.houseNo,
-    address.street,
-    address.landmark,
-    address.area,
-    address.city,
-    address.pincode,
-    address.state || 'Tamil Nadu',
-    address.country || 'India',
+  const parts = {
+    houseNo: String(address.houseNo || '').trim(),
+    street: String(address.street || '').trim(),
+    landmark: String(address.landmark || '').trim(),
+    area: String(address.area || '').trim(),
+    city: String(address.city || '').trim(),
+    pincode: String(address.pincode || '').trim(),
+    state: String(address.state || 'Tamil Nadu').trim(),
+    country: String(address.country || 'India').trim(),
+  };
+
+  const queries = [
+    [
+      parts.houseNo,
+      parts.street,
+      parts.landmark,
+      parts.area,
+      parts.city,
+      parts.pincode,
+      parts.state,
+      parts.country,
+    ],
+    [
+      parts.area,
+      'Karamadai',
+      parts.pincode,
+      parts.state,
+      parts.country,
+    ],
+    [
+      parts.area,
+      parts.pincode,
+      'Coimbatore',
+      parts.state,
+      parts.country,
+    ],
+    [
+      'Karamadai',
+      parts.pincode,
+      parts.state,
+      parts.country,
+    ],
   ]
-    .map((value) => String(value || '').trim())
-    .filter(Boolean)
-    .join(', ');
-
-  const params = new URLSearchParams({
-    format: 'jsonv2',
-    q: query,
-    limit: '1',
-    countrycodes: 'in',
-    'accept-language': 'en',
-  });
-
-  const response = await fetch(
-    `https://nominatim.openstreetmap.org/search?${params.toString()}`,
-    {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-      },
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      `Address lookup failed with status ${response.status}.`,
+    .map((items) =>
+      items.filter(Boolean).join(', '),
+    )
+    .filter(
+      (value, index, array) =>
+        value && array.indexOf(value) === index,
     );
+
+  for (const query of queries) {
+    try {
+      const params = new URLSearchParams({
+        format: 'jsonv2',
+        q: query,
+        limit: '1',
+        countrycodes: 'in',
+        'accept-language': 'en',
+      });
+
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?${params.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+          },
+        },
+      );
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const results =
+        (await response.json()) as ForwardGeocodeResponse;
+
+      const first = results[0];
+
+      if (!first?.lat || !first?.lon) {
+        continue;
+      }
+
+      const latitude = Number(first.lat);
+      const longitude = Number(first.lon);
+
+      if (
+        Number.isFinite(latitude) &&
+        Number.isFinite(longitude)
+      ) {
+        return { latitude, longitude };
+      }
+    } catch (error) {
+      console.warn(
+        'Address geocode attempt failed:',
+        query,
+        error,
+      );
+    }
   }
 
-  const results =
-    (await response.json()) as ForwardGeocodeResponse;
-
-  const first = results[0];
-
-  if (!first?.lat || !first?.lon) {
-    return null;
-  }
-
-  const latitude = Number(first.lat);
-  const longitude = Number(first.lon);
-
-  if (
-    !Number.isFinite(latitude) ||
-    !Number.isFinite(longitude)
-  ) {
-    return null;
-  }
-
-  return { latitude, longitude };
+  return null;
 };
 
 const coordinatesFromAddress = (
@@ -791,7 +836,7 @@ export default function AddressPage() {
 
         if (!coordinates) {
           setFormError(
-            'We could not verify this address location. Please check the area, city and pincode, or use Current Location.',
+            'We could not confirm this exact address on the map. If you are in Karamadai, Teacher Colony, EB Colony or Gandhinagar, tap “Verify Current Location” below and then save.',
           );
           return;
         }
@@ -1219,15 +1264,6 @@ export default function AddressPage() {
               )}
             </div>
 
-            {formError && (
-              <div
-                className="form-error"
-                role="alert"
-              >
-                {formError}
-              </div>
-            )}
-
             <div className="form-grid">
               <label>
                 Full name
@@ -1441,6 +1477,39 @@ export default function AddressPage() {
                 />
               </label>
             </div>
+
+            <button
+              type="button"
+              className="verify-location"
+              onClick={() =>
+                void useCurrentLocation()
+              }
+              disabled={locating || saving}
+            >
+              {locating ? (
+                <>
+                  <Loader2 className="spin" />
+                  Verifying location…
+                </>
+              ) : (
+                <>
+                  <MapPin size={18} />
+                  Verify Current Location
+                </>
+              )}
+            </button>
+
+            {formError && (
+              <div
+                className="form-error bottom-error"
+                role="alert"
+              >
+                <strong>
+                  Address location needs verification
+                </strong>
+                <span>{formError}</span>
+              </div>
+            )}
 
             <button
               type="submit"
@@ -1709,6 +1778,45 @@ export default function AddressPage() {
         }
 
         .continue-address,
+        .verify-location {
+          width: 100%;
+          min-height: 48px;
+          margin: 4px 0 10px;
+          padding: 0 16px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          border: 1px solid #cfc7bd;
+          border-radius: 12px;
+          color: #17120d;
+          background: #ffffff;
+          font-size: 14px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .verify-location:hover {
+          border-color: #22a65a;
+          color: #168648;
+        }
+
+        .verify-location:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .bottom-error {
+          margin: 0 0 12px !important;
+          display: grid;
+          gap: 4px;
+        }
+
+        .bottom-error strong,
+        .bottom-error span {
+          display: block;
+        }
+
         .save-address {
           width: 100%;
           min-height: 52px;
