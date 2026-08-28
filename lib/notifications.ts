@@ -64,21 +64,29 @@ async function getServiceWorkerRegistration():
     !('serviceWorker' in navigator)
   ) {
     throw new Error(
-      'Service workers are not supported in this browser.',
+      'Browser notifications are not supported on this device.',
     );
   }
 
-  const registration =
-    await navigator.serviceWorker.register(
-      SERVICE_WORKER_PATH,
-      {
-        scope: '/',
-      },
+  let registration =
+    await navigator.serviceWorker.getRegistration(
+      '/',
     );
 
-  await navigator.serviceWorker.ready;
+  if (!registration) {
+    registration =
+      await navigator.serviceWorker.register(
+        SERVICE_WORKER_PATH,
+        {
+          scope: '/',
+        },
+      );
+  }
 
-  return registration;
+  const readyRegistration =
+    await navigator.serviceWorker.ready;
+
+  return registration || readyRegistration;
 }
 
 async function saveTokenForUser(
@@ -87,31 +95,42 @@ async function saveTokenForUser(
 ): Promise<void> {
   if (!db) {
     throw new Error(
-      'Firebase Firestore is not available.',
+      'SPOTC could not connect to Firestore.',
     );
   }
 
-  await setDoc(
-    doc(db, 'Users', user.uid),
-    {
-      uid: user.uid,
-      fcm_tokens: arrayUnion(token),
-      fcm_token_last: token,
-      browser_notifications_enabled: true,
-      browser_notification_permission:
-        'granted',
-      browser_notification_user_agent:
-        typeof navigator !== 'undefined'
-          ? navigator.userAgent
-          : '',
-      browser_notification_updated_at:
-        serverTimestamp(),
-      updated_at: serverTimestamp(),
-    },
-    {
-      merge: true,
-    },
-  );
+  try {
+    await setDoc(
+      doc(db, 'Users', user.uid),
+      {
+        uid: user.uid,
+        fcm_tokens: arrayUnion(token),
+        fcm_token_last: token,
+        browser_notifications_enabled: true,
+        browser_notification_permission:
+          'granted',
+        browser_notification_user_agent:
+          typeof navigator !== 'undefined'
+            ? navigator.userAgent
+            : '',
+        browser_notification_updated_at:
+          serverTimestamp(),
+        updated_at: serverTimestamp(),
+      },
+      {
+        merge: true,
+      },
+    );
+  } catch (error) {
+    console.error(
+      '[SPOTC] Unable to save FCM token:',
+      error,
+    );
+
+    throw new Error(
+      'Notifications were allowed, but SPOTC could not save this device. Check Firestore permissions.',
+    );
+  }
 }
 
 async function createAndSaveToken(
@@ -119,7 +138,7 @@ async function createAndSaveToken(
 ): Promise<string> {
   if (!VAPID_KEY) {
     throw new Error(
-      'NEXT_PUBLIC_FIREBASE_VAPID_KEY is missing from .env.local.',
+      'SPOTC notification setup is incomplete: VAPID key is missing from the deployed site.',
     );
   }
 
@@ -128,7 +147,7 @@ async function createAndSaveToken(
 
   if (!supported) {
     throw new Error(
-      'Firebase browser notifications are not supported in this browser.',
+      'This browser does not support SPOTC browser notifications.',
     );
   }
 
@@ -138,16 +157,29 @@ async function createAndSaveToken(
   const messaging =
     getMessaging(getApp());
 
-  const token =
-    await getToken(messaging, {
-      vapidKey: VAPID_KEY,
-      serviceWorkerRegistration:
-        registration,
-    });
+  let token = '';
+
+  try {
+    token =
+      await getToken(messaging, {
+        vapidKey: VAPID_KEY,
+        serviceWorkerRegistration:
+          registration,
+      });
+  } catch (error) {
+    console.error(
+      '[SPOTC] Firebase getToken failed:',
+      error,
+    );
+
+    throw new Error(
+      'SPOTC could not register this browser for order alerts.',
+    );
+  }
 
   if (!token) {
     throw new Error(
-      'Firebase did not return a browser notification token.',
+      'Firebase did not return a notification token for this device.',
     );
   }
 
@@ -160,29 +192,71 @@ async function createAndSaveToken(
 }
 
 /**
- * Call this only from a user action such as tapping
- * "Enable browser notifications".
+ * Must be called directly from a user action.
+ * Example: tapping "Turn on order alerts".
  */
 export async function requestAndRegisterBrowserNotifications(
   user: User,
 ): Promise<BrowserNotificationState> {
-  const state =
-    await getBrowserNotificationState();
+  if (
+    !browserAvailable() ||
+    !('Notification' in window) ||
+    !('serviceWorker' in navigator)
+  ) {
+    throw new Error(
+      'Browser notifications are not supported on this device.',
+    );
+  }
 
-  if (state === 'unsupported') {
-    return 'unsupported';
+  const supported =
+    await isSupported().catch(() => false);
+
+  if (!supported) {
+    throw new Error(
+      'This browser does not support SPOTC browser notifications.',
+    );
   }
 
   let permission =
     Notification.permission;
 
-  if (permission !== 'granted') {
-    permission =
-      await Notification.requestPermission();
+  /*
+   * IMPORTANT:
+   * If the user previously blocked notifications,
+   * Chrome will not show the permission popup again.
+   */
+  if (permission === 'denied') {
+    throw new Error(
+      'Notifications are already blocked for spotc.in on this device.',
+    );
+  }
+
+  if (permission === 'default') {
+    try {
+      permission =
+        await Notification.requestPermission();
+    } catch (error) {
+      console.error(
+        '[SPOTC] Notification permission request failed:',
+        error,
+      );
+
+      throw new Error(
+        'Chrome could not open the notification permission request.',
+      );
+    }
+  }
+
+  if (permission === 'denied') {
+    throw new Error(
+      'Notifications were blocked on this device.',
+    );
   }
 
   if (permission !== 'granted') {
-    return permission;
+    throw new Error(
+      'Notification permission was not allowed.',
+    );
   }
 
   await createAndSaveToken(user);
@@ -191,8 +265,8 @@ export async function requestAndRegisterBrowserNotifications(
 }
 
 /**
- * Refresh/save the FCM token without showing a permission prompt.
- * Safe to call on login when the browser already has permission.
+ * Refresh/save an existing FCM token without showing
+ * a browser permission prompt.
  */
 export async function refreshBrowserNotificationToken(
   user: User,
@@ -230,12 +304,20 @@ export async function listenForForegroundNotifications(
   );
 }
 
+/**
+ * Mobile Chrome does not reliably support
+ * `new Notification(...)`.
+ * Use the service worker to display foreground
+ * notifications too.
+ */
 export function showForegroundBrowserNotification(
   payload: MessagePayload,
 ): void {
   if (
     typeof window === 'undefined' ||
+    typeof navigator === 'undefined' ||
     !('Notification' in window) ||
+    !('serviceWorker' in navigator) ||
     Notification.permission !== 'granted'
   ) {
     return;
@@ -255,33 +337,32 @@ export function showForegroundBrowserNotification(
     payload.data?.url ||
     '/dashboard?tab=orders';
 
-  const notification =
-    new Notification(title, {
-      body,
-      icon:
-        '/images/web-logo-color.png',
-      badge:
-        '/images/web-logo-color.png',
-      tag:
-        payload.data?.orderId ||
-        'spotc-order-update',
-      data: {
-        url,
-        orderId:
-          payload.data?.orderId ||
-          '',
-      },
-    });
-
-  notification.onclick = () => {
-    window.focus();
-
-    window.location.href =
-      String(
-        notification.data?.url ||
-          '/dashboard?tab=orders',
+  void navigator.serviceWorker.ready
+    .then((registration) =>
+      registration.showNotification(
+        title,
+        {
+          body,
+          icon:
+            '/images/web-logo-color.png',
+          badge:
+            '/images/web-logo-color.png',
+          tag:
+            payload.data?.orderId ||
+            'spotc-order-update',
+          data: {
+            url,
+            orderId:
+              payload.data?.orderId ||
+              '',
+          },
+        },
+      ),
+    )
+    .catch((error) => {
+      console.error(
+        '[SPOTC] Foreground notification failed:',
+        error,
       );
-
-    notification.close();
-  };
+    });
 }
