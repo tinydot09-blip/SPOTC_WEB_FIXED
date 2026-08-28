@@ -37,6 +37,30 @@ function browserAvailable(): boolean {
   );
 }
 
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(message)),
+          ms,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
 export async function getBrowserNotificationState():
   Promise<BrowserNotificationState> {
   if (
@@ -75,16 +99,24 @@ async function getServiceWorkerRegistration():
 
   if (!registration) {
     registration =
-      await navigator.serviceWorker.register(
-        SERVICE_WORKER_PATH,
-        {
-          scope: '/',
-        },
+      await withTimeout(
+        navigator.serviceWorker.register(
+          SERVICE_WORKER_PATH,
+          {
+            scope: '/',
+          },
+        ),
+        8000,
+        'SPOTC service worker registration timed out.',
       );
   }
 
   const readyRegistration =
-    await navigator.serviceWorker.ready;
+    await withTimeout(
+      navigator.serviceWorker.ready,
+      8000,
+      'SPOTC service worker did not become ready.',
+    );
 
   return registration || readyRegistration;
 }
@@ -161,11 +193,15 @@ async function createAndSaveToken(
 
   try {
     token =
-      await getToken(messaging, {
-        vapidKey: VAPID_KEY,
-        serviceWorkerRegistration:
-          registration,
-      });
+      await withTimeout(
+        getToken(messaging, {
+          vapidKey: VAPID_KEY,
+          serviceWorkerRegistration:
+            registration,
+        }),
+        12000,
+        'Firebase notification token request timed out.',
+      );
   } catch (error) {
     console.error(
       '[SPOTC] Firebase getToken failed:',

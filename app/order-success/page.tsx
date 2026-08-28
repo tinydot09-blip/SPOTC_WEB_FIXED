@@ -481,25 +481,19 @@ export default function OrderSuccessPage() {
         );
 
         if (
-          state !== 'granted' &&
+          state === 'default' &&
           typeof window !== 'undefined'
         ) {
-          setShowNotificationPrompt(true);
+          const dismissed =
+            window.localStorage.getItem(
+              'spotc-order-alerts-dismissed',
+            ) === '1';
 
-          if (state === 'denied') {
-            setNotificationMessage(
-              'Order alerts are currently blocked on this device.',
-            );
-          } else if (state === 'unsupported') {
-            setNotificationMessage(
-              'Browser alerts are not available on this browser.',
-            );
-          } else {
-            setNotificationMessage('');
-          }
+          setShowNotificationPrompt(
+            !dismissed,
+          );
         } else {
           setShowNotificationPrompt(false);
-          setNotificationMessage('');
         }
       },
     );
@@ -674,15 +668,21 @@ export default function OrderSuccessPage() {
   }, [orders]);
 
   const enableOrderAlerts = async () => {
-    if (
-      !notificationUser ||
-      notificationBusy
-    ) {
+    if (notificationBusy) {
+      return;
+    }
+
+    if (!notificationUser) {
+      setNotificationMessage(
+        'Please sign in again to enable order alerts.',
+      );
       return;
     }
 
     setNotificationBusy(true);
-    setNotificationMessage('');
+    setNotificationMessage(
+      'Checking notification permission…',
+    );
 
     try {
       const state =
@@ -732,6 +732,13 @@ export default function OrderSuccessPage() {
 
   const dismissOrderAlertsPrompt = () => {
     setShowNotificationPrompt(false);
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(
+        'spotc-order-alerts-dismissed',
+        '1',
+      );
+    }
   };
 
   if (loading) {
