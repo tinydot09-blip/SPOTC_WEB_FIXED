@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import {
+  Bell,
   CheckCircle2,
   Gift,
   Loader2,
@@ -21,7 +22,14 @@ import {
   useState,
 } from 'react';
 
-import { db, firebaseReady } from '@/lib/firebase';
+import { onAuthStateChanged, type User } from 'firebase/auth';
+
+import { auth, db, firebaseReady } from '@/lib/firebase';
+import {
+  getBrowserNotificationState,
+  requestAndRegisterBrowserNotifications,
+  type BrowserNotificationState,
+} from '@/lib/notifications';
 import { readOrderById } from '@/lib/orders';
 
 const SUPPORT_PHONE = '8072098066';
@@ -430,6 +438,66 @@ export default function OrderSuccessPage() {
   const [whatsappOrderNumber, setWhatsappOrderNumber] =
     useState<string | null>(null);
   const purchaseTrackedRef = useRef(false);
+  const [notificationUser, setNotificationUser] =
+    useState<User | null>(auth?.currentUser ?? null);
+  const [notificationPermission, setNotificationPermission] =
+    useState<BrowserNotificationState>('unsupported');
+  const [notificationBusy, setNotificationBusy] =
+    useState(false);
+  const [notificationMessage, setNotificationMessage] =
+    useState('');
+  const [showNotificationPrompt, setShowNotificationPrompt] =
+    useState(false);
+
+  useEffect(() => {
+    if (!firebaseReady || !auth) {
+      return;
+    }
+
+    return onAuthStateChanged(
+      auth,
+      async (nextUser) => {
+        const signedInUser =
+          nextUser && !nextUser.isAnonymous
+            ? nextUser
+            : null;
+
+        setNotificationUser(
+          signedInUser,
+        );
+
+        if (!signedInUser) {
+          setShowNotificationPrompt(false);
+          return;
+        }
+
+        const state =
+          await getBrowserNotificationState().catch(
+            () => 'unsupported' as const,
+          );
+
+        setNotificationPermission(
+          state,
+        );
+
+        if (
+          state === 'default' &&
+          typeof window !== 'undefined'
+        ) {
+          const dismissed =
+            window.localStorage.getItem(
+              'spotc-order-alerts-dismissed',
+            ) === '1';
+
+          setShowNotificationPrompt(
+            !dismissed,
+          );
+        } else {
+          setShowNotificationPrompt(false);
+        }
+      },
+    );
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -599,6 +667,74 @@ export default function OrderSuccessPage() {
     return [...giftMap.values()];
   }, [orders]);
 
+  const enableOrderAlerts = async () => {
+    if (
+      !notificationUser ||
+      notificationBusy
+    ) {
+      return;
+    }
+
+    setNotificationBusy(true);
+    setNotificationMessage('');
+
+    try {
+      const state =
+        await requestAndRegisterBrowserNotifications(
+          notificationUser,
+        );
+
+      setNotificationPermission(
+        state,
+      );
+
+      if (state === 'granted') {
+        setNotificationMessage(
+          'Order alerts are turned on for this device.',
+        );
+        setShowNotificationPrompt(false);
+
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem(
+            'spotc-order-alerts-dismissed',
+          );
+        }
+      } else if (state === 'denied') {
+        setNotificationMessage(
+          'Notifications are blocked in this browser.',
+        );
+      } else if (state === 'unsupported') {
+        setNotificationMessage(
+          'This browser does not support browser notifications.',
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Unable to enable order alerts:',
+        error,
+      );
+
+      setNotificationMessage(
+        error instanceof Error
+          ? error.message
+          : 'Unable to enable order alerts.',
+      );
+    } finally {
+      setNotificationBusy(false);
+    }
+  };
+
+  const dismissOrderAlertsPrompt = () => {
+    setShowNotificationPrompt(false);
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(
+        'spotc-order-alerts-dismissed',
+        '1',
+      );
+    }
+  };
+
   if (loading) {
     return (
       <main className="spotc-success-state">
@@ -658,6 +794,53 @@ export default function OrderSuccessPage() {
             <strong>{money(totals.amount)}</strong>
           </div>
         </section>
+
+        {notificationUser &&
+          notificationPermission !== 'granted' &&
+          showNotificationPrompt && (
+            <section className="spotc-order-alerts">
+              <div className="spotc-order-alerts__icon">
+                <Bell size={22} />
+              </div>
+
+              <div className="spotc-order-alerts__copy">
+                <strong>Get delivery updates</strong>
+                <p>
+                  Know when your order is confirmed,
+                  packed, out for delivery and delivered.
+                </p>
+
+                {notificationMessage && (
+                  <span>
+                    {notificationMessage}
+                  </span>
+                )}
+              </div>
+
+              <div className="spotc-order-alerts__actions">
+                <button
+                  type="button"
+                  className="spotc-order-alerts__enable"
+                  onClick={() =>
+                    void enableOrderAlerts()
+                  }
+                  disabled={notificationBusy}
+                >
+                  {notificationBusy
+                    ? 'Turning on…'
+                    : 'Turn on order alerts'}
+                </button>
+
+                <button
+                  type="button"
+                  className="spotc-order-alerts__later"
+                  onClick={dismissOrderAlertsPrompt}
+                >
+                  Not now
+                </button>
+              </div>
+            </section>
+          )}
 
         <section className="spotc-order-success__support-card">
           <div className="spotc-order-success__support-head">
@@ -1082,6 +1265,87 @@ const styles = `
   .spotc-order-success__grand-total strong {
     color: #167b42;
     font-size: 20px;
+  }
+
+  .spotc-order-alerts {
+    margin-top: 24px;
+    padding: 18px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid #d8e8f0;
+    border-radius: 18px;
+    background: #f7fbfd;
+    box-shadow: 0 12px 30px rgba(16, 68, 91, 0.06);
+  }
+
+  .spotc-order-alerts__icon {
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    color: #0b6f86;
+    background: #e8f6fa;
+  }
+
+  .spotc-order-alerts__copy {
+    min-width: 0;
+  }
+
+  .spotc-order-alerts__copy strong {
+    display: block;
+    color: #1f2c32;
+    font-size: 15px;
+  }
+
+  .spotc-order-alerts__copy p {
+    margin: 4px 0 0;
+    color: #66767e;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .spotc-order-alerts__copy span {
+    display: block;
+    margin-top: 6px;
+    color: #8c4f0a;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .spotc-order-alerts__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .spotc-order-alerts__actions button {
+    min-height: 42px;
+    padding: 0 14px;
+    border-radius: 12px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .spotc-order-alerts__enable {
+    border: 0;
+    color: #fff;
+    background: #0a7189;
+  }
+
+  .spotc-order-alerts__enable:disabled {
+    opacity: 0.65;
+    cursor: wait;
+  }
+
+  .spotc-order-alerts__later {
+    border: 1px solid #d7e2e7;
+    color: #58666d;
+    background: #fff;
   }
 
   .spotc-order-success__support-card,
@@ -1611,6 +1875,23 @@ const styles = `
   }
 
   @media (max-width: 680px) {
+    .spotc-order-alerts {
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: start;
+      padding: 16px;
+    }
+
+    .spotc-order-alerts__actions {
+      grid-column: 1 / -1;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+
+    .spotc-order-alerts__actions button {
+      width: 100%;
+    }
+
     .spotc-order-success {
       padding: 26px 12px max(18px, env(safe-area-inset-bottom));
     }
