@@ -83,7 +83,7 @@ const isDeliveryOptionAvailable = (
   const hour = now.getHours();
 
   if (id === 'instant') {
-    return true;
+    return hour >= 7 && hour < 20;
   }
 
   if (id === 'morning') {
