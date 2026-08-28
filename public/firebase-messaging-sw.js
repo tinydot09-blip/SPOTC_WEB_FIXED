@@ -19,56 +19,90 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+/*
+ * Activate new service-worker versions immediately.
+ */
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
+/*
+ * FCM data-only background message.
+ */
 messaging.onBackgroundMessage((payload) => {
   console.log(
-    '[SPOTC] Background notification:',
+    '[SPOTC] Background FCM received:',
     payload
   );
 
+  const data = payload?.data || {};
+
   const title =
-    payload.notification?.title ||
-    payload.data?.title ||
+    data.title ||
+    payload?.notification?.title ||
     'SPOTC';
 
   const body =
-    payload.notification?.body ||
-    payload.data?.body ||
+    data.body ||
+    payload?.notification?.body ||
     'You have a new order update.';
 
   const url =
-    payload.data?.url ||
+    data.url ||
     '/dashboard?tab=orders';
 
-  self.registration.showNotification(title, {
+  const orderId =
+    data.orderId || '';
+
+  const options = {
     body,
+
     icon: '/images/web-logo-color.png',
     badge: '/images/web-logo-color.png',
 
     data: {
       url,
-      orderId:
-        payload.data?.orderId || '',
+      orderId,
     },
 
     tag:
-      payload.data?.orderId ||
-      'spotc-order-update',
+      orderId ||
+      `spotc-${Date.now()}`,
 
     renotify: true,
-  });
+    requireInteraction: false,
+  };
+
+  return self.registration.showNotification(
+    title,
+    options
+  );
 });
 
+/*
+ * Notification click:
+ * open/focus SPOTC Orders.
+ */
 self.addEventListener(
   'notificationclick',
   (event) => {
     event.notification.close();
 
-    const targetUrl =
-      event.notification.data?.url ||
+    const relativeUrl =
+      event.notification?.data?.url ||
       '/dashboard?tab=orders';
 
+    const targetUrl = new URL(
+      relativeUrl,
+      self.location.origin
+    ).href;
+
     event.waitUntil(
-      clients
+      self.clients
         .matchAll({
           type: 'window',
           includeUncontrolled: true,
@@ -76,18 +110,29 @@ self.addEventListener(
         .then((clientList) => {
           for (const client of clientList) {
             if (
-              'focus' in client
+              client.url.startsWith(
+                self.location.origin
+              )
             ) {
-              client.navigate(targetUrl);
-              return client.focus();
+              if ('navigate' in client) {
+                client.navigate(
+                  targetUrl
+                );
+              }
+
+              if ('focus' in client) {
+                return client.focus();
+              }
             }
           }
 
-          if (clients.openWindow) {
-            return clients.openWindow(
+          if (self.clients.openWindow) {
+            return self.clients.openWindow(
               targetUrl
             );
           }
+
+          return undefined;
         })
     );
   }
