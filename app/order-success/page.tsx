@@ -481,20 +481,10 @@ export default function OrderSuccessPage() {
           state,
         );
 
-        if (
-          state === 'default' &&
-          typeof window !== 'undefined'
-        ) {
-          const dismissed =
-            window.localStorage.getItem(
-              'spotc-order-alerts-dismissed',
-            ) === '1';
-
-          setShowNotificationPrompt(
-            !dismissed,
-          );
-        } else {
+        if (state === 'granted') {
           setShowNotificationPrompt(false);
+        } else {
+          setShowNotificationPrompt(true);
         }
       },
     );
@@ -733,13 +723,6 @@ export default function OrderSuccessPage() {
 
   const dismissOrderAlertsPrompt = () => {
     setShowNotificationPrompt(false);
-
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(
-        'spotc-order-alerts-dismissed',
-        '1',
-      );
-    }
   };
 
   if (loading) {
