@@ -50,6 +50,20 @@ type OrderData = {
   payment_method?: string;
   total?: number;
   estimated_delivery?: string;
+  delivery_option_id?: string;
+  delivery_option?: string;
+  delivery_slot_id?: string;
+  delivery_slot?: string;
+  delivery_option_title?: string;
+  delivery_title?: string;
+  delivery_slot_title?: string;
+  delivery_slot_name?: string;
+  delivery_window?: string;
+  delivery_time?: string;
+  delivery_time_window?: string;
+  delivery_slot_time?: string;
+  delivery_slot_window?: string;
+  created_at?: unknown;
   items?: OrderItem[];
 };
 
@@ -116,6 +130,183 @@ const text = (value: unknown): string =>
 
 const money = (value: number): string =>
   `₹${Math.round(value).toLocaleString('en-IN')}`;
+
+type DeliveryOptionId =
+  | 'instant'
+  | 'morning'
+  | 'afternoon'
+  | 'overnight';
+
+type DeliveryOption = {
+  id: DeliveryOptionId;
+  title: string;
+  deliveryWindow: string;
+};
+
+const DELIVERY_OPTIONS: DeliveryOption[] = [
+  {
+    id: 'instant',
+    title: 'Instant Delivery',
+    deliveryWindow: 'Delivery in about 15 mins',
+  },
+  {
+    id: 'morning',
+    title: 'Morning Slot',
+    deliveryWindow: 'Delivery between 12 PM – 2 PM',
+  },
+  {
+    id: 'afternoon',
+    title: 'Afternoon Slot',
+    deliveryWindow: 'Delivery between 6 PM – 7 PM',
+  },
+  {
+    id: 'overnight',
+    title: 'Night Slot',
+    deliveryWindow: 'Delivery between 6 AM – 8 AM',
+  },
+];
+
+const formatOrderDateTime = (
+  value: unknown,
+): string => {
+  if (!value) return '';
+
+  try {
+    let date: Date | null = null;
+
+    if (
+      typeof value === 'object' &&
+      value !== null &&
+      'toDate' in value &&
+      typeof (
+        value as {
+          toDate?: () => Date;
+        }
+      ).toDate === 'function'
+    ) {
+      date = (
+        value as {
+          toDate: () => Date;
+        }
+      ).toDate();
+    } else if (
+      typeof value === 'object' &&
+      value !== null &&
+      'seconds' in value
+    ) {
+      const seconds = Number(
+        (
+          value as {
+            seconds?: unknown;
+          }
+        ).seconds,
+      );
+
+      if (Number.isFinite(seconds)) {
+        date = new Date(seconds * 1000);
+      }
+    } else {
+      const parsed = new Date(
+        value as string | number | Date,
+      );
+
+      if (!Number.isNaN(parsed.getTime())) {
+        date = parsed;
+      }
+    }
+
+    if (!date || Number.isNaN(date.getTime())) {
+      return '';
+    }
+
+    return date.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return '';
+  }
+};
+
+const deliveryDetails = (
+  order: OrderData,
+): {
+  title: string;
+  window: string;
+} => {
+  const rawId = text(
+    order.delivery_option_id ||
+      order.delivery_option ||
+      order.delivery_slot_id ||
+      order.delivery_slot,
+  ).toLowerCase();
+
+  const savedTitle = text(
+    order.delivery_option_title ||
+      order.delivery_title ||
+      order.delivery_slot_title ||
+      order.delivery_slot_name,
+  );
+
+  const savedWindow = text(
+    order.delivery_window ||
+      order.delivery_time ||
+      order.delivery_time_window ||
+      order.delivery_slot_time ||
+      order.delivery_slot_window,
+  );
+
+  const byId = DELIVERY_OPTIONS.find(
+    (option) =>
+      option.id === rawId ||
+      (rawId === 'night' &&
+        option.id === 'overnight'),
+  );
+
+  if (savedTitle || savedWindow || byId) {
+    return {
+      title:
+        savedTitle ||
+        byId?.title ||
+        'Selected Delivery',
+      window:
+        savedWindow ||
+        byId?.deliveryWindow ||
+        text(order.estimated_delivery) ||
+        'As selected at checkout',
+    };
+  }
+
+  if (typeof window !== 'undefined') {
+    const savedId = text(
+      window.localStorage.getItem(
+        'spotc-delivery-option',
+      ),
+    ).toLowerCase();
+
+    const localOption = DELIVERY_OPTIONS.find(
+      (option) => option.id === savedId,
+    );
+
+    if (localOption) {
+      return {
+        title: localOption.title,
+        window: localOption.deliveryWindow,
+      };
+    }
+  }
+
+  return {
+    title: 'Selected Delivery',
+    window:
+      text(order.estimated_delivery) ||
+      'As selected at checkout',
+  };
+};
 
 const readSavedGifts = (
   productId: string,
@@ -539,6 +730,14 @@ export default function OrderSuccessPage() {
               text(order.order_number) ||
               order.id;
 
+            const delivery =
+              deliveryDetails(order);
+
+            const orderedAt =
+              formatOrderDateTime(
+                order.created_at,
+              );
+
             return (
               <article
                 className="spotc-order-success__order-card"
@@ -581,6 +780,13 @@ export default function OrderSuccessPage() {
                     </strong>
                   </span>
 
+                  {orderedAt && (
+                    <span>
+                      Ordered:{' '}
+                      <strong>{orderedAt}</strong>
+                    </span>
+                  )}
+
                   <b>
                     {money(
                       Number(order.total || 0),
@@ -591,9 +797,8 @@ export default function OrderSuccessPage() {
                 <div className="spotc-order-success__delivery">
                   <Truck size={19} />
                   <span>
-                    Estimated delivery:{' '}
-                    {order.estimated_delivery ||
-                      'As selected at checkout'}
+                    <strong>{delivery.title}</strong>
+                    <small>{delivery.window}</small>
                   </span>
                 </div>
 
@@ -1081,6 +1286,22 @@ const styles = `
     background: #edf9f1;
     font-size: 13px;
     font-weight: 650;
+  }
+
+  .spotc-order-success__delivery span {
+    display: grid;
+    gap: 2px;
+  }
+
+  .spotc-order-success__delivery strong {
+    color: #116c38;
+    font-size: 13px;
+  }
+
+  .spotc-order-success__delivery small {
+    color: #2f8050;
+    font-size: 12px;
+    font-weight: 600;
   }
 
   .spotc-order-success__products {

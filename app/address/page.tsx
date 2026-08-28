@@ -17,10 +17,12 @@ import {
   MapPin,
   Pencil,
   Plus,
+  Trash2,
 } from 'lucide-react';
 
 import type { User } from 'firebase/auth';
 import {
+  deleteDoc,
   doc,
   serverTimestamp,
   updateDoc,
@@ -342,6 +344,9 @@ export default function AddressPage() {
   const [editingId, setEditingId] =
     useState<string | null>(null);
 
+  const [deletingId, setDeletingId] =
+    useState<string | null>(null);
+
   useEffect(() => {
     let active = true;
 
@@ -536,6 +541,87 @@ export default function AddressPage() {
 
     setFormError('');
     setFormOpen(true);
+  };
+
+  const deleteAddress = async (
+    address: SavedAddress,
+  ) => {
+    if (!db || !user || deletingId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete this ${address.addressType || 'saved'} address?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingId(address.id);
+    setFormError('');
+
+    try {
+      await deleteDoc(
+        doc(
+          db,
+          'UserAddresses',
+          address.id,
+        ),
+      );
+
+      const remaining = addresses.filter(
+        (item) => item.id !== address.id,
+      );
+
+      setAddresses(remaining);
+
+      if (selectedId === address.id) {
+        const nextAddress =
+          remaining[0] || null;
+
+        if (nextAddress) {
+          await setDefaultAddress(
+            db,
+            user,
+            remaining,
+            nextAddress,
+          );
+
+          setAddresses((current) =>
+            current.map((item) => ({
+              ...item,
+              isDefault:
+                item.id === nextAddress.id,
+            })),
+          );
+
+          setSelectedId(nextAddress.id);
+        } else {
+          setSelectedId('');
+          setFormOpen(true);
+          setEditingId(null);
+          setForm((current) => ({
+            ...EMPTY,
+            fullName:
+              current.fullName ||
+              user.displayName ||
+              '',
+          }));
+        }
+      }
+    } catch (error) {
+      console.error(
+        'Delete address failed:',
+        error,
+      );
+
+      setFormError(
+        'Unable to delete this address. Please try again.',
+      );
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const cancelNewAddress = () => {
@@ -1211,19 +1297,37 @@ export default function AddressPage() {
                         )}
                       </button>
 
-                      <button
-                        type="button"
-                        className="edit-address-button"
-                        onClick={() =>
-                          editAddress(
-                            address,
-                          )
-                        }
-                        aria-label={`Edit ${address.addressType} address`}
-                      >
-                        <Pencil size={15} />
-                        Edit
-                      </button>
+                      <div className="saved-address-actions">
+                        <button
+                          type="button"
+                          className="delete-address-button"
+                          onClick={() =>
+                            void deleteAddress(
+                              address,
+                            )
+                          }
+                          disabled={
+                            deletingId === address.id
+                          }
+                          aria-label={`Delete ${address.addressType} address`}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+
+                        <button
+                          type="button"
+                          className="edit-address-button"
+                          onClick={() =>
+                            editAddress(
+                              address,
+                            )
+                          }
+                          aria-label={`Edit ${address.addressType} address`}
+                        >
+                          <Pencil size={15} />
+                          Edit
+                        </button>
+                      </div>
                     </article>
                   );
                 },
@@ -1777,30 +1881,57 @@ export default function AddressPage() {
           font-weight: 750;
         }
 
-        .edit-address-button {
+        .saved-address-actions {
           position: absolute;
           top: 50%;
           right: 16px;
           transform: translateY(-50%);
-          min-width: 74px;
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          z-index: 2;
+        }
+
+        .edit-address-button,
+        .delete-address-button {
           height: 36px;
-          padding: 0 11px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
           border: 1px solid #d9d0c7;
           border-radius: 10px;
-          color: #17120d;
           background: #ffffff;
           font-size: 12px;
           font-weight: 800;
-          z-index: 2;
+        }
+
+        .edit-address-button {
+          min-width: 74px;
+          padding: 0 11px;
+          gap: 6px;
+          color: #17120d;
+        }
+
+        .delete-address-button {
+          width: 38px;
+          padding: 0;
+          color: #b33b2e;
         }
 
         .edit-address-button:hover {
           border-color: #22a65a;
           color: #168648;
+        }
+
+        .delete-address-button:hover {
+          border-color: #d86558;
+          color: #982d23;
+          background: #fff6f4;
+        }
+
+        .delete-address-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         .address-list-error {

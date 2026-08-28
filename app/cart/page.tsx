@@ -200,6 +200,17 @@ export default function CartPage() {
         'spotc-delivery-option',
         option.id,
       );
+
+      window.localStorage.setItem(
+        'spotc-delivery-selection',
+        JSON.stringify({
+          id: option.id,
+          title: option.title,
+          orderWindow: option.orderWindow,
+          deliveryWindow: option.deliveryWindow,
+          fee: option.fee,
+        }),
+      );
     }
   };
   const viewCartTrackedRef = useRef(false);
@@ -239,6 +250,18 @@ export default function CartPage() {
       setSelectedDeliveryId(
         savedDeliveryId,
       );
+
+      const savedDelivery =
+        DELIVERY_OPTIONS.find(
+          (option) => option.id === savedDeliveryId,
+        );
+
+      if (savedDelivery) {
+        window.localStorage.setItem(
+          'spotc-delivery-selection',
+          JSON.stringify(savedDelivery),
+        );
+      }
     }
 
   }, []);
