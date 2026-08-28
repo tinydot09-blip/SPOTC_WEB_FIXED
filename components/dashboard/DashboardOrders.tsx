@@ -41,6 +41,7 @@ import {
 
 type OrderItem = {
   id: string;
+  productId: string;
   title: string;
   image: string;
   price: number;
@@ -48,6 +49,17 @@ type OrderItem = {
   subtotal: number;
   size: string;
   color: string;
+  status: string;
+  rawIndex: number;
+};
+
+type OrderGift = {
+  id: string;
+  productId: string;
+  title: string;
+  image: string;
+  originalPrice: number;
+  status: string;
 };
 
 type OrderRecord = {
@@ -55,6 +67,7 @@ type OrderRecord = {
   orderNumber: string;
   businessName: string;
   items: OrderItem[];
+  gifts: OrderGift[];
   subtotal: number;
   deliveryCharge: number;
   platformFee: number;
@@ -71,6 +84,251 @@ type OrderRecord = {
   deliveryTitle: string;
   deliveryWindow: string;
 };
+
+type OrderView = {
+  key: string;
+  parent: OrderRecord;
+  item: OrderItem;
+  gifts: OrderGift[];
+};
+
+type OrderFilter =
+  | 'all'
+  | 'active'
+  | 'delivered'
+  | 'cancelled';
+
+type OrderSort =
+  | 'newest'
+  | 'oldest'
+  | 'amount-high'
+  | 'amount-low';
+
+function textOf(value: unknown): string {
+  return typeof value === 'string'
+    ? value.trim()
+    : String(value ?? '').trim();
+}
+
+function numberOf(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function dateOf(value: unknown): Date | null {
+  if (value instanceof Timestamp) {
+    return value.toDate();
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'seconds' in value
+  ) {
+    const seconds = Number(
+      (value as { seconds?: unknown }).seconds,
+    );
+
+    return Number.isFinite(seconds)
+      ? new Date(seconds * 1000)
+      : null;
+  }
+
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number'
+  ) {
+    const date = new Date(value);
+
+    return Number.isNaN(date.getTime())
+      ? null
+      : date;
+  }
+
+  return null;
+}
+
+function imageOf(item: DocumentData): string {
+  return (
+    textOf(item.image) ||
+    textOf(item.image_url) ||
+    textOf(item.product_image) ||
+    textOf(item.product_image_url) ||
+    textOf(item.thumbnail_url) ||
+    textOf(item.product_thumbnail)
+  );
+}
+
+function normalizeStatus(value: unknown): string {
+  const status = textOf(value)
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ');
+
+  if (!status) return 'placed';
+  if (status.includes('cancel')) return 'cancelled';
+  if (status.includes('out for delivery')) return 'out for delivery';
+  if (status.includes('deliver')) return 'delivered';
+  if (status.includes('ready')) return 'ready';
+  if (status.includes('confirm')) return 'confirmed';
+  if (status.includes('process')) return 'processing';
+  if (status.includes('pending')) return 'pending';
+  if (status.includes('place')) return 'placed';
+
+  return status;
+}
+
+function mapItems(value: unknown): OrderItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item, index) => {
+    const record =
+      typeof item === 'object' && item !== null
+        ? (item as DocumentData)
+        : {};
+
+    const price = numberOf(
+      record.price ??
+        record.selling_price ??
+        record.offer_price ??
+        record.unit_price,
+    );
+
+    const quantity = Math.max(
+      1,
+      numberOf(
+        record.quantity ??
+          record.qty ??
+          record.count,
+      ) || 1,
+    );
+
+    const id =
+      textOf(record.id) ||
+      textOf(record.product_id) ||
+      textOf(record.productId) ||
+      String(index);
+
+    const productId =
+      textOf(record.product_id) ||
+      textOf(record.productId) ||
+      id;
+
+    return {
+      id,
+      productId,
+      title:
+        textOf(record.title) ||
+        textOf(record.product_name) ||
+        textOf(record.name) ||
+        'Product',
+      image: imageOf(record),
+      price,
+      quantity,
+      subtotal:
+        numberOf(
+          record.subtotal ??
+            record.line_total,
+        ) ||
+        price * quantity,
+      size: textOf(record.size),
+      color: textOf(record.color),
+      status: normalizeStatus(
+        record.item_status ??
+          record.status ??
+          record.order_status ??
+          'placed',
+      ),
+      rawIndex: index,
+    };
+  });
+}
+
+function mapGiftRecord(
+  value: unknown,
+  fallbackIndex: number,
+): OrderGift | null {
+  if (
+    typeof value !== 'object' ||
+    value === null
+  ) {
+    return null;
+  }
+
+  const record = value as DocumentData;
+
+  const id =
+    textOf(record.id) ||
+    textOf(record.gift_id) ||
+    textOf(record.giftId) ||
+    textOf(record.product_id) ||
+    `gift-${fallbackIndex}`;
+
+  return {
+    id,
+    productId:
+      textOf(record.source_product_id) ||
+      textOf(record.sourceProductId) ||
+      textOf(record.product_id) ||
+      textOf(record.productId),
+    title:
+      textOf(record.title) ||
+      textOf(record.product_name) ||
+      textOf(record.name) ||
+      textOf(record.gift_name) ||
+      'FREE Gift',
+    image: imageOf(record),
+    originalPrice:
+      numberOf(
+        record.original_price ??
+          record.originalPrice ??
+          record.mrp ??
+          record.price,
+      ),
+    status: normalizeStatus(
+      record.gift_status ??
+        record.status ??
+        'placed',
+    ),
+  };
+}
+
+function giftsFromOrderData(
+  data: DocumentData,
+): OrderGift[] {
+  const candidates: unknown[] = [];
+
+  const topLevel = [
+    data.free_gifts,
+    data.selected_free_gifts,
+    data.freeGifts,
+    data.selectedFreeGifts,
+    data.gifts,
+  ];
+
+  for (const value of topLevel) {
+    if (Array.isArray(value)) {
+      candidates.push(...value);
+    }
+  }
+
+  const unique = new Map<string, OrderGift>();
+
+  candidates.forEach((value, index) => {
+    const gift = mapGiftRecord(value, index);
+    if (!gift) return;
+
+    const key = `${gift.productId}:${gift.id}:${index}`;
+    unique.set(key, gift);
+  });
+
+  return [...unique.values()];
+}
 
 type SavedFreeGift = {
   id: string;
@@ -90,12 +348,12 @@ type SavedGiftBundle = {
 
 function readSavedGifts(
   productId: string,
-): SavedGiftBundle | null {
+): OrderGift[] {
   if (
     typeof window === 'undefined' ||
     !productId
   ) {
-    return null;
+    return [];
   }
 
   try {
@@ -104,9 +362,7 @@ function readSavedGifts(
         `spotc-free-gifts:${productId}`,
       );
 
-    if (!raw) {
-      return null;
-    }
+    if (!raw) return [];
 
     const parsed =
       JSON.parse(raw) as Partial<SavedGiftBundle>;
@@ -115,321 +371,53 @@ function readSavedGifts(
       !parsed ||
       !Array.isArray(parsed.gifts)
     ) {
-      return null;
+      return [];
     }
 
-    return {
-      product_id:
-        String(
-          parsed.product_id ||
-            productId,
-        ),
-
-      quantity:
-        Number(parsed.quantity) || 1,
-
-      entitlement:
-        Number(parsed.entitlement) ||
-        parsed.gifts.length,
-
-      gifts: parsed.gifts
-        .filter(
-          (
-            gift,
-          ): gift is SavedFreeGift =>
-            Boolean(
-              gift &&
-                typeof gift ===
-                  'object' &&
-                'id' in gift,
-            ),
-        )
-        .map((gift) => ({
-          id: String(gift.id),
-          title:
-            String(
-              gift.title ||
-                'FREE Gift',
-            ),
-          image:
-            String(gift.image || ''),
-          original_price:
-            Number(
-              gift.original_price,
-            ) || 0,
-          price: 0,
-          is_free_gift: true,
-        })),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function giftsForOrder(
-  order: OrderRecord,
-): SavedFreeGift[] {
-  const unique =
-    new Map<
-      string,
-      SavedFreeGift
-    >();
-
-  for (const item of order.items) {
-    const bundle =
-      readSavedGifts(item.id);
-
-    for (const gift of
-      bundle?.gifts || []) {
-      unique.set(
-        gift.id,
-        gift,
-      );
-    }
-  }
-
-  return [
-    ...unique.values(),
-  ];
-}
-
-type OrderFilter =
-  | 'all'
-  | 'active'
-  | 'delivered'
-  | 'cancelled';
-
-type OrderSort =
-  | 'newest'
-  | 'oldest'
-  | 'amount-high'
-  | 'amount-low';
-
-function isActiveStatus(
-  status: string,
-): boolean {
-  return ![
-    'delivered',
-    'cancelled',
-  ].includes(status);
-}
-
-function statusMessage(
-  status: string,
-): string {
-  switch (status) {
-    case 'placed':
-      return 'Order placed';
-    case 'pending':
-      return 'Waiting for confirmation';
-    case 'processing':
-      return 'Being prepared';
-    case 'confirmed':
-      return 'Order confirmed';
-    case 'ready':
-      return 'Ready for delivery';
-    case 'out for delivery':
-      return 'Out for delivery';
-    case 'delivered':
-      return 'Delivered';
-    case 'cancelled':
-      return 'Cancelled';
-    default:
-      return statusLabel(status);
-  }
-}
-
-function textOf(
-  value: unknown,
-): string {
-  return typeof value === 'string'
-    ? value.trim()
-    : String(value ?? '').trim();
-}
-
-function numberOf(
-  value: unknown,
-): number {
-  const parsed = Number(value);
-
-  return Number.isFinite(parsed)
-    ? parsed
-    : 0;
-}
-
-function dateOf(
-  value: unknown,
-): Date | null {
-  if (value instanceof Timestamp) {
-    return value.toDate();
-  }
-
-  if (value instanceof Date) {
-    return value;
-  }
-
-  if (
-    typeof value === 'object' &&
-    value !== null &&
-    'seconds' in value
-  ) {
-    const seconds = Number(
-      (
-        value as {
-          seconds?: unknown;
-        }
-      ).seconds,
+    return parsed.gifts.map(
+      (gift, index) => ({
+        id:
+          textOf(gift.id) ||
+          `saved-gift-${index}`,
+        productId:
+          textOf(parsed.product_id) ||
+          productId,
+        title:
+          textOf(gift.title) ||
+          'FREE Gift',
+        image: textOf(gift.image),
+        originalPrice:
+          numberOf(gift.original_price),
+        status: 'placed',
+      }),
     );
-
-    return Number.isFinite(seconds)
-      ? new Date(seconds * 1000)
-      : null;
-  }
-
-  if (
-    typeof value === 'string' ||
-    typeof value === 'number'
-  ) {
-    const date = new Date(value);
-
-    return Number.isNaN(
-      date.getTime(),
-    )
-      ? null
-      : date;
-  }
-
-  return null;
-}
-
-function imageOf(
-  item: DocumentData,
-): string {
-  return (
-    textOf(item.image) ||
-    textOf(item.image_url) ||
-    textOf(item.product_image) ||
-    textOf(item.thumbnail_url) ||
-    textOf(item.product_thumbnail)
-  );
-}
-
-function mapItems(
-  value: unknown,
-): OrderItem[] {
-  if (!Array.isArray(value)) {
+  } catch {
     return [];
   }
-
-  return value.map(
-    (item, index) => {
-      const record =
-        typeof item === 'object' &&
-        item !== null
-          ? (item as DocumentData)
-          : {};
-
-      const price = numberOf(
-        record.price ??
-          record.selling_price ??
-          record.offer_price ??
-          record.unit_price,
-      );
-
-      const quantity = Math.max(
-        1,
-        numberOf(
-          record.quantity ??
-            record.qty ??
-            record.count,
-        ) || 1,
-      );
-
-      return {
-        id:
-          textOf(record.id) ||
-          textOf(record.product_id) ||
-          String(index),
-
-        title:
-          textOf(record.title) ||
-          textOf(
-            record.product_name,
-          ) ||
-          textOf(record.name) ||
-          'Product',
-
-        image: imageOf(record),
-
-        price,
-
-        quantity,
-
-        subtotal:
-          numberOf(
-            record.subtotal ??
-              record.line_total,
-          ) ||
-          price * quantity,
-
-        size:
-          textOf(record.size),
-
-        color:
-          textOf(record.color),
-      };
-    },
-  );
 }
 
-function normalizeStatus(
-  value: unknown,
-): string {
-  const status = textOf(value)
-    .toLowerCase()
-    .replace(/[_-]+/g, ' ');
+function giftsForItem(
+  order: OrderRecord,
+  item: OrderItem,
+): OrderGift[] {
+  const direct = order.gifts.filter(
+    (gift) =>
+      gift.status !== 'cancelled' &&
+      gift.productId &&
+      gift.productId === item.productId,
+  );
 
-  if (!status) {
-    return 'placed';
+  if (direct.length > 0) {
+    return direct;
   }
 
-  if (status.includes('cancel')) {
-    return 'cancelled';
-  }
-
-  if (
-    status.includes(
-      'out for delivery',
-    )
-  ) {
-    return 'out for delivery';
-  }
-
-  if (status.includes('deliver')) {
-    return 'delivered';
-  }
-
-  if (status.includes('ready')) {
-    return 'ready';
-  }
-
-  if (status.includes('confirm')) {
-    return 'confirmed';
-  }
-
-  if (status.includes('process')) {
-    return 'processing';
-  }
-
-  if (status.includes('pending')) {
-    return 'pending';
-  }
-
-  if (status.includes('place')) {
-    return 'placed';
-  }
-
-  return status;
+  /*
+   * Compatibility fallback for older orders that did not save gifts
+   * into Firestore. New orders should use the persisted gift snapshots.
+   */
+  return readSavedGifts(
+    item.productId || item.id,
+  );
 }
 
 function buildAddress(
@@ -440,13 +428,10 @@ function buildAddress(
     textOf(data.address_text) ||
     textOf(data.full_address);
 
-  if (direct) {
-    return direct;
-  }
+  if (direct) return direct;
 
   const source =
-    typeof data.address ===
-      'object' &&
+    typeof data.address === 'object' &&
     data.address !== null
       ? (data.address as DocumentData)
       : data;
@@ -509,21 +494,27 @@ function deliveryDisplay(
   ) {
     id = 'instant';
     title = title || 'Instant Delivery';
-    window = window || 'Delivery in about 15 mins';
+    window =
+      window ||
+      'Delivery in about 15 mins';
   } else if (
     id.includes('morning') ||
     title.toLowerCase().includes('morning')
   ) {
     id = 'morning';
     title = title || 'Morning Slot';
-    window = window || 'Delivery between 12 PM – 2 PM';
+    window =
+      window ||
+      'Delivery between 12 PM – 2 PM';
   } else if (
     id.includes('afternoon') ||
     title.toLowerCase().includes('afternoon')
   ) {
     id = 'afternoon';
     title = title || 'Afternoon Slot';
-    window = window || 'Delivery between 6 PM – 7 PM';
+    window =
+      window ||
+      'Delivery between 6 PM – 7 PM';
   } else if (
     id.includes('overnight') ||
     id.includes('night') ||
@@ -531,7 +522,9 @@ function deliveryDisplay(
   ) {
     id = 'overnight';
     title = title || 'Night Slot';
-    window = window || 'Delivery between 6 AM – 8 AM';
+    window =
+      window ||
+      'Delivery between 6 AM – 8 AM';
   }
 
   if (
@@ -543,12 +536,16 @@ function deliveryDisplay(
   ) {
     id = 'instant';
     title = 'Instant Delivery';
-    window = window || 'Delivery in about 15 mins';
+    window =
+      window ||
+      'Delivery in about 15 mins';
   }
 
   return {
     id,
-    title: title || 'Delivery slot not saved',
+    title:
+      title ||
+      'Delivery slot not saved',
     window:
       window ||
       'Delivery time was not stored for this order.',
@@ -570,11 +567,16 @@ function mapOrder(
 
   const subtotal =
     numberOf(data.subtotal) ||
-    items.reduce(
-      (sum, item) =>
-        sum + item.subtotal,
-      0,
-    );
+    items
+      .filter(
+        (item) =>
+          item.status !== 'cancelled',
+      )
+      .reduce(
+        (sum, item) =>
+          sum + item.subtotal,
+        0,
+      );
 
   const deliveryCharge =
     numberOf(
@@ -607,7 +609,6 @@ function mapOrder(
 
   return {
     id,
-
     orderNumber:
       textOf(data.order_number) ||
       textOf(data.order_no) ||
@@ -615,62 +616,56 @@ function mapOrder(
       `SPOTC-${id
         .slice(0, 8)
         .toUpperCase()}`,
-
     businessName:
-      textOf(
-        data.business_name,
-      ) ||
+      textOf(data.business_name) ||
       textOf(data.shop_name) ||
       'SPOTC Shop',
-
     items,
-
+    gifts:
+      giftsFromOrderData(data),
     subtotal,
     deliveryCharge,
     platformFee,
     discount,
     total,
-
     paymentMethod:
-      textOf(
-        data.payment_method,
-      ) ||
-      textOf(
-        data.payment_mode,
-      ) ||
+      textOf(data.payment_method) ||
+      textOf(data.payment_mode) ||
       'COD',
-
     status: normalizeStatus(
       data.order_status ??
         data.status ??
         data.delivery_status,
     ),
-
     createdAt: dateOf(
       data.created_at ??
         data.order_date,
     ),
-
-    address:
-      buildAddress(data),
-
+    address: buildAddress(data),
     phone:
-      textOf(
-        data.customer_phone ??
-          data.phone,
-      ),
-
+      textOf(data.customer_phone) ||
+      textOf(data.phone),
     deliveryAssigned: Boolean(
       textOf(data.delivery_boy_id) ||
-        textOf(data.delivery_partner_id) ||
-        textOf(data.assigned_delivery_boy_id) ||
-        textOf(data.delivery_assignment_status) === 'assigned' ||
-        dateOf(data.delivery_assigned_at),
+        textOf(
+          data.delivery_partner_id,
+        ) ||
+        textOf(
+          data.assigned_delivery_boy_id,
+        ) ||
+        textOf(
+          data.delivery_assignment_status,
+        ) === 'assigned' ||
+        dateOf(
+          data.delivery_assigned_at,
+        ),
     ),
-
     instantDelivery:
       deliveryInfo.id === 'instant' ||
       [
+        data.delivery_option_id,
+        data.delivery_option,
+        data.delivery_title,
         data.delivery_type,
         data.delivery_mode,
         data.delivery_speed,
@@ -680,50 +675,28 @@ function mapOrder(
         .map(textOf)
         .join(' ')
         .toLowerCase()
-        .match(/instant|15\s*(?:-|–|to)?\s*45\s*mins?|15\s*mins?/) !== null,
-
+        .match(
+          /instant|15\s*(?:-|–|to)?\s*45\s*mins?|15\s*mins?/,
+        ) !== null,
     deliveryOptionId:
       deliveryInfo.id,
-
     deliveryTitle:
       deliveryInfo.title,
-
     deliveryWindow:
       deliveryInfo.window,
   };
 }
 
-function money(
-  value: number,
-): string {
+function money(value: number): string {
   return `₹${Math.round(
     value,
   ).toLocaleString('en-IN')}`;
 }
 
-function formatDate(
-  date: Date | null,
-): string {
-  if (!date) {
-    return '';
-  }
-
-  return new Intl.DateTimeFormat(
-    'en-IN',
-    {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    },
-  ).format(date);
-}
-
 function formatDateTime(
   date: Date | null,
 ): string {
-  if (!date) {
-    return 'Date unavailable';
-  }
+  if (!date) return 'Date unavailable';
 
   return new Intl.DateTimeFormat(
     'en-IN',
@@ -751,6 +724,46 @@ function statusLabel(
     .join(' ');
 }
 
+function statusMessage(
+  status: string,
+): string {
+  switch (status) {
+    case 'placed':
+      return 'Order placed';
+    case 'pending':
+      return 'Waiting for confirmation';
+    case 'processing':
+      return 'Being prepared';
+    case 'confirmed':
+      return 'Order confirmed';
+    case 'ready':
+      return 'Ready for delivery';
+    case 'out for delivery':
+      return 'Out for delivery';
+    case 'delivered':
+      return 'Delivered';
+    case 'cancelled':
+      return 'Cancelled';
+    default:
+      return statusLabel(status);
+  }
+}
+
+function visibleItemStatus(
+  order: OrderRecord,
+  item: OrderItem,
+): string {
+  if (item.status === 'cancelled') {
+    return 'cancelled';
+  }
+
+  if (order.status === 'cancelled') {
+    return 'cancelled';
+  }
+
+  return order.status;
+}
+
 export default function DashboardOrders() {
   const [user, setUser] =
     useState<User | null>(
@@ -770,33 +783,25 @@ export default function DashboardOrders() {
   const [
     orders,
     setOrders,
-  ] = useState<OrderRecord[]>(
-    [],
-  );
+  ] = useState<OrderRecord[]>([]);
 
   const [
     selected,
     setSelected,
-  ] =
-    useState<OrderRecord | null>(
-      null,
-    );
+  ] = useState<OrderView | null>(
+    null,
+  );
 
   const [
     filter,
     setFilter,
-  ] =
-    useState<OrderFilter>(
-      'all',
-    );
+  ] = useState<OrderFilter>('all');
 
   const [
     sort,
     setSort,
   ] =
-    useState<OrderSort>(
-      'newest',
-    );
+    useState<OrderSort>('newest');
 
   const [
     search,
@@ -804,11 +809,15 @@ export default function DashboardOrders() {
   ] = useState('');
 
   const [
-    cancellingId,
-    setCancellingId,
+    cancellingKey,
+    setCancellingKey,
   ] = useState('');
 
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [
+    imagePreview,
+    setImagePreview,
+  ] =
+    useState<string | null>(null);
 
   const [
     nowMs,
@@ -821,7 +830,8 @@ export default function DashboardOrders() {
       1000,
     );
 
-    return () => window.clearInterval(timer);
+    return () =>
+      window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -839,7 +849,7 @@ export default function DashboardOrders() {
       (nextUser) => {
         setUser(
           nextUser &&
-          !nextUser.isAnonymous
+            !nextUser.isAnonymous
             ? nextUser
             : null,
         );
@@ -850,9 +860,7 @@ export default function DashboardOrders() {
   }, []);
 
   useEffect(() => {
-    if (!authChecked) {
-      return;
-    }
+    if (!authChecked) return;
 
     if (!user) {
       setOrders([]);
@@ -860,10 +868,7 @@ export default function DashboardOrders() {
       return;
     }
 
-    // Keep a non-null user reference for the async loader below.
-    // TypeScript does not preserve the state narrowing inside nested async functions.
     const currentUser = user;
-
     let active = true;
 
     async function loadOrders() {
@@ -888,9 +893,7 @@ export default function DashboardOrders() {
                 ),
                 limit(100),
               ),
-            ).catch(
-              () => null,
-            ),
+            ).catch(() => null),
 
             getDocs(
               query(
@@ -909,9 +912,7 @@ export default function DashboardOrders() {
                 ),
                 limit(100),
               ),
-            ).catch(
-              () => null,
-            ),
+            ).catch(() => null),
 
             getDocs(
               query(
@@ -930,14 +931,10 @@ export default function DashboardOrders() {
                 ),
                 limit(100),
               ),
-            ).catch(
-              () => null,
-            ),
+            ).catch(() => null),
           ]);
 
-        if (!active) {
-          return;
-        }
+        if (!active) return;
 
         const unique =
           new Map<
@@ -945,19 +942,13 @@ export default function DashboardOrders() {
             OrderRecord
           >();
 
-        for (
-          const snapshot
-          of snapshots
-        ) {
+        for (const snapshot of snapshots) {
           for (
-            const orderDoc
-            of snapshot?.docs ??
-            []
+            const orderDoc of
+            snapshot?.docs ?? []
           ) {
             if (
-              !unique.has(
-                orderDoc.id,
-              )
+              !unique.has(orderDoc.id)
             ) {
               unique.set(
                 orderDoc.id,
@@ -971,9 +962,7 @@ export default function DashboardOrders() {
         }
 
         setOrders(
-          [
-            ...unique.values(),
-          ].sort(
+          [...unique.values()].sort(
             (a, b) =>
               (
                 b.createdAt?.getTime() ??
@@ -1007,122 +996,181 @@ export default function DashboardOrders() {
     user,
   ]);
 
+  const orderViews =
+    useMemo<OrderView[]>(() => {
+      const views: OrderView[] = [];
+
+      for (const order of orders) {
+        order.items.forEach(
+          (item) => {
+            views.push({
+              key: `${order.id}:${item.rawIndex}`,
+              parent: order,
+              item,
+              gifts:
+                giftsForItem(
+                  order,
+                  item,
+                ),
+            });
+          },
+        );
+      }
+
+      return views;
+    }, [orders]);
+
   function cancelWindowSeconds(
-    order: OrderRecord,
+    view: OrderView,
   ): number {
-    return order.instantDelivery
+    return view.parent.instantDelivery
       ? 2 * 60
       : 15 * 60;
   }
 
   function cancelSecondsLeft(
-    order: OrderRecord,
+    view: OrderView,
   ): number {
-    if (!order.createdAt) {
+    if (!view.parent.createdAt) {
       return 0;
     }
 
     const expiresAt =
-      order.createdAt.getTime() +
-      cancelWindowSeconds(order) * 1000;
+      view.parent.createdAt.getTime() +
+      cancelWindowSeconds(view) *
+        1000;
 
     return Math.max(
       0,
-      Math.ceil((expiresAt - nowMs) / 1000),
+      Math.ceil(
+        (expiresAt - nowMs) /
+          1000,
+      ),
     );
   }
 
-  function canCancelOrder(
-    order: OrderRecord,
+  function canCancelItem(
+    view: OrderView,
   ): boolean {
+    const status =
+      visibleItemStatus(
+        view.parent,
+        view.item,
+      );
+
     if (
-      ['cancelled', 'delivered', 'out for delivery'].includes(
-        order.status,
-      )
+      [
+        'cancelled',
+        'delivered',
+        'out for delivery',
+      ].includes(status)
     ) {
       return false;
     }
 
-    if (order.deliveryAssigned) {
+    if (
+      view.parent.deliveryAssigned
+    ) {
       return false;
     }
 
-    return cancelSecondsLeft(order) > 0;
+    return (
+      cancelSecondsLeft(view) > 0
+    );
   }
 
   function formatCancelCountdown(
     seconds: number,
   ): string {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
+    const minutes =
+      Math.floor(seconds / 60);
 
-    return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
+    const remainingSeconds =
+      seconds % 60;
+
+    return `${minutes}:${String(
+      remainingSeconds,
+    ).padStart(2, '0')}`;
   }
 
   function cancelHelpText(
-    order: OrderRecord,
+    view: OrderView,
   ): string {
-    if (order.status === 'cancelled') {
-      return 'This order has been cancelled.';
+    const status =
+      visibleItemStatus(
+        view.parent,
+        view.item,
+      );
+
+    if (status === 'cancelled') {
+      return 'This item has been cancelled.';
     }
 
     if (
-      order.status === 'delivered' ||
-      order.status === 'out for delivery'
+      status === 'delivered' ||
+      status === 'out for delivery'
     ) {
       return 'Cancellation is no longer available.';
     }
 
-    if (order.deliveryAssigned) {
+    if (
+      view.parent.deliveryAssigned
+    ) {
       return 'Cancellation closed because delivery has been assigned.';
     }
 
-    const seconds = cancelSecondsLeft(order);
+    const seconds =
+      cancelSecondsLeft(view);
 
     if (seconds <= 0) {
-      return order.instantDelivery
+      return view.parent
+        .instantDelivery
         ? 'The 2-minute cancellation window has ended.'
         : 'The 15-minute cancellation window has ended.';
     }
 
-    return order.instantDelivery
+    return view.parent
+      .instantDelivery
       ? `Instant delivery: cancel within ${formatCancelCountdown(seconds)}.`
       : `FREE delivery: cancel within ${formatCancelCountdown(seconds)}.`;
   }
 
-  async function cancelOrder(
-    order: OrderRecord,
+  async function cancelItem(
+    view: OrderView,
   ) {
     if (
-      cancellingId ||
-      !canCancelOrder(order)
+      cancellingKey ||
+      !canCancelItem(view)
     ) {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Cancel order ${order.orderNumber}?\n\nThis cannot be undone.`,
-    );
+    const confirmed =
+      window.confirm(
+        `Cancel this product?\n\n${view.item.title}\n\nAny FREE gift linked to this product will also be cancelled.`,
+      );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
-    setCancellingId(order.id);
+    setCancellingKey(view.key);
 
     try {
-      const db = getFirestore();
+      const db =
+        getFirestore();
+
       const orderRef = doc(
         db,
         'Orders',
-        order.id,
+        view.parent.id,
       );
 
       await runTransaction(
         db,
         async (transaction) => {
           const snapshot =
-            await transaction.get(orderRef);
+            await transaction.get(
+              orderRef,
+            );
 
           if (!snapshot.exists()) {
             throw new Error(
@@ -1130,7 +1178,8 @@ export default function DashboardOrders() {
             );
           }
 
-          const data = snapshot.data();
+          const data =
+            snapshot.data();
 
           const liveStatus =
             normalizeStatus(
@@ -1139,10 +1188,26 @@ export default function DashboardOrders() {
                 data.delivery_status,
             );
 
+          if (
+            [
+              'cancelled',
+              'delivered',
+              'out for delivery',
+            ].includes(liveStatus)
+          ) {
+            throw new Error(
+              'This order can no longer be changed.',
+            );
+          }
+
           const deliveryAssigned =
             Boolean(
-              textOf(data.delivery_boy_id) ||
-                textOf(data.delivery_partner_id) ||
+              textOf(
+                data.delivery_boy_id,
+              ) ||
+                textOf(
+                  data.delivery_partner_id,
+                ) ||
                 textOf(
                   data.assigned_delivery_boy_id,
                 ) ||
@@ -1154,35 +1219,32 @@ export default function DashboardOrders() {
                 ),
             );
 
-          if (
-            ['cancelled', 'delivered', 'out for delivery'].includes(
-              liveStatus,
-            )
-          ) {
-            throw new Error(
-              'This order can no longer be cancelled.',
-            );
-          }
-
           if (deliveryAssigned) {
             throw new Error(
-              'Delivery has already been assigned, so this order can no longer be cancelled.',
+              'Delivery has already been assigned, so this item can no longer be cancelled.',
             );
           }
 
-          const instantDelivery = [
-            data.delivery_type,
-            data.delivery_mode,
-            data.delivery_speed,
-            data.delivery_slot,
-            data.estimated_delivery,
-          ]
-            .map(textOf)
-            .join(' ')
-            .toLowerCase()
-            .match(
-              /instant|15\s*(?:-|–|to)?\s*45\s*mins?|15\s*mins?/,
-            ) !== null;
+          const instantDelivery =
+            [
+              data.delivery_option_id,
+              data.delivery_option,
+              data.delivery_slot_id,
+              data.delivery_slot,
+              data.delivery_option_title,
+              data.delivery_title,
+              data.delivery_type,
+              data.delivery_mode,
+              data.delivery_speed,
+              data.shipping_tier,
+              data.estimated_delivery,
+            ]
+              .map(textOf)
+              .join(' ')
+              .toLowerCase()
+              .match(
+                /instant|15\s*(?:-|–|to)?\s*45\s*mins?|15\s*mins?/,
+              ) !== null;
 
           const createdAt =
             dateOf(
@@ -1197,7 +1259,8 @@ export default function DashboardOrders() {
 
           if (
             !createdAt ||
-            Date.now() - createdAt.getTime() >=
+            Date.now() -
+              createdAt.getTime() >=
               cancellationWindowMs
           ) {
             throw new Error(
@@ -1207,15 +1270,265 @@ export default function DashboardOrders() {
             );
           }
 
+          const rawItems =
+            Array.isArray(data.items)
+              ? data.items
+              : Array.isArray(
+                    data.order_items,
+                  )
+                ? data.order_items
+                : Array.isArray(
+                      data.products,
+                    )
+                  ? data.products
+                  : [];
+
+          if (
+            view.item.rawIndex < 0 ||
+            view.item.rawIndex >=
+              rawItems.length
+          ) {
+            throw new Error(
+              'Unable to find this product in the order.',
+            );
+          }
+
+          const nextItems =
+            rawItems.map(
+              (
+                rawItem: unknown,
+                index: number,
+              ) => {
+                const record =
+                  typeof rawItem ===
+                    'object' &&
+                  rawItem !== null
+                    ? {
+                        ...(rawItem as Record<
+                          string,
+                          unknown
+                        >),
+                      }
+                    : {};
+
+                if (
+                  index ===
+                  view.item.rawIndex
+                ) {
+                  return {
+                    ...record,
+                    item_status:
+                      'cancelled',
+                    cancelled_at:
+                      Timestamp.now(),
+                    cancelled_by:
+                      'customer',
+                  };
+                }
+
+                return record;
+              },
+            );
+
+          const activeItems =
+            nextItems.filter(
+              (rawItem) =>
+                normalizeStatus(
+                  (
+                    rawItem as DocumentData
+                  ).item_status ??
+                    (
+                      rawItem as DocumentData
+                    ).status ??
+                    'placed',
+                ) !== 'cancelled',
+            );
+
+          const activeSubtotal =
+            activeItems.reduce(
+              (
+                sum,
+                rawItem,
+              ) => {
+                const record =
+                  rawItem as DocumentData;
+
+                const price =
+                  numberOf(
+                    record.price ??
+                      record.selling_price ??
+                      record.offer_price ??
+                      record.unit_price,
+                  );
+
+                const quantity =
+                  Math.max(
+                    1,
+                    numberOf(
+                      record.quantity ??
+                        record.qty ??
+                        record.count,
+                    ) || 1,
+                  );
+
+                return (
+                  sum +
+                  (
+                    numberOf(
+                      record.subtotal ??
+                        record.line_total,
+                    ) ||
+                    price * quantity
+                  )
+                );
+              },
+              0,
+            );
+
+          const deliveryCharge =
+            activeItems.length > 0
+              ? numberOf(
+                  data.delivery_charge ??
+                    data.delivery_fee,
+                )
+              : 0;
+
+          const platformFee =
+            activeItems.length > 0
+              ? numberOf(
+                  data.platform_fee ??
+                    data.service_fee,
+                )
+              : 0;
+
+          const discount =
+            activeItems.length > 0
+              ? numberOf(
+                  data.discount ??
+                    data.discount_amount,
+                )
+              : 0;
+
+          const nextTotal =
+            Math.max(
+              0,
+              activeSubtotal +
+                deliveryCharge +
+                platformFee -
+                discount,
+            );
+
+          const giftFields = [
+            'free_gifts',
+            'selected_free_gifts',
+            'gifts',
+          ] as const;
+
+          const giftUpdates:
+            Record<
+              string,
+              unknown
+            > = {};
+
+          for (
+            const field
+            of giftFields
+          ) {
+            const current =
+              data[field];
+
+            if (!Array.isArray(current)) {
+              continue;
+            }
+
+            giftUpdates[field] =
+              current.map(
+                (
+                  rawGift: unknown,
+                ) => {
+                  const record =
+                    typeof rawGift ===
+                      'object' &&
+                    rawGift !== null
+                      ? {
+                          ...(rawGift as Record<
+                            string,
+                            unknown
+                          >),
+                        }
+                      : {};
+
+                  const sourceProductId =
+                    textOf(
+                      record.source_product_id,
+                    ) ||
+                    textOf(
+                      record.sourceProductId,
+                    ) ||
+                    textOf(
+                      record.product_id,
+                    ) ||
+                    textOf(
+                      record.productId,
+                    );
+
+                  if (
+                    sourceProductId &&
+                    sourceProductId ===
+                      view.item.productId
+                  ) {
+                    return {
+                      ...record,
+                      gift_status:
+                        'cancelled',
+                      cancelled_at:
+                        Timestamp.now(),
+                      cancelled_by:
+                        'customer',
+                    };
+                  }
+
+                  return record;
+                },
+              );
+          }
+
+          const allCancelled =
+            activeItems.length === 0;
+
           transaction.update(
             orderRef,
             {
-              order_status: 'cancelled',
-              status: 'cancelled',
-              cancelled_at:
-                serverTimestamp(),
-              cancelled_by:
-                'customer',
+              items: nextItems,
+              subtotal:
+                activeSubtotal,
+              delivery_charge:
+                deliveryCharge,
+              platform_fee:
+                platformFee,
+              discount,
+              total: nextTotal,
+              grand_total:
+                nextTotal,
+              cancelled_item_count:
+                nextItems.length -
+                activeItems.length,
+              has_cancelled_items:
+                nextItems.length !==
+                activeItems.length,
+              ...(allCancelled
+                ? {
+                    order_status:
+                      'cancelled',
+                    status:
+                      'cancelled',
+                    cancelled_at:
+                      serverTimestamp(),
+                    cancelled_by:
+                      'customer',
+                  }
+                : {}),
+              ...giftUpdates,
               updated_at:
                 serverTimestamp(),
             },
@@ -1223,42 +1536,122 @@ export default function DashboardOrders() {
         },
       );
 
-      setOrders((current) =>
-        current.map((item) =>
-          item.id === order.id
-            ? {
-                ...item,
-                status: 'cancelled',
-              }
-            : item,
-        ),
+      setOrders(
+        (current) =>
+          current.map((order) => {
+            if (
+              order.id !==
+              view.parent.id
+            ) {
+              return order;
+            }
+
+            const nextItems =
+              order.items.map(
+                (item) =>
+                  item.rawIndex ===
+                  view.item.rawIndex
+                    ? {
+                        ...item,
+                        status:
+                          'cancelled',
+                      }
+                    : item,
+              );
+
+            const activeItems =
+              nextItems.filter(
+                (item) =>
+                  item.status !==
+                  'cancelled',
+              );
+
+            const activeSubtotal =
+              activeItems.reduce(
+                (sum, item) =>
+                  sum +
+                  item.subtotal,
+                0,
+              );
+
+            const allCancelled =
+              activeItems.length === 0;
+
+            const nextDelivery =
+              allCancelled
+                ? 0
+                : order.deliveryCharge;
+
+            const nextPlatform =
+              allCancelled
+                ? 0
+                : order.platformFee;
+
+            const nextDiscount =
+              allCancelled
+                ? 0
+                : order.discount;
+
+            const nextTotal =
+              Math.max(
+                0,
+                activeSubtotal +
+                  nextDelivery +
+                  nextPlatform -
+                  nextDiscount,
+              );
+
+            return {
+              ...order,
+              items: nextItems,
+              gifts:
+                order.gifts.map(
+                  (gift) =>
+                    gift.productId ===
+                    view.item
+                      .productId
+                      ? {
+                          ...gift,
+                          status:
+                            'cancelled',
+                        }
+                      : gift,
+                ),
+              subtotal:
+                activeSubtotal,
+              deliveryCharge:
+                nextDelivery,
+              platformFee:
+                nextPlatform,
+              discount:
+                nextDiscount,
+              total: nextTotal,
+              status:
+                allCancelled
+                  ? 'cancelled'
+                  : order.status,
+            };
+          }),
       );
 
-      setSelected((current) =>
-        current?.id === order.id
-          ? {
-              ...current,
-              status: 'cancelled',
-            }
-          : current,
-      );
+      setSelected(null);
     } catch (error) {
       console.error(
-        'Cancel order failed:',
+        'Cancel item failed:',
         error,
       );
 
       window.alert(
         error instanceof Error
           ? error.message
-          : 'Unable to cancel this order. Please try again.',
+          : 'Unable to cancel this product. Please try again.',
       );
     } finally {
-      setCancellingId('');
+      setCancellingKey('');
     }
   }
 
-  const filteredOrders =
+  const filteredViews =
     useMemo(() => {
       const queryText =
         search
@@ -1266,14 +1659,20 @@ export default function DashboardOrders() {
           .toLowerCase();
 
       const result =
-        orders.filter(
-          (order) => {
+        orderViews.filter(
+          (view) => {
+            const itemStatus =
+              visibleItemStatus(
+                view.parent,
+                view.item,
+              );
+
             if (
-              filter ===
-                'active' &&
-              !isActiveStatus(
-                order.status,
-              )
+              filter === 'active' &&
+              [
+                'delivered',
+                'cancelled',
+              ].includes(itemStatus)
             ) {
               return false;
             }
@@ -1281,7 +1680,7 @@ export default function DashboardOrders() {
             if (
               filter ===
                 'delivered' &&
-              order.status !==
+              itemStatus !==
                 'delivered'
             ) {
               return false;
@@ -1290,7 +1689,7 @@ export default function DashboardOrders() {
             if (
               filter ===
                 'cancelled' &&
-              order.status !==
+              itemStatus !==
                 'cancelled'
             ) {
               return false;
@@ -1300,21 +1699,17 @@ export default function DashboardOrders() {
               return true;
             }
 
-            const haystack = [
-              order.orderNumber,
-              order.businessName,
-              order.status,
-              ...order.items.map(
-                (item) =>
-                  item.title,
-              ),
+            return [
+              view.parent
+                .orderNumber,
+              view.parent
+                .businessName,
+              view.item.title,
+              itemStatus,
             ]
               .join(' ')
-              .toLowerCase();
-
-            return haystack.includes(
-              queryText,
-            );
+              .toLowerCase()
+              .includes(queryText);
           },
         );
 
@@ -1325,8 +1720,8 @@ export default function DashboardOrders() {
             'amount-high'
           ) {
             return (
-              b.total -
-              a.total
+              b.item.subtotal -
+              a.item.subtotal
             );
           }
 
@@ -1335,26 +1730,29 @@ export default function DashboardOrders() {
             'amount-low'
           ) {
             return (
-              a.total -
-              b.total
+              a.item.subtotal -
+              b.item.subtotal
             );
           }
 
           const aTime =
-            a.createdAt?.getTime() ??
-            0;
+            a.parent
+              .createdAt
+              ?.getTime() ?? 0;
 
           const bTime =
-            b.createdAt?.getTime() ??
-            0;
+            b.parent
+              .createdAt
+              ?.getTime() ?? 0;
 
-          return sort === 'oldest'
+          return sort ===
+            'oldest'
             ? aTime - bTime
             : bTime - aTime;
         },
       );
     }, [
-      orders,
+      orderViews,
       filter,
       sort,
       search,
@@ -1402,7 +1800,9 @@ export default function DashboardOrders() {
     return (
       <section className="simple-orders-empty">
         <Package />
-        <h2>Sign in to view orders</h2>
+        <h2>
+          Sign in to view orders
+        </h2>
         <p>
           Your orders will appear here.
         </p>
@@ -1440,27 +1840,22 @@ export default function DashboardOrders() {
     <div className="simple-orders-page">
       <header className="simple-orders-head">
         <div>
-          <small>
-            MY ORDERS
-          </small>
-
+          <small>MY ORDERS</small>
           <h2>Orders</h2>
-
           <p>
-            Tap any order to
-            view full details.
+            Each product is shown as a separate order.
           </p>
         </div>
 
         <span>
-          {orders.length}{' '}
-          {orders.length === 1
+          {orderViews.length}{' '}
+          {orderViews.length === 1
             ? 'order'
             : 'orders'}
         </span>
       </header>
 
-      {orders.length > 0 && (
+      {orderViews.length > 0 && (
         <section className="simple-orders-tools">
           <div className="simple-orders-filters">
             {(
@@ -1476,10 +1871,7 @@ export default function DashboardOrders() {
                 ]
               >
             ).map(
-              ([
-                id,
-                label,
-              ]) => (
+              ([id, label]) => (
                 <button
                   type="button"
                   key={id}
@@ -1503,7 +1895,9 @@ export default function DashboardOrders() {
               <Search />
               <input
                 value={search}
-                onChange={(event) =>
+                onChange={(
+                  event,
+                ) =>
                   setSearch(
                     event.target.value,
                   )
@@ -1514,7 +1908,9 @@ export default function DashboardOrders() {
 
             <select
               value={sort}
-              onChange={(event) =>
+              onChange={(
+                event,
+              ) =>
                 setSort(
                   event.target
                     .value as OrderSort,
@@ -1525,15 +1921,12 @@ export default function DashboardOrders() {
               <option value="newest">
                 Newest first
               </option>
-
               <option value="oldest">
                 Oldest first
               </option>
-
               <option value="amount-high">
                 Amount: high to low
               </option>
-
               <option value="amount-low">
                 Amount: low to high
               </option>
@@ -1542,61 +1935,72 @@ export default function DashboardOrders() {
         </section>
       )}
 
-      {orders.length === 0 ? (
+      {orderViews.length === 0 ? (
         <section className="simple-orders-empty-card">
           <Package />
-
           <h3>No orders yet</h3>
-
           <p>
-            Your placed orders
-            will appear here.
+            Your placed orders will appear here.
           </p>
         </section>
-      ) : filteredOrders.length === 0 ? (
+      ) : filteredViews.length === 0 ? (
         <section className="simple-orders-empty-card">
           <Search />
-
           <h3>No matching orders</h3>
-
           <p>
             Try another filter or search.
           </p>
         </section>
       ) : (
         <section className="simple-orders-list">
-          {filteredOrders.map(
-            (order) => {
-              const firstItem =
-                order.items[0];
-
-              const freeGifts =
-                giftsForOrder(
-                  order,
+          {filteredViews.map(
+            (view) => {
+              const itemStatus =
+                visibleItemStatus(
+                  view.parent,
+                  view.item,
                 );
 
               return (
                 <article
-                  key={order.id}
+                  key={view.key}
                   className="simple-order-card"
                   role="button"
                   tabIndex={0}
-                  onClick={() => setSelected(order)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
+                  onClick={() =>
+                    setSelected(view)
+                  }
+                  onKeyDown={(
+                    event,
+                  ) => {
+                    if (
+                      event.key ===
+                        'Enter' ||
+                      event.key === ' '
+                    ) {
                       event.preventDefault();
-                      setSelected(order);
+                      setSelected(view);
                     }
                   }}
                 >
                   <div className="simple-order-image">
-                    {firstItem?.image ? (
+                    {view.item.image ? (
                       <img
-                        src={firstItem.image}
-                        alt={firstItem.title}
-                        onClick={(event) => {
+                        src={
+                          view.item.image
+                        }
+                        alt={
+                          view.item.title
+                        }
+                        title="Tap to zoom"
+                        role="button"
+                        onClick={(
+                          event,
+                        ) => {
                           event.stopPropagation();
-                          setImagePreview(firstItem.image);
+                          setImagePreview(
+                            view.item.image,
+                          );
                         }}
                       />
                     ) : (
@@ -1608,57 +2012,76 @@ export default function DashboardOrders() {
                     <div className="simple-order-top">
                       <span>
                         {
-                          order.orderNumber
+                          view.parent
+                            .orderNumber
                         }
+                        {' · '}
+                        Item{' '}
+                        {view.item.rawIndex +
+                          1}
                       </span>
 
                       <em
-                        className={`status-${order.status.replace(
+                        className={`status-${itemStatus.replace(
                           /\s+/g,
                           '-',
                         )}`}
                       >
                         {statusLabel(
-                          order.status,
+                          itemStatus,
                         )}
                       </em>
                     </div>
 
                     <strong>
-                      {firstItem?.title ||
-                        order.businessName}
+                      {
+                        view.item
+                          .title
+                      }
                     </strong>
 
                     <small className="simple-order-status-line">
                       {statusMessage(
-                        order.status,
+                        itemStatus,
                       )}
                     </small>
 
                     <small>
-                      {order.items.length}{' '}
-                      {order.items.length ===
-                      1
-                        ? 'item'
-                        : 'items'}
+                      Qty{' '}
+                      {
+                        view.item
+                          .quantity
+                      }
                       {' · '}
                       {formatDateTime(
-                        order.createdAt,
+                        view.parent
+                          .createdAt,
                       )}
                     </small>
 
                     <small className="simple-order-delivery-line">
-                      {order.deliveryTitle}
+                      {
+                        view.parent
+                          .deliveryTitle
+                      }
                       {' · '}
-                      {order.deliveryWindow}
+                      {
+                        view.parent
+                          .deliveryWindow
+                      }
                     </small>
 
-                    {freeGifts.length > 0 && (
+                    {view.gifts.length >
+                      0 && (
                       <small className="simple-order-gift-count">
                         <Gift />
-                        {freeGifts.length}{' '}
+                        {
+                          view.gifts
+                            .length
+                        }{' '}
                         FREE Gift
-                        {freeGifts.length === 1
+                        {view.gifts
+                          .length === 1
                           ? ''
                           : 's'}{' '}
                         Included
@@ -1668,21 +2091,40 @@ export default function DashboardOrders() {
 
                   <div className="simple-order-total">
                     <div>
-                      <strong>{money(order.total)}</strong>
+                      <strong>
+                        {money(
+                          view.item
+                            .subtotal,
+                        )}
+                      </strong>
 
-                      {canCancelOrder(order) && (
+                      {canCancelItem(
+                        view,
+                      ) && (
                         <button
                           type="button"
                           className="simple-order-card-cancel"
-                          disabled={cancellingId === order.id}
-                          onClick={(event) => {
+                          disabled={
+                            cancellingKey ===
+                            view.key
+                          }
+                          onClick={(
+                            event,
+                          ) => {
                             event.stopPropagation();
-                            void cancelOrder(order);
+                            void cancelItem(
+                              view,
+                            );
                           }}
                         >
-                          {cancellingId === order.id
+                          {cancellingKey ===
+                          view.key
                             ? 'Cancelling…'
-                            : 'Cancel'}
+                            : `Cancel ${formatCancelCountdown(
+                                cancelSecondsLeft(
+                                  view,
+                                ),
+                              )}`}
                         </button>
                       )}
                     </div>
@@ -1719,7 +2161,8 @@ export default function DashboardOrders() {
 
                 <h2>
                   {
-                    selected.orderNumber
+                    selected.parent
+                      .orderNumber
                   }
                 </h2>
               </div>
@@ -1735,12 +2178,62 @@ export default function DashboardOrders() {
               </button>
             </header>
 
+            <section
+              className={`simple-details-cancel-top ${
+                canCancelItem(
+                  selected,
+                )
+                  ? 'active'
+                  : ''
+              }`}
+            >
+              <div>
+                <strong>
+                  Cancel this product
+                </strong>
+                <span>
+                  {cancelHelpText(
+                    selected,
+                  )}
+                </span>
+              </div>
+
+              {canCancelItem(
+                selected,
+              ) && (
+                <button
+                  type="button"
+                  disabled={
+                    cancellingKey ===
+                    selected.key
+                  }
+                  onClick={() =>
+                    void cancelItem(
+                      selected,
+                    )
+                  }
+                >
+                  {cancellingKey ===
+                  selected.key
+                    ? 'Cancelling…'
+                    : `Cancel · ${formatCancelCountdown(
+                        cancelSecondsLeft(
+                          selected,
+                        ),
+                      )}`}
+                </button>
+              )}
+            </section>
+
             <div className="simple-details-status">
               <span>
                 <small>Status</small>
                 <strong>
                   {statusMessage(
-                    selected.status,
+                    visibleItemStatus(
+                      selected.parent,
+                      selected.item,
+                    ),
                   )}
                 </strong>
               </span>
@@ -1752,160 +2245,189 @@ export default function DashboardOrders() {
 
                 <strong>
                   {formatDateTime(
-                    selected.createdAt,
+                    selected.parent
+                      .createdAt,
                   )}
                 </strong>
               </span>
             </div>
 
-            <section className={`simple-details-cancel-top ${canCancelOrder(selected) ? 'active' : ''}`}>
-              <div>
-                <strong>Cancellation</strong>
-                <span>{cancelHelpText(selected)}</span>
-              </div>
-
-              {canCancelOrder(selected) && (
-                <button
-                  type="button"
-                  disabled={cancellingId === selected.id}
-                  onClick={() => void cancelOrder(selected)}
-                >
-                  {cancellingId === selected.id
-                    ? 'Cancelling…'
-                    : 'Cancel Order'}
-                </button>
-              )}
-            </section>
-
             <section className="simple-details-delivery">
               <div>
-                <small>Delivery option</small>
-                <strong>{selected.deliveryTitle}</strong>
-                <p>{selected.deliveryWindow}</p>
+                <small>
+                  Delivery option
+                </small>
+                <strong>
+                  {
+                    selected.parent
+                      .deliveryTitle
+                  }
+                </strong>
+                <p>
+                  {
+                    selected.parent
+                      .deliveryWindow
+                  }
+                </p>
               </div>
 
               <div>
-                <small>Delivery charge</small>
+                <small>
+                  Delivery charge
+                </small>
                 <strong>
-                  {selected.deliveryCharge > 0
-                    ? money(selected.deliveryCharge)
+                  {selected.parent
+                    .deliveryCharge > 0
+                    ? money(
+                        selected.parent
+                          .deliveryCharge,
+                      )
                     : 'FREE'}
                 </strong>
               </div>
             </section>
 
             <div className="simple-details-items">
-              {selected.items.map(
-                (item) => (
-                  <article
-                    key={item.id}
-                  >
-                    <div>
-                      {item.image ? (
-                        <img
-                          src={item.image}
-                          alt={item.title}
-                          onClick={() => setImagePreview(item.image)}
-                        />
-                      ) : (
-                        <Package />
-                      )}
-                    </div>
+              <article>
+                <div>
+                  {selected.item
+                    .image ? (
+                    <img
+                      src={
+                        selected.item
+                          .image
+                      }
+                      alt={
+                        selected.item
+                          .title
+                      }
+                      title="Tap to zoom"
+                      role="button"
+                      onClick={() =>
+                        setImagePreview(
+                          selected.item
+                            .image,
+                        )
+                      }
+                    />
+                  ) : (
+                    <Package />
+                  )}
+                </div>
 
-                    <span>
-                      <strong>
-                        {
-                          item.title
-                        }
-                      </strong>
+                <span>
+                  <strong>
+                    {
+                      selected.item
+                        .title
+                    }
+                  </strong>
 
-                      <small>
-                        Qty {item.quantity}
-                        {' · '}
-                        {money(item.price)} each
-                        {item.size
-                          ? ` · Size ${item.size}`
-                          : ''}
-                        {item.color
-                          ? ` · ${item.color}`
-                          : ''}
-                      </small>
-                    </span>
+                  <small>
+                    Qty{' '}
+                    {
+                      selected.item
+                        .quantity
+                    }
+                    {' · '}
+                    {money(
+                      selected.item
+                        .price,
+                    )}{' '}
+                    each
+                    {selected.item.size
+                      ? ` · Size ${selected.item.size}`
+                      : ''}
+                    {selected.item.color
+                      ? ` · ${selected.item.color}`
+                      : ''}
+                  </small>
+                </span>
 
-                    <b>
-                      {money(
-                        item.subtotal,
-                      )}
-                    </b>
-                  </article>
-                ),
-              )}
+                <b>
+                  {money(
+                    selected.item
+                      .subtotal,
+                  )}
+                </b>
+              </article>
             </div>
 
-            {giftsForOrder(
-              selected,
-            ).length > 0 && (
+            {selected.gifts.length >
+              0 && (
               <section className="simple-details-gifts">
                 <header>
                   <Gift />
 
                   <div>
                     <strong>
-                      {giftsForOrder(
-                        selected,
-                      ).length}{' '}
+                      {
+                        selected.gifts
+                          .length
+                      }{' '}
                       FREE Gift
-                      {giftsForOrder(
-                        selected,
-                      ).length === 1
+                      {selected.gifts
+                        .length === 1
                         ? ''
                         : 's'}{' '}
                       Included
                     </strong>
 
                     <small>
-                      Included at no extra cost
+                      These gifts belong to this product and are cancelled with it.
                     </small>
                   </div>
                 </header>
 
                 <div className="simple-details-gifts-list">
-                  {giftsForOrder(
-                    selected,
-                  ).map((gift) => (
-                    <article
-                      key={gift.id}
-                    >
-                      <div>
-                        {gift.image ? (
-                          <img
-                            src={gift.image}
-                            alt={gift.title}
-                            onClick={() => setImagePreview(gift.image)}
-                          />
-                        ) : (
-                          <Gift />
-                        )}
-                      </div>
+                  {selected.gifts.map(
+                    (gift) => (
+                      <article
+                        key={
+                          gift.id
+                        }
+                      >
+                        <div>
+                          {gift.image ? (
+                            <img
+                              src={
+                                gift.image
+                              }
+                              alt={
+                                gift.title
+                              }
+                              title="Tap to zoom"
+                              role="button"
+                              onClick={() =>
+                                setImagePreview(
+                                  gift.image,
+                                )
+                              }
+                            />
+                          ) : (
+                            <Gift />
+                          )}
+                        </div>
 
-                      <span>
-                        <strong>
-                          {
-                            gift.title
-                          }
-                        </strong>
-
-                        <small>
-                          FREE
-                        </small>
-                      </span>
-                    </article>
-                  ))}
+                        <span>
+                          <strong>
+                            {
+                              gift.title
+                            }
+                          </strong>
+                          <small>
+                            FREE
+                          </small>
+                        </span>
+                      </article>
+                    ),
+                  )}
                 </div>
               </section>
             )}
 
-            {selected.address && (
+            {selected.parent
+              .address && (
               <div className="simple-details-address">
                 <MapPin />
 
@@ -1916,14 +2438,17 @@ export default function DashboardOrders() {
 
                   <strong>
                     {
-                      selected.address
+                      selected.parent
+                        .address
                     }
                   </strong>
 
-                  {selected.phone && (
+                  {selected.parent
+                    .phone && (
                     <p>
                       {
-                        selected.phone
+                        selected.parent
+                          .phone
                       }
                     </p>
                   )}
@@ -1934,12 +2459,12 @@ export default function DashboardOrders() {
             <div className="simple-details-bill">
               <p>
                 <span>
-                  Subtotal
+                  Product total
                 </span>
-
                 <strong>
                   {money(
-                    selected.subtotal,
+                    selected.item
+                      .subtotal,
                   )}
                 </strong>
               </p>
@@ -1948,77 +2473,43 @@ export default function DashboardOrders() {
                 <span>
                   Delivery
                 </span>
-
                 <strong>
-                  {selected.deliveryCharge >
-                  0
+                  {selected.parent
+                    .deliveryCharge > 0
                     ? money(
-                        selected.deliveryCharge,
+                        selected.parent
+                          .deliveryCharge,
                       )
                     : 'FREE'}
                 </strong>
               </p>
 
-              <p>
-                <span>
-                  Platform fee
-                </span>
-
-                <strong>
-                  {money(
-                    selected.platformFee,
-                  )}
-                </strong>
-              </p>
-
-              {selected.discount >
-                0 && (
-                <p>
-                  <span>
-                    Discount
-                  </span>
-
-                  <strong>
-                    -
-                    {money(
-                      selected.discount,
-                    )}
-                  </strong>
-                </p>
-              )}
-
               <p className="total">
                 <span>
-                  Total
+                  This product
                 </span>
-
                 <strong>
                   {money(
-                    selected.total,
+                    selected.item
+                      .subtotal,
                   )}
                 </strong>
               </p>
-            </div>
 
-            <div className="simple-details-payment">
-              <span>
-                Payment
-              </span>
-
-              <strong>
-                {
-                  selected.paymentMethod
-                }
-              </strong>
-            </div>
-
-            <div className="simple-details-help">
-              <span>Need help with this order?</span>
-              <small>
-                Keep the order number ready when contacting SPOTC support.
+              <small className="shared-bill-note">
+                Delivery and any order-level discount are shared by the parent checkout. Cancelling this product recalculates the parent order total automatically.
               </small>
             </div>
 
+            <div className="simple-details-payment">
+              <span>Payment</span>
+              <strong>
+                {
+                  selected.parent
+                    .paymentMethod
+                }
+              </strong>
+            </div>
           </section>
         </div>
       )}
@@ -2026,12 +2517,16 @@ export default function DashboardOrders() {
       {imagePreview && (
         <div
           className="simple-image-preview"
-          onMouseDown={() => setImagePreview(null)}
+          onMouseDown={() =>
+            setImagePreview(null)
+          }
         >
           <button
             type="button"
             aria-label="Close image"
-            onClick={() => setImagePreview(null)}
+            onClick={() =>
+              setImagePreview(null)
+            }
           >
             <X />
           </button>
@@ -2039,7 +2534,11 @@ export default function DashboardOrders() {
           <img
             src={imagePreview}
             alt="Product preview"
-            onMouseDown={(event) => event.stopPropagation()}
+            onMouseDown={(
+              event,
+            ) =>
+              event.stopPropagation()
+            }
           />
         </div>
       )}
@@ -2159,7 +2658,6 @@ export default function DashboardOrders() {
           color: #5f5851;
           background: #fff;
           font-size: 12px;
-          cursor: pointer;
         }
 
         .simple-orders-list {
@@ -2181,16 +2679,6 @@ export default function DashboardOrders() {
           background: #fff;
           text-align: left;
           cursor: pointer;
-          transition:
-            border-color .15s ease,
-            box-shadow .15s ease,
-            transform .15s ease;
-        }
-
-        .simple-order-card:hover {
-          border-color: #e4ba86;
-          box-shadow: 0 9px 24px rgba(37, 28, 18, .07);
-          transform: translateY(-1px);
         }
 
         .simple-order-image {
@@ -2208,10 +2696,7 @@ export default function DashboardOrders() {
           width: 100%;
           height: 100%;
           object-fit: contain;
-        }
-
-        .simple-order-image svg {
-          width: 26px;
+          cursor: zoom-in;
         }
 
         .simple-order-copy {
@@ -2253,6 +2738,15 @@ export default function DashboardOrders() {
           background: #fff0f1;
         }
 
+        .simple-order-top em.status-processing,
+        .simple-order-top em.status-pending,
+        .simple-order-top em.status-confirmed,
+        .simple-order-top em.status-ready,
+        .simple-order-top em.status-out-for-delivery {
+          color: #176a8a;
+          background: #eaf7fb;
+        }
+
         .simple-order-copy > strong {
           display: block;
           overflow: hidden;
@@ -2270,14 +2764,14 @@ export default function DashboardOrders() {
           font-size: 11px;
         }
 
-        .simple-order-copy > .simple-order-status-line {
-          color: #168648;
+        .simple-order-status-line {
+          color: #168648 !important;
           font-weight: 600;
         }
 
-        .simple-order-copy > .simple-order-delivery-line {
-          color: #6d756f;
-          font-size: 10px;
+        .simple-order-delivery-line {
+          color: #6d756f !important;
+          font-size: 10px !important;
         }
 
         .simple-order-gift-count {
@@ -2293,19 +2787,16 @@ export default function DashboardOrders() {
           height: 13px;
         }
 
-        .simple-order-top em.status-processing,
-        .simple-order-top em.status-pending,
-        .simple-order-top em.status-confirmed,
-        .simple-order-top em.status-ready,
-        .simple-order-top em.status-out-for-delivery {
-          color: #176a8a;
-          background: #eaf7fb;
-        }
-
         .simple-order-total {
           display: flex;
           align-items: center;
           gap: 9px;
+        }
+
+        .simple-order-total > div {
+          display: grid;
+          justify-items: end;
+          gap: 7px;
         }
 
         .simple-order-total strong {
@@ -2315,12 +2806,6 @@ export default function DashboardOrders() {
         .simple-order-total svg {
           width: 18px;
           color: #8c8379;
-        }
-
-        .simple-order-total > div {
-          display: grid;
-          justify-items: end;
-          gap: 7px;
         }
 
         .simple-order-card-cancel {
@@ -2351,21 +2836,6 @@ export default function DashboardOrders() {
           text-align: center;
         }
 
-        .simple-orders-empty-card svg {
-          width: 36px;
-          height: 36px;
-          color: #978b80;
-        }
-
-        .simple-orders-empty-card h3 {
-          margin: 12px 0 0;
-        }
-
-        .simple-orders-empty-card p {
-          margin: 6px 0 0;
-          color: #81786e;
-        }
-
         .simple-order-overlay {
           position: fixed;
           inset: 0;
@@ -2378,14 +2848,13 @@ export default function DashboardOrders() {
         }
 
         .simple-order-details {
-          width: min(640px, 100%);
-          max-height: min(86vh, 780px);
+          width: min(720px, 100%);
+          max-height: 92vh;
           overflow-y: auto;
-          padding: 22px;
-          border: 1px solid #e6dfd7;
-          border-radius: 22px;
+          padding: 24px;
+          border-radius: 24px;
           background: #fff;
-          box-shadow: 0 30px 90px rgba(0, 0, 0, .22);
+          box-shadow: 0 32px 90px rgba(0,0,0,.24);
         }
 
         .simple-order-details > header {
@@ -2396,85 +2865,43 @@ export default function DashboardOrders() {
         }
 
         .simple-order-details > header small {
-          color: #d97800;
-          font-size: 9px;
-          font-weight: 700;
+          color: #c46a09;
+          font-size: 10px;
+          font-weight: 800;
           letter-spacing: .12em;
         }
 
         .simple-order-details > header h2 {
-          margin: 5px 0 0;
-          font-size: 20px;
+          margin: 7px 0 0;
+          font-size: 26px;
         }
 
-        .simple-order-details > header button {
-          width: 38px;
-          height: 38px;
+        .simple-order-details > header > button {
+          width: 42px;
+          height: 42px;
           display: grid;
           place-items: center;
-          border: 1px solid #e3dcd4;
-          border-radius: 11px;
+          border: 1px solid #ddd6cf;
+          border-radius: 13px;
           background: #fff;
           cursor: pointer;
         }
 
-        .simple-order-details > header button svg {
-          width: 18px;
-        }
-
-        .simple-details-status,
-        .simple-details-payment {
-          margin-top: 18px;
-          padding: 13px 14px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 18px;
-          border-radius: 12px;
-          background: #f8f5f1;
-        }
-
-        .simple-details-status > span {
-          min-width: 0;
-        }
-
-        .simple-details-status small,
-        .simple-details-status strong {
-          display: block;
-        }
-
-        .simple-details-status small,
-        .simple-details-payment span {
-          color: #766f67;
-          font-size: 11px;
-        }
-
-        .simple-details-status strong,
-        .simple-details-payment strong {
-          margin-top: 3px;
-          font-size: 13px;
-        }
-
-        .simple-details-date {
-          text-align: right;
-        }
-
         .simple-details-cancel-top {
-          margin-top: 14px;
-          padding: 13px 14px;
+          margin-top: 18px;
+          padding: 17px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
-          border: 1px solid #ead9da;
-          border-radius: 12px;
+          gap: 16px;
+          border: 1px solid #eadfe0;
+          border-radius: 17px;
           background: #fffafa;
         }
 
         .simple-details-cancel-top.active {
-          border-color: #e09aa0;
-          background: #fff1f2;
-          box-shadow: 0 0 0 2px rgba(185, 57, 67, .05);
+          border-color: #e8aeb3;
+          background: #fff2f3;
         }
 
         .simple-details-cancel-top strong,
@@ -2482,96 +2909,91 @@ export default function DashboardOrders() {
           display: block;
         }
 
-        .simple-details-cancel-top strong {
-          color: #9f2933;
+        .simple-details-cancel-top span {
+          margin-top: 4px;
+          color: #806c6d;
           font-size: 12px;
         }
 
-        .simple-details-cancel-top span {
-          margin-top: 3px;
-          color: #735f61;
-          font-size: 10px;
-        }
-
         .simple-details-cancel-top button {
-          min-height: 36px;
-          padding: 0 13px;
-          flex: 0 0 auto;
-          border: 1px solid #cc6972;
-          border-radius: 10px;
+          min-height: 44px;
+          padding: 0 16px;
+          border: 0;
+          border-radius: 12px;
           color: #fff;
-          background: #b93641;
-          font-size: 11px;
-          font-weight: 700;
+          background: #c73743;
+          font-weight: 800;
           cursor: pointer;
         }
 
-        .simple-details-cancel-top button:disabled {
-          opacity: .6;
-          cursor: wait;
-        }
-
+        .simple-details-status,
         .simple-details-delivery {
-          margin-top: 16px;
-          padding: 13px 14px;
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) auto;
-          gap: 14px;
-          align-items: center;
-          border: 1px solid #dcecdf;
-          border-radius: 12px;
-          background: #f7fcf8;
+          margin-top: 18px;
+          padding: 16px;
+          display: flex;
+          justify-content: space-between;
+          gap: 18px;
+          border: 1px solid #e7e1da;
+          border-radius: 16px;
+          background: #faf8f5;
         }
 
+        .simple-details-status small,
+        .simple-details-status strong,
         .simple-details-delivery small,
-        .simple-details-delivery strong,
-        .simple-details-delivery p {
+        .simple-details-delivery strong {
           display: block;
         }
 
+        .simple-details-status small,
         .simple-details-delivery small {
-          color: #6f786f;
-          font-size: 10px;
+          color: #83796f;
+          font-size: 11px;
         }
 
+        .simple-details-status strong,
         .simple-details-delivery strong {
-          margin-top: 3px;
-          color: #176a3c;
-          font-size: 13px;
+          margin-top: 4px;
+        }
+
+        .simple-details-date {
+          text-align: right;
+        }
+
+        .simple-details-delivery {
+          background: #f5fbf7;
         }
 
         .simple-details-delivery p {
-          margin: 4px 0 0;
-          color: #617469;
-          font-size: 11px;
-          line-height: 1.4;
+          margin: 5px 0 0;
+          color: #587162;
+          font-size: 12px;
         }
 
         .simple-details-items {
-          margin-top: 16px;
+          margin-top: 18px;
           display: grid;
-          gap: 9px;
+          gap: 10px;
         }
 
         .simple-details-items article {
-          padding: 10px;
+          padding: 11px;
           display: grid;
-          grid-template-columns: 58px minmax(0, 1fr) auto;
+          grid-template-columns: 82px minmax(0,1fr) auto;
           align-items: center;
-          gap: 11px;
-          border: 1px solid #ece5de;
-          border-radius: 13px;
+          gap: 12px;
+          border: 1px solid #e8e2dc;
+          border-radius: 15px;
         }
 
         .simple-details-items article > div {
-          width: 58px;
-          height: 58px;
+          width: 82px;
+          height: 82px;
           overflow: hidden;
           display: grid;
           place-items: center;
-          border-radius: 10px;
-          color: #988d82;
-          background: #f7f4ef;
+          border-radius: 12px;
+          background: #f5f1ec;
         }
 
         .simple-details-items img {
@@ -2581,32 +3003,26 @@ export default function DashboardOrders() {
           cursor: zoom-in;
         }
 
-        .simple-details-items article > span {
+        .simple-details-items span {
           min-width: 0;
         }
 
-        .simple-details-items article > span strong {
+        .simple-details-items strong,
+        .simple-details-items small {
           display: block;
-          font-size: 13px;
-          font-weight: 600;
         }
 
-        .simple-details-items article > span small {
-          display: block;
-          margin-top: 4px;
+        .simple-details-items small {
+          margin-top: 5px;
           color: #81786f;
           font-size: 11px;
         }
 
-        .simple-details-items article > b {
-          font-size: 13px;
-        }
-
         .simple-details-gifts {
-          margin-top: 16px;
-          padding: 14px;
-          border: 1px solid #dcecdf;
-          border-radius: 13px;
+          margin-top: 18px;
+          padding: 16px;
+          border: 1px solid #d8eadc;
+          border-radius: 16px;
           background: #f7fcf8;
         }
 
@@ -2614,13 +3030,10 @@ export default function DashboardOrders() {
           display: flex;
           align-items: center;
           gap: 10px;
-          color: #168648;
         }
 
         .simple-details-gifts > header > svg {
-          width: 20px;
-          height: 20px;
-          flex: 0 0 auto;
+          color: #178746;
         }
 
         .simple-details-gifts > header strong,
@@ -2628,94 +3041,70 @@ export default function DashboardOrders() {
           display: block;
         }
 
-        .simple-details-gifts > header strong {
-          font-size: 13px;
-          font-weight: 600;
-        }
-
         .simple-details-gifts > header small {
           margin-top: 3px;
-          color: #688171;
-          font-size: 10px;
+          color: #617468;
+          font-size: 11px;
         }
 
         .simple-details-gifts-list {
           margin-top: 12px;
           display: grid;
-          grid-template-columns:
-            repeat(
-              2,
-              minmax(0, 1fr)
-            );
-          gap: 8px;
+          gap: 9px;
         }
 
         .simple-details-gifts-list article {
-          min-width: 0;
           padding: 9px;
           display: grid;
-          grid-template-columns:
-            48px minmax(0, 1fr);
+          grid-template-columns: 62px minmax(0,1fr);
           align-items: center;
-          gap: 9px;
-          border: 1px solid #dcecdf;
-          border-radius: 11px;
+          gap: 11px;
+          border: 1px solid #dce8df;
+          border-radius: 13px;
           background: #fff;
         }
 
         .simple-details-gifts-list article > div {
-          width: 48px;
-          height: 48px;
+          width: 62px;
+          height: 62px;
           overflow: hidden;
           display: grid;
           place-items: center;
-          border-radius: 9px;
-          color: #7b9a83;
-          background: #f7fcf8;
+          border-radius: 10px;
+          background: #eef7f0;
         }
 
-        .simple-details-gifts-list article img {
+        .simple-details-gifts-list img {
           width: 100%;
           height: 100%;
           object-fit: contain;
           cursor: zoom-in;
         }
 
-        .simple-details-gifts-list article > span {
-          min-width: 0;
+        .simple-details-gifts-list span strong,
+        .simple-details-gifts-list span small {
+          display: block;
         }
 
-        .simple-details-gifts-list article strong {
-          display: block;
-          overflow: hidden;
-          font-size: 12px;
-          font-weight: 500;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .simple-details-gifts-list article small {
-          display: block;
+        .simple-details-gifts-list span small {
           margin-top: 4px;
           color: #168648;
           font-size: 11px;
-          font-weight: 600;
+          font-weight: 700;
         }
 
         .simple-details-address {
-          margin-top: 16px;
-          padding: 14px;
+          margin-top: 18px;
+          padding: 16px;
           display: flex;
-          gap: 11px;
-          border: 1px solid #e3ece5;
-          border-radius: 13px;
-          background: #f6fbf7;
+          gap: 12px;
+          border: 1px solid #e2e8e3;
+          border-radius: 16px;
+          background: #f7fbf8;
         }
 
-        .simple-details-address > svg {
-          width: 20px;
+        .simple-details-address svg {
           flex: 0 0 auto;
-          color: #168648;
         }
 
         .simple-details-address small,
@@ -2724,144 +3113,75 @@ export default function DashboardOrders() {
         }
 
         .simple-details-address small {
-          color: #738077;
-          font-size: 10px;
+          color: #7c837e;
+          font-size: 11px;
         }
 
         .simple-details-address strong {
           margin-top: 4px;
-          font-size: 12px;
-          font-weight: 500;
-          line-height: 1.5;
         }
 
         .simple-details-address p {
-          margin: 4px 0 0;
-          color: #777069;
-          font-size: 11px;
+          margin: 5px 0 0;
+          color: #777;
+          font-size: 12px;
         }
 
         .simple-details-bill {
-          margin-top: 16px;
-          padding: 14px;
-          border: 1px solid #e8e1da;
-          border-radius: 13px;
+          margin-top: 18px;
+          padding: 16px;
+          border: 1px solid #e4ddd6;
+          border-radius: 16px;
         }
 
         .simple-details-bill p {
-          margin: 0 0 10px;
+          margin: 0 0 11px;
           display: flex;
-          align-items: center;
           justify-content: space-between;
-          gap: 18px;
-          font-size: 12px;
+          gap: 16px;
         }
 
-        .simple-details-bill p:last-child {
-          margin-bottom: 0;
-        }
-
-        .simple-details-bill p > span {
-          color: #746d65;
-        }
-
-        .simple-details-bill .total {
-          margin-top: 12px;
-          padding-top: 12px;
-          border-top: 1px solid #e5ddd5;
-          font-size: 15px;
-        }
-
-        .simple-details-bill .total > span {
-          color: #191612;
-          font-weight: 600;
-        }
-
-        .simple-details-help {
-          margin-top: 12px;
-          padding: 12px 13px;
-          border: 1px solid #ece5de;
-          border-radius: 11px;
-          background: #fbfaf8;
-        }
-
-        .simple-details-help span,
-        .simple-details-help small {
-          display: block;
-        }
-
-        .simple-details-help span {
-          color: #2a2520;
-          font-size: 12px;
-          font-weight: 600;
-        }
-
-        .simple-details-help small {
-          margin-top: 4px;
-          color: #7a726a;
-          font-size: 10px;
-          line-height: 1.4;
-        }
-
-        .simple-details-cancel {
+        .simple-details-bill p.total {
           margin-top: 14px;
           padding-top: 14px;
-          border-top: 1px solid #ece5de;
+          border-top: 1px solid #e5ddd6;
+          font-size: 17px;
         }
 
-        .simple-details-cancel p {
-          margin: 0 0 10px;
-          color: #776f67;
-          font-size: 11px;
-          line-height: 1.45;
+        .shared-bill-note {
+          display: block;
+          margin-top: 12px;
+          color: #857b72;
+          font-size: 10px;
+          line-height: 1.5;
         }
 
-        .simple-details-cancel button {
-          width: 100%;
-          min-height: 42px;
-          border: 1px solid #e1a6aa;
-          border-radius: 11px;
-          color: #a72f38;
-          background: #fff5f5;
-          font-size: 13px;
-          font-weight: 700;
-          cursor: pointer;
-        }
-
-        .simple-details-cancel button:hover {
-          border-color: #cc737a;
-          background: #ffeded;
-        }
-
-        .simple-details-cancel button:disabled {
-          opacity: .6;
-          cursor: wait;
+        .simple-details-payment {
+          margin-top: 18px;
+          padding: 15px;
+          display: flex;
+          justify-content: space-between;
+          gap: 16px;
+          border-radius: 14px;
+          background: #f7f3ed;
         }
 
         .simple-image-preview {
           position: fixed;
           inset: 0;
           z-index: 900;
-          padding: 24px;
+          padding: 20px;
           display: grid;
           place-items: center;
-          background: rgba(0, 0, 0, .86);
-        }
-
-        .simple-image-preview > img {
-          width: min(92vw, 760px);
-          max-height: 86vh;
-          object-fit: contain;
-          border-radius: 14px;
-          background: #fff;
+          background: rgba(0,0,0,.82);
         }
 
         .simple-image-preview > button {
           position: fixed;
-          top: 18px;
-          right: 18px;
-          width: 42px;
-          height: 42px;
+          top: 20px;
+          right: 20px;
+          width: 44px;
+          height: 44px;
           display: grid;
           place-items: center;
           border: 0;
@@ -2871,68 +3191,61 @@ export default function DashboardOrders() {
           cursor: pointer;
         }
 
-        .simple-order-image img {
-          cursor: zoom-in;
+        .simple-image-preview > img {
+          max-width: min(900px, 94vw);
+          max-height: 88vh;
+          object-fit: contain;
+          border-radius: 16px;
+          background: #fff;
         }
 
-        @media (max-width: 650px) {
-          .simple-orders-head {
-            align-items: flex-start;
-          }
-
+        @media (max-width: 700px) {
           .simple-orders-tools {
-            display: grid;
+            align-items: stretch;
+            flex-direction: column;
           }
 
           .simple-orders-controls {
             width: 100%;
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
           }
 
           .simple-orders-search {
             width: 100%;
           }
 
-          .simple-orders-filters {
-            overflow-x: auto;
-            flex-wrap: nowrap;
-            padding-bottom: 2px;
-          }
-
-          .simple-orders-head h2 {
-            font-size: 26px;
+          .simple-orders-controls select {
+            width: 44%;
           }
 
           .simple-order-card {
-            grid-template-columns: 58px minmax(0, 1fr) auto;
-            gap: 10px;
-            padding: 10px;
+            grid-template-columns: 86px minmax(0,1fr);
+            align-items: start;
+            padding: 12px;
           }
 
           .simple-order-image {
-            width: 58px;
-            height: 58px;
+            width: 86px;
+            height: 86px;
           }
 
-          .simple-order-copy > strong {
-            font-size: 13px;
+          .simple-order-total {
+            grid-column: 2;
+            justify-content: space-between;
+            margin-top: 2px;
           }
 
-          .simple-order-top em {
-            display: none;
+          .simple-order-total > div {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
           }
 
-          .simple-order-total strong {
-            font-size: 14px;
-          }
-
-          .simple-order-total svg {
-            width: 16px;
-          }
-
-          .simple-details-gifts-list {
-            grid-template-columns: 1fr;
+          .simple-order-card-cancel {
+            min-height: 36px;
+            padding: 0 13px;
+            font-size: 11px;
           }
 
           .simple-order-overlay {
@@ -2942,9 +3255,31 @@ export default function DashboardOrders() {
 
           .simple-order-details {
             width: 100%;
-            max-height: 88vh;
-            padding: 18px 14px;
-            border-radius: 22px 22px 12px 12px;
+            max-height: 94vh;
+            padding: 18px;
+            border-radius: 24px 24px 0 0;
+          }
+
+          .simple-details-cancel-top {
+            align-items: stretch;
+            flex-direction: column;
+          }
+
+          .simple-details-cancel-top button {
+            width: 100%;
+          }
+
+          .simple-details-items article {
+            grid-template-columns: 72px minmax(0,1fr);
+          }
+
+          .simple-details-items article > div {
+            width: 72px;
+            height: 72px;
+          }
+
+          .simple-details-items article > b {
+            grid-column: 2;
           }
         }
       `}</style>
