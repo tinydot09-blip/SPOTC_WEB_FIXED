@@ -17,6 +17,14 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { requireGoogleLogin, logoutUser } from '@/lib/auth';
 import { auth, firebaseReady } from '@/lib/firebase';
+import {
+  getBrowserNotificationState,
+  listenForForegroundNotifications,
+  refreshBrowserNotificationToken,
+  requestAndRegisterBrowserNotifications,
+  showForegroundBrowserNotification,
+  type BrowserNotificationState,
+} from '@/lib/notifications';
 import DashboardOrders from './DashboardOrders';
 import DashboardSaved from './DashboardSaved';
 
@@ -93,6 +101,12 @@ export default function DashboardClient() {
     useState(false);
   const [notificationsOpen, setNotificationsOpen] =
     useState(false);
+  const [notificationPermission, setNotificationPermission] =
+    useState<BrowserNotificationState>('unsupported');
+  const [notificationBusy, setNotificationBusy] =
+    useState(false);
+  const [notificationMessage, setNotificationMessage] =
+    useState('');
 
   useEffect(() => {
     if (!firebaseReady || !auth) {
@@ -113,6 +127,73 @@ export default function DashboardClient() {
       },
     );
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    let stopForegroundListener:
+      (() => void) | null = null;
+
+    if (!user) {
+      setNotificationPermission(
+        'unsupported',
+      );
+      return;
+    }
+
+    void getBrowserNotificationState()
+      .then(async (state) => {
+        if (!active) return;
+
+        setNotificationPermission(
+          state,
+        );
+
+        if (state === 'granted') {
+          await refreshBrowserNotificationToken(
+            user,
+          ).catch((error) => {
+            console.error(
+              'FCM token refresh failed:',
+              error,
+            );
+          });
+        }
+      })
+      .catch((error) => {
+        console.error(
+          'Notification state check failed:',
+          error,
+        );
+      });
+
+    void listenForForegroundNotifications(
+      (payload) => {
+        showForegroundBrowserNotification(
+          payload,
+        );
+      },
+    )
+      .then((unsubscribe) => {
+        if (!active) {
+          unsubscribe();
+          return;
+        }
+
+        stopForegroundListener =
+          unsubscribe;
+      })
+      .catch((error) => {
+        console.error(
+          'Foreground notification listener failed:',
+          error,
+        );
+      });
+
+    return () => {
+      active = false;
+      stopForegroundListener?.();
+    };
+  }, [user]);
 
   useEffect(() => {
     const params =
@@ -249,6 +330,65 @@ export default function DashboardClient() {
       behavior: 'smooth',
     });
   };
+
+  const enableBrowserNotifications =
+    async () => {
+      if (
+        !user ||
+        notificationBusy
+      ) {
+        return;
+      }
+
+      setNotificationBusy(true);
+      setNotificationMessage('');
+
+      try {
+        const state =
+          await requestAndRegisterBrowserNotifications(
+            user,
+          );
+
+        setNotificationPermission(
+          state,
+        );
+
+        if (state === 'granted') {
+          setNotificationMessage(
+            'Browser order alerts are enabled on this device.',
+          );
+        } else if (
+          state === 'denied'
+        ) {
+          setNotificationMessage(
+            'Notifications are blocked in this browser. Allow notifications for spotc.in in browser site settings.',
+          );
+        } else if (
+          state === 'unsupported'
+        ) {
+          setNotificationMessage(
+            'This browser does not support SPOTC browser notifications.',
+          );
+        } else {
+          setNotificationMessage(
+            'Notification permission was not enabled.',
+          );
+        }
+      } catch (error) {
+        console.error(
+          'Enable browser notifications failed:',
+          error,
+        );
+
+        setNotificationMessage(
+          error instanceof Error
+            ? error.message
+            : 'Unable to enable browser notifications.',
+        );
+      } finally {
+        setNotificationBusy(false);
+      }
+    };
 
   if (!authChecked) {
     return (
@@ -471,7 +611,8 @@ export default function DashboardClient() {
                 aria-label="Open notifications"
               >
                 <Bell />
-                <i />
+                {notificationPermission !==
+                  'granted' && <i />}
               </button>
 
               {notificationsOpen && (
@@ -500,6 +641,46 @@ export default function DashboardClient() {
                       <X />
                     </button>
                   </div>
+
+                  {user && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void enableBrowserNotifications()
+                      }
+                      disabled={
+                        notificationBusy ||
+                        notificationPermission ===
+                          'granted'
+                      }
+                    >
+                      <Bell />
+
+                      <span>
+                        <strong>
+                          {notificationPermission ===
+                          'granted'
+                            ? 'Browser alerts enabled'
+                            : notificationBusy
+                              ? 'Enabling alerts…'
+                              : 'Enable browser alerts'}
+                        </strong>
+
+                        <small>
+                          {notificationPermission ===
+                          'granted'
+                            ? 'Order confirmations and delivery updates can appear on this device.'
+                            : 'Receive product and order-status updates even when SPOTC is in the background.'}
+                        </small>
+                      </span>
+                    </button>
+                  )}
+
+                  {notificationMessage && (
+                    <div className="dash-notification-message">
+                      {notificationMessage}
+                    </div>
+                  )}
 
                   <button
                     type="button"
