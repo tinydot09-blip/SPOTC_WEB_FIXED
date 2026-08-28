@@ -474,6 +474,177 @@ function orderTotal(data: DocumentData): number {
   );
 }
 
+function itemUnitPrice(item: DocumentData): number {
+  return Math.max(
+    0,
+    numberValue(
+      item.price ??
+        item.unit_price ??
+        item.selling_price ??
+        item.offer_price ??
+        item.final_price ??
+        0,
+    ),
+  );
+}
+
+function itemLineTotal(item: DocumentData): number {
+  const stored = numberValue(
+    item.subtotal ??
+      item.line_total ??
+      item.total ??
+      item.amount,
+  );
+
+  if (stored > 0) return stored;
+
+  return itemUnitPrice(item) * quantityOf(item);
+}
+
+function orderSubtotal(data: DocumentData): number {
+  const stored = numberValue(
+    data.subtotal ??
+      data.products_subtotal ??
+      data.item_subtotal,
+  );
+
+  if (stored > 0) return stored;
+
+  return orderItems(data).reduce(
+    (sum, item) => sum + itemLineTotal(item),
+    0,
+  );
+}
+
+function orderDeliveryCharge(data: DocumentData): number {
+  return Math.max(
+    0,
+    numberValue(
+      data.delivery_charge ??
+        data.delivery_fee ??
+        data.shipping_charge ??
+        data.shipping_fee ??
+        0,
+    ),
+  );
+}
+
+function orderPlatformFee(data: DocumentData): number {
+  return Math.max(
+    0,
+    numberValue(
+      data.platform_fee ??
+        data.service_fee ??
+        data.handling_fee ??
+        0,
+    ),
+  );
+}
+
+function orderDiscount(data: DocumentData): number {
+  return Math.max(
+    0,
+    numberValue(
+      data.discount ??
+        data.discount_amount ??
+        data.coupon_discount ??
+        0,
+    ),
+  );
+}
+
+type DeliveryBookingInfo = {
+  id: string;
+  title: string;
+  window: string;
+};
+
+function deliveryBookingInfo(
+  data: DocumentData,
+): DeliveryBookingInfo {
+  const rawId = text(
+    data.delivery_option_id ??
+      data.delivery_option ??
+      data.delivery_slot_id ??
+      data.delivery_slot ??
+      data.delivery_type ??
+      data.delivery_mode ??
+      data.shipping_tier,
+  ).toLowerCase();
+
+  const rawTitle = text(
+    data.delivery_option_title ??
+      data.delivery_title ??
+      data.delivery_slot_title ??
+      data.delivery_slot_name ??
+      data.shipping_tier,
+  );
+
+  const rawWindow = text(
+    data.delivery_window ??
+      data.delivery_time ??
+      data.delivery_time_window ??
+      data.delivery_slot_time ??
+      data.delivery_slot_window ??
+      data.estimated_delivery,
+  );
+
+  let id = rawId;
+  let title = rawTitle;
+  let window = rawWindow;
+
+  if (
+    id.includes('instant') ||
+    title.toLowerCase().includes('instant')
+  ) {
+    id = 'instant';
+    title = title || 'Instant Delivery';
+    window = window || 'Delivery in about 15 mins';
+  } else if (
+    id.includes('morning') ||
+    title.toLowerCase().includes('morning')
+  ) {
+    id = 'morning';
+    title = title || 'Morning Slot';
+    window = window || 'Delivery between 12 PM – 2 PM';
+  } else if (
+    id.includes('afternoon') ||
+    title.toLowerCase().includes('afternoon')
+  ) {
+    id = 'afternoon';
+    title = title || 'Afternoon Slot';
+    window = window || 'Delivery between 6 PM – 7 PM';
+  } else if (
+    id.includes('overnight') ||
+    id.includes('night') ||
+    title.toLowerCase().includes('night')
+  ) {
+    id = 'overnight';
+    title = title || 'Night Slot';
+    window = window || 'Delivery between 6 AM – 8 AM';
+  }
+
+  /*
+   * Older orders may only contain the delivery charge.
+   * ₹20 uniquely identifies the Instant Delivery option.
+   * A FREE charge does NOT identify morning/afternoon/night,
+   * so never guess a free slot.
+   */
+  if (!title && orderDeliveryCharge(data) > 0) {
+    id = 'instant';
+    title = 'Instant Delivery';
+    window = window || 'Delivery in about 15 mins';
+  }
+
+  return {
+    id,
+    title: title || 'Delivery slot not saved',
+    window:
+      window ||
+      'The customer delivery time was not stored in this order.',
+  };
+}
+
 function productInfoFromData(
   id: string,
   data: DocumentData,
@@ -2026,6 +2197,31 @@ export default function AdminOrdersPage() {
             const busy =
               busyId === row.id;
 
+            const bookedDelivery =
+              deliveryBookingInfo(row.data);
+
+            const bookedSubtotal =
+              orderSubtotal(row.data);
+
+            const bookedDeliveryCharge =
+              orderDeliveryCharge(row.data);
+
+            const bookedPlatformFee =
+              orderPlatformFee(row.data);
+
+            const bookedDiscount =
+              orderDiscount(row.data);
+
+            const bookedTotal =
+              orderTotal(row.data) ||
+              Math.max(
+                0,
+                bookedSubtotal +
+                  bookedDeliveryCharge +
+                  bookedPlatformFee -
+                  bookedDiscount,
+              );
+
             return (
               <article
                 key={row.id}
@@ -2059,10 +2255,7 @@ export default function AdminOrdersPage() {
                     </span>
 
                     <span style={totalText}>
-                      ₹
-                      {orderTotal(
-                        row.data,
-                      ).toFixed(0)}
+                      ₹{bookedTotal.toFixed(0)}
                     </span>
                   </div>
                 </div>
@@ -2073,14 +2266,11 @@ export default function AdminOrdersPage() {
                       Customer
                     </span>
                     <div>
-                      {customerName(
-                        row.data,
-                      )}
+                      {customerName(row.data)}
                     </div>
                     <div style={mutedText}>
-                      {customerPhone(
-                        row.data,
-                      ) || 'No phone'}
+                      {customerPhone(row.data) ||
+                        'No phone'}
                     </div>
                   </div>
 
@@ -2089,20 +2279,38 @@ export default function AdminOrdersPage() {
                       Payment
                     </span>
                     <div>
-                      {paymentLabel(
-                        row.data,
-                      )}
+                      {paymentLabel(row.data)}
+                    </div>
+                    <div style={mutedText}>
+                      Total payable ₹
+                      {bookedTotal.toFixed(0)}
                     </div>
                   </div>
 
                   <div>
                     <span style={metaLabel}>
-                      Delivery
+                      Booked Delivery
+                    </span>
+                    <div style={deliveryTitleText}>
+                      {bookedDelivery.title}
+                    </div>
+                    <div style={deliveryWindowText}>
+                      {bookedDelivery.window}
+                    </div>
+                    <div style={mutedText}>
+                      Charge:{' '}
+                      {bookedDeliveryCharge > 0
+                        ? `₹${bookedDeliveryCharge.toFixed(0)}`
+                        : 'FREE'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span style={metaLabel}>
+                      Delivery Address
                     </span>
                     <div style={addressLine}>
-                      {addressText(
-                        row.data,
-                      ) ||
+                      {addressText(row.data) ||
                         'Address not stored in order'}
                     </div>
                   </div>
@@ -2136,10 +2344,7 @@ export default function AdminOrdersPage() {
                     <div>
                       {items.reduce(
                         (sum, item) =>
-                          sum +
-                          quantityOf(
-                            item,
-                          ),
+                          sum + quantityOf(item),
                         0,
                       )}{' '}
                       unit(s)
@@ -2148,6 +2353,10 @@ export default function AdminOrdersPage() {
                             freeGifts.length === 1 ? '' : 's'
                           }`
                         : ''}
+                    </div>
+                    <div style={mutedText}>
+                      Products ₹
+                      {bookedSubtotal.toFixed(0)}
                     </div>
                   </div>
                 </div>
@@ -2231,10 +2440,12 @@ export default function AdminOrdersPage() {
                               <div
                                 style={itemSub}
                               >
-                                Qty{' '}
-                                {quantityOf(
-                                  item,
-                                )}
+                                Qty {quantityOf(item)}
+                                {' • '}
+                                ₹{itemUnitPrice(item).toFixed(0)}
+                                {' each • '}
+                                Line ₹
+                                {itemLineTotal(item).toFixed(0)}
                                 {product?.sku
                                   ? ` • SKU ${product.sku}`
                                   : ''}
@@ -2336,6 +2547,78 @@ export default function AdminOrdersPage() {
                           } more item(s)`}
                     </button>
                   )}
+                </div>
+
+                <div style={bookingSummary}>
+                  <div style={bookingSummaryHead}>
+                    <strong>Customer Booking Details</strong>
+                    <span>
+                      What the customer selected at checkout
+                    </span>
+                  </div>
+
+                  <div style={bookingSummaryGrid}>
+                    <div style={bookingSummaryCell}>
+                      <span style={metaLabel}>
+                        Delivery option
+                      </span>
+                      <strong>
+                        {bookedDelivery.title}
+                      </strong>
+                      <small style={bookingSmallText}>
+                        {bookedDelivery.window}
+                      </small>
+                    </div>
+
+                    <div style={bookingSummaryCell}>
+                      <span style={metaLabel}>
+                        Products subtotal
+                      </span>
+                      <strong>
+                        ₹{bookedSubtotal.toFixed(0)}
+                      </strong>
+                    </div>
+
+                    <div style={bookingSummaryCell}>
+                      <span style={metaLabel}>
+                        Delivery charge
+                      </span>
+                      <strong>
+                        {bookedDeliveryCharge > 0
+                          ? `₹${bookedDeliveryCharge.toFixed(0)}`
+                          : 'FREE'}
+                      </strong>
+                    </div>
+
+                    <div style={bookingSummaryCell}>
+                      <span style={metaLabel}>
+                        Platform fee
+                      </span>
+                      <strong>
+                        ₹{bookedPlatformFee.toFixed(0)}
+                      </strong>
+                    </div>
+
+                    {bookedDiscount > 0 && (
+                      <div style={bookingSummaryCell}>
+                        <span style={metaLabel}>
+                          Discount
+                        </span>
+                        <strong style={discountText}>
+                          −₹{bookedDiscount.toFixed(0)}
+                        </strong>
+                      </div>
+                    )}
+
+                    <div style={bookingTotalCell}>
+                      <span style={metaLabel}>
+                        Total payable
+                      </span>
+                      <strong>
+                        ₹{bookedTotal.toFixed(0)}
+                      </strong>
+                    </div>
+                  </div>
                 </div>
 
                 {freeGifts.length > 0 && (
@@ -3059,6 +3342,75 @@ const mutedText: React.CSSProperties = {
 const addressLine: React.CSSProperties = {
   maxWidth: 360,
   lineHeight: 1.4,
+};
+
+const deliveryTitleText: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: '#1f5135',
+};
+
+const deliveryWindowText: React.CSSProperties = {
+  marginTop: 3,
+  fontSize: 11,
+  lineHeight: 1.35,
+  color: '#168648',
+};
+
+const bookingSummary: React.CSSProperties = {
+  margin: '12px 16px',
+  padding: 14,
+  border: '1px solid #e5ded6',
+  borderRadius: 12,
+  background: '#fbfaf8',
+};
+
+const bookingSummaryHead: React.CSSProperties = {
+  marginBottom: 12,
+  display: 'flex',
+  alignItems: 'baseline',
+  justifyContent: 'space-between',
+  gap: 10,
+  flexWrap: 'wrap',
+};
+
+const bookingSummaryGrid: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns:
+    'repeat(auto-fit,minmax(150px,1fr))',
+  gap: 10,
+};
+
+const bookingSummaryCell: React.CSSProperties = {
+  minWidth: 0,
+  padding: '10px 11px',
+  border: '1px solid #ece5de',
+  borderRadius: 10,
+  background: '#fff',
+  fontSize: 13,
+};
+
+const bookingTotalCell: React.CSSProperties = {
+  minWidth: 0,
+  padding: '10px 11px',
+  border: '1px solid #c9e4d2',
+  borderRadius: 10,
+  background: '#f2faf4',
+  color: '#176b37',
+  fontSize: 14,
+};
+
+const bookingSmallText: React.CSSProperties = {
+  display: 'block',
+  marginTop: 4,
+  color: '#6d756f',
+  fontSize: 10,
+  fontWeight: 400,
+  lineHeight: 1.4,
+};
+
+const discountText: React.CSSProperties = {
+  color: '#168648',
 };
 
 const itemsWrap: React.CSSProperties = {
