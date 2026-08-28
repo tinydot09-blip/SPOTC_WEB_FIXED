@@ -1099,21 +1099,31 @@ export default function AdminOrdersPage() {
       },
     );
 
-    const result = (await response.json().catch(
-      () => ({}),
-    )) as {
-      ok?: boolean;
-      sent?: number;
-      message?: string;
-      error?: string;
-    };
+    const rawResponse = await response.text();
 
-    if (!response.ok) {
-      throw new Error(
-        result.error ||
-          'Order was updated, but the customer notification could not be sent.',
-      );
-    }
+let result: {
+  ok?: boolean;
+  sent?: number;
+  message?: string;
+  error?: string;
+} = {};
+
+try {
+  result = rawResponse
+    ? JSON.parse(rawResponse)
+    : {};
+} catch {
+  // Keep rawResponse for diagnostics below.
+}
+
+if (!response.ok) {
+  throw new Error(
+    result.error ||
+      `Notification API failed (${response.status}): ${
+        rawResponse || response.statusText
+      }`,
+  );
+}
   }
 
   async function changeOrderStatus(
