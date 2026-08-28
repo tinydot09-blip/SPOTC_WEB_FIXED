@@ -2868,10 +2868,10 @@ export default function DashboardOrders() {
 
         .simple-order-details > header {
           position: sticky;
-          top: -24px;
+          top: 0;
           z-index: 30;
-          margin: -24px -24px 0;
-          padding: 24px;
+          margin: 0;
+          padding: 0 0 18px;
           display: flex;
           align-items: flex-start;
           justify-content: space-between;
@@ -2894,14 +2894,14 @@ export default function DashboardOrders() {
         }
 
         .simple-order-details > header > button {
-          width: 42px;
-          height: 42px;
-          flex: 0 0 42px;
-          position: sticky;
-          top: 0;
+          width: 44px;
+          height: 44px;
+          flex: 0 0 44px;
+          position: relative;
           z-index: 31;
           display: grid;
           place-items: center;
+          align-self: flex-start;
           border: 1px solid #d9d1ca;
           border-radius: 13px;
           color: #111111;
@@ -3284,19 +3284,15 @@ export default function DashboardOrders() {
           }
 
           .simple-order-details > header {
-            top: -18px;
-            margin: -18px -18px 0;
-            padding: 18px;
+            top: 0;
+            margin: 0;
+            padding: 0 0 16px;
           }
 
           .simple-order-details > header h2 {
             padding-right: 8px;
             font-size: 24px;
             overflow-wrap: anywhere;
-          }
-
-          .simple-order-details > header > button {
-            top: 0;
           }
 
           .simple-details-cancel-top {
