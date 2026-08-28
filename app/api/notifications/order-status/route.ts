@@ -402,16 +402,28 @@ export async function POST(request: NextRequest) {
       });
 
     const invalidTokens: string[] = [];
+    const failureMessages: string[] = [];
 
     response.responses.forEach((result, index) => {
       if (result.success) return;
 
-      const code = result.error?.code || '';
+      const code =
+        result.error?.code ||
+        'messaging/unknown-error';
+
+      const message =
+        result.error?.message ||
+        'Unknown Firebase Messaging error';
+
+      failureMessages.push(
+        `${code}: ${message}`,
+      );
 
       if (
         code ===
           'messaging/registration-token-not-registered' ||
-        code === 'messaging/invalid-registration-token'
+        code ===
+          'messaging/invalid-registration-token'
       ) {
         invalidTokens.push(tokens[index]);
       }
@@ -421,11 +433,45 @@ export async function POST(request: NextRequest) {
       await userRef.set(
         {
           fcm_tokens:
-            FieldValue.arrayRemove(...invalidTokens),
+            FieldValue.arrayRemove(
+              ...invalidTokens,
+            ),
           browser_notification_updated_at:
             FieldValue.serverTimestamp(),
         },
         { merge: true },
+      );
+    }
+
+    console.log(
+      '[SPOTC] FCM result:',
+      {
+        orderId,
+        successCount:
+          response.successCount,
+        failureCount:
+          response.failureCount,
+        failureMessages,
+      },
+    );
+
+    if (
+      response.successCount === 0 &&
+      response.failureCount > 0
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          sent: 0,
+          failed:
+            response.failureCount,
+          error:
+            failureMessages.join(' | ') ||
+            'Firebase Messaging could not deliver the notification.',
+        },
+        {
+          status: 502,
+        },
       );
     }
 
