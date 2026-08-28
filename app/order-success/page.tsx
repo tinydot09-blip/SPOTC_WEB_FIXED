@@ -447,7 +447,7 @@ export default function OrderSuccessPage() {
   const [notificationMessage, setNotificationMessage] =
     useState('');
   const [showNotificationPrompt, setShowNotificationPrompt] =
-    useState(false);
+    useState(true);
 
   useEffect(() => {
     if (!firebaseReady || !auth) {
@@ -467,7 +467,8 @@ export default function OrderSuccessPage() {
         );
 
         if (!signedInUser) {
-          setShowNotificationPrompt(false);
+          setShowNotificationPrompt(true);
+          setNotificationMessage('');
           return;
         }
 
@@ -801,8 +802,7 @@ export default function OrderSuccessPage() {
           </div>
         </section>
 
-        {notificationUser &&
-          notificationPermission !== 'granted' &&
+        {notificationPermission !== 'granted' &&
           showNotificationPrompt && (
             <section className="spotc-order-alerts">
               <div className="spotc-order-alerts__icon">
