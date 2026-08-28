@@ -2854,12 +2854,14 @@ export default function DashboardOrders() {
           place-items: center;
           background: rgba(24, 20, 16, .48);
           backdrop-filter: blur(4px);
+          overflow: hidden;
         }
 
         .simple-order-details {
           width: min(720px, 100%);
-          max-height: 92vh;
+          max-height: min(92vh, calc(100dvh - 48px));
           overflow-y: auto;
+          overscroll-behavior: contain;
           padding: 24px;
           border-radius: 24px;
           background: #fff;
@@ -3272,15 +3274,22 @@ export default function DashboardOrders() {
           }
 
           .simple-order-overlay {
-            padding: 10px;
-            align-items: end;
+            padding:
+              max(10px, env(safe-area-inset-top))
+              10px
+              max(10px, env(safe-area-inset-bottom));
+            align-items: center;
           }
 
           .simple-order-details {
             width: 100%;
-            max-height: 94vh;
+            max-height: calc(
+              100dvh -
+              max(20px, env(safe-area-inset-top)) -
+              max(20px, env(safe-area-inset-bottom))
+            );
             padding: 18px;
-            border-radius: 24px 24px 0 0;
+            border-radius: 24px;
           }
 
           .simple-order-details > header {
