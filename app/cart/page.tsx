@@ -76,6 +76,44 @@ const DELIVERY_OPTIONS: DeliveryOption[] = [
 ];
 
 
+const isDeliveryOptionAvailable = (
+  id: DeliveryOptionId,
+  now: Date = new Date(),
+): boolean => {
+  const hour = now.getHours();
+
+  if (id === 'instant') {
+    return true;
+  }
+
+  if (id === 'morning') {
+    return hour >= 6 && hour < 12;
+  }
+
+  if (id === 'afternoon') {
+    return hour >= 12 && hour < 18;
+  }
+
+  return hour >= 18 || hour < 6;
+};
+
+const preferredDeliveryOptionId = (
+  now: Date = new Date(),
+): DeliveryOptionId => {
+  const hour = now.getHours();
+
+  if (hour >= 6 && hour < 12) {
+    return 'morning';
+  }
+
+  if (hour >= 12 && hour < 18) {
+    return 'afternoon';
+  }
+
+  return 'overnight';
+};
+
+
 type SavedFreeGift = {
   id: string;
   title: string;
@@ -185,6 +223,9 @@ export default function CartPage() {
   const [selectedDeliveryId, setSelectedDeliveryId] =
     useState<DeliveryOptionId>('instant');
 
+  const [deliveryClock, setDeliveryClock] =
+    useState(() => new Date());
+
   const selectedDelivery =
     DELIVERY_OPTIONS.find(
       (option) => option.id === selectedDeliveryId,
@@ -193,6 +234,13 @@ export default function CartPage() {
   const selectDelivery = (
     option: DeliveryOption,
   ) => {
+    const now = new Date();
+
+    if (!isDeliveryOptionAvailable(option.id, now)) {
+      return;
+    }
+
+    setDeliveryClock(now);
     setSelectedDeliveryId(option.id);
 
     if (typeof window !== 'undefined') {
@@ -240,31 +288,91 @@ export default function CartPage() {
         'spotc-delivery-option',
       ) as DeliveryOptionId | null;
 
-    if (
-      savedDeliveryId &&
+    const now = new Date();
+
+    const savedDeliveryIsValid =
+      Boolean(savedDeliveryId) &&
       DELIVERY_OPTIONS.some(
         (option) =>
           option.id === savedDeliveryId,
-      )
-    ) {
-      setSelectedDeliveryId(
-        savedDeliveryId,
+      ) &&
+      isDeliveryOptionAvailable(
+        savedDeliveryId as DeliveryOptionId,
+        now,
       );
 
-      const savedDelivery =
-        DELIVERY_OPTIONS.find(
-          (option) => option.id === savedDeliveryId,
-        );
+    const nextDeliveryId =
+      savedDeliveryIsValid && savedDeliveryId
+        ? savedDeliveryId
+        : preferredDeliveryOptionId(now);
 
-      if (savedDelivery) {
-        window.localStorage.setItem(
-          'spotc-delivery-selection',
-          JSON.stringify(savedDelivery),
-        );
-      }
-    }
+    const nextDelivery =
+      DELIVERY_OPTIONS.find(
+        (option) => option.id === nextDeliveryId,
+      ) ?? DELIVERY_OPTIONS[0];
+
+    setDeliveryClock(now);
+    setSelectedDeliveryId(nextDelivery.id);
+
+    window.localStorage.setItem(
+      'spotc-delivery-option',
+      nextDelivery.id,
+    );
+
+    window.localStorage.setItem(
+      'spotc-delivery-selection',
+      JSON.stringify(nextDelivery),
+    );
 
   }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setDeliveryClock(new Date()),
+      30_000,
+    );
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (
+      isDeliveryOptionAvailable(
+        selectedDeliveryId,
+        deliveryClock,
+      )
+    ) {
+      return;
+    }
+
+    const nextDeliveryId =
+      preferredDeliveryOptionId(
+        deliveryClock,
+      );
+
+    const nextDelivery =
+      DELIVERY_OPTIONS.find(
+        (option) =>
+          option.id === nextDeliveryId,
+      ) ?? DELIVERY_OPTIONS[0];
+
+    setSelectedDeliveryId(
+      nextDelivery.id,
+    );
+
+    window.localStorage.setItem(
+      'spotc-delivery-option',
+      nextDelivery.id,
+    );
+
+    window.localStorage.setItem(
+      'spotc-delivery-selection',
+      JSON.stringify(nextDelivery),
+    );
+  }, [
+    deliveryClock,
+    selectedDeliveryId,
+  ]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1001,15 +1109,26 @@ export default function CartPage() {
 
                 <div className="spotc-delivery-options">
                   {DELIVERY_OPTIONS.map((option) => {
+                    const available =
+                      isDeliveryOptionAvailable(
+                        option.id,
+                        deliveryClock,
+                      );
+
                     const selected =
+                      available &&
                       option.id === selectedDelivery.id;
 
                     return (
                       <button
                         key={option.id}
                         type="button"
+                        disabled={!available}
+                        aria-disabled={!available}
                         className={`spotc-delivery-option ${
                           selected ? 'active' : ''
+                        } ${
+                          !available ? 'disabled' : ''
                         }`}
                         onClick={() =>
                           selectDelivery(option)
@@ -1035,7 +1154,11 @@ export default function CartPage() {
                             </b>
                           </span>
                           <small>{option.orderWindow}</small>
-                          <em>{option.deliveryWindow}</em>
+                          <em>
+                            {available
+                              ? option.deliveryWindow
+                              : 'Unavailable now'}
+                          </em>
                         </span>
 
                         <span
@@ -1497,6 +1620,31 @@ const styles = `
   .spotc-delivery-option.active {
     border-color: #1a9a53;
     background: #edf9f1;
+  }
+
+
+  .spotc-delivery-option.disabled,
+  .spotc-delivery-option:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
+    border-color: #e3e3e3;
+    background: #f5f5f5;
+  }
+
+  .spotc-delivery-option.disabled .spotc-delivery-option-icon {
+    color: #8b8b8b;
+    background: #ececec;
+  }
+
+  .spotc-delivery-option.disabled .spotc-delivery-fee,
+  .spotc-delivery-option.disabled .spotc-delivery-fee.free {
+    color: #777777;
+    background: #e9e9e9;
+  }
+
+  .spotc-delivery-option.disabled .spotc-delivery-option-copy em {
+    color: #a13b3b;
+    font-weight: 700;
   }
 
   .spotc-delivery-option-icon {
