@@ -67,6 +67,9 @@ type OrderRecord = {
   phone: string;
   deliveryAssigned: boolean;
   instantDelivery: boolean;
+  deliveryOptionId: string;
+  deliveryTitle: string;
+  deliveryWindow: string;
 };
 
 type SavedFreeGift = {
@@ -460,10 +463,105 @@ function buildAddress(
     .join(', ');
 }
 
+type DeliveryDisplay = {
+  id: string;
+  title: string;
+  window: string;
+};
+
+function deliveryDisplay(
+  data: DocumentData,
+): DeliveryDisplay {
+  const rawId = textOf(
+    data.delivery_option_id ??
+      data.delivery_option ??
+      data.delivery_slot_id ??
+      data.delivery_slot ??
+      data.delivery_type ??
+      data.delivery_mode ??
+      data.shipping_tier,
+  ).toLowerCase();
+
+  const rawTitle = textOf(
+    data.delivery_option_title ??
+      data.delivery_title ??
+      data.delivery_slot_title ??
+      data.delivery_slot_name ??
+      data.shipping_tier,
+  );
+
+  const rawWindow = textOf(
+    data.delivery_window ??
+      data.delivery_time ??
+      data.delivery_time_window ??
+      data.delivery_slot_time ??
+      data.delivery_slot_window ??
+      data.estimated_delivery,
+  );
+
+  let id = rawId;
+  let title = rawTitle;
+  let window = rawWindow;
+
+  if (
+    id.includes('instant') ||
+    title.toLowerCase().includes('instant')
+  ) {
+    id = 'instant';
+    title = title || 'Instant Delivery';
+    window = window || 'Delivery in about 15 mins';
+  } else if (
+    id.includes('morning') ||
+    title.toLowerCase().includes('morning')
+  ) {
+    id = 'morning';
+    title = title || 'Morning Slot';
+    window = window || 'Delivery between 12 PM – 2 PM';
+  } else if (
+    id.includes('afternoon') ||
+    title.toLowerCase().includes('afternoon')
+  ) {
+    id = 'afternoon';
+    title = title || 'Afternoon Slot';
+    window = window || 'Delivery between 6 PM – 7 PM';
+  } else if (
+    id.includes('overnight') ||
+    id.includes('night') ||
+    title.toLowerCase().includes('night')
+  ) {
+    id = 'overnight';
+    title = title || 'Night Slot';
+    window = window || 'Delivery between 6 AM – 8 AM';
+  }
+
+  if (
+    !title &&
+    numberOf(
+      data.delivery_charge ??
+        data.delivery_fee,
+    ) > 0
+  ) {
+    id = 'instant';
+    title = 'Instant Delivery';
+    window = window || 'Delivery in about 15 mins';
+  }
+
+  return {
+    id,
+    title: title || 'Delivery slot not saved',
+    window:
+      window ||
+      'Delivery time was not stored for this order.',
+  };
+}
+
 function mapOrder(
   id: string,
   data: DocumentData,
 ): OrderRecord {
+  const deliveryInfo =
+    deliveryDisplay(data);
+
   const items = mapItems(
     data.items ??
       data.order_items ??
@@ -570,17 +668,28 @@ function mapOrder(
         dateOf(data.delivery_assigned_at),
     ),
 
-    instantDelivery: [
-      data.delivery_type,
-      data.delivery_mode,
-      data.delivery_speed,
-      data.delivery_slot,
-      data.estimated_delivery,
-    ]
-      .map(textOf)
-      .join(' ')
-      .toLowerCase()
-      .match(/instant|15\s*(?:-|–|to)?\s*45\s*mins?|15\s*mins?/) !== null,
+    instantDelivery:
+      deliveryInfo.id === 'instant' ||
+      [
+        data.delivery_type,
+        data.delivery_mode,
+        data.delivery_speed,
+        data.delivery_slot,
+        data.estimated_delivery,
+      ]
+        .map(textOf)
+        .join(' ')
+        .toLowerCase()
+        .match(/instant|15\s*(?:-|–|to)?\s*45\s*mins?|15\s*mins?/) !== null,
+
+    deliveryOptionId:
+      deliveryInfo.id,
+
+    deliveryTitle:
+      deliveryInfo.title,
+
+    deliveryWindow:
+      deliveryInfo.window,
   };
 }
 
@@ -1525,6 +1634,12 @@ export default function DashboardOrders() {
                       )}
                     </small>
 
+                    <small className="simple-order-delivery-line">
+                      {order.deliveryTitle}
+                      {' · '}
+                      {order.deliveryWindow}
+                    </small>
+
                     {freeGifts.length > 0 && (
                       <small className="simple-order-gift-count">
                         <Gift />
@@ -1616,6 +1731,23 @@ export default function DashboardOrders() {
               </span>
             </div>
 
+            <section className="simple-details-delivery">
+              <div>
+                <small>Delivery option</small>
+                <strong>{selected.deliveryTitle}</strong>
+                <p>{selected.deliveryWindow}</p>
+              </div>
+
+              <div>
+                <small>Delivery charge</small>
+                <strong>
+                  {selected.deliveryCharge > 0
+                    ? money(selected.deliveryCharge)
+                    : 'FREE'}
+                </strong>
+              </div>
+            </section>
+
             <div className="simple-details-items">
               {selected.items.map(
                 (item) => (
@@ -1645,10 +1777,9 @@ export default function DashboardOrders() {
                       </strong>
 
                       <small>
-                        Qty{' '}
-                        {
-                          item.quantity
-                        }
+                        Qty {item.quantity}
+                        {' · '}
+                        {money(item.price)} each
                         {item.size
                           ? ` · Size ${item.size}`
                           : ''}
@@ -1788,20 +1919,17 @@ export default function DashboardOrders() {
                 </strong>
               </p>
 
-              {selected.platformFee >
-                0 && (
-                <p>
-                  <span>
-                    Platform fee
-                  </span>
+              <p>
+                <span>
+                  Platform fee
+                </span>
 
-                  <strong>
-                    {money(
-                      selected.platformFee,
-                    )}
-                  </strong>
-                </p>
-              )}
+                <strong>
+                  {money(
+                    selected.platformFee,
+                  )}
+                </strong>
+              </p>
 
               {selected.discount >
                 0 && (
@@ -1842,6 +1970,13 @@ export default function DashboardOrders() {
                   selected.paymentMethod
                 }
               </strong>
+            </div>
+
+            <div className="simple-details-help">
+              <span>Need help with this order?</span>
+              <small>
+                Keep the order number ready when contacting SPOTC support.
+              </small>
             </div>
 
             <div className="simple-details-cancel">
@@ -2104,6 +2239,11 @@ export default function DashboardOrders() {
           font-weight: 600;
         }
 
+        .simple-order-copy > .simple-order-delivery-line {
+          color: #6d756f;
+          font-size: 10px;
+        }
+
         .simple-order-gift-count {
           display: inline-flex !important;
           align-items: center;
@@ -2258,6 +2398,42 @@ export default function DashboardOrders() {
 
         .simple-details-date {
           text-align: right;
+        }
+
+        .simple-details-delivery {
+          margin-top: 16px;
+          padding: 13px 14px;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 14px;
+          align-items: center;
+          border: 1px solid #dcecdf;
+          border-radius: 12px;
+          background: #f7fcf8;
+        }
+
+        .simple-details-delivery small,
+        .simple-details-delivery strong,
+        .simple-details-delivery p {
+          display: block;
+        }
+
+        .simple-details-delivery small {
+          color: #6f786f;
+          font-size: 10px;
+        }
+
+        .simple-details-delivery strong {
+          margin-top: 3px;
+          color: #176a3c;
+          font-size: 13px;
+        }
+
+        .simple-details-delivery p {
+          margin: 4px 0 0;
+          color: #617469;
+          font-size: 11px;
+          line-height: 1.4;
         }
 
         .simple-details-items {
@@ -2486,6 +2662,32 @@ export default function DashboardOrders() {
         .simple-details-bill .total > span {
           color: #191612;
           font-weight: 600;
+        }
+
+        .simple-details-help {
+          margin-top: 12px;
+          padding: 12px 13px;
+          border: 1px solid #ece5de;
+          border-radius: 11px;
+          background: #fbfaf8;
+        }
+
+        .simple-details-help span,
+        .simple-details-help small {
+          display: block;
+        }
+
+        .simple-details-help span {
+          color: #2a2520;
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        .simple-details-help small {
+          margin-top: 4px;
+          color: #7a726a;
+          font-size: 10px;
+          line-height: 1.4;
         }
 
         .simple-details-cancel {
