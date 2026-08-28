@@ -391,14 +391,21 @@ export async function generateMetadata({
     const title =
       getProductTitle(record);
 
-    const description =
+    const seoTitle =
+      `${title} in Karamadai`;
+
+    const rawDescription =
       getProductDescription(record);
+
+    const description =
+      `Shop ${title} online in Karamadai at SPOTC. ${rawDescription}`
+        .slice(0, 160);
 
     const image =
       getProductImage(record);
 
     return {
-      title,
+      title: seoTitle,
 
       description,
 
@@ -446,7 +453,7 @@ export async function generateMetadata({
           'SPOTC',
 
         title:
-          `${title} | SPOTC`,
+          `${seoTitle} | SPOTC`,
 
         description,
 
@@ -470,7 +477,7 @@ export async function generateMetadata({
           'summary_large_image',
 
         title:
-          `${title} | SPOTC`,
+          `${seoTitle} | SPOTC`,
 
         description,
 
