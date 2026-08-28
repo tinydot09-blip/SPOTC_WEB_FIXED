@@ -468,6 +468,15 @@ export default function CheckoutPage() {
                 : 0,
           },
           address: selectedAddress,
+          deliveryOption: {
+            id: selectedDelivery.id,
+            title: selectedDelivery.title,
+            deliveryWindow: selectedDelivery.deliveryWindow,
+            fee:
+              groupIndex === 0
+                ? selectedDelivery.fee
+                : 0,
+          },
           discount: 0,
           rewards: {
             purchasePoints: 0,

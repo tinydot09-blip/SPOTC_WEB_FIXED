@@ -133,6 +133,7 @@ export async function createBusinessOrder({
   user,
   group,
   address,
+  deliveryOption,
   discount,
   rewards,
 }: {
@@ -140,6 +141,12 @@ export async function createBusinessOrder({
   user: User;
   group: BusinessCartGroup;
   address: SavedAddress;
+  deliveryOption: {
+    id: 'instant' | 'morning' | 'afternoon' | 'overnight';
+    title: string;
+    deliveryWindow: string;
+    fee: number;
+  };
   discount: number;
   rewards: RewardEstimate;
 }): Promise<CreatedOrder> {
@@ -190,6 +197,22 @@ export async function createBusinessOrder({
 
   const delivery =
     num(group.delivery);
+
+  const deliveryOptionId =
+    text(deliveryOption?.id) ||
+    (delivery > 0 ? 'instant' : '');
+
+  const deliveryOptionTitle =
+    text(deliveryOption?.title) ||
+    (deliveryOptionId === 'instant'
+      ? 'Instant Delivery'
+      : 'Delivery');
+
+  const deliveryWindow =
+    text(deliveryOption?.deliveryWindow) ||
+    (deliveryOptionId === 'instant'
+      ? 'Delivery in about 15 mins'
+      : 'Delivery time selected at checkout');
 
   const safeDiscount =
     num(discount);
@@ -497,8 +520,48 @@ export async function createBusinessOrder({
       status:
         'placed',
 
+      /*
+       * ======================================================
+       * CUSTOMER-SELECTED DELIVERY OPTION
+       * ======================================================
+       *
+       * Keep the canonical fields plus a few compatibility aliases
+       * because the customer dashboard/admin already read these names.
+       */
+      delivery_option_id:
+        deliveryOptionId,
+
+      delivery_option:
+        deliveryOptionId,
+
+      delivery_slot_id:
+        deliveryOptionId,
+
+      delivery_slot:
+        deliveryOptionId,
+
+      delivery_option_title:
+        deliveryOptionTitle,
+
+      delivery_title:
+        deliveryOptionTitle,
+
+      delivery_window:
+        deliveryWindow,
+
+      delivery_time_window:
+        deliveryWindow,
+
+      shipping_tier:
+        deliveryOptionTitle,
+
+      delivery_type:
+        deliveryOptionId === 'instant'
+          ? 'instant'
+          : 'scheduled',
+
       estimated_delivery:
-        '15–45 mins',
+        deliveryWindow,
 
       /*
        * ======================================================
