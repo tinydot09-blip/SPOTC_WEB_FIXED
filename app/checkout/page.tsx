@@ -477,6 +477,26 @@ export default function CheckoutPage() {
                 ? selectedDelivery.fee
                 : 0,
           },
+          freeGifts: Object.values(giftBundles)
+            .filter((bundle) =>
+              group.items.some(
+                (item) =>
+                  String(item.id) === String(bundle.product_id),
+              ),
+            )
+            .flatMap((bundle) =>
+              bundle.gifts.map((gift) => ({
+                id: String(gift.id),
+                product_id: String(gift.id),
+                title: String(gift.title || 'FREE Gift'),
+                image: String(gift.image || ''),
+                original_price:
+                  Number(gift.original_price) || 0,
+                price: 0,
+                is_free_gift: true,
+                source_product_id: String(bundle.product_id),
+              })),
+            ),
           discount: 0,
           rewards: {
             purchasePoints: 0,

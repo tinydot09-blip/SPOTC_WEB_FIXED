@@ -21,6 +21,17 @@ export type CreatedOrder = {
   businessName: string;
 };
 
+export type OrderFreeGift = {
+  id: string;
+  product_id: string;
+  title: string;
+  image: string;
+  original_price: number;
+  price: number;
+  is_free_gift: boolean;
+  source_product_id: string;
+};
+
 /*
  * ============================================================
  * SPOTC OWN INVENTORY SELLER
@@ -134,6 +145,7 @@ export async function createBusinessOrder({
   group,
   address,
   deliveryOption,
+  freeGifts = [],
   discount,
   rewards,
 }: {
@@ -147,6 +159,7 @@ export async function createBusinessOrder({
     deliveryWindow: string;
     fee: number;
   };
+  freeGifts?: OrderFreeGift[];
   discount: number;
   rewards: RewardEstimate;
 }): Promise<CreatedOrder> {
@@ -280,6 +293,29 @@ export async function createBusinessOrder({
 
   const formattedDeliveryAddress =
     formatAddress(address);
+
+  const safeFreeGifts = Array.isArray(freeGifts)
+    ? freeGifts
+        .filter((gift) => gift && gift.id)
+        .map((gift) => ({
+          id: text(gift.id),
+          product_id:
+            text(gift.product_id) || text(gift.id),
+          title:
+            text(gift.title) || 'FREE Gift',
+          product_name:
+            text(gift.title) || 'FREE Gift',
+          image: text(gift.image),
+          image_url: text(gift.image),
+          original_price:
+            Math.max(0, num(gift.original_price)),
+          price: 0,
+          is_free_gift: true,
+          type: 'free_gift',
+          source_product_id:
+            text(gift.source_product_id),
+        }))
+    : [];
 
   /*
    * ==========================================================
@@ -457,6 +493,26 @@ export async function createBusinessOrder({
         group.items.map(
           orderItem,
         ),
+
+      /*
+       * ======================================================
+       * FREE GIFT SNAPSHOT
+       * ======================================================
+       */
+      free_gifts:
+        safeFreeGifts,
+
+      selected_free_gifts:
+        safeFreeGifts,
+
+      gifts:
+        safeFreeGifts,
+
+      free_gift_count:
+        safeFreeGifts.length,
+
+      has_free_gift:
+        safeFreeGifts.length > 0,
 
       /*
        * ======================================================
