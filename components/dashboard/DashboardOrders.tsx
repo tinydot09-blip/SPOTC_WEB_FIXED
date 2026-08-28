@@ -808,6 +808,8 @@ export default function DashboardOrders() {
     setCancellingId,
   ] = useState('');
 
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
   const [
     nowMs,
     setNowMs,
@@ -1005,19 +1007,24 @@ export default function DashboardOrders() {
     user,
   ]);
 
-  function instantCancelSecondsLeft(
+  function cancelWindowSeconds(
     order: OrderRecord,
   ): number {
-    if (
-      !order.instantDelivery ||
-      !order.createdAt
-    ) {
+    return order.instantDelivery
+      ? 2 * 60
+      : 15 * 60;
+  }
+
+  function cancelSecondsLeft(
+    order: OrderRecord,
+  ): number {
+    if (!order.createdAt) {
       return 0;
     }
 
     const expiresAt =
       order.createdAt.getTime() +
-      2 * 60 * 1000;
+      cancelWindowSeconds(order) * 1000;
 
     return Math.max(
       0,
@@ -1040,11 +1047,16 @@ export default function DashboardOrders() {
       return false;
     }
 
-    if (order.instantDelivery) {
-      return instantCancelSecondsLeft(order) > 0;
-    }
+    return cancelSecondsLeft(order) > 0;
+  }
 
-    return true;
+  function formatCancelCountdown(
+    seconds: number,
+  ): string {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+
+    return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
   }
 
   function cancelHelpText(
@@ -1065,23 +1077,17 @@ export default function DashboardOrders() {
       return 'Cancellation closed because delivery has been assigned.';
     }
 
-    if (order.instantDelivery) {
-      const seconds =
-        instantCancelSecondsLeft(order);
+    const seconds = cancelSecondsLeft(order);
 
-      if (seconds <= 0) {
-        return 'The 2-minute cancellation window has ended.';
-      }
-
-      const minutes = Math.floor(seconds / 60);
-      const remainingSeconds = seconds % 60;
-
-      return `Instant delivery: cancel within ${minutes}:${String(
-        remainingSeconds,
-      ).padStart(2, '0')}.`;
+    if (seconds <= 0) {
+      return order.instantDelivery
+        ? 'The 2-minute cancellation window has ended.'
+        : 'The 15-minute cancellation window has ended.';
     }
 
-    return 'You can cancel until a delivery boy is assigned.';
+    return order.instantDelivery
+      ? `Instant delivery: cancel within ${formatCancelCountdown(seconds)}.`
+      : `FREE delivery: cancel within ${formatCancelCountdown(seconds)}.`;
   }
 
   async function cancelOrder(
@@ -1178,23 +1184,27 @@ export default function DashboardOrders() {
               /instant|15\s*(?:-|–|to)?\s*45\s*mins?|15\s*mins?/,
             ) !== null;
 
-          if (instantDelivery) {
-            const createdAt =
-              dateOf(
-                data.created_at ??
-                  data.order_date,
-              );
+          const createdAt =
+            dateOf(
+              data.created_at ??
+                data.order_date,
+            );
 
-            if (
-              !createdAt ||
-              Date.now() -
-                createdAt.getTime() >=
-                2 * 60 * 1000
-            ) {
-              throw new Error(
-                'The 2-minute cancellation window for instant delivery has ended.',
-              );
-            }
+          const cancellationWindowMs =
+            instantDelivery
+              ? 2 * 60 * 1000
+              : 15 * 60 * 1000;
+
+          if (
+            !createdAt ||
+            Date.now() - createdAt.getTime() >=
+              cancellationWindowMs
+          ) {
+            throw new Error(
+              instantDelivery
+                ? 'The 2-minute cancellation window for instant delivery has ended.'
+                : 'The 15-minute cancellation window for FREE delivery has ended.',
+            );
           }
 
           transaction.update(
@@ -1566,25 +1576,28 @@ export default function DashboardOrders() {
                 );
 
               return (
-                <button
-                  type="button"
+                <article
                   key={order.id}
                   className="simple-order-card"
-                  onClick={() =>
-                    setSelected(
-                      order,
-                    )
-                  }
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelected(order)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setSelected(order);
+                    }
+                  }}
                 >
                   <div className="simple-order-image">
                     {firstItem?.image ? (
                       <img
-                        src={
-                          firstItem.image
-                        }
-                        alt={
-                          firstItem.title
-                        }
+                        src={firstItem.image}
+                        alt={firstItem.title}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setImagePreview(firstItem.image);
+                        }}
                       />
                     ) : (
                       <Package />
@@ -1654,15 +1667,29 @@ export default function DashboardOrders() {
                   </div>
 
                   <div className="simple-order-total">
-                    <strong>
-                      {money(
-                        order.total,
+                    <div>
+                      <strong>{money(order.total)}</strong>
+
+                      {canCancelOrder(order) && (
+                        <button
+                          type="button"
+                          className="simple-order-card-cancel"
+                          disabled={cancellingId === order.id}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void cancelOrder(order);
+                          }}
+                        >
+                          {cancellingId === order.id
+                            ? 'Cancelling…'
+                            : 'Cancel'}
+                        </button>
                       )}
-                    </strong>
+                    </div>
 
                     <ChevronRight />
                   </div>
-                </button>
+                </article>
               );
             },
           )}
@@ -1731,6 +1758,25 @@ export default function DashboardOrders() {
               </span>
             </div>
 
+            <section className={`simple-details-cancel-top ${canCancelOrder(selected) ? 'active' : ''}`}>
+              <div>
+                <strong>Cancellation</strong>
+                <span>{cancelHelpText(selected)}</span>
+              </div>
+
+              {canCancelOrder(selected) && (
+                <button
+                  type="button"
+                  disabled={cancellingId === selected.id}
+                  onClick={() => void cancelOrder(selected)}
+                >
+                  {cancellingId === selected.id
+                    ? 'Cancelling…'
+                    : 'Cancel Order'}
+                </button>
+              )}
+            </section>
+
             <section className="simple-details-delivery">
               <div>
                 <small>Delivery option</small>
@@ -1757,12 +1803,9 @@ export default function DashboardOrders() {
                     <div>
                       {item.image ? (
                         <img
-                          src={
-                            item.image
-                          }
-                          alt={
-                            item.title
-                          }
+                          src={item.image}
+                          alt={item.title}
+                          onClick={() => setImagePreview(item.image)}
                         />
                       ) : (
                         <Package />
@@ -1836,12 +1879,9 @@ export default function DashboardOrders() {
                       <div>
                         {gift.image ? (
                           <img
-                            src={
-                              gift.image
-                            }
-                            alt={
-                              gift.title
-                            }
+                            src={gift.image}
+                            alt={gift.title}
+                            onClick={() => setImagePreview(gift.image)}
                           />
                         ) : (
                           <Gift />
@@ -1979,32 +2019,28 @@ export default function DashboardOrders() {
               </small>
             </div>
 
-            <div className="simple-details-cancel">
-              <p>
-                {cancelHelpText(selected)}
-              </p>
-
-              {canCancelOrder(selected) && (
-                <button
-                  type="button"
-                  disabled={
-                    cancellingId ===
-                    selected.id
-                  }
-                  onClick={() =>
-                    void cancelOrder(
-                      selected,
-                    )
-                  }
-                >
-                  {cancellingId ===
-                  selected.id
-                    ? 'Cancelling…'
-                    : 'Cancel Order'}
-                </button>
-              )}
-            </div>
           </section>
+        </div>
+      )}
+
+      {imagePreview && (
+        <div
+          className="simple-image-preview"
+          onMouseDown={() => setImagePreview(null)}
+        >
+          <button
+            type="button"
+            aria-label="Close image"
+            onClick={() => setImagePreview(null)}
+          >
+            <X />
+          </button>
+
+          <img
+            src={imagePreview}
+            alt="Product preview"
+            onMouseDown={(event) => event.stopPropagation()}
+          />
         </div>
       )}
 
@@ -2281,6 +2317,29 @@ export default function DashboardOrders() {
           color: #8c8379;
         }
 
+        .simple-order-total > div {
+          display: grid;
+          justify-items: end;
+          gap: 7px;
+        }
+
+        .simple-order-card-cancel {
+          min-height: 30px;
+          padding: 0 11px;
+          border: 1px solid #df8f96;
+          border-radius: 9px;
+          color: #a52f38;
+          background: #fff3f3;
+          font-size: 10px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .simple-order-card-cancel:disabled {
+          opacity: .6;
+          cursor: wait;
+        }
+
         .simple-orders-empty-card {
           min-height: 240px;
           display: grid;
@@ -2400,6 +2459,58 @@ export default function DashboardOrders() {
           text-align: right;
         }
 
+        .simple-details-cancel-top {
+          margin-top: 14px;
+          padding: 13px 14px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          border: 1px solid #ead9da;
+          border-radius: 12px;
+          background: #fffafa;
+        }
+
+        .simple-details-cancel-top.active {
+          border-color: #e09aa0;
+          background: #fff1f2;
+          box-shadow: 0 0 0 2px rgba(185, 57, 67, .05);
+        }
+
+        .simple-details-cancel-top strong,
+        .simple-details-cancel-top span {
+          display: block;
+        }
+
+        .simple-details-cancel-top strong {
+          color: #9f2933;
+          font-size: 12px;
+        }
+
+        .simple-details-cancel-top span {
+          margin-top: 3px;
+          color: #735f61;
+          font-size: 10px;
+        }
+
+        .simple-details-cancel-top button {
+          min-height: 36px;
+          padding: 0 13px;
+          flex: 0 0 auto;
+          border: 1px solid #cc6972;
+          border-radius: 10px;
+          color: #fff;
+          background: #b93641;
+          font-size: 11px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .simple-details-cancel-top button:disabled {
+          opacity: .6;
+          cursor: wait;
+        }
+
         .simple-details-delivery {
           margin-top: 16px;
           padding: 13px 14px;
@@ -2467,6 +2578,7 @@ export default function DashboardOrders() {
           width: 100%;
           height: 100%;
           object-fit: contain;
+          cursor: zoom-in;
         }
 
         .simple-details-items article > span {
@@ -2566,6 +2678,7 @@ export default function DashboardOrders() {
           width: 100%;
           height: 100%;
           object-fit: contain;
+          cursor: zoom-in;
         }
 
         .simple-details-gifts-list article > span {
@@ -2723,6 +2836,43 @@ export default function DashboardOrders() {
         .simple-details-cancel button:disabled {
           opacity: .6;
           cursor: wait;
+        }
+
+        .simple-image-preview {
+          position: fixed;
+          inset: 0;
+          z-index: 900;
+          padding: 24px;
+          display: grid;
+          place-items: center;
+          background: rgba(0, 0, 0, .86);
+        }
+
+        .simple-image-preview > img {
+          width: min(92vw, 760px);
+          max-height: 86vh;
+          object-fit: contain;
+          border-radius: 14px;
+          background: #fff;
+        }
+
+        .simple-image-preview > button {
+          position: fixed;
+          top: 18px;
+          right: 18px;
+          width: 42px;
+          height: 42px;
+          display: grid;
+          place-items: center;
+          border: 0;
+          border-radius: 50%;
+          color: #111;
+          background: #fff;
+          cursor: pointer;
+        }
+
+        .simple-order-image img {
+          cursor: zoom-in;
         }
 
         @media (max-width: 650px) {
