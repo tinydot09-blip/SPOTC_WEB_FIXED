@@ -6,10 +6,10 @@ export const metadata: Metadata = {
   title: 'Kids Wear, Toys & Fancy Items in Karamadai',
 
   description:
-    'Shop kids wear, girls dresses, boys wear, toys, earrings, hair accessories and fancy items at SPOTC in Karamadai and Mettupalayam. Special offers, free gifts and fast local delivery.',
+    'Shop kids wear, girls dresses, boys wear, toys, earrings, gifts, hair accessories and fancy items online in Karamadai. Local delivery available from SPOTC.',
 
   alternates: {
-    canonical: 'https://www.spotc.in/shop',
+    canonical: '/shop',
   },
 
   openGraph: {
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
       'Kids Wear, Toys & Fancy Items in Karamadai | SPOTC',
 
     description:
-      'Shop kids wear, toys and fancy items in Karamadai and Mettupalayam with special offers, free gifts and fast local delivery.',
+      'Shop kids wear, toys, gifts, earrings and fancy items online in Karamadai with convenient local delivery.',
   },
 
   twitter: {
@@ -32,17 +32,87 @@ export const metadata: Metadata = {
       'Kids Wear, Toys & Fancy Items in Karamadai | SPOTC',
 
     description:
-      'Shop kids wear, toys and fancy items in Karamadai and Mettupalayam with special offers, free gifts and fast local delivery.',
+      'Shop kids wear, toys, gifts, earrings and fancy items online in Karamadai.',
   },
+};
+
+const shopJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+
+  name: 'Kids Wear, Toys & Fancy Items in Karamadai',
+
+  url: 'https://www.spotc.in/shop',
+
+  description:
+    'Shop kids wear, toys, earrings, gifts, hair accessories and fancy items online in Karamadai.',
+
+  isPartOf: {
+    '@type': 'WebSite',
+    name: 'SPOTC',
+    url: 'https://www.spotc.in',
+  },
+
+  about: [
+    {
+      '@type': 'Thing',
+      name: 'Kids Wear',
+    },
+    {
+      '@type': 'Thing',
+      name: 'Toys',
+    },
+    {
+      '@type': 'Thing',
+      name: 'Fancy Items',
+    },
+    {
+      '@type': 'Thing',
+      name: 'Gifts',
+    },
+    {
+      '@type': 'Thing',
+      name: 'Earrings',
+    },
+    {
+      '@type': 'Thing',
+      name: 'Hair Accessories',
+    },
+  ],
 };
 
 export default function ShopPage() {
   return (
     <main className="page shop-page">
-      {/* EXISTING PRODUCT GRID */}
+
+      <h1
+        style={{
+          position: 'absolute',
+          width: '1px',
+          height: '1px',
+          padding: 0,
+          margin: '-1px',
+          overflow: 'hidden',
+          clip: 'rect(0, 0, 0, 0)',
+          whiteSpace: 'nowrap',
+          border: 0,
+        }}
+      >
+        Kids Wear, Toys & Fancy Items in Karamadai
+      </h1>
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(shopJsonLd).replace(
+            /</g,
+            '\\u003c',
+          ),
+        }}
+      />
+
       <ProductGrid />
 
-      {/* GAP BETWEEN PRODUCTS AND SEO */}
       <div
         aria-hidden="true"
         style={{
@@ -52,7 +122,6 @@ export default function ShopPage() {
         }}
       />
 
-      {/* FULL WIDTH SEO SECTION */}
       <section
         style={{
           position: 'relative',
@@ -64,7 +133,6 @@ export default function ShopPage() {
           padding: '30px 0 36px',
         }}
       >
-        {/* ALIGNED CONTENT */}
         <div
           style={{
             width: '100%',
@@ -82,7 +150,7 @@ export default function ShopPage() {
               color: '#111',
             }}
           >
-            Kids Wear, Toys & Fancy Items in Karamadai
+            Shop Kids Wear, Toys & Fancy Items in Karamadai
           </h2>
 
           <p
@@ -95,11 +163,25 @@ export default function ShopPage() {
             }}
           >
             Shop kids wear, girls dresses, boys wear, toys,
-            earrings, hair accessories, keychains and fancy
-            items at SPOTC in Karamadai and Mettupalayam.
-            Find kids party dresses, girls frocks, casual
-            wear, toys and accessories with special offers,
-            free gifts and fast local 15 minutes delivery in
+            earrings, hair accessories, keychains, gifts and
+            fancy items online at SPOTC in Karamadai.
+            Discover kids party dresses, girls frocks, casual
+            wear, toys and accessories with special offers
+            and free gifts on eligible orders.
+          </p>
+
+          <p
+            style={{
+              margin: '14px 0 0',
+              width: '100%',
+              fontSize: '15px',
+              lineHeight: 1.7,
+              color: '#555',
+            }}
+          >
+            Looking for a kids wear shop, toy shop, gift shop
+            or fancy items in Karamadai? Browse SPOTC online
+            for products available for local delivery in
             Karamadai, Teacher Colony, EB Colony and nearby
             areas.
           </p>
@@ -113,10 +195,10 @@ export default function ShopPage() {
               color: '#555',
             }}
           >
-            Looking for kids dress shops in Karamadai,
-            toys near Mettupalayam or fancy items near you?
-            Browse SPOTC products online and discover local
-            deals available for nearby 15 minutes delivery.
+            SPOTC also serves shoppers looking for kids wear,
+            toys and accessories around Mettupalayam.
+            Delivery times and availability depend on the
+            customer's location and selected products.
           </p>
         </div>
       </section>
