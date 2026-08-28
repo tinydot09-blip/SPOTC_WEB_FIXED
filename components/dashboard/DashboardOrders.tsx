@@ -323,8 +323,17 @@ function giftsFromOrderData(
     const gift = mapGiftRecord(value, index);
     if (!gift) return;
 
-    const key = `${gift.productId}:${gift.id}:${index}`;
-    unique.set(key, gift);
+    // Deduplicate the same gift stored in compatibility arrays.
+    const key = [
+      gift.productId || 'no-product',
+      gift.id || 'no-id',
+      gift.title,
+      gift.image,
+    ].join('::');
+
+    if (!unique.has(key)) {
+      unique.set(key, gift);
+    }
   });
 
   return [...unique.values()];
