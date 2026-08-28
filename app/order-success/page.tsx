@@ -481,19 +481,25 @@ export default function OrderSuccessPage() {
         );
 
         if (
-          state === 'default' &&
+          state !== 'granted' &&
           typeof window !== 'undefined'
         ) {
-          const dismissed =
-            window.localStorage.getItem(
-              'spotc-order-alerts-dismissed',
-            ) === '1';
+          setShowNotificationPrompt(true);
 
-          setShowNotificationPrompt(
-            !dismissed,
-          );
+          if (state === 'denied') {
+            setNotificationMessage(
+              'Order alerts are currently blocked on this device.',
+            );
+          } else if (state === 'unsupported') {
+            setNotificationMessage(
+              'Browser alerts are not available on this browser.',
+            );
+          } else {
+            setNotificationMessage('');
+          }
         } else {
           setShowNotificationPrompt(false);
+          setNotificationMessage('');
         }
       },
     );
@@ -726,13 +732,6 @@ export default function OrderSuccessPage() {
 
   const dismissOrderAlertsPrompt = () => {
     setShowNotificationPrompt(false);
-
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(
-        'spotc-order-alerts-dismissed',
-        '1',
-      );
-    }
   };
 
   if (loading) {
