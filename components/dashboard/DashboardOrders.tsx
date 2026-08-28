@@ -2867,10 +2867,18 @@ export default function DashboardOrders() {
         }
 
         .simple-order-details > header {
+          position: sticky;
+          top: -24px;
+          z-index: 30;
+          margin: -24px -24px 0;
+          padding: 24px;
           display: flex;
           align-items: flex-start;
           justify-content: space-between;
           gap: 16px;
+          border-bottom: 1px solid #eee7df;
+          background: #ffffff;
+          box-shadow: 0 5px 14px rgba(30, 23, 17, .05);
         }
 
         .simple-order-details > header small {
@@ -2888,12 +2896,18 @@ export default function DashboardOrders() {
         .simple-order-details > header > button {
           width: 42px;
           height: 42px;
+          flex: 0 0 42px;
+          position: sticky;
+          top: 0;
+          z-index: 31;
           display: grid;
           place-items: center;
-          border: 1px solid #ddd6cf;
+          border: 1px solid #d9d1ca;
           border-radius: 13px;
-          background: #fff;
+          color: #111111;
+          background: #ffffff;
           cursor: pointer;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, .08);
         }
 
         .simple-details-cancel-top {
@@ -3267,6 +3281,22 @@ export default function DashboardOrders() {
             max-height: 94vh;
             padding: 18px;
             border-radius: 24px 24px 0 0;
+          }
+
+          .simple-order-details > header {
+            top: -18px;
+            margin: -18px -18px 0;
+            padding: 18px;
+          }
+
+          .simple-order-details > header h2 {
+            padding-right: 8px;
+            font-size: 24px;
+            overflow-wrap: anywhere;
+          }
+
+          .simple-order-details > header > button {
+            top: 0;
           }
 
           .simple-details-cancel-top {
