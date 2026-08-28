@@ -7,6 +7,7 @@ import {
 
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
 
 let adminApp: App | null = null;
 
@@ -83,4 +84,8 @@ export function getAdminAuth() {
 
 export function getAdminDb() {
   return getFirestore(getAdminApp());
+}
+
+export function getAdminMessaging() {
+  return getMessaging(getAdminApp());
 }
