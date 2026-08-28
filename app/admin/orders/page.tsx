@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 
 type OrderRow = {
   id: string;
@@ -1070,6 +1070,52 @@ export default function AdminOrdersPage() {
     filtered.length,
   );
 
+  async function sendOrderStatusNotification(
+    orderId: string,
+    status: OrderStatus,
+  ): Promise<void> {
+    const user = auth?.currentUser;
+
+    if (!user) {
+      throw new Error(
+        'Admin session is not available for notification sending.',
+      );
+    }
+
+    const idToken = await user.getIdToken();
+
+    const response = await fetch(
+      '/api/notifications/order-status',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          orderId,
+          status,
+        }),
+      },
+    );
+
+    const result = (await response.json().catch(
+      () => ({}),
+    )) as {
+      ok?: boolean;
+      sent?: number;
+      message?: string;
+      error?: string;
+    };
+
+    if (!response.ok) {
+      throw new Error(
+        result.error ||
+          'Order was updated, but the customer notification could not be sent.',
+      );
+    }
+  }
+
   async function changeOrderStatus(
     row: OrderRow,
     nextStatus: OrderStatus,
@@ -1543,6 +1589,25 @@ export default function AdminOrdersPage() {
         },
       );
 
+      let notificationNote = '';
+
+      try {
+        await sendOrderStatusNotification(
+          row.id,
+          nextStatus,
+        );
+      } catch (notificationError) {
+        console.error(
+          'Order notification failed:',
+          notificationError,
+        );
+
+        notificationNote =
+          notificationError instanceof Error
+            ? ` Notification: ${notificationError.message}`
+            : ' Customer notification could not be sent.';
+      }
+
       await loadData(false);
 
       setMessage(
@@ -1553,7 +1618,7 @@ export default function AdminOrdersPage() {
             (item) =>
               item.value === nextStatus,
           )?.label ?? nextStatus
-        }.`,
+        }.${notificationNote}`,
       );
     } catch (error) {
       console.error(
