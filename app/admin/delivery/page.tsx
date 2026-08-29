@@ -1,1193 +1,1010 @@
 'use client';
 
 import {
+  onAuthStateChanged,
+  signOut,
+  type User,
+} from 'firebase/auth';
+import {
   collection,
-  deleteDoc,
   doc,
-  getDocs,
-  orderBy,
+  getDoc,
+  onSnapshot,
   query,
   serverTimestamp,
   updateDoc,
+  where,
   type DocumentData,
 } from 'firebase/firestore';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import {
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+  deliveryAuth,
+  deliveryDb,
+} from '@/lib/delivery-firebase';
 
-import { auth, db } from '@/lib/firebase';
+type DeliveryBoy = {
+  uid: string;
+  name: string;
+  phone: string;
+  vehicle_number?: string;
+  role: string;
+  is_active: boolean;
+};
 
-type DeliveryBoyRow = {
+type DeliveryItem = {
+  title: string;
+  quantity: number;
+  image?: string;
+  size?: string;
+  color?: string;
+};
+
+type DeliveryGift = {
+  title: string;
+  image?: string;
+};
+
+type DeliveryOrder = {
   id: string;
-  data: DocumentData;
+  orderNumber: string;
+  customerName: string;
+  customerPhone: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  landmark: string;
+  deliveryNote: string;
+  deliveryTitle: string;
+  deliveryWindow: string;
+  total: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  status: string;
+  deliveryStatus: string;
+  deliveryFailureReason: string;
+  assignedDeliveryBoyId: string;
+  assignedDeliveryBoyName: string;
+  items: DeliveryItem[];
+  gifts: DeliveryGift[];
+  returnStatus: string;
+  exchangeStatus: string;
 };
 
-type FormState = {
-  name: string;
-  phone: string;
-  pin: string;
-  vehicleNumber: string;
-};
+const UPI_ID =
+  process.env.NEXT_PUBLIC_SPOTC_UPI_ID?.trim() || '';
+const UPI_NAME =
+  process.env.NEXT_PUBLIC_SPOTC_UPI_NAME?.trim() || 'SPOTC';
 
-type CreatedLoginInfo = {
-  name: string;
-  phone: string;
-  pin: string;
-};
+const FAILURE_REASONS = [
+  'Customer unavailable',
+  'Customer refused order',
+  'Unable to locate address',
+  'Payment issue',
+  'Customer asked to reschedule',
+  'Other',
+];
 
-const emptyForm: FormState = {
-  name: '',
-  phone: '',
-  pin: '',
-  vehicleNumber: '',
-};
-
-function text(
-  value: unknown,
-): string {
-  return String(value ?? '').trim();
+function text(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
-function cleanPhone(
-  value: string,
-): string {
-  return value.replace(/\D+/g, '');
+function numberValue(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function formatDate(
-  value: unknown,
-): string {
-  if (!value) return '—';
-
-  try {
-    if (
-      typeof value === 'object' &&
-      value !== null &&
-      'toDate' in value &&
-      typeof (
-        value as {
-          toDate?: unknown;
-        }
-      ).toDate === 'function'
-    ) {
-      return (
-        value as {
-          toDate: () => Date;
-        }
-      )
-        .toDate()
-        .toLocaleString('en-IN', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
-    }
-
-    const parsed = Date.parse(
-      String(value),
-    );
-
-    if (!Number.isFinite(parsed)) {
-      return '—';
-    }
-
-    return new Date(
-      parsed,
-    ).toLocaleString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return '—';
-  }
+function nullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
-export default function AdminDeliveryPage() {
-  const [deliveryBoys, setDeliveryBoys] =
-    useState<DeliveryBoyRow[]>([]);
+function readItems(value: unknown): DeliveryItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => {
+    const data =
+      item && typeof item === 'object'
+        ? (item as Record<string, unknown>)
+        : {};
+    return {
+      title:
+        text(data.title) ||
+        text(data.product_name) ||
+        text(data.name) ||
+        'Product',
+      quantity: Math.max(
+        1,
+        numberValue(data.quantity ?? data.qty) || 1,
+      ),
+      image:
+        text(data.image) ||
+        text(data.image_url) ||
+        text(data.product_image),
+      size: text(data.size),
+      color: text(data.color),
+    };
+  });
+}
 
-  const [form, setForm] =
-    useState<FormState>(emptyForm);
+function readGifts(raw: Record<string, unknown>): DeliveryGift[] {
+  const sources = [
+    raw.free_gifts,
+    raw.selected_free_gifts,
+    raw.gifts,
+  ];
+  const all: DeliveryGift[] = [];
+  const seen = new Set<string>();
 
-  const [editingId, setEditingId] =
-    useState('');
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [saving, setSaving] =
-    useState(false);
-
-  const [busyId, setBusyId] =
-    useState('');
-
-  const [message, setMessage] =
-    useState('');
-
-  const [search, setSearch] =
-    useState('');
-
-  const [createdLoginInfo, setCreatedLoginInfo] =
-    useState<CreatedLoginInfo | null>(null);
-
-  async function loadDeliveryBoys(
-    showLoader = true,
-  ) {
-    if (!db) {
-      setLoading(false);
-      setMessage(
-        'Firebase is not available.',
-      );
-      return;
-    }
-
-    if (showLoader) {
-      setLoading(true);
-    }
-
-    try {
-      let snapshot;
-
-      try {
-        snapshot = await getDocs(
-          query(
-            collection(
-              db,
-              'DeliveryBoys',
-            ),
-            orderBy(
-              'created_at',
-              'desc',
-            ),
-          ),
-        );
-      } catch {
-        snapshot = await getDocs(
-          collection(
-            db,
-            'DeliveryBoys',
-          ),
-        );
-      }
-
-      setDeliveryBoys(
-        snapshot.docs.map(
-          (item) => ({
-            id: item.id,
-            data: item.data(),
-          }),
-        ),
-      );
-    } catch (error) {
-      console.error(
-        'Delivery boys load failed:',
-        error,
-      );
-
-      setMessage(
-        error instanceof Error
-          ? `Load failed: ${error.message}`
-          : 'Failed to load delivery boys.',
-      );
-    } finally {
-      setLoading(false);
+  for (const source of sources) {
+    if (!Array.isArray(source)) continue;
+    for (const gift of source) {
+      if (!gift || typeof gift !== 'object') continue;
+      const data = gift as Record<string, unknown>;
+      const title =
+        text(data.title) ||
+        text(data.product_name) ||
+        text(data.name) ||
+        'FREE Gift';
+      const image =
+        text(data.image) ||
+        text(data.image_url) ||
+        text(data.product_image);
+      const key = `${text(data.id) || text(data.product_id)}::${title}::${image}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      all.push({ title, image });
     }
   }
+  return all;
+}
+
+function mapOrder(
+  id: string,
+  raw: Record<string, unknown>,
+): DeliveryOrder {
+  const addressObject =
+    raw.address && typeof raw.address === 'object'
+      ? (raw.address as Record<string, unknown>)
+      : {};
+
+  const directAddress =
+    text(raw.delivery_address) ||
+    text(raw.address_text) ||
+    text(raw.formatted_address);
+
+  const address =
+    directAddress ||
+    [
+      text(addressObject.house_no),
+      text(addressObject.street),
+      text(addressObject.area),
+      text(addressObject.city),
+      text(addressObject.pincode),
+    ]
+      .filter(Boolean)
+      .join(', ') ||
+    'Delivery address not available';
+
+  const latitude = nullableNumber(
+    addressObject.latitude ?? raw.latitude ?? raw.delivery_latitude,
+  );
+  const longitude = nullableNumber(
+    addressObject.longitude ?? raw.longitude ?? raw.delivery_longitude,
+  );
+
+  return {
+    id,
+    orderNumber:
+      text(raw.order_number) ||
+      text(raw.orderNumber) ||
+      id,
+    customerName:
+      text(raw.customer_name) ||
+      text(raw.customerName) ||
+      text(raw.user_name) ||
+      'Customer',
+    customerPhone:
+      text(raw.customer_phone) ||
+      text(raw.customerPhone) ||
+      text(raw.phone) ||
+      text(addressObject.phone),
+    address,
+    latitude,
+    longitude,
+    landmark: text(addressObject.landmark),
+    deliveryNote:
+      text(addressObject.delivery_note) ||
+      text(raw.delivery_note),
+    deliveryTitle:
+      text(raw.delivery_option_title) ||
+      text(raw.delivery_title) ||
+      'Delivery',
+    deliveryWindow:
+      text(raw.delivery_window) ||
+      text(raw.delivery_time_window) ||
+      text(raw.estimated_delivery),
+    total: numberValue(
+      raw.total ??
+        raw.total_amount ??
+        raw.grand_total,
+    ),
+    paymentMethod:
+      text(raw.payment_method) ||
+      text(raw.paymentMethod) ||
+      'COD',
+    paymentStatus:
+      text(raw.payment_status) || 'pending',
+    status:
+      text(raw.order_status) ||
+      text(raw.status),
+    deliveryStatus: text(raw.delivery_status),
+    deliveryFailureReason: text(raw.delivery_failure_reason),
+    assignedDeliveryBoyId:
+      text(raw.delivery_boy_id) ||
+      text(raw.assigned_delivery_boy_id) ||
+      text(raw.deliveryBoyId),
+    assignedDeliveryBoyName:
+      text(raw.delivery_boy_name) ||
+      text(raw.assigned_delivery_boy_name),
+    items: readItems(raw.items),
+    gifts: readGifts(raw),
+    returnStatus:
+      text(raw.return_status) ||
+      text(raw.return_request_status),
+    exchangeStatus:
+      text(raw.exchange_status) ||
+      text(raw.exchange_request_status),
+  };
+}
+
+function normalized(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+}
+
+function effectiveStatus(order: DeliveryOrder): string {
+  return normalized(order.deliveryStatus || order.status || '');
+}
+
+function mapsHref(order: DeliveryOrder): string {
+  const destination =
+    order.latitude !== null && order.longitude !== null
+      ? `${order.latitude},${order.longitude}`
+      : order.address;
+
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+    destination,
+  )}`;
+}
+
+function upiHref(order: DeliveryOrder): string {
+  if (!UPI_ID) return '';
+  const note = `SPOTC ${order.orderNumber}`;
+  return `upi://pay?pa=${encodeURIComponent(
+    UPI_ID,
+  )}&pn=${encodeURIComponent(
+    UPI_NAME,
+  )}&am=${order.total.toFixed(
+    2,
+  )}&cu=INR&tn=${encodeURIComponent(note)}`;
+}
+
+function qrHref(order: DeliveryOrder): string {
+  const uri = upiHref(order);
+  if (!uri) return '';
+  return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(
+    uri,
+  )}`;
+}
+
+export default function DeliveryDashboardPage() {
+  const router = useRouter();
+  const [checking, setChecking] = useState(true);
+  const [rider, setRider] = useState<DeliveryBoy | null>(null);
+  const [orders, setOrders] = useState<DeliveryOrder[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
+  const [message, setMessage] = useState('');
+  const [busyId, setBusyId] = useState('');
+  const [failureOrder, setFailureOrder] = useState<DeliveryOrder | null>(null);
+  const [failureReason, setFailureReason] = useState(FAILURE_REASONS[0]);
+  const [showQrOrder, setShowQrOrder] = useState<DeliveryOrder | null>(null);
 
   useEffect(() => {
-    void loadDeliveryBoys();
-  }, []);
+    let stopOrders: (() => void) | null = null;
 
-  const filtered = useMemo(() => {
-    const needle =
-      search.trim().toLowerCase();
-
-    if (!needle) {
-      return deliveryBoys;
+    async function logoutAndRedirect() {
+      localStorage.removeItem('spotc-delivery-uid');
+      localStorage.removeItem('spotc-delivery-name');
+      localStorage.removeItem('spotc-delivery-phone');
+      try {
+        await signOut(deliveryAuth);
+      } catch (error) {
+        console.error('Delivery sign out failed:', error);
+      }
+      setRider(null);
+      setChecking(false);
+      window.location.replace('/delivery/login');
     }
 
-    return deliveryBoys.filter(
-      ({ id, data }) => {
-        return [
-          id,
-          data.name,
-          data.phone,
-          data.vehicle_number,
-        ].some((value) =>
-          text(value)
-            .toLowerCase()
-            .includes(needle),
-        );
+    const stopAuth = onAuthStateChanged(
+      deliveryAuth,
+      async (user: User | null) => {
+        if (stopOrders) {
+          stopOrders();
+          stopOrders = null;
+        }
+
+        if (!user) {
+          setRider(null);
+          setChecking(false);
+          router.replace('/delivery/login');
+          return;
+        }
+
+        try {
+          const riderSnap = await getDoc(
+            doc(deliveryDb, 'DeliveryBoys', user.uid),
+          );
+
+          if (!riderSnap.exists()) {
+            await logoutAndRedirect();
+            return;
+          }
+
+          const data = riderSnap.data();
+
+          if (
+            data.role !== 'delivery_boy' ||
+            data.is_active === false
+          ) {
+            await logoutAndRedirect();
+            return;
+          }
+
+          setRider({
+            uid: user.uid,
+            name: text(data.name) || 'Delivery Boy',
+            phone: text(data.phone),
+            vehicle_number: text(data.vehicle_number),
+            role: text(data.role),
+            is_active: data.is_active !== false,
+          });
+          setChecking(false);
+          setLoadingOrders(true);
+
+          const ordersQuery = query(
+            collection(deliveryDb, 'Orders'),
+            where('delivery_boy_id', '==', user.uid),
+          );
+
+          stopOrders = onSnapshot(
+            ordersQuery,
+            (snapshot) => {
+              const next = snapshot.docs
+                .map((orderDoc) =>
+                  mapOrder(
+                    orderDoc.id,
+                    orderDoc.data() as Record<string, unknown>,
+                  ),
+                )
+                .sort((a, b) => {
+                  const rank = (order: DeliveryOrder) => {
+                    const s = effectiveStatus(order);
+                    if (s === 'out_for_delivery') return 0;
+                    if (s === 'packed' || s === 'assigned') return 1;
+                    if (s === 'delivered_waiting_approval') return 2;
+                    if (s === 'not_delivered') return 3;
+                    if (s === 'cancelled') return 4;
+                    if (s === 'delivered') return 5;
+                    return 2;
+                  };
+                  return rank(a) - rank(b);
+                });
+
+              setOrders(next);
+              setLoadingOrders(false);
+            },
+            (error) => {
+              console.error('Delivery orders listener failed:', error);
+              setMessage('Could not load assigned orders.');
+              setLoadingOrders(false);
+            },
+          );
+        } catch (error) {
+          console.error('Delivery dashboard access check failed:', error);
+          await logoutAndRedirect();
+        }
       },
     );
-  }, [deliveryBoys, search]);
 
-  const activeCount =
-    deliveryBoys.filter(
-      ({ data }) =>
-        data.is_active !== false,
-    ).length;
+    return () => {
+      stopAuth();
+      if (stopOrders) stopOrders();
+    };
+  }, [router]);
 
-  const inactiveCount =
-    deliveryBoys.length -
-    activeCount;
+  const counts = useMemo(() => {
+    let active = 0;
+    let waiting = 0;
+    let notDelivered = 0;
 
-  function updateField(
-    field: keyof FormState,
-    value: string,
-  ) {
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
-  }
-
-  function resetForm() {
-    setForm(emptyForm);
-    setEditingId('');
-  }
-
-  function startEdit(
-    row: DeliveryBoyRow,
-  ) {
-    setEditingId(row.id);
-
-    setForm({
-      name: text(row.data.name),
-      phone: text(row.data.phone),
-      pin: '',
-      vehicleNumber: text(
-        row.data.vehicle_number,
-      ),
-    });
-
-    setMessage('');
-
-    window.scrollTo({
-      top: 0,
-      behavior: 'smooth',
-    });
-  }
-
-  function openWhatsAppLoginDetails(
-    details: {
-      name: string;
-      phone: string;
-      pin?: string;
-    },
-  ) {
-    const phone = cleanPhone(details.phone);
-
-    if (!phone) {
-      setMessage(
-        'Delivery boy mobile number is missing.',
-      );
-      return;
-    }
-
-    const lines = [
-      'SPOTC Delivery Login',
-      '',
-      `Hi ${details.name || 'Delivery Partner'},`,
-      '',
-      'Your SPOTC delivery account is ready.',
-      '',
-      'Login:',
-      'https://spotc.in/delivery/login',
-      '',
-      `Mobile: ${phone}`,
-    ];
-
-    if (details.pin) {
-      lines.push(
-        '',
-        `PIN: ${details.pin}`,
-        '',
-        'Please keep your PIN private.',
-      );
-    } else {
-      lines.push(
-        '',
-        'Use the PIN given to you by SPOTC Admin.',
-        '',
-        'If you forgot the PIN, contact SPOTC Admin.',
-      );
-    }
-
-    const url =
-      `https://wa.me/${phone}?text=${encodeURIComponent(
-        lines.join('\n'),
-      )}`;
-
-    window.open(
-      url,
-      '_blank',
-      'noopener,noreferrer',
-    );
-  }
-
-  function sendExistingLoginLink(
-    row: DeliveryBoyRow,
-  ) {
-    openWhatsAppLoginDetails({
-      name:
-        text(row.data.name) ||
-        'Delivery Partner',
-      phone: text(row.data.phone),
-    });
-  }
-
-  async function saveDeliveryBoy() {
-    if (!db || saving) return;
-
-    const name = form.name.trim();
-    const phone = cleanPhone(form.phone);
-    const pin = form.pin.trim();
-    const vehicleNumber = form.vehicleNumber
-      .trim()
-      .toUpperCase();
-
-    if (!name) {
-      setMessage('Enter delivery boy name.');
-      return;
-    }
-
-    if (phone.length < 10 || phone.length > 15) {
-      setMessage('Enter a valid mobile number.');
-      return;
-    }
-
-    if (!editingId && !/^\d{4,6}$/.test(pin)) {
-      setMessage('Create a 4 to 6 digit login PIN.');
-      return;
-    }
-
-    if (editingId && pin && !/^\d{4,6}$/.test(pin)) {
-      setMessage('PIN must be 4 to 6 digits.');
-      return;
-    }
-
-    const duplicate = deliveryBoys.find(
-      ({ id, data }) =>
-        id !== editingId &&
-        cleanPhone(text(data.phone)) === phone,
-    );
-
-    if (duplicate) {
-      setMessage(
-        'A delivery boy with this mobile number already exists.',
-      );
-      return;
-    }
-
-    setSaving(true);
-    setMessage('');
-
-    try {
-      if (editingId) {
-        /*
-         * Profile edits remain Firestore updates for now.
-         * We intentionally do NOT write login_pin to Firestore.
-         *
-         * PIN reset will be connected to the secure Admin API
-         * separately, so an entered PIN is not silently stored
-         * as plain text.
-         */
-        await updateDoc(
-          doc(db, 'DeliveryBoys', editingId),
-          {
-            name,
-            phone,
-            vehicle_number: vehicleNumber,
-            updated_at: serverTimestamp(),
-          },
-        );
-
-        if (pin) {
-          setMessage(
-            'Delivery boy details updated. PIN was not changed yet; secure PIN reset will be connected separately.',
-          );
-        } else {
-          setMessage(
-            'Delivery boy updated successfully.',
-          );
-        }
-      } else {
-        if (!auth?.currentUser) {
-          throw new Error(
-            'Admin login is required. Please refresh and sign in again.',
-          );
-        }
-
-        const idToken =
-          await auth.currentUser.getIdToken();
-
-        const response = await fetch(
-          '/api/admin/delivery-boys',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${idToken}`,
-            },
-            body: JSON.stringify({
-              name,
-              phone,
-              pin,
-              vehicleNumber,
-            }),
-          },
-        );
-
-        const result = (await response.json()) as {
-          ok?: boolean;
-          error?: string;
-        };
-
-        if (!response.ok || result.ok !== true) {
-          throw new Error(
-            result.error ||
-              'Failed to create delivery boy.',
-          );
-        }
-
-        setCreatedLoginInfo({
-          name,
-          phone,
-          pin,
-        });
-
-        setMessage(
-          'Delivery boy created successfully. Send the login details to the delivery boy now.',
-        );
+    orders.forEach((order) => {
+      const status = effectiveStatus(order);
+      if (status === 'delivered_waiting_approval') {
+        waiting += 1;
+      } else if (
+        status === 'not_delivered' ||
+        status === 'delivery_failed' ||
+        status === 'cancelled'
+      ) {
+        notDelivered += 1;
+      } else if (status !== 'delivered') {
+        active += 1;
       }
+    });
 
-      resetForm();
-      await loadDeliveryBoys(false);
+    return { active, waiting, notDelivered };
+  }, [orders]);
+
+  async function handleLogout() {
+    setMessage('');
+    localStorage.removeItem('spotc-delivery-uid');
+    localStorage.removeItem('spotc-delivery-name');
+    localStorage.removeItem('spotc-delivery-phone');
+    try {
+      await signOut(deliveryAuth);
     } catch (error) {
-      console.error(
-        'Save delivery boy failed:',
-        error,
-      );
-
-      setMessage(
-        error instanceof Error
-          ? `Save failed: ${error.message}`
-          : 'Failed to save delivery boy.',
-      );
-    } finally {
-      setSaving(false);
+      console.error('Delivery logout failed:', error);
     }
+    window.location.replace('/delivery/login');
   }
 
-  async function toggleActive(
-    row: DeliveryBoyRow,
-  ) {
-    if (!db || busyId) return;
+  async function markOutForDelivery(order: DeliveryOrder) {
+    if (!rider || busyId) return;
 
-    const currentlyActive =
-      row.data.is_active !== false;
-
-    const nextActive =
-      !currentlyActive;
-
+    const current = effectiveStatus(order);
+    if (current === 'cancelled') {
+      setMessage('Cancelled order cannot be taken for delivery.');
+      return;
+    }
     if (
-      !nextActive &&
-      !window.confirm(
-        `Disable ${text(
-          row.data.name,
-        )}?\n\nThey will no longer be available for new delivery assignments.`,
-      )
+      current === 'delivered' ||
+      current === 'delivered_waiting_approval'
     ) {
       return;
     }
 
-    setBusyId(row.id);
+    setBusyId(order.id);
+    setMessage('');
+
+    try {
+      await updateDoc(doc(deliveryDb, 'Orders', order.id), {
+        order_status: 'out_for_delivery',
+        status: 'out_for_delivery',
+        delivery_status: 'out_for_delivery',
+        delivery_assignment_status: 'out_for_delivery',
+        out_for_delivery_at: serverTimestamp(),
+        delivery_started_at: serverTimestamp(),
+        delivery_started_by: rider.uid,
+        updated_at: serverTimestamp(),
+      });
+      setMessage(`${order.orderNumber} is now Out for Delivery.`);
+    } catch (error) {
+      console.error(error);
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Could not start delivery.',
+      );
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function markDelivered(order: DeliveryOrder) {
+    if (!rider || busyId) return;
+
+    const current = effectiveStatus(order);
+    if (current === 'cancelled') {
+      setMessage('CANCELLED — DO NOT DELIVER.');
+      return;
+    }
+    if (current !== 'out_for_delivery') {
+      setMessage('Mark the order Out for Delivery first.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Confirm that ${order.orderNumber} was handed to the customer?\n\nAmount: ₹${Math.round(
+        order.total,
+      )}\nPayment: ${order.paymentMethod}`,
+    );
+    if (!confirmed) return;
+
+    setBusyId(order.id);
+    setMessage('');
+
+    try {
+      await updateDoc(doc(deliveryDb, 'Orders', order.id), {
+        delivery_status: 'delivered_waiting_approval',
+        delivery_assignment_status: 'delivered_waiting_approval',
+        delivery_completed_at: serverTimestamp(),
+        delivery_completed_by: rider.uid,
+        delivery_completed_by_name: rider.name,
+        updated_at: serverTimestamp(),
+      });
+
+      setMessage(
+        `${order.orderNumber}: delivery reported. Waiting for Admin approval.`,
+      );
+    } catch (error) {
+      console.error(error);
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Could not report delivery.',
+      );
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function markNotDelivered() {
+    if (!rider || !failureOrder || busyId) return;
+
+    setBusyId(failureOrder.id);
     setMessage('');
 
     try {
       await updateDoc(
-        doc(
-          db,
-          'DeliveryBoys',
-          row.id,
-        ),
+        doc(deliveryDb, 'Orders', failureOrder.id),
         {
-          is_active: nextActive,
-          updated_at:
-            serverTimestamp(),
+          delivery_status: 'not_delivered',
+          delivery_assignment_status: 'not_delivered',
+          delivery_failure_reason: failureReason,
+          delivery_failed_at: serverTimestamp(),
+          delivery_failed_by: rider.uid,
+          delivery_failed_by_name: rider.name,
+          updated_at: serverTimestamp(),
         },
       );
 
       setMessage(
-        nextActive
-          ? `${text(
-              row.data.name,
-            )} activated.`
-          : `${text(
-              row.data.name,
-            )} disabled.`,
+        `${failureOrder.orderNumber}: Not Delivered — ${failureReason}.`,
       );
-
-      await loadDeliveryBoys(
-        false,
-      );
+      setFailureOrder(null);
     } catch (error) {
-      console.error(
-        'Delivery boy status update failed:',
-        error,
-      );
-
+      console.error(error);
       setMessage(
         error instanceof Error
-          ? `Update failed: ${error.message}`
-          : 'Failed to update status.',
+          ? error.message
+          : 'Could not update delivery result.',
       );
     } finally {
       setBusyId('');
     }
   }
 
-  async function removeDeliveryBoy(
-    row: DeliveryBoyRow,
-  ) {
-    if (!db || busyId) return;
+  if (checking) {
+    return <main style={loadingPage}>Checking delivery account…</main>;
+  }
 
-    const name =
-      text(row.data.name) ||
-      'this delivery boy';
-
-    const confirmed =
-      window.confirm(
-        `Delete ${name}?\n\nFor delivery history, disabling is normally better than deleting.`,
-      );
-
-    if (!confirmed) return;
-
-    setBusyId(row.id);
-    setMessage('');
-
-    try {
-      await deleteDoc(
-        doc(
-          db,
-          'DeliveryBoys',
-          row.id,
-        ),
-      );
-
-      if (
-        editingId === row.id
-      ) {
-        resetForm();
-      }
-
-      setMessage(
-        `${name} deleted.`,
-      );
-
-      await loadDeliveryBoys(
-        false,
-      );
-    } catch (error) {
-      console.error(
-        'Delete delivery boy failed:',
-        error,
-      );
-
-      setMessage(
-        error instanceof Error
-          ? `Delete failed: ${error.message}`
-          : 'Failed to delete delivery boy.',
-      );
-    } finally {
-      setBusyId('');
-    }
+  if (!rider) {
+    return <main style={loadingPage}>Redirecting to delivery login…</main>;
   }
 
   return (
-    <div style={page}>
-      <div style={pageHeader}>
+    <main style={page}>
+      <header style={header}>
         <div>
-          <h1 style={pageTitle}>
-            Delivery
-          </h1>
+          <div style={brand}>SPOTC</div>
+          <div style={brandRole}>DELIVERY</div>
+        </div>
 
-          <p style={pageSubtitle}>
-            Create delivery boys,
-            control access and manage
-            delivery staff.
+        <div style={headerRight}>
+          <div>
+            <strong>{rider.name}</strong>
+            {rider.vehicle_number && (
+              <div style={headerVehicle}>{rider.vehicle_number}</div>
+            )}
+          </div>
+          <button
+            type="button"
+            style={logoutButton}
+            onClick={() => void handleLogout()}
+          >
+            Logout
+          </button>
+        </div>
+      </header>
+
+      <div style={content}>
+        <section style={intro}>
+          <h1 style={title}>My Deliveries</h1>
+          <p style={subtitle}>
+            Navigation, payment collection and delivery confirmation.
           </p>
-        </div>
+        </section>
 
-        <button
-          type="button"
-          style={refreshButton}
-          onClick={() =>
-            void loadDeliveryBoys(
-              false,
-            )
-          }
-        >
-          ↻ Refresh
-        </button>
-      </div>
+        {message && <div style={messageBox}>{message}</div>}
 
-      <div style={summaryGrid}>
-        <SummaryCard
-          label="Delivery Boys"
-          value={
-            deliveryBoys.length
-          }
-        />
+        <section style={stats}>
+          <StatCard label="Active" value={counts.active} />
+          <StatCard label="Waiting Approval" value={counts.waiting} />
+          <StatCard label="Not Delivered" value={counts.notDelivered} />
+        </section>
 
-        <SummaryCard
-          label="Active"
-          value={activeCount}
-        />
-
-        <SummaryCard
-          label="Inactive"
-          value={inactiveCount}
-        />
-      </div>
-
-      {message && (
-        <div style={messageBox}>
-          <span>{message}</span>
-
-          <button
-            type="button"
-            onClick={() =>
-              setMessage('')
-            }
-            style={messageClose}
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      {createdLoginInfo && (
-        <div style={loginShareCard}>
-          <div>
-            <div style={loginShareTitle}>
-              Login details ready
-            </div>
-
-            <div style={loginShareText}>
-              {createdLoginInfo.name} • {createdLoginInfo.phone}
-            </div>
-
-            <div style={loginShareNote}>
-              The PIN is not stored on this page after you close this message.
-              Send it now, or reset the PIN later if needed.
-            </div>
-          </div>
-
-          <div style={loginShareActions}>
-            <button
-              type="button"
-              onClick={() =>
-                openWhatsAppLoginDetails(
-                  createdLoginInfo,
-                )
-              }
-              style={whatsAppButton}
-            >
-              WhatsApp Login Details
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                setCreatedLoginInfo(null)
-              }
-              style={secondaryButton}
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div style={formCard}>
-        <div style={formHeader}>
-          <div>
-            <h2 style={formTitle}>
-              {editingId
-                ? 'Edit Delivery Boy'
-                : 'Add Delivery Boy'}
-            </h2>
-
-            <p style={formSubtitle}>
-              {editingId
-                ? 'Update delivery boy information.'
-                : 'Create a delivery boy who can later receive assigned orders.'}
+        {loadingOrders ? (
+          <section style={emptyCard}>Loading assigned orders…</section>
+        ) : orders.length === 0 ? (
+          <section style={emptyCard}>
+            <div style={emptyIcon}>📦</div>
+            <h2 style={emptyTitle}>No deliveries assigned</h2>
+            <p style={emptyText}>
+              New assigned orders will appear here automatically.
             </p>
-          </div>
-
-          {editingId && (
-            <button
-              type="button"
-              onClick={resetForm}
-              style={cancelEditButton}
-            >
-              Cancel Edit
-            </button>
-          )}
-        </div>
-
-        <div style={formGrid}>
-          <label style={fieldWrap}>
-            <span style={fieldLabel}>
-              Name *
-            </span>
-
-            <input
-              value={form.name}
-              onChange={(event) =>
-                updateField(
-                  'name',
-                  event.target.value,
-                )
-              }
-              placeholder="Delivery boy name"
-              style={input}
-            />
-          </label>
-
-          <label style={fieldWrap}>
-            <span style={fieldLabel}>
-              Mobile Number *
-            </span>
-
-            <input
-              value={form.phone}
-              onChange={(event) =>
-                updateField(
-                  'phone',
-                  event.target.value,
-                )
-              }
-              inputMode="tel"
-              placeholder="9876543210"
-              style={input}
-            />
-          </label>
-
-          <label style={fieldWrap}>
-            <span style={fieldLabel}>
-              {editingId
-                ? 'New Login PIN'
-                : 'Login PIN *'}
-            </span>
-
-            <input
-              value={form.pin}
-              onChange={(event) =>
-                updateField(
-                  'pin',
-                  event.target.value
-                    .replace(
-                      /\D+/g,
-                      '',
-                    )
-                    .slice(0, 6),
-                )
-              }
-              inputMode="numeric"
-              type="password"
-              placeholder={
-                editingId
-                  ? 'Leave blank to keep current PIN'
-                  : '4–6 digits'
-              }
-              style={input}
-            />
-          </label>
-
-          <label style={fieldWrap}>
-            <span style={fieldLabel}>
-              Vehicle Number
-            </span>
-
-            <input
-              value={
-                form.vehicleNumber
-              }
-              onChange={(event) =>
-                updateField(
-                  'vehicleNumber',
-                  event.target.value,
-                )
-              }
-              placeholder="TN 40 AB 1234"
-              style={input}
-            />
-          </label>
-        </div>
-
-        <div style={formActions}>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() =>
-              void saveDeliveryBoy()
-            }
-            style={{
-              ...primaryButton,
-              opacity:
-                saving ? 0.55 : 1,
-            }}
-          >
-            {saving
-              ? 'Saving…'
-              : editingId
-                ? 'Save Changes'
-                : 'Create Delivery Boy'}
-          </button>
-
-          {(form.name ||
-            form.phone ||
-            form.pin ||
-            form.vehicleNumber) && (
-            <button
-              type="button"
-              disabled={saving}
-              onClick={resetForm}
-              style={secondaryButton}
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div style={listCard}>
-        <div style={listHeader}>
-          <div>
-            <h2 style={listTitle}>
-              Delivery Boys
-            </h2>
-
-            <p style={listSubtitle}>
-              Only active delivery
-              boys will be available
-              when assigning orders.
-            </p>
-          </div>
-
-          <input
-            value={search}
-            onChange={(event) =>
-              setSearch(
-                event.target.value,
-              )
-            }
-            placeholder="Search name, phone, vehicle..."
-            style={searchInput}
-          />
-        </div>
-
-        {loading ? (
-          <div style={emptyState}>
-            Loading delivery boys…
-          </div>
-        ) : filtered.length === 0 ? (
-          <div style={emptyState}>
-            {deliveryBoys.length ===
-            0
-              ? 'No delivery boys created yet.'
-              : 'No matching delivery boys.'}
-          </div>
+          </section>
         ) : (
-          <div style={tableWrap}>
-            <table style={table}>
-              <thead>
-                <tr>
-                  <th
-                    style={tableHeader}
-                  >
-                    Delivery Boy
-                  </th>
+          <section style={orderList}>
+            {orders.map((order) => {
+              const status = effectiveStatus(order);
+              const cancelled = status === 'cancelled';
+              const waiting =
+                status === 'delivered_waiting_approval';
+              const delivered = status === 'delivered';
+              const failed = status === 'not_delivered';
+              const out = status === 'out_for_delivery';
+              const busy = busyId === order.id;
 
-                  <th
-                    style={tableHeader}
-                  >
-                    Phone
-                  </th>
+              return (
+                <article
+                  key={order.id}
+                  style={{
+                    ...orderCard,
+                    ...(cancelled ? cancelledCard : {}),
+                  }}
+                >
+                  {cancelled && (
+                    <div style={dangerBanner}>
+                      CANCELLED — DO NOT DELIVER / DO NOT COLLECT PAYMENT
+                    </div>
+                  )}
 
-                  <th
-                    style={tableHeader}
-                  >
-                    Vehicle
-                  </th>
+                  {waiting && (
+                    <div style={waitingBanner}>
+                      DELIVERY REPORTED — WAITING FOR ADMIN APPROVAL
+                    </div>
+                  )}
 
-                  <th
-                    style={tableHeader}
-                  >
-                    Status
-                  </th>
+                  {failed && (
+                    <div style={failedBanner}>
+                      NOT DELIVERED
+                      {order.deliveryFailureReason
+                        ? ` — ${order.deliveryFailureReason}`
+                        : ''}
+                    </div>
+                  )}
 
-                  <th
-                    style={tableHeader}
-                  >
-                    Created
-                  </th>
+                  <div style={orderTop}>
+                    <div>
+                      <div style={orderNumber}>{order.orderNumber}</div>
+                      <div style={smallMuted}>
+                        {order.items.reduce(
+                          (sum, item) => sum + item.quantity,
+                          0,
+                        )}{' '}
+                        unit(s)
+                        {order.gifts.length
+                          ? ` + ${order.gifts.length} FREE gift(s)`
+                          : ''}
+                      </div>
+                    </div>
+                    <div style={amount}>
+                      ₹{Math.round(order.total).toLocaleString('en-IN')}
+                    </div>
+                  </div>
 
-                  <th
-                    style={{
-                      ...tableHeader,
-                      textAlign:
-                        'right',
-                    }}
-                  >
-                    Actions
-                  </th>
-                </tr>
-              </thead>
+                  <div style={collectBox}>
+                    <div>
+                      <span style={collectLabel}>AMOUNT TO COLLECT</span>
+                      <strong style={collectAmount}>
+                        ₹{Math.round(order.total).toLocaleString('en-IN')}
+                      </strong>
+                    </div>
+                    <div style={paymentPill}>
+                      {order.paymentMethod.toUpperCase()}
+                      {order.paymentStatus &&
+                        ` · ${order.paymentStatus.toUpperCase()}`}
+                    </div>
+                  </div>
 
-              <tbody>
-                {filtered.map(
-                  (row) => {
-                    const active =
-                      row.data
-                        .is_active !==
-                      false;
+                  <div style={deliverySlotBox}>
+                    <strong>{order.deliveryTitle}</strong>
+                    {order.deliveryWindow && (
+                      <span>{order.deliveryWindow}</span>
+                    )}
+                  </div>
 
-                    const busy =
-                      busyId ===
-                      row.id;
-
-                    return (
-                      <tr key={row.id}>
-                        <td
-                          style={
-                            tableCell
-                          }
+                  <div style={orderGrid}>
+                    <div>
+                      <div style={fieldLabel}>Customer</div>
+                      <div style={fieldValue}>{order.customerName}</div>
+                      {order.customerPhone && (
+                        <a
+                          href={`tel:${order.customerPhone}`}
+                          style={phoneLink}
                         >
-                          <div
-                            style={
-                              personWrap
-                            }
-                          >
-                            <div
-                              style={
-                                avatar
-                              }
-                            >
-                              {text(
-                                row.data
-                                  .name,
-                              )
-                                .slice(
-                                  0,
-                                  1,
-                                )
-                                .toUpperCase() ||
-                                'D'}
-                            </div>
+                          {order.customerPhone}
+                        </a>
+                      )}
+                    </div>
 
-                            <div>
-                              <div
-                                style={
-                                  personName
-                                }
-                              >
-                                {text(
-                                  row.data
-                                    .name,
-                                ) ||
-                                  'Delivery Boy'}
-                              </div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <div style={fieldLabel}>Delivery Address</div>
+                      <div style={fieldValue}>{order.address}</div>
+                      {order.landmark && (
+                        <div style={detailMuted}>
+                          Landmark: {order.landmark}
+                        </div>
+                      )}
+                      {order.deliveryNote && (
+                        <div style={detailMuted}>
+                          Note: {order.deliveryNote}
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-                              <div
-                                style={
-                                  smallText
-                                }
-                              >
-                                ID:{' '}
-                                {row.id.slice(
-                                  0,
-                                  8,
-                                )}
-                              </div>
+                  <div style={quickActions}>
+                    <a
+                      href={mapsHref(order)}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={mapButton}
+                    >
+                      📍 Open Maps
+                    </a>
+
+                    {order.customerPhone && (
+                      <a
+                        href={`tel:${order.customerPhone}`}
+                        style={secondaryButton}
+                      >
+                        ☎ Call Customer
+                      </a>
+                    )}
+
+                    {!cancelled &&
+                      !delivered &&
+                      !waiting &&
+                      UPI_ID && (
+                        <button
+                          type="button"
+                          style={upiButton}
+                          onClick={() => setShowQrOrder(order)}
+                        >
+                          ▦ Show UPI QR
+                        </button>
+                      )}
+                  </div>
+
+                  {order.items.length > 0 && (
+                    <div style={itemsBox}>
+                      <div style={sectionLabel}>PRODUCTS</div>
+                      {order.items.map((item, index) => (
+                        <div
+                          key={`${order.id}-${index}`}
+                          style={itemRow}
+                        >
+                          {item.image ? (
+                            <img
+                              src={item.image}
+                              alt=""
+                              style={itemImage}
+                            />
+                          ) : (
+                            <div style={itemImagePlaceholder}>📦</div>
+                          )}
+                          <div>
+                            <div style={itemTitle}>{item.title}</div>
+                            <div style={smallMuted}>
+                              Qty {item.quantity}
+                              {item.size ? ` · Size ${item.size}` : ''}
+                              {item.color ? ` · ${item.color}` : ''}
                             </div>
                           </div>
-                        </td>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
-                        <td
-                          style={
-                            tableCell
-                          }
+                  {order.gifts.length > 0 && (
+                    <div style={giftBox}>
+                      <div style={sectionLabel}>FREE GIFTS — HAND OVER WITH ORDER</div>
+                      {order.gifts.map((gift, index) => (
+                        <div
+                          key={`${order.id}-gift-${index}`}
+                          style={giftRow}
                         >
-                          {text(
-                            row.data
-                              .phone,
-                          ) || '—'}
-                        </td>
+                          {gift.image ? (
+                            <img
+                              src={gift.image}
+                              alt=""
+                              style={giftImage}
+                            />
+                          ) : (
+                            <div style={giftPlaceholder}>🎁</div>
+                          )}
+                          <strong>{gift.title}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
-                        <td
-                          style={
-                            tableCell
-                          }
-                        >
-                          {text(
-                            row.data
-                              .vehicle_number,
-                          ) || '—'}
-                        </td>
+                  {(order.returnStatus || order.exchangeStatus) && (
+                    <div style={serviceBox}>
+                      {order.returnStatus && (
+                        <div>
+                          <strong>Return</strong>
+                          <span>{order.returnStatus}</span>
+                        </div>
+                      )}
+                      {order.exchangeStatus && (
+                        <div>
+                          <strong>Exchange</strong>
+                          <span>{order.exchangeStatus}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                        <td
-                          style={
-                            tableCell
-                          }
-                        >
-                          <span
-                            style={{
-                              ...statusBadge,
-                              ...(active
-                                ? activeBadge
-                                : inactiveBadge),
+                  <div style={orderFooter}>
+                    <span style={statusBadge}>
+                      {(status || 'assigned')
+                        .replace(/_/g, ' ')
+                        .toUpperCase()}
+                    </span>
+
+                    <div style={footerActions}>
+                      {!cancelled &&
+                        !delivered &&
+                        !waiting &&
+                        !out &&
+                        !failed && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            style={primaryButton}
+                            onClick={() =>
+                              void markOutForDelivery(order)
+                            }
+                          >
+                            {busy
+                              ? 'Updating…'
+                              : 'Start Delivery'}
+                          </button>
+                        )}
+
+                      {out && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            style={deliveredButton}
+                            onClick={() =>
+                              void markDelivered(order)
+                            }
+                          >
+                            {busy ? 'Updating…' : '✓ Delivered'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            style={notDeliveredButton}
+                            onClick={() => {
+                              setFailureReason(FAILURE_REASONS[0]);
+                              setFailureOrder(order);
                             }}
                           >
-                            {active
-                              ? 'Active'
-                              : 'Inactive'}
-                          </span>
-                        </td>
-
-                        <td
-                          style={
-                            tableCell
-                          }
-                        >
-                          {formatDate(
-                            row.data
-                              .created_at,
-                          )}
-                        </td>
-
-                        <td
-                          style={{
-                            ...tableCell,
-                            textAlign:
-                              'right',
-                          }}
-                        >
-                          <div
-                            style={
-                              actionRow
-                            }
-                          >
-                            <button
-                              type="button"
-                              disabled={
-                                busy ||
-                                !text(
-                                  row.data
-                                    .phone,
-                                )
-                              }
-                              onClick={() =>
-                                sendExistingLoginLink(
-                                  row,
-                                )
-                              }
-                              style={{
-                                ...whatsAppSmallButton,
-                                opacity:
-                                  busy ||
-                                  !text(
-                                    row.data
-                                      .phone,
-                                  )
-                                    ? 0.5
-                                    : 1,
-                              }}
-                            >
-                              WhatsApp Login
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={
-                                busy
-                              }
-                              onClick={() =>
-                                startEdit(
-                                  row,
-                                )
-                              }
-                              style={
-                                editButton
-                              }
-                            >
-                              Edit
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={
-                                busy
-                              }
-                              onClick={() =>
-                                void toggleActive(
-                                  row,
-                                )
-                              }
-                              style={
-                                active
-                                  ? disableButton
-                                  : enableButton
-                              }
-                            >
-                              {active
-                                ? 'Disable'
-                                : 'Enable'}
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={
-                                busy
-                              }
-                              onClick={() =>
-                                void removeDeliveryBoy(
-                                  row,
-                                )
-                              }
-                              style={
-                                deleteButton
-                              }
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  },
-                )}
-              </tbody>
-            </table>
-          </div>
+                            Not Delivered
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </section>
         )}
       </div>
-    </div>
+
+      {showQrOrder && (
+        <div
+          style={modalBackdrop}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setShowQrOrder(null);
+            }
+          }}
+        >
+          <div style={modalCard}>
+            <button
+              type="button"
+              style={modalClose}
+              onClick={() => setShowQrOrder(null)}
+            >
+              ×
+            </button>
+            <div style={qrTitle}>Customer UPI Payment</div>
+            <div style={qrAmount}>
+              ₹{Math.round(showQrOrder.total).toLocaleString('en-IN')}
+            </div>
+            <div style={qrOrder}>{showQrOrder.orderNumber}</div>
+            <img
+              src={qrHref(showQrOrder)}
+              alt="UPI payment QR"
+              style={qrImage}
+            />
+            <div style={qrUpi}>{UPI_ID}</div>
+            <a href={upiHref(showQrOrder)} style={primaryButton}>
+              Open UPI App
+            </a>
+            <p style={qrNote}>
+              Confirm the payment in your UPI/bank app before handing
+              over the order. The QR itself does not verify payment.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {failureOrder && (
+        <div style={modalBackdrop}>
+          <div style={modalCard}>
+            <button
+              type="button"
+              style={modalClose}
+              onClick={() => setFailureOrder(null)}
+            >
+              ×
+            </button>
+            <div style={qrTitle}>Why was it not delivered?</div>
+            <div style={qrOrder}>{failureOrder.orderNumber}</div>
+            <select
+              value={failureReason}
+              onChange={(event) =>
+                setFailureReason(event.target.value)
+              }
+              style={reasonSelect}
+            >
+              {FAILURE_REASONS.map((reason) => (
+                <option key={reason} value={reason}>
+                  {reason}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={busyId === failureOrder.id}
+              style={notDeliveredButtonLarge}
+              onClick={() => void markNotDelivered()}
+            >
+              {busyId === failureOrder.id
+                ? 'Updating…'
+                : 'Confirm Not Delivered'}
+            </button>
+          </div>
+        </div>
+      )}
+    </main>
   );
 }
 
-function SummaryCard({
+function StatCard({
   label,
   value,
 }: {
@@ -1195,411 +1012,495 @@ function SummaryCard({
   value: number;
 }) {
   return (
-    <div style={summaryCard}>
-      <div style={summaryLabel}>
-        {label}
-      </div>
-
-      <div style={summaryValue}>
-        {value}
-      </div>
+    <div style={statCard}>
+      <div style={statLabel}>{label}</div>
+      <div style={statValue}>{value}</div>
     </div>
   );
 }
 
+const loadingPage: React.CSSProperties = {
+  minHeight: '100vh',
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center',
+  background: '#f5f6f7',
+  color: '#475467',
+};
 const page: React.CSSProperties = {
-  width: '100%',
+  minHeight: '100vh',
+  background: '#f5f6f7',
 };
-
-const pageHeader: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'flex-start',
-  gap: 20,
-  marginBottom: 22,
-};
-
-const pageTitle: React.CSSProperties = {
-  margin: 0,
-  fontSize: 28,
-  fontWeight: 700,
-};
-
-const pageSubtitle: React.CSSProperties = {
-  margin: '6px 0 0',
-  color: '#667085',
-  fontSize: 14,
-};
-
-const refreshButton: React.CSSProperties = {
-  minHeight: 40,
-  padding: '0 16px',
-  borderRadius: 9,
-  border: '1px solid #d0d5dd',
-  background: '#fff',
-  cursor: 'pointer',
-  fontSize: 14,
-};
-
-const summaryGrid: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns:
-    'repeat(3, minmax(0, 1fr))',
-  gap: 12,
-  marginBottom: 20,
-};
-
-const summaryCard: React.CSSProperties = {
-  padding: 16,
-  border: '1px solid #e4e7ec',
-  borderRadius: 12,
-  background: '#fff',
-};
-
-const summaryLabel: React.CSSProperties = {
-  color: '#667085',
-  fontSize: 12,
-};
-
-const summaryValue: React.CSSProperties = {
-  marginTop: 4,
-  fontSize: 24,
-  fontWeight: 700,
-  color: '#101828',
-};
-
-const messageBox: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 16,
-  padding: '12px 14px',
-  marginBottom: 16,
-  border: '1px solid #f6d28b',
-  borderRadius: 10,
-  background: '#fffaeb',
-  fontSize: 13,
-};
-
-const messageClose: React.CSSProperties = {
-  border: 0,
-  background: 'transparent',
-  cursor: 'pointer',
-  fontSize: 20,
-};
-
-const loginShareCard: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 16,
-  padding: 16,
-  marginBottom: 16,
-  border: '1px solid #abefc6',
-  borderRadius: 12,
-  background: '#ecfdf3',
-};
-
-const loginShareTitle: React.CSSProperties = {
-  fontSize: 14,
-  fontWeight: 700,
-  color: '#05603a',
-};
-
-const loginShareText: React.CSSProperties = {
-  marginTop: 4,
-  fontSize: 13,
-  color: '#344054',
-};
-
-const loginShareNote: React.CSSProperties = {
-  marginTop: 5,
-  maxWidth: 620,
-  fontSize: 11,
-  lineHeight: 1.45,
-  color: '#667085',
-};
-
-const loginShareActions: React.CSSProperties = {
-  display: 'flex',
-  gap: 8,
-  alignItems: 'center',
-  flexWrap: 'wrap',
-};
-
-const whatsAppButton: React.CSSProperties = {
-  minHeight: 42,
-  padding: '0 16px',
-  border: 0,
-  borderRadius: 9,
-  background: '#128c7e',
+const header: React.CSSProperties = {
+  minHeight: 66,
+  padding: '0 22px',
+  background: '#111',
   color: '#fff',
-  fontWeight: 700,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+};
+const brand: React.CSSProperties = {
+  fontSize: 21,
+  fontWeight: 900,
+  lineHeight: 1,
+};
+const brandRole: React.CSSProperties = {
+  marginTop: 4,
+  color: '#f5a623',
+  fontSize: 9,
+  fontWeight: 800,
+  letterSpacing: 1.3,
+};
+const headerRight: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 14,
+  fontSize: 13,
+};
+const headerVehicle: React.CSSProperties = {
+  marginTop: 2,
+  color: '#aaa',
+  fontSize: 10,
+};
+const logoutButton: React.CSSProperties = {
+  border: '1px solid #444',
+  background: '#222',
+  color: '#fff',
+  borderRadius: 8,
+  padding: '8px 13px',
   cursor: 'pointer',
 };
-
-const formCard: React.CSSProperties = {
-  background: '#fff',
-  border: '1px solid #e4e7ec',
-  borderRadius: 14,
-  padding: 20,
-  marginBottom: 20,
+const content: React.CSSProperties = {
+  width: '100%',
+  maxWidth: 820,
+  margin: '0 auto',
+  padding: '22px 16px 60px',
+  boxSizing: 'border-box',
 };
-
-const formHeader: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'flex-start',
-  gap: 16,
-  marginBottom: 18,
-};
-
-const formTitle: React.CSSProperties = {
+const intro: React.CSSProperties = { marginBottom: 14 };
+const title: React.CSSProperties = {
   margin: 0,
-  fontSize: 19,
+  fontSize: 24,
+  color: '#111',
 };
-
-const formSubtitle: React.CSSProperties = {
+const subtitle: React.CSSProperties = {
   margin: '5px 0 0',
   color: '#667085',
   fontSize: 13,
 };
-
-const formGrid: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns:
-    'repeat(2, minmax(0, 1fr))',
-  gap: 14,
+const messageBox: React.CSSProperties = {
+  padding: 12,
+  marginBottom: 14,
+  border: '1px solid #fedf89',
+  background: '#fffaeb',
+  color: '#93370d',
+  borderRadius: 10,
+  fontSize: 13,
 };
-
-const fieldWrap: React.CSSProperties = {
+const stats: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+  gap: 10,
+  marginBottom: 18,
+};
+const statCard: React.CSSProperties = {
+  background: '#fff',
+  border: '1px solid #e4e7ec',
+  borderRadius: 10,
+  padding: 12,
+};
+const statLabel: React.CSSProperties = {
+  color: '#667085',
+  fontSize: 11,
+};
+const statValue: React.CSSProperties = {
+  marginTop: 3,
+  fontSize: 21,
+  fontWeight: 800,
+  color: '#111',
+};
+const emptyCard: React.CSSProperties = {
+  minHeight: 180,
+  border: '1px solid #e4e7ec',
+  borderRadius: 14,
+  background: '#fff',
   display: 'flex',
   flexDirection: 'column',
-  gap: 6,
+  alignItems: 'center',
+  justifyContent: 'center',
+  textAlign: 'center',
+  padding: 24,
+  color: '#667085',
 };
-
-const fieldLabel: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 600,
-  color: '#344054',
+const emptyIcon: React.CSSProperties = {
+  fontSize: 32,
+  marginBottom: 10,
 };
-
-const input: React.CSSProperties = {
-  width: '100%',
-  minHeight: 42,
-  boxSizing: 'border-box',
-  padding: '0 12px',
-  border: '1px solid #d0d5dd',
-  borderRadius: 9,
-  background: '#fff',
-  outline: 'none',
-  fontSize: 14,
+const emptyTitle: React.CSSProperties = {
+  margin: 0,
+  color: '#111',
+  fontSize: 17,
 };
-
-const formActions: React.CSSProperties = {
+const emptyText: React.CSSProperties = {
+  margin: '6px 0 0',
+  fontSize: 13,
+};
+const orderList: React.CSSProperties = {
   display: 'flex',
-  gap: 10,
-  marginTop: 18,
+  flexDirection: 'column',
+  gap: 14,
 };
-
-const primaryButton: React.CSSProperties = {
-  minHeight: 42,
-  padding: '0 18px',
-  border: 0,
-  borderRadius: 9,
-  background: '#101010',
-  color: '#fff',
-  fontWeight: 700,
-  cursor: 'pointer',
-};
-
-const secondaryButton: React.CSSProperties = {
-  minHeight: 42,
-  padding: '0 18px',
-  border: '1px solid #d0d5dd',
-  borderRadius: 9,
-  background: '#fff',
-  cursor: 'pointer',
-};
-
-const cancelEditButton: React.CSSProperties = {
-  minHeight: 38,
-  padding: '0 14px',
-  border: '1px solid #d0d5dd',
-  borderRadius: 8,
-  background: '#fff',
-  cursor: 'pointer',
-};
-
-const listCard: React.CSSProperties = {
+const orderCard: React.CSSProperties = {
   background: '#fff',
   border: '1px solid #e4e7ec',
   borderRadius: 14,
   overflow: 'hidden',
 };
-
-const listHeader: React.CSSProperties = {
+const cancelledCard: React.CSSProperties = {
+  border: '2px solid #f04438',
+};
+const dangerBanner: React.CSSProperties = {
+  padding: '10px 14px',
+  background: '#fee4e2',
+  color: '#b42318',
+  fontSize: 12,
+  fontWeight: 900,
+  textAlign: 'center',
+};
+const waitingBanner: React.CSSProperties = {
+  padding: '10px 14px',
+  background: '#fff4e5',
+  color: '#9a6100',
+  fontSize: 12,
+  fontWeight: 800,
+  textAlign: 'center',
+};
+const failedBanner: React.CSSProperties = {
+  padding: '10px 14px',
+  background: '#fef3f2',
+  color: '#b42318',
+  fontSize: 12,
+  fontWeight: 800,
+  textAlign: 'center',
+};
+const orderTop: React.CSSProperties = {
+  padding: 15,
+  display: 'flex',
+  justifyContent: 'space-between',
+  gap: 15,
+  borderBottom: '1px solid #eaecf0',
+};
+const orderNumber: React.CSSProperties = {
+  fontWeight: 800,
+  color: '#111',
+};
+const amount: React.CSSProperties = {
+  fontSize: 18,
+  fontWeight: 900,
+};
+const collectBox: React.CSSProperties = {
+  margin: 14,
+  padding: 14,
+  borderRadius: 12,
+  background: '#101828',
+  color: '#fff',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
+  gap: 12,
+};
+const collectLabel: React.CSSProperties = {
+  display: 'block',
+  color: '#d0d5dd',
+  fontSize: 9,
+  fontWeight: 800,
+  letterSpacing: 1,
+};
+const collectAmount: React.CSSProperties = {
+  display: 'block',
+  marginTop: 3,
+  fontSize: 25,
+};
+const paymentPill: React.CSSProperties = {
+  padding: '6px 9px',
+  borderRadius: 999,
+  background: '#344054',
+  fontSize: 10,
+  fontWeight: 700,
+};
+const deliverySlotBox: React.CSSProperties = {
+  margin: '0 14px 14px',
+  padding: 12,
+  border: '1px solid #d1ead8',
+  borderRadius: 10,
+  background: '#f3fbf5',
+  display: 'grid',
+  gap: 3,
+  color: '#175c34',
+  fontSize: 12,
+};
+const orderGrid: React.CSSProperties = {
+  padding: '0 15px 15px',
+  display: 'grid',
+  gridTemplateColumns: '1fr 2fr',
   gap: 16,
-  padding: 20,
-  borderBottom: '1px solid #e4e7ec',
 };
-
-const listTitle: React.CSSProperties = {
-  margin: 0,
-  fontSize: 19,
+const fieldLabel: React.CSSProperties = {
+  color: '#98a2b3',
+  fontSize: 10,
+  marginBottom: 4,
 };
-
-const listSubtitle: React.CSSProperties = {
-  margin: '5px 0 0',
-  color: '#667085',
+const fieldValue: React.CSSProperties = {
+  color: '#101828',
   fontSize: 13,
+  lineHeight: 1.4,
 };
-
-const searchInput: React.CSSProperties = {
-  width: 300,
-  maxWidth: '100%',
-  minHeight: 40,
-  padding: '0 12px',
-  border: '1px solid #d0d5dd',
-  borderRadius: 8,
-  outline: 'none',
-};
-
-const emptyState: React.CSSProperties = {
-  padding: 40,
-  textAlign: 'center',
+const detailMuted: React.CSSProperties = {
+  marginTop: 4,
   color: '#667085',
-};
-
-const tableWrap: React.CSSProperties = {
-  overflowX: 'auto',
-};
-
-const table: React.CSSProperties = {
-  width: '100%',
-  borderCollapse: 'collapse',
-};
-
-const tableHeader: React.CSSProperties = {
-  padding: '12px 16px',
-  textAlign: 'left',
   fontSize: 11,
-  fontWeight: 600,
+};
+const phoneLink: React.CSSProperties = {
+  display: 'inline-block',
+  marginTop: 3,
+  color: '#175cd3',
+  fontSize: 12,
+  textDecoration: 'none',
+};
+const quickActions: React.CSSProperties = {
+  padding: '0 15px 15px',
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 8,
+};
+const mapButton: React.CSSProperties = {
+  display: 'inline-flex',
+  minHeight: 40,
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '0 14px',
+  borderRadius: 9,
+  background: '#175cd3',
+  color: '#fff',
+  textDecoration: 'none',
+  fontSize: 12,
+  fontWeight: 800,
+};
+const secondaryButton: React.CSSProperties = {
+  ...mapButton,
+  background: '#fff',
+  color: '#101828',
+  border: '1px solid #d0d5dd',
+};
+const upiButton: React.CSSProperties = {
+  ...mapButton,
+  border: 0,
+  background: '#7f56d9',
+  cursor: 'pointer',
+};
+const itemsBox: React.CSSProperties = {
+  padding: '0 15px 15px',
+  display: 'grid',
+  gap: 8,
+};
+const sectionLabel: React.CSSProperties = {
   color: '#667085',
-  background: '#f9fafb',
-  borderBottom: '1px solid #e4e7ec',
+  fontSize: 9,
+  fontWeight: 800,
+  letterSpacing: 0.7,
 };
-
-const tableCell: React.CSSProperties = {
-  padding: '14px 16px',
-  borderBottom: '1px solid #eaecf0',
-  fontSize: 13,
-  verticalAlign: 'middle',
-};
-
-const personWrap: React.CSSProperties = {
+const itemRow: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 10,
+  padding: 10,
+  borderRadius: 9,
+  background: '#f9fafb',
 };
-
-const avatar: React.CSSProperties = {
-  width: 38,
-  height: 38,
-  borderRadius: '50%',
+const itemImage: React.CSSProperties = {
+  width: 48,
+  height: 48,
+  borderRadius: 7,
+  objectFit: 'cover',
+};
+const itemImagePlaceholder: React.CSSProperties = {
+  width: 48,
+  height: 48,
+  borderRadius: 7,
+  background: '#eee',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  background: '#f2f4f7',
-  fontWeight: 800,
 };
-
-const personName: React.CSSProperties = {
+const itemTitle: React.CSSProperties = {
+  fontSize: 13,
   fontWeight: 650,
+  color: '#101828',
 };
-
-const smallText: React.CSSProperties = {
-  marginTop: 3,
+const smallMuted: React.CSSProperties = {
+  marginTop: 2,
   color: '#98a2b3',
-  fontSize: 11,
+  fontSize: 10,
 };
-
-const statusBadge: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  minHeight: 24,
-  padding: '0 9px',
-  borderRadius: 999,
-  fontSize: 11,
-  fontWeight: 700,
+const giftBox: React.CSSProperties = {
+  margin: '0 15px 15px',
+  padding: 12,
+  border: '1px solid #cce7d4',
+  borderRadius: 10,
+  background: '#f6fcf8',
+  display: 'grid',
+  gap: 8,
 };
-
-const activeBadge: React.CSSProperties = {
-  background: '#ecfdf3',
-  color: '#027a48',
-};
-
-const inactiveBadge: React.CSSProperties = {
-  background: '#f2f4f7',
-  color: '#667085',
-};
-
-const actionRow: React.CSSProperties = {
+const giftRow: React.CSSProperties = {
   display: 'flex',
-  justifyContent: 'flex-end',
-  gap: 7,
+  alignItems: 'center',
+  gap: 10,
+  fontSize: 12,
+};
+const giftImage: React.CSSProperties = {
+  width: 42,
+  height: 42,
+  objectFit: 'cover',
+  borderRadius: 7,
+};
+const giftPlaceholder: React.CSSProperties = {
+  width: 42,
+  height: 42,
+  display: 'grid',
+  placeItems: 'center',
+  background: '#eaf7ee',
+  borderRadius: 7,
+};
+const serviceBox: React.CSSProperties = {
+  margin: '0 15px 15px',
+  padding: 12,
+  border: '1px solid #f0d5a8',
+  borderRadius: 10,
+  background: '#fffaf0',
+  display: 'grid',
+  gap: 8,
+};
+const orderFooter: React.CSSProperties = {
+  padding: 12,
+  borderTop: '1px solid #eaecf0',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 10,
   flexWrap: 'wrap',
 };
-
-const whatsAppSmallButton: React.CSSProperties = {
-  minHeight: 34,
-  padding: '0 11px',
-  border: '1px solid #12b76a',
-  borderRadius: 7,
-  background: '#ecfdf3',
-  color: '#027a48',
-  cursor: 'pointer',
-  fontWeight: 600,
+const statusBadge: React.CSSProperties = {
+  background: '#eff8ff',
+  color: '#175cd3',
+  borderRadius: 20,
+  padding: '6px 9px',
+  fontSize: 10,
+  fontWeight: 750,
 };
-
-const editButton: React.CSSProperties = {
-  minHeight: 34,
-  padding: '0 11px',
+const footerActions: React.CSSProperties = {
+  display: 'flex',
+  gap: 8,
+  flexWrap: 'wrap',
+};
+const primaryButton: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minHeight: 40,
+  padding: '0 15px',
+  border: 0,
+  borderRadius: 9,
+  background: '#111',
+  color: '#fff',
+  textDecoration: 'none',
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: 'pointer',
+};
+const deliveredButton: React.CSSProperties = {
+  ...primaryButton,
+  background: '#178746',
+};
+const notDeliveredButton: React.CSSProperties = {
+  ...primaryButton,
+  background: '#fff',
+  color: '#b42318',
+  border: '1px solid #f3b7b2',
+};
+const modalBackdrop: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: 1000,
+  padding: 20,
+  display: 'grid',
+  placeItems: 'center',
+  background: 'rgba(16,24,40,.6)',
+};
+const modalCard: React.CSSProperties = {
+  width: 'min(390px, 100%)',
+  position: 'relative',
+  padding: 22,
+  borderRadius: 18,
+  background: '#fff',
+  boxShadow: '0 24px 70px rgba(0,0,0,.25)',
+  textAlign: 'center',
+};
+const modalClose: React.CSSProperties = {
+  position: 'absolute',
+  right: 10,
+  top: 10,
+  width: 34,
+  height: 34,
+  border: '1px solid #ddd',
+  borderRadius: 9,
+  background: '#fff',
+  cursor: 'pointer',
+  fontSize: 20,
+};
+const qrTitle: React.CSSProperties = {
+  fontSize: 18,
+  fontWeight: 800,
+  color: '#101828',
+};
+const qrAmount: React.CSSProperties = {
+  marginTop: 8,
+  fontSize: 32,
+  fontWeight: 900,
+  color: '#101828',
+};
+const qrOrder: React.CSSProperties = {
+  marginTop: 3,
+  color: '#667085',
+  fontSize: 11,
+};
+const qrImage: React.CSSProperties = {
+  width: 260,
+  maxWidth: '100%',
+  margin: '18px auto 10px',
+  display: 'block',
+};
+const qrUpi: React.CSSProperties = {
+  marginBottom: 14,
+  color: '#475467',
+  fontSize: 12,
+};
+const qrNote: React.CSSProperties = {
+  margin: '14px 0 0',
+  color: '#667085',
+  fontSize: 10,
+  lineHeight: 1.5,
+};
+const reasonSelect: React.CSSProperties = {
+  width: '100%',
+  margin: '20px 0 12px',
+  padding: 12,
   border: '1px solid #d0d5dd',
-  borderRadius: 7,
+  borderRadius: 10,
   background: '#fff',
-  cursor: 'pointer',
 };
-
-const disableButton: React.CSSProperties = {
-  minHeight: 34,
-  padding: '0 11px',
-  border: '1px solid #f79009',
-  borderRadius: 7,
-  background: '#fffaeb',
-  color: '#b54708',
-  cursor: 'pointer',
-};
-
-const enableButton: React.CSSProperties = {
-  minHeight: 34,
-  padding: '0 11px',
-  border: '1px solid #12b76a',
-  borderRadius: 7,
-  background: '#ecfdf3',
-  color: '#027a48',
-  cursor: 'pointer',
-};
-
-const deleteButton: React.CSSProperties = {
-  minHeight: 34,
-  padding: '0 11px',
-  border: '1px solid #fda29b',
-  borderRadius: 7,
-  background: '#fff',
-  color: '#d92d20',
-  cursor: 'pointer',
+const notDeliveredButtonLarge: React.CSSProperties = {
+  ...primaryButton,
+  width: '100%',
+  background: '#b42318',
 };
