@@ -8,16 +8,23 @@ import GoogleAnalyticsPageView from '@/components/GoogleAnalyticsPageView';
 import NavigationLoader from '@/components/NavigationLoader';
 import RouteShell from '@/components/RouteShell';
 
-const GA_MEASUREMENT_ID = 'G-YLJ3YNCN2C';
+const GA_MEASUREMENT_ID =
+  'G-YLJ3YNCN2C';
 
-const SITE_URL = 'https://www.spotc.in';
+const SITE_URL =
+  'https://www.spotc.in';
 
 export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
+  metadataBase: new URL(
+    SITE_URL,
+  ),
 
   title: {
-    default: 'SPOTC — Kids Wear, Toys & Fancy Items in Karamadai',
-    template: '%s | SPOTC',
+    default:
+      'SPOTC — Kids Wear, Toys & Fancy Items in Karamadai',
+
+    template:
+      '%s | SPOTC',
   },
 
   description:
@@ -27,9 +34,9 @@ export const metadata: Metadata = {
     canonical: '/',
   },
 
-  applicationName: 'SPOTC',
+  applicationName:
+    'SPOTC',
 
-  // Fine to keep, but Google does not rely heavily on meta keywords.
   keywords: [
     'SPOTC',
     'SPOTC Karamadai',
@@ -50,12 +57,16 @@ export const metadata: Metadata = {
 
   authors: [
     {
-      name: 'SPOTC Technologies',
+      name:
+        'SPOTC Technologies',
     },
   ],
 
-  creator: 'SPOTC Technologies',
-  publisher: 'SPOTC Technologies',
+  creator:
+    'SPOTC Technologies',
+
+  publisher:
+    'SPOTC Technologies',
 
   robots: {
     index: true,
@@ -64,80 +75,123 @@ export const metadata: Metadata = {
     googleBot: {
       index: true,
       follow: true,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
-      'max-video-preview': -1,
+
+      'max-image-preview':
+        'large',
+
+      'max-snippet':
+        -1,
+
+      'max-video-preview':
+        -1,
     },
   },
 
   openGraph: {
     type: 'website',
-    locale: 'en_IN',
-    url: SITE_URL,
-    siteName: 'SPOTC',
 
-    title: 'SPOTC — Kids Wear, Toys & Fancy Items in Karamadai',
+    locale:
+      'en_IN',
+
+    url:
+      SITE_URL,
+
+    siteName:
+      'SPOTC',
+
+    title:
+      'SPOTC — Kids Wear, Toys & Fancy Items in Karamadai',
 
     description:
       'Shop kids wear, toys, earrings, gifts and fancy items online in Karamadai with local delivery from SPOTC.',
   },
 
   twitter: {
-    card: 'summary_large_image',
+    card:
+      'summary_large_image',
 
-    title: 'SPOTC — Kids Wear, Toys & Fancy Items in Karamadai',
+    title:
+      'SPOTC — Kids Wear, Toys & Fancy Items in Karamadai',
 
     description:
       'Shop kids wear, toys, earrings, gifts and fancy items online in Karamadai with local delivery.',
   },
 
-  category: 'shopping',
+  category:
+    'shopping',
 };
 
 const organizationJsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'Organization',
+  '@context':
+    'https://schema.org',
 
-  name: 'SPOTC Technologies',
-  alternateName: 'SPOTC',
+  '@type':
+    'Organization',
 
-  url: SITE_URL,
+  name:
+    'SPOTC Technologies',
+
+  alternateName:
+    'SPOTC',
+
+  url:
+    SITE_URL,
 
   description:
     'SPOTC is an online shopping service offering kids wear, toys, earrings, hair accessories, gifts and fancy items in Karamadai.',
 
   brand: {
-    '@type': 'Brand',
-    name: 'SPOTC',
+    '@type':
+      'Brand',
+
+    name:
+      'SPOTC',
   },
 
   areaServed: [
     {
-      '@type': 'Place',
-      name: 'Karamadai',
+      '@type':
+        'Place',
+
+      name:
+        'Karamadai',
     },
+
     {
-      '@type': 'Place',
-      name: 'Mettupalayam',
+      '@type':
+        'Place',
+
+      name:
+        'Mettupalayam',
     },
   ],
 };
 
 const websiteJsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'WebSite',
+  '@context':
+    'https://schema.org',
 
-  name: 'SPOTC',
-  alternateName: 'SPOTC.in',
+  '@type':
+    'WebSite',
 
-  url: SITE_URL,
+  name:
+    'SPOTC',
+
+  alternateName:
+    'SPOTC.in',
+
+  url:
+    SITE_URL,
 
   description:
     'Shop kids wear, toys, gifts, earrings, hair accessories and fancy items online in Karamadai.',
 
   publisher: {
-    '@type': 'Organization',
-    name: 'SPOTC Technologies',
+    '@type':
+      'Organization',
+
+    name:
+      'SPOTC Technologies',
   },
 };
 
@@ -159,7 +213,8 @@ export default function RootLayout({
           strategy="afterInteractive"
         >
           {`
-            window.dataLayer = window.dataLayer || [];
+            window.dataLayer =
+              window.dataLayer || [];
 
             function gtag(){
               dataLayer.push(arguments);
@@ -167,7 +222,10 @@ export default function RootLayout({
 
             window.gtag = gtag;
 
-            gtag('js', new Date());
+            gtag(
+              'js',
+              new Date()
+            );
 
             gtag(
               'config',
@@ -182,18 +240,26 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify(
-              organizationJsonLd,
-            ).replace(/</g, '\\u003c'),
+            __html:
+              JSON.stringify(
+                organizationJsonLd,
+              ).replace(
+                /</g,
+                '\\u003c',
+              ),
           }}
         />
 
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify(
-              websiteJsonLd,
-            ).replace(/</g, '\\u003c'),
+            __html:
+              JSON.stringify(
+                websiteJsonLd,
+              ).replace(
+                /</g,
+                '\\u003c',
+              ),
           }}
         />
       </head>
