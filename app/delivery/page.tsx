@@ -555,7 +555,10 @@ export default function DeliveryDashboardPage() {
       return;
     }
 
-    if (current !== 'out_for_delivery') {
+    if (
+      current !== 'out_for_delivery' &&
+      current !== 'delivered_waiting_approval'
+    ) {
       setMessage('Mark the order Out for Delivery first.');
       return;
     }
@@ -865,7 +868,6 @@ export default function DeliveryDashboardPage() {
 
                     {!cancelled &&
                       !delivered &&
-                      !waiting &&
                       normalized(order.paymentStatus) !== 'paid' && (
                         <button
                           type="button"
@@ -883,7 +885,6 @@ export default function DeliveryDashboardPage() {
 
                     {!cancelled &&
                       !delivered &&
-                      !waiting &&
                       normalized(order.paymentStatus) !== 'paid' &&
                       UPI_ID && (
                         <button
@@ -1017,6 +1018,31 @@ export default function DeliveryDashboardPage() {
                             Not Delivered
                           </button>
                         </>
+                      )}
+
+                      {waiting && (
+                        <button
+                          type="button"
+                          disabled={
+                            busy ||
+                            normalized(order.paymentStatus) !== 'paid'
+                          }
+                          style={{
+                            ...deliveredButton,
+                            opacity:
+                              busy ||
+                              normalized(order.paymentStatus) !== 'paid'
+                                ? 0.5
+                                : 1,
+                          }}
+                          onClick={() =>
+                            void markDelivered(order)
+                          }
+                        >
+                          {busy
+                            ? 'Updating…'
+                            : 'Complete Delivery'}
+                        </button>
                       )}
                     </div>
                   </div>
