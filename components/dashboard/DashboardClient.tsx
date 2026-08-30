@@ -355,7 +355,7 @@ export default function DashboardClient() {
 
         if (state === 'granted') {
           setNotificationMessage(
-            'Browser order alerts are enabled on this device.',
+            'SPOTC order status alerts are enabled on this device.',
           );
         } else if (
           state === 'denied'
@@ -669,8 +669,8 @@ export default function DashboardClient() {
                         <small>
                           {notificationPermission ===
                           'granted'
-                            ? 'Order confirmations and delivery updates can appear on this device.'
-                            : 'Receive product and order-status updates even when SPOTC is in the background.'}
+                            ? 'Get alerts when your order is placed, confirmed, ready, out for delivery, delivered or cancelled.'
+                            : 'Enable alerts for placed, confirmed, ready, out for delivery, delivered and cancelled order updates.'}
                         </small>
                       </span>
                     </button>
@@ -698,9 +698,9 @@ export default function DashboardClient() {
                       </strong>
 
                       <small>
-                        Confirmed, ready
-                        and delivered
-                        alerts
+                        Placed, confirmed, ready,
+                        out for delivery, delivered
+                        and cancelled alerts
                       </small>
                     </span>
                   </button>
