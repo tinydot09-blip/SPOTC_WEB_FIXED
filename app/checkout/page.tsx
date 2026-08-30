@@ -243,6 +243,18 @@ const ga4ItemFromCart = (item: CartItem) => ({
   quantity: Math.max(1, Number(item.qty) || 1),
 });
 
+const getDistanceBand = (distance: number | null): string => {
+  if (distance === null || !Number.isFinite(distance)) return 'unknown';
+  if (distance <= 1) return '0_1km';
+  if (distance <= 2) return '1_2km';
+  if (distance <= 3) return '2_3km';
+  if (distance <= 4) return '3_4km';
+  if (distance <= 5) return '4_5km';
+  if (distance <= 7) return '5_7km';
+  if (distance <= 10) return '7_10km';
+  return 'over_10km';
+};
+
 export default function CheckoutPage() {
   const router = useRouter();
 
@@ -256,6 +268,8 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [placing, setPlacing] = useState(false);
   const checkoutTrackedRef = useRef('');
+  const deliveryCheckTrackedRef = useRef('');
+  const deliveryBlockedTrackedRef = useRef('');
 
   const groups = useMemo(
     () => groupCartByBusiness(items),
@@ -383,33 +397,85 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (loading || !items.length || !address) return;
 
-    const signature = [
+    const distanceBand = getDistanceBand(addressDeliveryCheck.distanceKm);
+    const deliverySignature = [
+      formatAddress(address),
+      addressDeliveryCheck.status,
+      distanceBand,
+    ].join('|');
+
+    if (deliveryCheckTrackedRef.current !== deliverySignature) {
+      sendGa4Event('checkout_delivery_check', {
+        delivery_status: addressDeliveryCheck.status,
+        delivery_available: canDeliverToAddress,
+        delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
+        distance_band: distanceBand,
+        cart_value: total,
+        cart_item_count: items.reduce(
+          (sum, item) => sum + Math.max(1, Number(item.qty) || 1),
+          0,
+        ),
+        selected_delivery_id: selectedDelivery.id,
+        selected_delivery_title: selectedDelivery.title,
+        page_path: '/checkout',
+      });
+
+      deliveryCheckTrackedRef.current = deliverySignature;
+    }
+
+    if (
+      !canDeliverToAddress &&
+      deliveryBlockedTrackedRef.current !== deliverySignature
+    ) {
+      sendGa4Event('checkout_delivery_blocked', {
+        block_reason:
+          addressDeliveryCheck.status === 'outside'
+            ? 'outside_5km'
+            : 'location_missing',
+        delivery_status: addressDeliveryCheck.status,
+        delivery_available: false,
+        delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
+        distance_band: distanceBand,
+        cart_value: total,
+        cart_item_count: items.reduce(
+          (sum, item) => sum + Math.max(1, Number(item.qty) || 1),
+          0,
+        ),
+        page_path: '/checkout',
+      });
+
+      deliveryBlockedTrackedRef.current = deliverySignature;
+    }
+
+    if (!canDeliverToAddress) return;
+
+    const checkoutSignature = [
       ...items.map(
         (item) =>
           `${item.id}:${item.qty}:${item.price}:${item.size}:${item.color}`,
       ),
       selectedDelivery.id,
+      deliverySignature,
     ].join('|');
 
-    if (checkoutTrackedRef.current === signature) return;
+    if (checkoutTrackedRef.current === checkoutSignature) return;
 
     sendGa4Event('add_shipping_info', {
       currency: 'INR',
       value: total,
       shipping_tier: selectedDelivery.title,
+      delivery_status: 'available',
+      delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
+      distance_band: distanceBand,
       items: items.map(ga4ItemFromCart),
     });
 
-    sendGa4Event('add_payment_info', {
-      currency: 'INR',
-      value: total,
-      payment_type: 'Cash on Delivery',
-      items: items.map(ga4ItemFromCart),
-    });
-
-    checkoutTrackedRef.current = signature;
+    checkoutTrackedRef.current = checkoutSignature;
   }, [
     address,
+    addressDeliveryCheck.distanceKm,
+    addressDeliveryCheck.status,
+    canDeliverToAddress,
     items,
     loading,
     selectedDelivery.id,
@@ -428,7 +494,35 @@ export default function CheckoutPage() {
       return;
     }
 
+    const distanceBand = getDistanceBand(addressDeliveryCheck.distanceKm);
+
+    sendGa4Event('order_place_attempt', {
+      currency: 'INR',
+      value: total,
+      payment_type: 'Cash on Delivery',
+      delivery_status: addressDeliveryCheck.status,
+      delivery_available: canDeliverToAddress,
+      delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
+      distance_band: distanceBand,
+      selected_delivery_id: selectedDelivery.id,
+      selected_delivery_title: selectedDelivery.title,
+      items: items.map(ga4ItemFromCart),
+    });
+
     if (!canDeliverToAddress) {
+      sendGa4Event('checkout_delivery_blocked', {
+        block_reason:
+          addressDeliveryCheck.status === 'outside'
+            ? 'outside_5km'
+            : 'location_missing',
+        delivery_status: addressDeliveryCheck.status,
+        delivery_available: false,
+        delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
+        distance_band: distanceBand,
+        cart_value: total,
+        page_path: '/checkout',
+      });
+
       if (addressDeliveryCheck.status === 'outside') {
         window.alert(
           'Delivery is currently available only in Karamadai, Teacher Colony, EB Colony and Gandhinagar. This address is outside our delivery area.',
@@ -441,6 +535,16 @@ export default function CheckoutPage() {
 
       return;
     }
+
+    sendGa4Event('add_payment_info', {
+      currency: 'INR',
+      value: total,
+      payment_type: 'Cash on Delivery',
+      delivery_status: 'available',
+      delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
+      distance_band: distanceBand,
+      items: items.map(ga4ItemFromCart),
+    });
 
     const firestore = db;
     const currentUser = user;
@@ -628,7 +732,21 @@ export default function CheckoutPage() {
 
             <button
               type="button"
-              onClick={() => router.push('/address')}
+              onClick={() => {
+                sendGa4Event('checkout_change_address', {
+                  reason:
+                    addressDeliveryCheck.status === 'outside'
+                      ? 'outside_5km'
+                      : 'location_missing',
+                  delivery_status: addressDeliveryCheck.status,
+                  delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
+                  distance_band: getDistanceBand(
+                    addressDeliveryCheck.distanceKm,
+                  ),
+                  page_path: '/checkout',
+                });
+                router.push('/address');
+              }}
             >
               {addressDeliveryCheck.status === 'outside'
                 ? 'Change address'
