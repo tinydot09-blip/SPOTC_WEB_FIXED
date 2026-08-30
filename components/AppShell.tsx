@@ -175,9 +175,161 @@ function DeliveryAvailabilityBanner() {
   const delivery = useDeliveryAvailability();
   const [closed, setClosed] = useState(false);
 
-  if (delivery.status !== 'outside' || closed) {
+  const popupTrackedRef = useRef(false);
+
+  const getDistanceBand = (
+    distance: number | null,
+  ): string => {
+    if (
+      distance === null ||
+      !Number.isFinite(distance)
+    ) {
+      return 'unknown';
+    }
+
+    if (distance <= 1) return '0_1km';
+    if (distance <= 2) return '1_2km';
+    if (distance <= 3) return '2_3km';
+    if (distance <= 4) return '3_4km';
+    if (distance <= 5) return '4_5km';
+    if (distance <= 7) return '5_7km';
+    if (distance <= 10) return '7_10km';
+
+    return 'over_10km';
+  };
+
+  const sendGaEvent = (
+    eventName: string,
+    params: Record<string, unknown> = {},
+  ) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const gaWindow = window as typeof window & {
+      gtag?: (
+        command: string,
+        eventName: string,
+        params?: Record<string, unknown>,
+      ) => void;
+    };
+
+    if (typeof gaWindow.gtag !== 'function') {
+      return;
+    }
+
+    gaWindow.gtag('event', eventName, {
+      ...params,
+
+      page_path:
+        window.location.pathname,
+
+      delivery_status:
+        delivery.status,
+
+      delivery_radius_km:
+        delivery.radiusKm,
+
+      distance_band:
+        getDistanceBand(
+          delivery.distanceKm,
+        ),
+    });
+  };
+
+  /*
+   * Reset popup state when the visitor moves
+   * from outside → inside.
+   *
+   * If they later genuinely move outside again,
+   * the popup can appear again.
+   */
+  useEffect(() => {
+    if (
+      delivery.status !== 'outside'
+    ) {
+      setClosed(false);
+      popupTrackedRef.current = false;
+    }
+  }, [
+    delivery.status,
+  ]);
+
+  /*
+   * GA4:
+   * Track when the outside-area popup
+   * is actually displayed.
+   *
+   * useRef prevents duplicate events caused
+   * by React re-renders / GPS watch updates.
+   */
+  useEffect(() => {
+    if (
+      delivery.status !== 'outside' ||
+      closed ||
+      popupTrackedRef.current
+    ) {
+      return;
+    }
+
+    popupTrackedRef.current = true;
+
+    sendGaEvent(
+      'delivery_outside_popup_view',
+      {
+        popup_type:
+          'browse_only',
+
+        purchase_allowed:
+          false,
+      },
+    );
+  }, [
+    delivery.status,
+    delivery.distanceKm,
+    delivery.radiusKm,
+    closed,
+  ]);
+
+  if (
+    delivery.status !== 'outside' ||
+    closed
+  ) {
     return null;
   }
+
+  const handleContinueBrowsing = () => {
+    sendGaEvent(
+      'delivery_outside_continue_browsing',
+      {
+        popup_type:
+          'browse_only',
+
+        purchase_allowed:
+          false,
+      },
+    );
+
+    setClosed(true);
+  };
+
+  const handleClose = () => {
+    sendGaEvent(
+      'delivery_outside_popup_close',
+      {
+        popup_type:
+          'browse_only',
+
+        purchase_allowed:
+          false,
+
+        close_method:
+          'x_button',
+      },
+    );
+
+    setClosed(true);
+  };
 
   return (
     <div
@@ -191,27 +343,38 @@ function DeliveryAvailabilityBanner() {
           type="button"
           className="spotc-delivery-popup-close"
           aria-label="Close"
-          onClick={() => setClosed(true)}
+          onClick={handleClose}
         >
-          <X size={20} aria-hidden="true" />
+          <X
+            size={20}
+            aria-hidden="true"
+          />
         </button>
 
         <div className="spotc-delivery-popup-icon">
-          <ShoppingBag size={24} aria-hidden="true" />
+          <ShoppingBag
+            size={24}
+            aria-hidden="true"
+          />
         </div>
 
-        <strong id="spotc-delivery-popup-title">
+        <strong
+          id="spotc-delivery-popup-title"
+        >
           Delivery not available here yet
         </strong>
 
         <p>
-          You can browse products. Ordering is available within 5 km only.
+          You can browse products. Ordering is
+          available within 5 km only.
         </p>
 
         <button
           type="button"
           className="spotc-delivery-popup-continue"
-          onClick={() => setClosed(true)}
+          onClick={
+            handleContinueBrowsing
+          }
         >
           Continue Browsing
         </button>
