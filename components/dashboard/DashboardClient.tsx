@@ -242,7 +242,16 @@ export default function DashboardClient() {
     const publish=()=>setOrderNotifications([...merged.values()].sort((a,b)=>(b.time?.getTime()??0)-(a.time?.getTime()??0)).slice(0,20));
     const listen=(source:string,q:ReturnType<typeof query>)=>onSnapshot(q,(snap)=>{
       const old=sourceIds.get(source)??new Set<string>(); const next=new Set<string>();
-      snap.docs.forEach(d=>{next.add(d.id);merged.set(d.id,nItem(d.id,d.data()));});
+      snap.docs.forEach((d) => {
+  next.add(d.id);
+  merged.set(
+    d.id,
+    nItem(
+      d.id,
+      d.data() as DocumentData,
+    ),
+  );
+});
       old.forEach(id=>{if(!next.has(id)) merged.delete(id);}); sourceIds.set(source,next); publish();
     },error=>console.error(`Order notification listener failed (${source}):`,error));
     const orders=collection(firestore,'Orders');
