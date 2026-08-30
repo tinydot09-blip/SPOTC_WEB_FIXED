@@ -1005,8 +1005,18 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     const query = new URLSearchParams(window.location.search);
     const openNormalGiftPicker = query.get('gift') === '1';
     const changeOneGift = query.get('changeGift') === '1';
+    const fromCartGift = query.get('fromCartGift') === '1';
+    const cartGiftQty = Number(query.get('cartGiftQty'));
 
     if (!openNormalGiftPicker && !changeOneGift) return;
+
+    if (
+      fromCartGift &&
+      Number.isFinite(cartGiftQty) &&
+      cartGiftQty >= 1
+    ) {
+      setQty(Math.floor(cartGiftQty));
+    }
 
     const currentPrice = customerPriceOf(product);
     const currentGiftCount =
@@ -1792,6 +1802,16 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
 
     saveSelectedGiftsForCart();
     setGiftPreviewOpen(false);
+
+    if (typeof window !== 'undefined') {
+      const query = new URLSearchParams(window.location.search);
+
+      if (query.get('fromCartGift') === '1') {
+        setChangingGiftIndex(null);
+        router.push('/cart');
+        return;
+      }
+    }
 
     if (changingGiftIndex !== null && typeof window !== 'undefined') {
       window.localStorage.removeItem('spotc-change-free-gift-product-id');

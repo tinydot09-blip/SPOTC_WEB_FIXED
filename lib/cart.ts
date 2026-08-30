@@ -12,6 +12,7 @@ export type CartItem = {
   businessName?: string;
   size?: string;
   color?: string;
+  freeGiftCountPerItem?: number;
 };
 
 const CART_KEY = 'spotc_cart';
@@ -66,6 +67,17 @@ function stockQuantityOf(
     product.stock_qty ??
       product.stock_quantity,
   );
+}
+
+function freeGiftCountPerItemOf(
+  product: BusinessProduct,
+): number {
+  const price = priceOf(product);
+
+  if (price < 80) return 0;
+  if (price < 200) return 1;
+
+  return Math.floor(price / 100);
 }
 
 const businessIdOf = (
@@ -224,6 +236,11 @@ export function readCart(): CartItem[] {
             color: String(
               item.color || '',
             ),
+
+            freeGiftCountPerItem:
+              Number.isFinite(Number(item.freeGiftCountPerItem))
+                ? Math.max(0, Math.floor(Number(item.freeGiftCountPerItem)))
+                : undefined,
           };
 
         const key =
@@ -411,6 +428,11 @@ export function writeCart(
 
           color:
             item.color || '',
+
+          freeGiftCountPerItem:
+            Number.isFinite(Number(item.freeGiftCountPerItem))
+              ? Math.max(0, Math.floor(Number(item.freeGiftCountPerItem)))
+              : undefined,
         };
 
       const key =
@@ -532,6 +554,8 @@ export function addProduct(
      */
     existingItem.stockQty =
       availableStock;
+    existingItem.freeGiftCountPerItem =
+      freeGiftCountPerItemOf(product);
 
     const requestedQuantity =
       safeQuantity(
@@ -575,6 +599,9 @@ export function addProduct(
 
       stockQty:
         availableStock,
+
+      freeGiftCountPerItem:
+        freeGiftCountPerItemOf(product),
 
       businessId:
         businessIdOf(

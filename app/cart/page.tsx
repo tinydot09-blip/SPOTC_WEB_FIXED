@@ -29,6 +29,23 @@ const money = (value: number): string =>
     'en-IN',
   )}`;
 
+const freeGiftCountPerItemFromPrice = (
+  price: number,
+): number => {
+  if (price < 80) return 0;
+  if (price < 200) return 1;
+  return Math.floor(price / 100);
+};
+
+const freeGiftEntitlementForItem = (item: CartItem): number => {
+  const perItem =
+    Number.isFinite(Number(item.freeGiftCountPerItem))
+      ? Math.max(0, Math.floor(Number(item.freeGiftCountPerItem)))
+      : freeGiftCountPerItemFromPrice(Number(item.price) || 0);
+
+  return perItem * Math.max(1, Number(item.qty) || 1);
+};
+
 
 type DeliveryOptionId =
   | 'instant'
@@ -599,6 +616,26 @@ export default function CartPage() {
     0,
   );
 
+  const firstItemMissingGifts = items.find((item) => {
+    const required = freeGiftEntitlementForItem(item);
+    if (required <= 0) return false;
+
+    const selected = giftBundles[item.id]?.gifts.length || 0;
+    return selected < required;
+  });
+
+  const hasMissingFreeGifts = Boolean(firstItemMissingGifts);
+
+  const chooseMissingFreeGifts = (item: CartItem) => {
+    if (typeof window === 'undefined') return;
+
+    const quantity = Math.max(1, Number(item.qty) || 1);
+
+    router.push(
+      `/product/${encodeURIComponent(item.id)}?gift=1&fromCartGift=1&cartGiftQty=${quantity}`,
+    );
+  };
+
   const chooseGiftForAddedQuantity = (
     itemIndex: number,
     productId: string,
@@ -887,6 +924,12 @@ export default function CartPage() {
                 {items.map((item, index) => {
                   const freeGifts =
                     giftBundles[item.id]?.gifts || [];
+                  const requiredFreeGifts =
+                    freeGiftEntitlementForItem(item);
+                  const missingFreeGifts = Math.max(
+                    0,
+                    requiredFreeGifts - freeGifts.length,
+                  );
 
                   return (
                     <div
@@ -1017,6 +1060,41 @@ export default function CartPage() {
                           </button>
                         </div>
                       </div>
+
+                      {requiredFreeGifts > 0 && missingFreeGifts > 0 && (
+                        <div className="spotc-free-gifts spotc-free-gifts-missing">
+                          <div className="spotc-free-gifts-title">
+                            <div className="spotc-free-gifts-title-copy">
+                              <span
+                                className="spotc-free-gifts-title-icon"
+                                aria-hidden="true"
+                              >
+                                🎁
+                              </span>
+
+                              <div>
+                                <strong>
+                                  Choose {requiredFreeGifts} FREE Gift
+                                  {requiredFreeGifts === 1 ? '' : 's'}
+                                </strong>
+                                <small>
+                                  {freeGifts.length > 0
+                                    ? `${freeGifts.length} selected · Choose ${missingFreeGifts} more before checkout`
+                                    : 'FREE gifts are included with this product. Choose them before checkout.'}
+                                </small>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              className="spotc-change-gift-button spotc-change-gift-button-header"
+                              onClick={() => chooseMissingFreeGifts(item)}
+                            >
+                              Choose
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       {freeGifts.length > 0 && (
                         <div className="spotc-free-gifts">
@@ -1222,7 +1300,14 @@ export default function CartPage() {
             <Link
               className="spotc-checkout-button"
               href="/address"
-              onClick={() => {
+              onClick={(event) => {
+                if (hasMissingFreeGifts && firstItemMissingGifts) {
+                  event.preventDefault();
+                  alert('Choose your FREE gifts before continuing to address.');
+                  chooseMissingFreeGifts(firstItemMissingGifts);
+                  return;
+                }
+
                 sendGa4Event('begin_checkout', {
                   currency: 'INR',
                   value: total,
