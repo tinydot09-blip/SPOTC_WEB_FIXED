@@ -1725,7 +1725,7 @@ export default function DashboardOrders() {
     if (returnRequestFor(view)) return false;
     const deliveredAt = view.parent.deliveredAt;
     if (!deliveredAt) return false;
-    return Date.now() - deliveredAt.getTime() <= 7 * 24 * 60 * 60 * 1000;
+    return Date.now() - deliveredAt.getTime() <= 24 * 60 * 60 * 1000;
   }
 
   async function requestReturnOrExchange(
@@ -1769,8 +1769,8 @@ export default function DashboardOrders() {
         const deliveredAt = dateOf(
           data.delivered_at ?? data.delivery_completed_at ?? data.updated_at,
         );
-        if (!deliveredAt || Date.now() - deliveredAt.getTime() > 7 * 24 * 60 * 60 * 1000) {
-          throw new Error('The 7-day return / exchange window has ended.');
+        if (!deliveredAt || Date.now() - deliveredAt.getTime() > 24 * 60 * 60 * 1000) {
+          throw new Error('The 1-day return / exchange window has ended.');
         }
 
         const existing = Array.isArray(data.return_requests)
@@ -2493,7 +2493,7 @@ export default function DashboardOrders() {
               </section>
             ) : canRequestReturn(selected) ? (
               <section className="simple-details-return-box">
-                <strong>7 Days Return & Exchange</strong>
+                <strong>1 Day Return & Exchange</strong>
                 <span>Request a return or exchange for this delivered product.</span>
                 <div>
                   <button
