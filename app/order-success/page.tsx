@@ -392,8 +392,8 @@ const whatsappHref = (
 const sendGa4Event = (
   eventName: string,
   parameters: Record<string, unknown>,
-) => {
-  if (typeof window === 'undefined') return;
+): boolean => {
+  if (typeof window === 'undefined') return false;
 
   const gtag = (
     window as typeof window & {
@@ -401,9 +401,32 @@ const sendGa4Event = (
     }
   ).gtag;
 
-  if (typeof gtag === 'function') {
-    gtag('event', eventName, parameters);
+  if (typeof gtag !== 'function') {
+    return false;
   }
+
+  gtag('event', eventName, parameters);
+  return true;
+};
+
+const sendMetaEvent = (
+  eventName: string,
+  parameters: Record<string, unknown>,
+): boolean => {
+  if (typeof window === 'undefined') return false;
+
+  const fbq = (
+    window as typeof window & {
+      fbq?: (...args: unknown[]) => void;
+    }
+  ).fbq;
+
+  if (typeof fbq !== 'function') {
+    return false;
+  }
+
+  fbq('track', eventName, parameters);
+  return true;
 };
 
 const ga4ItemFromOrder = (
@@ -559,46 +582,137 @@ export default function OrderSuccessPage() {
       return;
     }
 
-    orders.forEach((order) => {
-      const transactionId =
-        text(order.order_number) ||
-        text(order.id);
+    let cancelled = false;
+    let attempts = 0;
+    let retryTimer: number | null = null;
 
-      if (!transactionId) return;
+    const trackPurchases = (): boolean => {
+      if (cancelled) return false;
 
-      const storageKey =
-        `spotc-ga4-purchase:${transactionId}`;
+      let allTracked = true;
 
-      if (
-        window.localStorage.getItem(
-          storageKey,
-        ) === '1'
-      ) {
-        return;
-      }
+      orders.forEach((order) => {
+        const transactionId =
+          text(order.order_number) ||
+          text(order.id);
 
-      sendGa4Event('purchase', {
-        transaction_id: transactionId,
-        currency: 'INR',
-        value: Number(order.total || 0),
-        payment_type:
-          text(order.payment_method) ||
-          'Cash on Delivery',
-        items: (order.items || []).map(
-          ga4ItemFromOrder,
-        ),
+        if (!transactionId) {
+          return;
+        }
+
+        const orderValue = Number(order.total || 0);
+        const items = order.items || [];
+
+        /*
+         * GA4 PURCHASE
+         *
+         * IMPORTANT:
+         * Only mark the order as tracked after gtag() really exists
+         * and the purchase event has actually been sent.
+         *
+         * The previous code marked localStorage immediately even when
+         * Google Analytics had not finished loading yet. That could make
+         * the purchase event disappear permanently for that browser/order.
+         */
+        const ga4StorageKey =
+          `spotc-ga4-purchase:${transactionId}`;
+
+        const ga4AlreadyTracked =
+          window.localStorage.getItem(ga4StorageKey) === '1';
+
+        if (!ga4AlreadyTracked) {
+          const ga4Sent = sendGa4Event('purchase', {
+            transaction_id: transactionId,
+            currency: 'INR',
+            value: orderValue,
+            payment_type:
+              text(order.payment_method) ||
+              'Cash on Delivery',
+            items: items.map(ga4ItemFromOrder),
+          });
+
+          if (ga4Sent) {
+            window.localStorage.setItem(ga4StorageKey, '1');
+          } else {
+            allTracked = false;
+          }
+        }
+
+        /*
+         * META PIXEL PURCHASE
+         *
+         * Fire only after a real order has been read from Firestore.
+         * The per-order localStorage key prevents refreshes of the success
+         * page from generating another Purchase in the same browser.
+         */
+        const metaStorageKey =
+          `spotc-meta-purchase:${transactionId}`;
+
+        const metaAlreadyTracked =
+          window.localStorage.getItem(metaStorageKey) === '1';
+
+        if (!metaAlreadyTracked) {
+          const contentIds = items
+            .map((item) => String(item.id || ''))
+            .filter(Boolean);
+
+          const numItems = items.reduce(
+            (total, item) =>
+              total +
+              Math.max(
+                1,
+                Number(item.quantity ?? item.qty) || 1,
+              ),
+            0,
+          );
+
+          const metaSent = sendMetaEvent('Purchase', {
+            value: orderValue,
+            currency: 'INR',
+            content_type: 'product',
+            content_ids: contentIds,
+            num_items: numItems,
+            order_id: transactionId,
+          });
+
+          if (metaSent) {
+            window.localStorage.setItem(metaStorageKey, '1');
+          } else {
+            allTracked = false;
+          }
+        }
       });
 
-      window.localStorage.setItem(
-        storageKey,
-        '1',
-      );
-    });
+      if (allTracked) {
+        purchaseTrackedRef.current = true;
+        window.sessionStorage.removeItem(
+          'spotc-ga4-checkout-snapshot',
+        );
+      }
 
-    purchaseTrackedRef.current = true;
-    window.sessionStorage.removeItem(
-      'spotc-ga4-checkout-snapshot',
-    );
+      return allTracked;
+    };
+
+    if (!trackPurchases()) {
+      retryTimer = window.setInterval(() => {
+        attempts += 1;
+
+        if (trackPurchases() || attempts >= 40) {
+          if (retryTimer !== null) {
+            window.clearInterval(retryTimer);
+            retryTimer = null;
+          }
+        }
+      }, 250);
+    }
+
+    return () => {
+      cancelled = true;
+
+      if (retryTimer !== null) {
+        window.clearInterval(retryTimer);
+      }
+    };
   }, [loading, orders]);
 
   useEffect(() => {
