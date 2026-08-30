@@ -155,10 +155,10 @@ type ForwardGeocodeResponse = Array<{
 }>;
 
 const SERVICE_AREA_MESSAGE =
-  'Delivery is available only in Karamadai, Teacher Colony, EB Colony and Gandhinagar. This address is outside our current delivery area.';
+  'Coming Soon to Your Area!';
 
 const BROWSE_MESSAGE =
-  'You can still browse all SPOTC products.';
+  'We currently deliver in Karamadai, Teacher Colony, EB Colony & Gandhinagar.';
 
 const forwardGeocode = async (
   address: AddressInput,
