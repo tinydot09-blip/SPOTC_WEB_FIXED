@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
+import { collection, doc, getFirestore, onSnapshot, query, where, type DocumentData } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 
 import { requireGoogleLogin, logoutUser } from '@/lib/auth';
@@ -84,6 +85,42 @@ function DashboardAuthStyles() {
   );
 }
 
+
+type OrderNotificationItem = { id:string; orderNumber:string; status:string; title:string; message:string; time:Date|null };
+
+function nText(value: unknown): string { return typeof value === 'string' ? value.trim() : ''; }
+function nDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === 'object' && value !== null && 'toDate' in value) {
+    try { return (value as { toDate: () => Date }).toDate(); } catch { return null; }
+  }
+  const date = new Date(value as string | number);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+function nStatus(data: DocumentData): string {
+  const raw=nText(data.order_status ?? data.status ?? data.delivery_status).toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+  if (raw.includes('cancel')) return 'cancelled';
+  if (raw.includes('out for')) return 'out for delivery';
+  if (raw.includes('deliver')) return 'delivered';
+  if (raw.includes('ready')) return 'ready';
+  if (raw.includes('confirm') || raw.includes('accept')) return 'confirmed';
+  return 'placed';
+}
+function nCopy(orderNumber:string,status:string){
+  if(status==='confirmed') return {title:'Order confirmed',message:`${orderNumber} has been confirmed.`};
+  if(status==='ready') return {title:'Order ready',message:`${orderNumber} is ready.`};
+  if(status==='out for delivery') return {title:'Out for delivery',message:`${orderNumber} is out for delivery.`};
+  if(status==='delivered') return {title:'Order delivered',message:`${orderNumber} has been delivered.`};
+  if(status==='cancelled') return {title:'Order cancelled',message:`${orderNumber} has been cancelled.`};
+  return {title:'Order placed',message:`${orderNumber} has been placed successfully.`};
+}
+function nItem(id:string,data:DocumentData):OrderNotificationItem{
+  const orderNumber=nText(data.order_number ?? data.orderNumber) || id; const status=nStatus(data); const copy=nCopy(orderNumber,status);
+  return {id:`${id}:${status}`,orderNumber,status,...copy,time:nDate(data.updated_at ?? data.updatedAt ?? data.delivered_at ?? data.deliveredAt ?? data.created_at ?? data.createdAt)};
+}
+function nTime(date:Date|null):string{ return date ? new Intl.DateTimeFormat('en-IN',{day:'2-digit',month:'short',hour:'numeric',minute:'2-digit'}).format(date) : ''; }
+
 export default function DashboardClient() {
   const [user, setUser] = useState<User | null>(
     auth?.currentUser ?? null,
@@ -107,6 +144,8 @@ export default function DashboardClient() {
     useState(false);
   const [notificationMessage, setNotificationMessage] =
     useState('');
+  const [orderNotifications, setOrderNotifications] = useState<OrderNotificationItem[]>([]);
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!firebaseReady || !auth) {
@@ -194,6 +233,32 @@ export default function DashboardClient() {
       stopForegroundListener?.();
     };
   }, [user]);
+
+  useEffect(() => {
+    if (!user) { setOrderNotifications([]); setReadNotificationIds([]); return; }
+    const key=`spotc-read-order-notifications:${user.uid}`;
+    try { const saved=JSON.parse(localStorage.getItem(key)||'[]'); setReadNotificationIds(Array.isArray(saved)?saved:[]); } catch { setReadNotificationIds([]); }
+    const firestore=getFirestore(); const merged=new Map<string,OrderNotificationItem>(); const sourceIds=new Map<string,Set<string>>();
+    const publish=()=>setOrderNotifications([...merged.values()].sort((a,b)=>(b.time?.getTime()??0)-(a.time?.getTime()??0)).slice(0,20));
+    const listen=(source:string,q:ReturnType<typeof query>)=>onSnapshot(q,(snap)=>{
+      const old=sourceIds.get(source)??new Set<string>(); const next=new Set<string>();
+      snap.docs.forEach(d=>{next.add(d.id);merged.set(d.id,nItem(d.id,d.data()));});
+      old.forEach(id=>{if(!next.has(id)) merged.delete(id);}); sourceIds.set(source,next); publish();
+    },error=>console.error(`Order notification listener failed (${source}):`,error));
+    const orders=collection(firestore,'Orders');
+    const stops=[
+      listen('uid',query(orders,where('user_uid','==',user.uid))),
+      listen('users-ref',query(orders,where('user_ref','==',doc(firestore,'users',user.uid)))),
+      listen('Users-ref',query(orders,where('user_ref','==',doc(firestore,'Users',user.uid)))),
+    ];
+    return ()=>stops.forEach(stop=>stop());
+  }, [user]);
+
+  const unreadNotificationCount=orderNotifications.filter(item=>!readNotificationIds.includes(item.id)).length;
+  const openNotifications=()=>{
+    const opening=!notificationsOpen; setNotificationsOpen(opening);
+    if(opening && user){ const ids=orderNotifications.map(item=>item.id); setReadNotificationIds(ids); try{localStorage.setItem(`spotc-read-order-notifications:${user.uid}`,JSON.stringify(ids));}catch{} }
+  };
 
   useEffect(() => {
     const params =
@@ -355,7 +420,7 @@ export default function DashboardClient() {
 
         if (state === 'granted') {
           setNotificationMessage(
-            'SPOTC order status alerts are enabled on this device.',
+            'Browser order alerts are enabled on this device.',
           );
         } else if (
           state === 'denied'
@@ -602,17 +667,11 @@ export default function DashboardClient() {
               <button
                 type="button"
                 className="dash-header-notification-button"
-                onClick={() =>
-                  setNotificationsOpen(
-                    (value) =>
-                      !value,
-                  )
-                }
+                onClick={openNotifications}
                 aria-label="Open notifications"
               >
                 <Bell />
-                {notificationPermission !==
-                  'granted' && <i />}
+                {unreadNotificationCount > 0 && <i>{unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}</i>}
               </button>
 
               {notificationsOpen && (
@@ -642,68 +701,38 @@ export default function DashboardClient() {
                     </button>
                   </div>
 
-                  {user && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void enableBrowserNotifications()
-                      }
-                      disabled={
-                        notificationBusy ||
-                        notificationPermission ===
-                          'granted'
-                      }
-                    >
+                  {orderNotifications.length ? (
+                    <div className="dash-order-notification-list">
+                      {orderNotifications.map((item) => (
+                        <button key={item.id} type="button" className="dash-order-notification-item" onClick={() => changeTab('orders')}>
+                          <CheckCircle2 />
+                          <span>
+                            <strong>{item.title}</strong>
+                            <small>{item.message}</small>
+                            {item.time && <em>{nTime(item.time)}</em>}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="dash-notification-empty">
                       <Bell />
+                      <strong>No order updates yet</strong>
+                      <span>New order status updates will appear here.</span>
+                    </div>
+                  )}
 
+                  {user && notificationPermission !== 'granted' && (
+                    <button type="button" className="dash-enable-alerts-button" onClick={() => void enableBrowserNotifications()} disabled={notificationBusy}>
+                      <Bell />
                       <span>
-                        <strong>
-                          {notificationPermission ===
-                          'granted'
-                            ? 'Browser alerts enabled'
-                            : notificationBusy
-                              ? 'Enabling alerts…'
-                              : 'Enable browser alerts'}
-                        </strong>
-
-                        <small>
-                          {notificationPermission ===
-                          'granted'
-                            ? 'Get alerts when your order is placed, confirmed, ready, out for delivery, delivered or cancelled.'
-                            : 'Enable alerts for placed, confirmed, ready, out for delivery, delivered and cancelled order updates.'}
-                        </small>
+                        <strong>{notificationBusy ? 'Enabling alerts…' : 'Enable browser alerts'}</strong>
+                        <small>Also receive order updates when SPOTC is in the background.</small>
                       </span>
                     </button>
                   )}
 
-                  {notificationMessage && (
-                    <div className="dash-notification-message">
-                      {notificationMessage}
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      changeTab(
-                        'orders',
-                      )
-                    }
-                  >
-                    <CheckCircle2 />
-
-                    <span>
-                      <strong>
-                        Order updates
-                      </strong>
-
-                      <small>
-                        Placed, confirmed, ready,
-                        out for delivery, delivered
-                        and cancelled alerts
-                      </small>
-                    </span>
-                  </button>
+                  {notificationMessage && <div className="dash-notification-message">{notificationMessage}</div>}
 
                                   </div>
               )}
@@ -736,6 +765,7 @@ export default function DashboardClient() {
         .dash-side:before{display:none!important}.dash-side-brand{padding:10px 10px 24px!important}.dash-side-brand span{color:var(--dash-orange)!important;font-size:25px!important;font-weight:800!important;letter-spacing:.08em!important;text-shadow:none!important}.dash-side-brand small{color:#9299a3!important;font-size:10px!important;font-weight:600!important}.dash-side nav{display:grid!important;gap:6px!important}.dash-side nav button,.dash-logout{width:100%!important;min-height:46px!important;padding:0 13px!important;display:flex!important;align-items:center!important;gap:11px!important;border:1px solid transparent!important;border-radius:13px!important;color:#626b76!important;background:transparent!important;font-size:14px!important;font-weight:600!important;text-align:left!important;cursor:pointer!important;transform:none!important;box-shadow:none!important}.dash-side nav button.active{color:#9b5600!important;background:#fff2e1!important;border-color:#f1cf9f!important;font-weight:700!important}.dash-logout{margin-top:auto!important;color:#c8434c!important;background:#fff4f5!important;border-color:#f3d4d7!important}
         .dash-shell{width:100%;height:100vh;max-width:none;min-width:0;padding:22px 28px 64px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}.dash-header-card{width:100%;padding:22px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;border:1px solid var(--dash-border);border-radius:22px;background:#fff;box-shadow:0 9px 28px rgba(30,37,48,.06)}.dash-header-left,.dash-header-right{display:flex;align-items:center;gap:13px;min-width:0}.dash-menu{display:none;width:42px;height:42px;border:1px solid var(--dash-border);border-radius:12px;background:#fff;cursor:pointer}.dash-user-avatar{position:relative;width:58px;height:58px;flex:0 0 auto}.dash-user-avatar img,.dash-user-avatar>span{width:58px;height:58px;display:grid;place-items:center;object-fit:cover;border-radius:18px;color:#fff;background:linear-gradient(135deg,#347b25,#215f1b)}.dash-user-avatar i{position:absolute;right:-2px;bottom:-2px;width:15px;height:15px;border:3px solid #fff;border-radius:50%;background:#33c86f}.dash-user-copy{min-width:0}.dash-eyebrow{display:flex;align-items:center;gap:5px;margin-bottom:4px;color:#9a651f;font-size:10px;font-weight:700;letter-spacing:.08em}.dash-user-copy h1{margin:0;color:#171b20;font-size:clamp(26px,2.5vw,34px);line-height:1.1;font-weight:700}.dash-user-copy p{margin:6px 0 0;color:var(--dash-muted);font-size:14px}.dash-member-chip{min-width:175px;padding:10px 13px;display:flex;align-items:center;gap:9px;border:1px solid #d8eee1;border-radius:14px;background:#f1fbf5}.dash-member-chip>svg{width:22px;color:var(--dash-green)}.dash-member-chip small,.dash-member-chip strong{display:block}.dash-member-chip small{color:#789083;font-size:9px}.dash-member-chip strong{margin-top:2px;color:#277044;font-size:12px}.dash-icon-button{position:relative;width:42px;height:42px;display:grid;place-items:center;flex:0 0 auto;border:1px solid var(--dash-border);border-radius:12px;color:#22282e;background:#fff;cursor:pointer}.dash-icon-button svg{width:19px}.dash-icon-button i{position:absolute;right:8px;top:7px;width:7px;height:7px;border:2px solid #fff;border-radius:50%;background:#ef4650}.dash-logout-icon{color:#df4650}
         .dash-notification-wrap{position:relative}.dash-notification-panel{position:absolute;right:0;top:52px;z-index:80;width:340px;padding:10px;border:1px solid var(--dash-border);border-radius:18px;background:#fff;box-shadow:0 22px 60px rgba(25,32,42,.18)}.dash-popover-head{padding:9px 9px 12px;display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #edf0f3}.dash-popover-head strong,.dash-popover-head span{display:block}.dash-popover-head span{margin-top:3px;color:#7a828d;font-size:11px}.dash-popover-head>button{width:30px;height:30px;border:0;border-radius:9px;background:#f4f6f8;cursor:pointer}.dash-notification-panel>button{width:100%;padding:12px 9px;display:flex;align-items:center;gap:11px;border:0;border-radius:12px;background:#fff;text-align:left;cursor:pointer}.dash-notification-panel>button:hover{background:#f7f8fa}.dash-notification-panel>button>svg{width:20px;color:#d97800}.dash-notification-panel>button span,.dash-notification-panel>button strong,.dash-notification-panel>button small{display:block}.dash-notification-panel>button small{margin-top:3px;color:#7a828d}
+        .dash-order-notification-list{max-height:360px;overflow-y:auto;padding:4px 0}.dash-order-notification-item{width:100%;padding:12px 9px;display:flex;align-items:flex-start;gap:11px;border:0;border-bottom:1px solid #f0f2f4;background:#fff;text-align:left;cursor:pointer}.dash-order-notification-item:hover{background:#f7f8fa}.dash-order-notification-item>svg{width:19px;height:19px;margin-top:2px;flex:0 0 auto;color:#d97800}.dash-order-notification-item span,.dash-order-notification-item strong,.dash-order-notification-item small,.dash-order-notification-item em{display:block}.dash-order-notification-item strong{color:#252a30;font-size:13px}.dash-order-notification-item small{margin-top:3px;color:#747c86;font-size:11px;line-height:1.35}.dash-order-notification-item em{margin-top:5px;color:#a0a6ae;font-size:10px;font-style:normal}.dash-notification-empty{padding:24px 12px;text-align:center;color:#7a828d}.dash-notification-empty>svg{width:25px;height:25px;margin-bottom:8px;color:#c4c9cf}.dash-notification-empty strong,.dash-notification-empty span{display:block}.dash-notification-empty strong{color:#42484f;font-size:13px}.dash-notification-empty span{margin-top:4px;font-size:11px}.dash-enable-alerts-button{border-top:1px solid #edf0f3!important;border-radius:0!important}.dash-notification-message{margin:7px 8px;padding:9px 10px;border-radius:10px;color:#5f6770;background:#f5f7f9;font-size:10px;line-height:1.35}.dash-header-notification-button i{min-width:17px!important;width:auto!important;height:17px!important;padding:0 4px!important;display:flex!important;align-items:center!important;justify-content:center!important;color:#fff!important;background:#ff5060!important;font-size:8px!important;font-style:normal!important;font-weight:800!important;line-height:1!important}
         .dash-content{width:100%;max-width:none;min-width:0;margin:24px 0 0;padding:0;display:block}.dash-content>*{width:100%!important;max-width:none!important;margin-left:0!important;margin-right:0!important}.dash-content>.dash-overview{gap:24px!important}.dash-bottom-cta-row{width:100%;margin-top:24px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:24px}.dash-bottom-cta-row article{min-width:0;min-height:220px;padding:24px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;overflow:hidden;border:1px solid var(--dash-border);border-radius:24px;box-shadow:0 13px 34px rgba(35,42,53,.06)}.dash-box-cta{position:relative;background:linear-gradient(135deg,#fbf9ff,#f1ecff)}.dash-box-cta:after{content:'🎁';position:absolute;right:36px;top:26px;font-size:68px}.dash-invite-cta{position:relative;background:linear-gradient(135deg,#fffaf4,#fff1df)}.dash-invite-cta:after{content:'👥';position:absolute;right:32px;top:28px;font-size:60px}.dash-cta-copy{position:relative;z-index:1;max-width:620px}.dash-cta-kicker{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;color:#6035c4;background:#ece5ff;font-size:10px;font-weight:700}.dash-cta-kicker.orange{color:#a85c08;background:#ffead2}.dash-cta-copy h2{margin:13px 0 7px;font-size:clamp(22px,2.3vw,30px)}.dash-cta-copy p{margin:0;color:#737b85;font-size:14px}.dash-box-milestones{margin-top:17px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.dash-box-milestones button{padding:11px;border:1px solid rgba(101,61,199,.12);border-radius:13px;background:#fff;text-align:left;cursor:pointer}.dash-box-milestones span,.dash-box-milestones strong{display:block}.dash-box-milestones span{color:#5f38b9;font-size:12px}.dash-box-milestones strong{margin-top:3px;color:#2a2335;font-size:13px}.dash-cta-primary{position:relative;z-index:2;min-width:168px;min-height:48px;padding:0 16px;display:flex;align-items:center;justify-content:center;gap:8px;flex:0 0 auto;border:0;border-radius:14px;color:#fff;font-weight:700;cursor:pointer}.dash-cta-primary.purple{background:#6a39d5}.dash-cta-primary.orange{background:#f28a00}
         .dash-modal-backdrop{position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:22px;background:rgba(19,23,29,.68);backdrop-filter:blur(7px)}.dash-modal{width:min(900px,100%);max-height:90vh;overflow-y:auto;padding:26px;border:1px solid #e5e8ec;border-radius:26px;background:#fff;box-shadow:0 35px 100px rgba(0,0,0,.28)}.dash-modal-head{display:flex;justify-content:space-between;gap:20px}.dash-modal-head h2{margin:10px 0 6px;font-size:30px}.dash-modal-head p{margin:0;color:#6f7781}.dash-modal-head>button{width:40px;height:40px;border:1px solid #e5e8ec;border-radius:12px;background:#fff;cursor:pointer}.dash-modal-kicker{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;color:#9a5a00;background:#fff1dc;font-size:10px;font-weight:800}.dash-modal-kicker.purple{color:#6035c4;background:#eee7ff}.dash-level-modal-grid,.dash-box-modal-grid{margin-top:22px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.dash-level-modal-grid article,.dash-box-modal-grid article{padding:18px;border:1px solid #e5e8ec;border-radius:18px;background:#fafbfc}.dash-level-modal-grid span,.dash-level-modal-grid strong,.dash-level-modal-grid b{display:block}.dash-level-modal-grid span{color:#d97800;font-size:10px;font-weight:800}.dash-level-modal-grid strong{margin-top:8px;font-size:18px}.dash-level-modal-grid b{margin-top:5px;color:#5f38b9}.dash-level-modal-grid p,.dash-box-modal-grid p{color:#6f7781;font-size:13px}.dash-modal-primary{margin-top:20px;min-height:48px;padding:0 17px;display:flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:14px;color:#fff;background:#6d3cdf;font-weight:700;cursor:pointer}.dash-box-modal-grid article>div{width:76px;height:76px;display:grid;place-items:center;align-content:center;border-radius:22px;color:#fff;background:#6d3cdf}.dash-box-modal-grid article>div strong{font-size:24px}.dash-box-modal-grid article>div span{font-size:9px}.dash-box-modal-grid button{width:100%;min-height:40px;border:1px solid #d8c9ff;border-radius:11px;color:#6035c4;background:#fff;cursor:pointer}.dash-info-note{margin-top:18px;padding:15px;display:flex;gap:11px;border:1px solid #d8eee1;border-radius:15px;background:#f3fbf6}.dash-info-note>svg{width:22px;color:#169b50}.dash-info-note span{color:#557062;font-size:13px}.dash-info-note strong{display:block}
         .dash-auth-loading{min-height:100vh;display:grid;place-items:center;align-content:center;gap:14px}.dash-auth-loading span{width:36px;height:36px;border:3px solid #e0e3e7;border-top-color:#d97800;border-radius:50%;animation:spin .8s linear infinite}.dash-login-page{min-height:100vh;display:grid;place-items:center;padding:24px;color:#fff;background:#12151a}.dash-login-card{width:min(520px,100%);padding:36px;text-align:center;border-radius:28px;background:#1b1f25}.dash-login-badge{width:max-content;margin:0 auto 20px;padding:7px 10px;display:flex;gap:6px;border-radius:999px;color:#f0b56b;background:rgba(240,181,107,.1);font-size:10px}.dash-login-logo{width:74px;height:74px;margin:0 auto 20px;display:grid;place-items:center;border-radius:22px;background:#d97800;font-size:34px}.dash-login-benefits{margin:21px 0;display:grid;gap:8px}.dash-login-benefits span{padding:10px 12px;display:flex;gap:8px;border-radius:12px;background:rgba(255,255,255,.04);text-align:left}.dash-login-page button{width:100%;min-height:52px;display:flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:14px;background:#f0b56b;font-weight:700}.dash-login-page a{display:inline-block;margin-top:17px;color:#bbc1c9}.dash-mobile-overlay{display:none}
