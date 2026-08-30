@@ -1995,15 +1995,35 @@ const serviceActions: React.CSSProperties = {
 };
 
 const serviceDoneButton: React.CSSProperties = {
-  ...primaryButton,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minHeight: 40,
+  padding: '0 15px',
+  border: 0,
+  borderRadius: 9,
   background: '#178746',
+  color: '#fff',
+  textDecoration: 'none',
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: 'pointer',
 };
 
 const serviceFailedButton: React.CSSProperties = {
-  ...primaryButton,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minHeight: 40,
+  padding: '0 15px',
+  borderRadius: 9,
   background: '#fff',
   color: '#b42318',
   border: '1px solid #f3b7b2',
+  textDecoration: 'none',
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: 'pointer',
 };
 
 const serviceWaitingAdmin: React.CSSProperties = {
