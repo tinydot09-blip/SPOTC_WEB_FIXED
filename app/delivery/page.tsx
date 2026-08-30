@@ -11,6 +11,7 @@ import {
   getDoc,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
   where,
@@ -46,6 +47,21 @@ type DeliveryGift = {
   image?: string;
 };
 
+type DeliveryServiceRequest = {
+  index: number;
+  rawIndex: number;
+  productId: string;
+  productTitle: string;
+  quantity: number;
+  type: 'return' | 'exchange';
+  reason: string;
+  status: string;
+  pickupStatus: string;
+  pickupFailureReason: string;
+  pickupDeliveryBoyId: string;
+  pickupDeliveryBoyName: string;
+};
+
 type DeliveryOrder = {
   id: string;
   orderNumber: string;
@@ -68,6 +84,7 @@ type DeliveryOrder = {
   assignedDeliveryBoyName: string;
   items: DeliveryItem[];
   gifts: DeliveryGift[];
+  serviceRequests: DeliveryServiceRequest[];
   returnStatus: string;
   exchangeStatus: string;
 };
@@ -160,6 +177,60 @@ function readGifts(raw: Record<string, unknown>): DeliveryGift[] {
   return all;
 }
 
+function readServiceRequests(
+  raw: Record<string, unknown>,
+): DeliveryServiceRequest[] {
+  if (!Array.isArray(raw.return_requests)) return [];
+
+  return raw.return_requests
+    .map((value, index) => {
+      const request =
+        value && typeof value === 'object'
+          ? (value as Record<string, unknown>)
+          : {};
+
+      const type = text(request.type).toLowerCase();
+
+      if (type !== 'return' && type !== 'exchange') {
+        return null;
+      }
+
+      return {
+        index,
+        rawIndex: Math.max(
+          0,
+          numberValue(request.raw_index ?? request.rawIndex),
+        ),
+        productId:
+          text(request.product_id) ||
+          text(request.productId),
+        productTitle:
+          text(request.product_title) ||
+          text(request.productTitle) ||
+          'Product',
+        quantity: Math.max(
+          1,
+          numberValue(request.quantity ?? request.qty) || 1,
+        ),
+        type: type as 'return' | 'exchange',
+        reason: text(request.reason),
+        status: normalized(text(request.status) || 'requested'),
+        pickupStatus: normalized(text(request.pickup_status)),
+        pickupFailureReason: text(request.pickup_failure_reason),
+        pickupDeliveryBoyId:
+          text(request.pickup_delivery_boy_id) ||
+          text(request.delivery_boy_id),
+        pickupDeliveryBoyName:
+          text(request.pickup_delivery_boy_name) ||
+          text(request.delivery_boy_name),
+      };
+    })
+    .filter(
+      (value): value is DeliveryServiceRequest =>
+        Boolean(value),
+    );
+}
+
 function mapOrder(
   id: string,
   raw: Record<string, unknown>,
@@ -250,6 +321,7 @@ function mapOrder(
       text(raw.assigned_delivery_boy_name),
     items: readItems(raw.items),
     gifts: readGifts(raw),
+    serviceRequests: readServiceRequests(raw),
     returnStatus:
       text(raw.return_status) ||
       text(raw.return_request_status),
@@ -393,6 +465,13 @@ export default function DeliveryDashboardPage() {
                 )
                 .sort((a, b) => {
                   const rank = (order: DeliveryOrder) => {
+                    const hasServiceWork =
+                      order.serviceRequests.some(
+                        (request) =>
+                          request.status === 'approved' &&
+                          request.pickupStatus !== 'picked_up',
+                      );
+                    if (hasServiceWork) return -1;
                     const s = effectiveStatus(order);
                     if (s === 'out_for_delivery') return 0;
                     if (s === 'packed' || s === 'assigned') return 1;
@@ -434,7 +513,16 @@ export default function DeliveryDashboardPage() {
 
     orders.forEach((order) => {
       const status = effectiveStatus(order);
-      if (status === 'delivered_waiting_approval') {
+      const hasServiceWork =
+        order.serviceRequests.some(
+          (request) =>
+            request.status === 'approved' &&
+            request.pickupStatus !== 'picked_up',
+        );
+
+      if (hasServiceWork) {
+        active += 1;
+      } else if (status === 'delivered_waiting_approval') {
         waiting += 1;
       } else if (
         status === 'not_delivered' ||
@@ -641,6 +729,184 @@ export default function DeliveryDashboardPage() {
     }
   }
 
+  async function updateServiceRequest(
+    order: DeliveryOrder,
+    requestIndex: number,
+    outcome: 'picked_up' | 'failed',
+  ) {
+    if (!rider || busyId) return;
+
+    const serviceRequest = order.serviceRequests.find(
+      (request) => request.index === requestIndex,
+    );
+
+    if (!serviceRequest) {
+      setMessage('Return / exchange request was not found.');
+      return;
+    }
+
+    let failureReason = '';
+
+    if (outcome === 'failed') {
+      const entered = window.prompt(
+        serviceRequest.type === 'return'
+          ? 'Why could the return pickup not be completed?'
+          : 'Why could the exchange not be completed?',
+        'Customer unavailable',
+      );
+
+      if (entered === null) return;
+
+      failureReason = entered.trim();
+
+      if (!failureReason) {
+        setMessage('Enter a failure reason.');
+        return;
+      }
+    } else {
+      const confirmed = window.confirm(
+        serviceRequest.type === 'return'
+          ? `Confirm RETURN PICKUP completed?\n\n${serviceRequest.productTitle}\nQty ${serviceRequest.quantity}`
+          : `Confirm EXCHANGE completed?\n\nReplacement handed over and old item collected:\n${serviceRequest.productTitle}\nQty ${serviceRequest.quantity}`,
+      );
+
+      if (!confirmed) return;
+    }
+
+    setBusyId(order.id);
+    setMessage('');
+
+    try {
+      const orderRef = doc(
+        deliveryDb,
+        'Orders',
+        order.id,
+      );
+
+      await runTransaction(
+        deliveryDb,
+        async (transaction) => {
+          const snapshot =
+            await transaction.get(orderRef);
+
+          if (!snapshot.exists()) {
+            throw new Error(
+              'Order no longer exists.',
+            );
+          }
+
+          const data =
+            snapshot.data() as DocumentData;
+
+          const requests =
+            Array.isArray(data.return_requests)
+              ? [...data.return_requests]
+              : [];
+
+          if (
+            requestIndex < 0 ||
+            requestIndex >= requests.length
+          ) {
+            throw new Error(
+              'Return / exchange request no longer exists.',
+            );
+          }
+
+          const currentRaw =
+            requests[requestIndex] &&
+            typeof requests[requestIndex] === 'object'
+              ? {
+                  ...(requests[
+                    requestIndex
+                  ] as Record<string, unknown>),
+                }
+              : {};
+
+          const currentStatus =
+            normalized(text(currentRaw.status));
+
+          if (currentStatus !== 'approved') {
+            throw new Error(
+              'This service request is not approved.',
+            );
+          }
+
+          const assignedRiderId =
+            text(currentRaw.pickup_delivery_boy_id) ||
+            text(data.delivery_boy_id);
+
+          if (
+            assignedRiderId &&
+            assignedRiderId !== rider.uid
+          ) {
+            throw new Error(
+              'This pickup / exchange is assigned to another delivery boy.',
+            );
+          }
+
+          const requestType =
+            normalized(text(currentRaw.type));
+
+          if (outcome === 'failed') {
+            currentRaw.pickup_status = 'failed';
+            currentRaw.pickup_failure_reason =
+              failureReason;
+            currentRaw.pickup_failed_at = Date.now();
+            currentRaw.pickup_failed_by = rider.uid;
+            currentRaw.pickup_failed_by_name =
+              rider.name;
+          } else {
+            currentRaw.pickup_status = 'picked_up';
+            currentRaw.picked_up_at = Date.now();
+            currentRaw.picked_up_by = rider.uid;
+            currentRaw.picked_up_by_name =
+              rider.name;
+            currentRaw.pickup_failure_reason = '';
+
+            if (requestType === 'exchange') {
+              currentRaw.exchange_handed_over = true;
+              currentRaw.exchange_handed_over_at =
+                Date.now();
+            } else {
+              currentRaw.return_picked_up = true;
+              currentRaw.return_picked_up_at =
+                Date.now();
+            }
+          }
+
+          requests[requestIndex] = currentRaw;
+
+          transaction.update(orderRef, {
+            return_requests: requests,
+            updated_at: serverTimestamp(),
+          });
+        },
+      );
+
+      setMessage(
+        outcome === 'failed'
+          ? `${order.orderNumber}: ${
+              serviceRequest.type === 'return'
+                ? 'Return pickup'
+                : 'Exchange'
+            } failed — ${failureReason}.`
+          : serviceRequest.type === 'return'
+            ? `${order.orderNumber}: Return item picked up. Admin must receive it before stock is restored.`
+            : `${order.orderNumber}: Exchange swap completed. Admin must finalize the exchange.`,
+      );
+    } catch (error) {
+      console.error(error);
+
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Could not update return / exchange.',
+      );
+    } finally {
+      setBusyId('');
+    }
+  }
+
   async function markNotDelivered() {
     if (!rider || !failureOrder || busyId) return;
 
@@ -747,6 +1013,14 @@ export default function DeliveryDashboardPage() {
               const failed = status === 'not_delivered';
               const out = status === 'out_for_delivery';
               const busy = busyId === order.id;
+
+              const serviceRequests =
+                order.serviceRequests.filter(
+                  (request) =>
+                    request.status === 'approved' &&
+                    (!request.pickupDeliveryBoyId ||
+                      request.pickupDeliveryBoyId === rider.uid),
+                );
 
               return (
                 <article
@@ -896,6 +1170,123 @@ export default function DeliveryDashboardPage() {
                         </button>
                       )}
                   </div>
+
+                  {serviceRequests.length > 0 && (
+                    <div style={serviceWorkBox}>
+                      <div style={serviceWorkHeading}>
+                        RETURN / EXCHANGE WORK
+                      </div>
+
+                      {serviceRequests.map((request) => (
+                        <div
+                          key={`${order.id}-service-${request.index}`}
+                          style={serviceWorkCard}
+                        >
+                          <div style={serviceWorkTop}>
+                            <strong>
+                              {request.type === 'return'
+                                ? '↩ RETURN PICKUP'
+                                : '⇄ EXCHANGE'}
+                            </strong>
+
+                            <span style={serviceWorkPill}>
+                              {(request.pickupStatus || 'assigned')
+                                .replace(/_/g, ' ')
+                                .toUpperCase()}
+                            </span>
+                          </div>
+
+                          <div style={serviceProductTitle}>
+                            {request.productTitle}
+                          </div>
+
+                          <div style={serviceMeta}>
+                            Qty {request.quantity} · Reason:{' '}
+                            {request.reason || 'No reason provided'}
+                          </div>
+
+                          {request.pickupFailureReason && (
+                            <div style={serviceFailure}>
+                              Previous failure:{' '}
+                              {request.pickupFailureReason}
+                            </div>
+                          )}
+
+                          <div style={serviceInstructions}>
+                            {request.type === 'return'
+                              ? 'Collect the returned product from the customer. Do not change stock here. Admin will inspect and restore stock after receiving it.'
+                              : 'Hand over the same-product replacement and collect the original item from the customer. Then mark the exchange completed.'}
+                          </div>
+
+                          <div style={serviceActions}>
+                            <a
+                              href={mapsHref(order)}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={mapButton}
+                            >
+                              📍 Open Maps
+                            </a>
+
+                            {order.customerPhone && (
+                              <a
+                                href={`tel:${order.customerPhone}`}
+                                style={secondaryButton}
+                              >
+                                ☎ Call Customer
+                              </a>
+                            )}
+
+                            {request.pickupStatus !== 'picked_up' && (
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  style={serviceDoneButton}
+                                  onClick={() =>
+                                    void updateServiceRequest(
+                                      order,
+                                      request.index,
+                                      'picked_up',
+                                    )
+                                  }
+                                >
+                                  {busy
+                                    ? 'Updating…'
+                                    : request.type === 'return'
+                                      ? '✓ Picked Up'
+                                      : '✓ Exchange Completed'}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  style={serviceFailedButton}
+                                  onClick={() =>
+                                    void updateServiceRequest(
+                                      order,
+                                      request.index,
+                                      'failed',
+                                    )
+                                  }
+                                >
+                                  {request.type === 'return'
+                                    ? 'Pickup Failed'
+                                    : 'Exchange Failed'}
+                                </button>
+                              </>
+                            )}
+
+                            {request.pickupStatus === 'picked_up' && (
+                              <span style={serviceWaitingAdmin}>
+                                ✓ Rider step complete — waiting for Admin finalization.
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {order.items.length > 0 && (
                     <div style={itemsBox}>
@@ -1523,6 +1914,104 @@ const giftPlaceholder: React.CSSProperties = {
   background: '#eaf7ee',
   borderRadius: 7,
 };
+const serviceWorkBox: React.CSSProperties = {
+  margin: '0 15px 15px',
+  padding: 12,
+  border: '2px solid #f2c46d',
+  borderRadius: 12,
+  background: '#fff9ed',
+  display: 'grid',
+  gap: 10,
+};
+
+const serviceWorkHeading: React.CSSProperties = {
+  color: '#8a4b00',
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 0.8,
+};
+
+const serviceWorkCard: React.CSSProperties = {
+  padding: 12,
+  borderRadius: 10,
+  border: '1px solid #efd9ae',
+  background: '#fff',
+  display: 'grid',
+  gap: 8,
+};
+
+const serviceWorkTop: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  gap: 10,
+  flexWrap: 'wrap',
+  color: '#8a4b00',
+  fontSize: 12,
+};
+
+const serviceWorkPill: React.CSSProperties = {
+  padding: '4px 7px',
+  borderRadius: 999,
+  background: '#fff0cf',
+  color: '#8a4b00',
+  fontSize: 9,
+  fontWeight: 900,
+};
+
+const serviceProductTitle: React.CSSProperties = {
+  color: '#101828',
+  fontSize: 13,
+  fontWeight: 800,
+};
+
+const serviceMeta: React.CSSProperties = {
+  color: '#667085',
+  fontSize: 11,
+};
+
+const serviceInstructions: React.CSSProperties = {
+  padding: 9,
+  borderRadius: 8,
+  background: '#f8fafc',
+  color: '#475467',
+  fontSize: 10,
+  lineHeight: 1.45,
+};
+
+const serviceFailure: React.CSSProperties = {
+  padding: 8,
+  borderRadius: 8,
+  background: '#fff1f0',
+  color: '#b42318',
+  fontSize: 10,
+  fontWeight: 700,
+};
+
+const serviceActions: React.CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 8,
+  alignItems: 'center',
+};
+
+const serviceDoneButton: React.CSSProperties = {
+  ...primaryButton,
+  background: '#178746',
+};
+
+const serviceFailedButton: React.CSSProperties = {
+  ...primaryButton,
+  background: '#fff',
+  color: '#b42318',
+  border: '1px solid #f3b7b2',
+};
+
+const serviceWaitingAdmin: React.CSSProperties = {
+  color: '#166534',
+  fontSize: 11,
+  fontWeight: 800,
+};
+
 const serviceBox: React.CSSProperties = {
   margin: '0 15px 15px',
   padding: 12,

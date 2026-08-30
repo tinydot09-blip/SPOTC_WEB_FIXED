@@ -345,6 +345,10 @@ type ReturnRequestInfo = {
   reason: string;
   status: 'requested' | 'approved' | 'rejected' | 'completed';
   requestedAt: number;
+  pickupStatus: '' | 'assigned' | 'picked_up' | 'failed';
+  pickupFailureReason: string;
+  pickupDeliveryBoyId: string;
+  pickupDeliveryBoyName: string;
 };
 
 function returnRequestsFromOrder(data: DocumentData): ReturnRequestInfo[] {
@@ -373,6 +377,20 @@ function returnRequestsFromOrder(data: DocumentData): ReturnRequestInfo[] {
           ? status
           : 'requested') as ReturnRequestInfo['status'],
         requestedAt: Number(request.requested_at ?? request.requestedAt ?? 0) || 0,
+        pickupStatus: (
+          ['assigned', 'picked_up', 'failed'].includes(
+            text(request.pickup_status).toLowerCase(),
+          )
+            ? text(request.pickup_status).toLowerCase()
+            : ''
+        ) as ReturnRequestInfo['pickupStatus'],
+        pickupFailureReason: text(request.pickup_failure_reason),
+        pickupDeliveryBoyId: text(
+          request.pickup_delivery_boy_id ?? request.delivery_boy_id,
+        ),
+        pickupDeliveryBoyName: text(
+          request.pickup_delivery_boy_name ?? request.delivery_boy_name,
+        ),
       };
     })
     .filter((value): value is ReturnRequestInfo => Boolean(value));
@@ -1706,19 +1724,38 @@ if (!response.ok) {
       return;
     }
 
-    if (action === 'complete' && request.status !== 'approved') {
-      setMessage('Approve the request before marking it received / completed.');
+    const selectedServiceDeliveryBoyId =
+      selectedDeliveryBoyByOrder[row.id] ||
+      request.pickupDeliveryBoyId ||
+      text(row.data.delivery_boy_id);
+
+    const serviceDeliveryBoy = deliveryBoys.find(
+      (item) => item.id === selectedServiceDeliveryBoyId,
+    );
+
+    if (action === 'approve' && !serviceDeliveryBoy) {
+      setMessage(
+        `Select an active delivery boy for this ${
+          request.type === 'return' ? 'return pickup' : 'exchange'
+        } before approving.`,
+      );
       return;
     }
 
     const actionText =
       action === 'approve'
-        ? 'approve'
+        ? request.pickupStatus === 'failed'
+          ? `retry and assign this ${
+              request.type === 'return' ? 'return pickup' : 'exchange'
+            }`
+          : `approve this ${
+              request.type === 'return' ? 'return' : 'exchange'
+            } and assign the delivery boy`
         : action === 'reject'
-          ? 'reject'
+          ? 'reject this request'
           : request.type === 'return'
-            ? 'confirm the returned item was received and restore stock'
-            : 'complete this exchange';
+            ? 'confirm the physically returned item was received and restore stock'
+            : 'finalize this exchange after the delivery boy completed the swap';
 
     if (
       !window.confirm(
@@ -1736,7 +1773,10 @@ if (!response.ok) {
 
       await runTransaction(firestore, async (transaction) => {
         const orderSnap = await transaction.get(orderRef);
-        if (!orderSnap.exists()) throw new Error('Order no longer exists.');
+
+        if (!orderSnap.exists()) {
+          throw new Error('Order no longer exists.');
+        }
 
         const liveOrder = orderSnap.data();
         const requests = Array.isArray(liveOrder.return_requests)
@@ -1751,35 +1791,93 @@ if (!response.ok) {
           requests[requestIndex] && typeof requests[requestIndex] === 'object'
             ? ({ ...(requests[requestIndex] as DocumentData) } as DocumentData)
             : ({} as DocumentData);
-        const currentStatus = text(currentRaw.status).toLowerCase() || 'requested';
-        const currentType = text(currentRaw.type).toLowerCase();
 
-        if (currentStatus === 'completed' || currentStatus === 'rejected') {
+        const currentStatus =
+          text(currentRaw.status).toLowerCase() || 'requested';
+        const currentType = text(currentRaw.type).toLowerCase();
+        const currentPickupStatus =
+          text(currentRaw.pickup_status).toLowerCase();
+
+        if (
+          currentStatus === 'completed' ||
+          currentStatus === 'rejected'
+        ) {
           throw new Error('This request has already been closed.');
         }
 
+        const orderUpdate: DocumentData = {
+          updated_at: serverTimestamp(),
+        };
+
         if (action === 'approve') {
+          if (!serviceDeliveryBoy) {
+            throw new Error(
+              'Select an active delivery boy before approving this request.',
+            );
+          }
+
           currentRaw.status = 'approved';
-          currentRaw.approved_at = Date.now();
+          currentRaw.approved_at =
+            currentStatus === 'requested'
+              ? Date.now()
+              : currentRaw.approved_at ?? Date.now();
+
+          currentRaw.pickup_status = 'assigned';
+          currentRaw.pickup_assigned_at = Date.now();
+          currentRaw.pickup_delivery_boy_id = serviceDeliveryBoy.id;
+          currentRaw.pickup_delivery_boy_name = serviceDeliveryBoy.name;
+          currentRaw.pickup_delivery_boy_phone = serviceDeliveryBoy.phone;
+          currentRaw.pickup_failure_reason = '';
+          currentRaw.pickup_failed_at = null;
+
+          orderUpdate.delivery_boy_id = serviceDeliveryBoy.id;
+          orderUpdate.delivery_boy_name = serviceDeliveryBoy.name;
+          orderUpdate.delivery_boy_phone = serviceDeliveryBoy.phone;
+          orderUpdate.delivery_boy_vehicle =
+            serviceDeliveryBoy.vehicleNumber;
+          orderUpdate.delivery_assignment_status = 'service_assigned';
         } else if (action === 'reject') {
+          if (currentPickupStatus === 'picked_up') {
+            throw new Error(
+              'The item has already been picked up. Finalize the request instead of rejecting it.',
+            );
+          }
+
           currentRaw.status = 'rejected';
           currentRaw.rejected_at = Date.now();
         } else {
           if (currentStatus !== 'approved') {
-            throw new Error('Approve the request before completing it.');
+            throw new Error(
+              'Approve the request and complete the physical pickup / exchange first.',
+            );
+          }
+
+          if (currentPickupStatus !== 'picked_up') {
+            throw new Error(
+              currentType === 'return'
+                ? 'The delivery boy has not marked the returned item as Picked Up yet.'
+                : 'The delivery boy has not marked the exchange swap as completed yet.',
+            );
           }
 
           if (currentType === 'return') {
             const productId =
               text(currentRaw.product_id ?? currentRaw.productId) ||
               request.productId;
+
             const qty = Math.max(
               1,
-              Number(currentRaw.quantity ?? currentRaw.qty ?? request.quantity) || 1,
+              Number(
+                currentRaw.quantity ??
+                  currentRaw.qty ??
+                  request.quantity,
+              ) || 1,
             );
 
             if (!productId) {
-              throw new Error('Returned product ID is missing, so stock cannot be restored.');
+              throw new Error(
+                'Returned product ID is missing, so stock cannot be restored.',
+              );
             }
 
             const productRef = doc(
@@ -1787,24 +1885,34 @@ if (!response.ok) {
               'BusinessProducts',
               productId,
             );
+
             const productSnap = await transaction.get(productRef);
+
             if (!productSnap.exists()) {
               throw new Error(`Product ${productId} was not found.`);
             }
 
             const product = productSnap.data();
+
             const currentStock = Math.max(
               0,
-              numberValue(product.stock_qty ?? product.stock_quantity ?? 0),
+              numberValue(
+                product.stock_qty ??
+                  product.stock_quantity ??
+                  0,
+              ),
             );
+
             const currentReserved = Math.max(
               0,
               numberValue(product.reserved_qty ?? 0),
             );
+
             const currentSold = Math.max(
               0,
               numberValue(product.sold_qty ?? 0),
             );
+
             const nextStock = currentStock + qty;
             const nextSold = Math.max(0, currentSold - qty);
 
@@ -1812,13 +1920,21 @@ if (!response.ok) {
               stock_qty: nextStock,
               stock_quantity: nextStock,
               sold_qty: nextSold,
-              available_qty: Math.max(0, nextStock - currentReserved),
-              is_in_stock: nextStock - currentReserved > 0,
+              available_qty: Math.max(
+                0,
+                nextStock - currentReserved,
+              ),
+              is_in_stock:
+                nextStock - currentReserved > 0,
               updated_at: serverTimestamp(),
             });
 
             currentRaw.stock_restored = true;
             currentRaw.stock_restored_qty = qty;
+            currentRaw.return_received_at = Date.now();
+          } else if (currentType === 'exchange') {
+            currentRaw.exchange_finalized = true;
+            currentRaw.exchange_finalized_at = Date.now();
           }
 
           currentRaw.status = 'completed';
@@ -1829,22 +1945,30 @@ if (!response.ok) {
 
         transaction.update(orderRef, {
           return_requests: requests,
-          updated_at: serverTimestamp(),
+          ...orderUpdate,
         });
       });
 
+      setSelectedDeliveryBoyByOrder((current) => {
+        const next = { ...current };
+        delete next[row.id];
+        return next;
+      });
+
       await loadData(false);
+
       setMessage(
         action === 'approve'
-          ? `${request.type === 'return' ? 'Return' : 'Exchange'} request approved.`
+          ? `${request.type === 'return' ? 'Return pickup' : 'Exchange'} assigned to ${serviceDeliveryBoy?.name ?? 'delivery boy'}.`
           : action === 'reject'
             ? `${request.type === 'return' ? 'Return' : 'Exchange'} request rejected.`
             : request.type === 'return'
               ? 'Return completed. Product stock restored and Sold Qty reduced.'
-              : 'Exchange completed. Order remains delivered and stock is unchanged for the same-product exchange.',
+              : 'Exchange completed. Order remains delivered; same-product exchange stock counters remain unchanged.',
       );
     } catch (error) {
       console.error('Return / exchange update failed:', error);
+
       setMessage(
         error instanceof Error
           ? `Return / exchange failed: ${error.message}`
@@ -3006,89 +3130,257 @@ if (!response.ok) {
                     </div>
 
                     <div style={{ display: 'grid', gap: 10 }}>
-                      {returnRequests.map((request) => (
-                        <div
-                          key={`${row.id}-return-${request.index}`}
-                          style={{
-                            padding: 12,
-                            border: '1px solid #eadfd0',
-                            borderRadius: 12,
-                            background: '#fff',
-                            display: 'grid',
-                            gap: 7,
-                          }}
-                        >
+                      {returnRequests.map((request) => {
+                        const needsRider =
+                          request.status === 'requested' ||
+                          (request.status === 'approved' &&
+                            request.pickupStatus === 'failed');
+
+                        const canFinalize =
+                          request.status === 'approved' &&
+                          request.pickupStatus === 'picked_up';
+
+                        return (
                           <div
+                            key={`${row.id}-return-${request.index}`}
                             style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              gap: 12,
-                              flexWrap: 'wrap',
+                              padding: 12,
+                              border: '1px solid #eadfd0',
+                              borderRadius: 12,
+                              background: '#fff',
+                              display: 'grid',
+                              gap: 8,
                             }}
                           >
-                            <strong>
-                              {request.type === 'return' ? 'RETURN' : 'EXCHANGE'} · {request.productTitle}
-                            </strong>
-                            <span
+                            <div
                               style={{
-                                fontSize: 12,
-                                fontWeight: 800,
-                                textTransform: 'uppercase',
-                                color:
-                                  request.status === 'completed'
-                                    ? '#16723a'
-                                    : request.status === 'rejected'
-                                      ? '#b42318'
-                                      : '#9a5b00',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                gap: 12,
+                                flexWrap: 'wrap',
                               }}
                             >
-                              {request.status}
-                            </span>
-                          </div>
+                              <strong>
+                                {request.type === 'return'
+                                  ? 'RETURN'
+                                  : 'EXCHANGE'}{' '}
+                                · {request.productTitle}
+                              </strong>
 
-                          <div style={{ fontSize: 13, color: '#665d54' }}>
-                            Qty {request.quantity} · Reason: {request.reason || 'No reason provided'}
-                          </div>
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                  textTransform: 'uppercase',
+                                  color:
+                                    request.status === 'completed'
+                                      ? '#16723a'
+                                      : request.status === 'rejected'
+                                        ? '#b42318'
+                                        : '#9a5b00',
+                                }}
+                              >
+                                {request.status}
+                              </span>
+                            </div>
 
-                          {(request.status === 'requested' || request.status === 'approved') && (
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                              {request.status === 'requested' && (
-                                <>
+                            <div style={{ fontSize: 13, color: '#665d54' }}>
+                              Qty {request.quantity} · Reason:{' '}
+                              {request.reason || 'No reason provided'}
+                            </div>
+
+                            {request.status === 'approved' && (
+                              <div
+                                style={{
+                                  padding: '9px 10px',
+                                  borderRadius: 10,
+                                  background:
+                                    request.pickupStatus === 'picked_up'
+                                      ? '#edf8f0'
+                                      : request.pickupStatus === 'failed'
+                                        ? '#fff1f0'
+                                        : '#f7f4ef',
+                                  color:
+                                    request.pickupStatus === 'picked_up'
+                                      ? '#166534'
+                                      : request.pickupStatus === 'failed'
+                                        ? '#b42318'
+                                        : '#665d54',
+                                  fontSize: 12,
+                                  display: 'grid',
+                                  gap: 3,
+                                }}
+                              >
+                                <strong>
+                                  {request.type === 'return'
+                                    ? 'Return pickup'
+                                    : 'Exchange service'}:{' '}
+                                  {request.pickupStatus === 'picked_up'
+                                    ? request.type === 'return'
+                                      ? 'PICKED UP'
+                                      : 'SWAP COMPLETED BY RIDER'
+                                    : request.pickupStatus === 'failed'
+                                      ? 'FAILED'
+                                      : 'ASSIGNED / WAITING'}
+                                </strong>
+
+                                {request.pickupDeliveryBoyName && (
+                                  <span>
+                                    Delivery boy: {request.pickupDeliveryBoyName}
+                                  </span>
+                                )}
+
+                                {request.pickupFailureReason && (
+                                  <span>
+                                    Reason: {request.pickupFailureReason}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {needsRider && (
+                              <select
+                                value={
+                                  selectedDeliveryBoyByOrder[row.id] ||
+                                  request.pickupDeliveryBoyId ||
+                                  text(row.data.delivery_boy_id)
+                                }
+                                onChange={(event) =>
+                                  setSelectedDeliveryBoyByOrder(
+                                    (current) => ({
+                                      ...current,
+                                      [row.id]: event.target.value,
+                                    }),
+                                  )
+                                }
+                                disabled={busy}
+                                style={{
+                                  minHeight: 40,
+                                  padding: '0 10px',
+                                  borderRadius: 9,
+                                  border: '1px solid #d0d5dd',
+                                  background: '#fff',
+                                }}
+                              >
+                                <option value="">Select delivery boy</option>
+                                {deliveryBoys.map((deliveryBoy) => (
+                                  <option
+                                    key={deliveryBoy.id}
+                                    value={deliveryBoy.id}
+                                  >
+                                    {deliveryBoy.name}
+                                    {deliveryBoy.vehicleNumber
+                                      ? ` · ${deliveryBoy.vehicleNumber}`
+                                      : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+
+                            {(request.status === 'requested' ||
+                              request.status === 'approved') && (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  gap: 8,
+                                  flexWrap: 'wrap',
+                                }}
+                              >
+                                {request.status === 'requested' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() =>
+                                        void updateReturnRequest(
+                                          row,
+                                          request.index,
+                                          'approve',
+                                        )
+                                      }
+                                      style={primaryAction}
+                                    >
+                                      {request.type === 'return'
+                                        ? 'Approve & Assign Pickup'
+                                        : 'Approve & Assign Exchange'}
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() =>
+                                        void updateReturnRequest(
+                                          row,
+                                          request.index,
+                                          'reject',
+                                        )
+                                      }
+                                      style={cancelButton}
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                )}
+
+                                {request.status === 'approved' &&
+                                  request.pickupStatus === 'failed' && (
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() =>
+                                        void updateReturnRequest(
+                                          row,
+                                          request.index,
+                                          'approve',
+                                        )
+                                      }
+                                      style={primaryAction}
+                                    >
+                                      Retry / Reassign
+                                    </button>
+                                  )}
+
+                                {canFinalize && (
                                   <button
                                     type="button"
                                     disabled={busy}
-                                    onClick={() => void updateReturnRequest(row, request.index, 'approve')}
+                                    onClick={() =>
+                                      void updateReturnRequest(
+                                        row,
+                                        request.index,
+                                        'complete',
+                                      )
+                                    }
                                     style={primaryAction}
                                   >
-                                    Approve
+                                    {request.type === 'return'
+                                      ? 'Received & Restore Stock'
+                                      : 'Finalize Exchange'}
                                   </button>
-                                  <button
-                                    type="button"
-                                    disabled={busy}
-                                    onClick={() => void updateReturnRequest(row, request.index, 'reject')}
-                                    style={cancelButton}
-                                  >
-                                    Reject
-                                  </button>
-                                </>
-                              )}
+                                )}
 
-                              {request.status === 'approved' && (
-                                <button
-                                  type="button"
-                                  disabled={busy}
-                                  onClick={() => void updateReturnRequest(row, request.index, 'complete')}
-                                  style={primaryAction}
-                                >
-                                  {request.type === 'return'
-                                    ? 'Received & Restore Stock'
-                                    : 'Complete Exchange'}
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                                {request.status === 'approved' &&
+                                  !canFinalize &&
+                                  request.pickupStatus !== 'failed' && (
+                                    <span
+                                      style={{
+                                        alignSelf: 'center',
+                                        color: '#7a6b5d',
+                                        fontSize: 12,
+                                        fontWeight: 700,
+                                      }}
+                                    >
+                                      Waiting for delivery boy to{' '}
+                                      {request.type === 'return'
+                                        ? 'pick up the item.'
+                                        : 'complete the exchange.'}
+                                    </span>
+                                  )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
