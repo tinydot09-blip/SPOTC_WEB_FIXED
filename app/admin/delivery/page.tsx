@@ -505,6 +505,43 @@ export default function DeliveryDashboardPage() {
     }
   }
 
+  async function confirmPayment(order: DeliveryOrder) {
+    if (!rider || busyId) return;
+
+    const confirmed = window.confirm(
+      `Confirm payment received for ${order.orderNumber}?\n\nAmount: ₹${Math.round(
+        order.total,
+      )}`,
+    );
+    if (!confirmed) return;
+
+    setBusyId(order.id);
+    setMessage('');
+
+    try {
+      await updateDoc(doc(deliveryDb, 'Orders', order.id), {
+        payment_status: 'paid',
+        payment_received_at: serverTimestamp(),
+        payment_received_by: rider.uid,
+        payment_received_by_name: rider.name,
+        updated_at: serverTimestamp(),
+      });
+
+      setMessage(
+        `${order.orderNumber}: payment marked as received.`,
+      );
+    } catch (error) {
+      console.error(error);
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Could not confirm payment.',
+      );
+    } finally {
+      setBusyId('');
+    }
+  }
+
   async function markDelivered(order: DeliveryOrder) {
     if (!rider || busyId) return;
 
@@ -518,10 +555,15 @@ export default function DeliveryDashboardPage() {
       return;
     }
 
+    if (normalized(order.paymentStatus) !== 'paid') {
+      setMessage(
+        'Confirm payment received before marking this order Delivered.',
+      );
+      return;
+    }
+
     const confirmed = window.confirm(
-      `Confirm that ${order.orderNumber} was handed to the customer?\n\nAmount: ₹${Math.round(
-        order.total,
-      )}\nPayment: ${order.paymentMethod}`,
+      `Mark ${order.orderNumber} as DELIVERED?\n\nThis will update Admin Orders and reduce the sold stock.`,
     );
     if (!confirmed) return;
 
@@ -529,24 +571,54 @@ export default function DeliveryDashboardPage() {
     setMessage('');
 
     try {
-      await updateDoc(doc(deliveryDb, 'Orders', order.id), {
-        delivery_status: 'delivered_waiting_approval',
-        delivery_assignment_status: 'delivered_waiting_approval',
-        delivery_completed_at: serverTimestamp(),
-        delivery_completed_by: rider.uid,
-        delivery_completed_by_name: rider.name,
-        updated_at: serverTimestamp(),
+      const user = deliveryAuth.currentUser;
+      if (!user) {
+        throw new Error('Delivery login expired. Please sign in again.');
+      }
+
+      const idToken = await user.getIdToken();
+
+      const response = await fetch('/api/delivery/complete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          orderId: order.id,
+        }),
       });
 
+      const raw = await response.text();
+      let result: {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+      } = {};
+
+      try {
+        result = raw ? JSON.parse(raw) : {};
+      } catch {
+        // Keep raw response for diagnostics.
+      }
+
+      if (!response.ok || !result.ok) {
+        throw new Error(
+          result.error ||
+            raw ||
+            `Delivery completion failed (${response.status}).`,
+        );
+      }
+
       setMessage(
-        `${order.orderNumber}: delivery reported. Waiting for Admin approval.`,
+        `${order.orderNumber}: Delivered. Admin and stock are updated.`,
       );
     } catch (error) {
       console.error(error);
       setMessage(
         error instanceof Error
           ? error.message
-          : 'Could not report delivery.',
+          : 'Could not complete delivery.',
       );
     } finally {
       setBusyId('');
@@ -777,6 +849,24 @@ export default function DeliveryDashboardPage() {
                         ☎ Call Customer
                       </a>
                     )}
+
+                    {!cancelled &&
+                      !delivered &&
+                      !waiting &&
+                      normalized(order.paymentStatus) !== 'paid' && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          style={paymentReceivedButton}
+                          onClick={() =>
+                            void confirmPayment(order)
+                          }
+                        >
+                          {busy
+                            ? 'Updating…'
+                            : '✓ Payment Received'}
+                        </button>
+                      )}
 
                     {!cancelled &&
                       !delivered &&
@@ -1297,6 +1387,13 @@ const upiButton: React.CSSProperties = {
   ...mapButton,
   border: 0,
   background: '#7f56d9',
+  cursor: 'pointer',
+};
+
+const paymentReceivedButton: React.CSSProperties = {
+  ...mapButton,
+  border: 0,
+  background: '#178746',
   cursor: 'pointer',
 };
 const itemsBox: React.CSSProperties = {

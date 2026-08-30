@@ -8,6 +8,10 @@ import {
   useState,
 } from 'react';
 
+/* =========================================================
+   SPOTC DELIVERY AREA
+   ========================================================= */
+
 export const SPOTC_DELIVERY_CENTER = {
   latitude: 11.2625206,
   longitude: 76.9536029,
@@ -26,7 +30,18 @@ type Coordinates = {
   longitude: number;
 };
 
-const DELIVERY_CACHE_KEY = 'spotc_delivery_location_v1';
+type DeliveryLocationSource =
+  | 'gps'
+  | 'cache'
+  | 'permission'
+  | 'browser_unavailable'
+  | 'location_error';
+
+const DELIVERY_CACHE_KEY =
+  'spotc_delivery_location_v1';
+
+const DELIVERY_TRACKING_KEY =
+  'spotc_delivery_tracking_v1';
 
 type CachedDeliveryLocation = {
   latitude: number;
@@ -34,29 +49,294 @@ type CachedDeliveryLocation = {
   savedAt: number;
 };
 
-const readCachedLocation = (): CachedDeliveryLocation | null => {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.sessionStorage.getItem(DELIVERY_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as CachedDeliveryLocation;
-    const latitude = Number(parsed.latitude);
-    const longitude = Number(parsed.longitude);
-    const savedAt = Number(parsed.savedAt);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !Number.isFinite(savedAt)) return null;
-    if (Date.now() - savedAt > 5 * 60 * 1000) return null;
-    return { latitude, longitude, savedAt };
-  } catch { return null; }
+/* =========================================================
+   GA4
+   ========================================================= */
+
+type GtagWindow = Window & {
+  gtag?: (
+    command: string,
+    eventName: string,
+    params?: Record<string, unknown>,
+  ) => void;
 };
 
-const writeCachedLocation = (coordinates: Coordinates) => {
-  if (typeof window === 'undefined') return;
+function getDistanceBand(
+  distance: number | null,
+): string {
+  if (
+    distance === null ||
+    !Number.isFinite(distance)
+  ) {
+    return 'unknown';
+  }
+
+  if (distance <= 1) return '0_1km';
+  if (distance <= 2) return '1_2km';
+  if (distance <= 3) return '2_3km';
+  if (distance <= 4) return '3_4km';
+  if (distance <= 5) return '4_5km';
+  if (distance <= 7) return '5_7km';
+  if (distance <= 10) return '7_10km';
+
+  return 'over_10km';
+}
+
+function sendGaEvent(
+  eventName: string,
+  params: Record<string, unknown> = {},
+) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const gtag = (window as GtagWindow).gtag;
+
+  if (typeof gtag !== 'function') {
+    return;
+  }
+
+  gtag('event', eventName, {
+    ...params,
+
+    page_path:
+      window.location.pathname,
+
+    page_location:
+      window.location.href,
+  });
+}
+
+/*
+ * Prevent watchPosition / focus / pageshow from sending
+ * the same GA event repeatedly in the same browser session.
+ */
+function alreadyTracked(
+  trackingKey: string,
+): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
   try {
-    window.sessionStorage.setItem(DELIVERY_CACHE_KEY, JSON.stringify({ ...coordinates, savedAt: Date.now() }));
-  } catch {}
+    const raw =
+      window.sessionStorage.getItem(
+        DELIVERY_TRACKING_KEY,
+      );
+
+    const tracked: string[] =
+      raw ? JSON.parse(raw) : [];
+
+    if (tracked.includes(trackingKey)) {
+      return true;
+    }
+
+    tracked.push(trackingKey);
+
+    window.sessionStorage.setItem(
+      DELIVERY_TRACKING_KEY,
+      JSON.stringify(tracked),
+    );
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function trackDeliveryStatus(
+  status: DeliveryAvailabilityStatus,
+  distance: number | null,
+  source: DeliveryLocationSource,
+  accuracyMeters?: number | null,
+) {
+  if (
+    typeof window === 'undefined' ||
+    status === 'checking'
+  ) {
+    return;
+  }
+
+  const distanceBand =
+    getDistanceBand(distance);
+
+  /*
+   * We deliberately DO NOT send exact GPS coordinates
+   * to Google Analytics.
+   */
+  const commonParams = {
+    delivery_status: status,
+
+    delivery_available:
+      status === 'available',
+
+    delivery_radius_km:
+      SPOTC_DELIVERY_CENTER.radiusKm,
+
+    distance_band:
+      distanceBand,
+
+    location_source:
+      source,
+
+    gps_accuracy_band:
+      accuracyMeters == null
+        ? 'unknown'
+        : accuracyMeters <= 20
+          ? '0_20m'
+          : accuracyMeters <= 50
+            ? '20_50m'
+            : accuracyMeters <= 100
+              ? '50_100m'
+              : 'over_100m',
+  };
+
+  /*
+   * One general event.
+   *
+   * This lets us analyse all location checks together.
+   */
+  const generalKey =
+    `delivery_location_checked:${status}:${distanceBand}`;
+
+  if (!alreadyTracked(generalKey)) {
+    sendGaEvent(
+      'delivery_location_checked',
+      commonParams,
+    );
+  }
+
+  /*
+   * Separate easy-to-read GA4 events.
+   *
+   * These will appear directly in:
+   * GA4 → Reports → Engagement → Events
+   */
+  let eventName = '';
+
+  if (status === 'available') {
+    eventName = 'delivery_available';
+  }
+
+  if (status === 'outside') {
+    eventName = 'delivery_outside_area';
+  }
+
+  if (status === 'permission_denied') {
+    eventName = 'delivery_location_denied';
+  }
+
+  if (status === 'unavailable') {
+    eventName =
+      'delivery_location_unavailable';
+  }
+
+  if (!eventName) {
+    return;
+  }
+
+  const statusKey =
+    `${eventName}:${distanceBand}`;
+
+  if (alreadyTracked(statusKey)) {
+    return;
+  }
+
+  sendGaEvent(
+    eventName,
+    commonParams,
+  );
+}
+
+/* =========================================================
+   LOCATION CACHE
+   ========================================================= */
+
+const readCachedLocation =
+  (): CachedDeliveryLocation | null => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    try {
+      const raw =
+        window.sessionStorage.getItem(
+          DELIVERY_CACHE_KEY,
+        );
+
+      if (!raw) {
+        return null;
+      }
+
+      const parsed =
+        JSON.parse(
+          raw,
+        ) as CachedDeliveryLocation;
+
+      const latitude =
+        Number(parsed.latitude);
+
+      const longitude =
+        Number(parsed.longitude);
+
+      const savedAt =
+        Number(parsed.savedAt);
+
+      if (
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude) ||
+        !Number.isFinite(savedAt)
+      ) {
+        return null;
+      }
+
+      /*
+       * Location cache valid for 5 minutes.
+       */
+      if (
+        Date.now() - savedAt >
+        5 * 60 * 1000
+      ) {
+        return null;
+      }
+
+      return {
+        latitude,
+        longitude,
+        savedAt,
+      };
+    } catch {
+      return null;
+    }
+  };
+
+const writeCachedLocation = (
+  coordinates: Coordinates,
+) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(
+      DELIVERY_CACHE_KEY,
+      JSON.stringify({
+        ...coordinates,
+        savedAt: Date.now(),
+      }),
+    );
+  } catch {
+    // Ignore storage failure.
+  }
 };
 
-const toRadians = (value: number) =>
+/* =========================================================
+   DISTANCE CALCULATION
+   ========================================================= */
+
+const toRadians = (
+  value: number,
+) =>
   (value * Math.PI) / 180;
 
 export function distanceKm(
@@ -66,15 +346,20 @@ export function distanceKm(
   const earthRadiusKm = 6371;
 
   const dLat = toRadians(
-    to.latitude - from.latitude,
+    to.latitude -
+      from.latitude,
   );
 
   const dLng = toRadians(
-    to.longitude - from.longitude,
+    to.longitude -
+      from.longitude,
   );
 
-  const lat1 = toRadians(from.latitude);
-  const lat2 = toRadians(to.latitude);
+  const lat1 =
+    toRadians(from.latitude);
+
+  const lat2 =
+    toRadians(to.latitude);
 
   const a =
     Math.sin(dLat / 2) ** 2 +
@@ -92,9 +377,15 @@ export function distanceKm(
   return earthRadiusKm * c;
 }
 
+/* =========================================================
+   DELIVERY AVAILABILITY HOOK
+   ========================================================= */
+
 export function useDeliveryAvailability() {
   const [status, setStatus] =
-    useState<DeliveryAvailabilityStatus>('checking');
+    useState<DeliveryAvailabilityStatus>(
+      'checking',
+    );
 
   const [distance, setDistance] =
     useState<number | null>(null);
@@ -102,7 +393,8 @@ export function useDeliveryAvailability() {
   const [coordinates, setCoordinates] =
     useState<Coordinates | null>(null);
 
-  const hasValidLocationRef = useRef(false);
+  const hasValidLocationRef =
+    useRef(false);
 
   const watchIdRef =
     useRef<number | null>(null);
@@ -110,174 +402,378 @@ export function useDeliveryAvailability() {
   const retryTimerRef =
     useRef<number | null>(null);
 
-  const updateFromPosition = useCallback(
-    (position: GeolocationPosition) => {
-      const customer: Coordinates = {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      };
+  /*
+   * Keeps the last good location result.
+   * Prevents temporary Android GPS errors from
+   * replacing a confirmed valid location.
+   */
+  const lastValidStatusRef =
+    useRef<DeliveryAvailabilityStatus | null>(
+      null,
+    );
 
-      const calculatedDistance = distanceKm(
+  /* =======================================================
+     VALID GPS POSITION
+     ======================================================= */
+
+  const updateFromPosition =
+    useCallback(
+      (
+        position:
+          GeolocationPosition,
+      ) => {
+        const customer: Coordinates = {
+          latitude:
+            position.coords.latitude,
+
+          longitude:
+            position.coords.longitude,
+        };
+
+        const calculatedDistance =
+          distanceKm(
+            customer,
+            {
+              latitude:
+                SPOTC_DELIVERY_CENTER.latitude,
+
+              longitude:
+                SPOTC_DELIVERY_CENTER.longitude,
+            },
+          );
+
+        const nextStatus:
+          DeliveryAvailabilityStatus =
+          calculatedDistance <=
+          SPOTC_DELIVERY_CENTER.radiusKm
+            ? 'available'
+            : 'outside';
+
+        hasValidLocationRef.current =
+          true;
+
+        lastValidStatusRef.current =
+          nextStatus;
+
+        writeCachedLocation(
+          customer,
+        );
+
+        setCoordinates(customer);
+
+        setDistance(
+          calculatedDistance,
+        );
+
+        setStatus(
+          nextStatus,
+        );
+
+        console.log(
+          '[SPOTC DELIVERY]',
+          {
+            latitude:
+              customer.latitude,
+
+            longitude:
+              customer.longitude,
+
+            accuracyMeters:
+              position.coords.accuracy,
+
+            distanceKm:
+              Number(
+                calculatedDistance.toFixed(
+                  2,
+                ),
+              ),
+
+            radiusKm:
+              SPOTC_DELIVERY_CENTER.radiusKm,
+
+            status:
+              nextStatus,
+          },
+        );
+
+        /*
+         * GA4 TRACKING
+         */
+        trackDeliveryStatus(
+          nextStatus,
+          calculatedDistance,
+          'gps',
+          position.coords.accuracy,
+        );
+      },
+      [],
+    );
+
+  /* =======================================================
+     LOCATION ERROR
+     ======================================================= */
+
+  const handleLocationError =
+    useCallback(
+      (
+        error:
+          GeolocationPositionError,
+      ) => {
+        console.warn(
+          '[SPOTC DELIVERY] error',
+          error.code,
+          error.message,
+        );
+
+        /*
+         * If we already have a valid GPS location,
+         * do NOT replace it because of a temporary
+         * Android GPS error.
+         */
+        if (
+          hasValidLocationRef.current
+        ) {
+          return;
+        }
+
+        setCoordinates(null);
+        setDistance(null);
+
+        if (
+          error.code ===
+          error.PERMISSION_DENIED
+        ) {
+          setStatus(
+            'permission_denied',
+          );
+
+          trackDeliveryStatus(
+            'permission_denied',
+            null,
+            'location_error',
+          );
+
+          return;
+        }
+
+        setStatus(
+          'unavailable',
+        );
+
+        trackDeliveryStatus(
+          'unavailable',
+          null,
+          'location_error',
+        );
+      },
+      [],
+    );
+
+  /* =======================================================
+     REQUEST LOCATION
+     ======================================================= */
+
+  const requestLocation =
+    useCallback(
+      (
+        showChecking = false,
+      ) => {
+        if (
+          typeof navigator ===
+            'undefined' ||
+          !navigator.geolocation
+        ) {
+          if (
+            !hasValidLocationRef.current
+          ) {
+            setStatus(
+              'unavailable',
+            );
+
+            setDistance(null);
+            setCoordinates(null);
+
+            trackDeliveryStatus(
+              'unavailable',
+              null,
+              'browser_unavailable',
+            );
+          }
+
+          return;
+        }
+
+        /*
+         * Do not make a confirmed outside banner
+         * disappear every time location retries.
+         */
+        if (
+          !hasValidLocationRef.current &&
+          showChecking
+        ) {
+          setStatus(
+            'checking',
+          );
+        }
+
+        navigator.geolocation
+          .getCurrentPosition(
+            updateFromPosition,
+
+            handleLocationError,
+
+            {
+              /*
+               * Important for the 5-km
+               * delivery boundary.
+               */
+              enableHighAccuracy:
+                true,
+
+              /*
+               * Always ask for fresh GPS.
+               */
+              maximumAge: 0,
+
+              timeout: 15000,
+            },
+          );
+      },
+      [
+        updateFromPosition,
+        handleLocationError,
+      ],
+    );
+
+  /* =======================================================
+     USE CACHED LOCATION IMMEDIATELY
+     ======================================================= */
+
+  useEffect(() => {
+    const cached =
+      readCachedLocation();
+
+    if (!cached) {
+      return;
+    }
+
+    const customer: Coordinates = {
+      latitude:
+        cached.latitude,
+
+      longitude:
+        cached.longitude,
+    };
+
+    const calculatedDistance =
+      distanceKm(
         customer,
         {
           latitude:
             SPOTC_DELIVERY_CENTER.latitude,
+
           longitude:
             SPOTC_DELIVERY_CENTER.longitude,
         },
       );
 
-      hasValidLocationRef.current = true;
-      writeCachedLocation(customer);
-
-      setCoordinates(customer);
-      setDistance(calculatedDistance);
-
-      const nextStatus: DeliveryAvailabilityStatus =
-        calculatedDistance <=
-        SPOTC_DELIVERY_CENTER.radiusKm
-          ? 'available'
-          : 'outside';
-
-      setStatus(nextStatus);
-
-      console.log('[SPOTC DELIVERY]', {
-        latitude: customer.latitude,
-        longitude: customer.longitude,
-        accuracyMeters: position.coords.accuracy,
-        distanceKm:
-          Number(calculatedDistance.toFixed(2)),
-        radiusKm:
-          SPOTC_DELIVERY_CENTER.radiusKm,
-        status: nextStatus,
-      });
-    },
-    [],
-  );
-
-  const handleLocationError = useCallback(
-    (error: GeolocationPositionError) => {
-      console.warn('[SPOTC DELIVERY] error', error.code, error.message);
-
-      if (hasValidLocationRef.current) {
-        return;
-      }
-
-      setCoordinates(null);
-      setDistance(null);
-
-      if (error.code === error.PERMISSION_DENIED) {
-        setStatus('permission_denied');
-        return;
-      }
-
-      setStatus('unavailable');
-    },
-    [],
-  );
-
-  const requestLocation = useCallback(
-    (showChecking = false) => {
-      if (
-        typeof navigator === 'undefined' ||
-        !navigator.geolocation
-      ) {
-        if (!hasValidLocationRef.current) {
-          setStatus('unavailable');
-          setDistance(null);
-          setCoordinates(null);
-        }
-
-        return;
-      }
-
-      /*
-       * Do not make an already-confirmed outside banner
-       * disappear during every automatic retry.
-       */
-      if (!hasValidLocationRef.current && showChecking) {
-        setStatus('checking');
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        updateFromPosition,
-        handleLocationError,
-        {
-          enableHighAccuracy: true,
-
-          /*
-           * Always request a fresh location.
-           */
-          maximumAge: 0,
-
-          timeout: 15000,
-        },
-      );
-    },
-    [
-      updateFromPosition,
-      handleLocationError,
-    ],
-  );
-
-  useEffect(() => {
-    const cached = readCachedLocation();
-    if (!cached) return;
-
-    const customer: Coordinates = {
-      latitude: cached.latitude,
-      longitude: cached.longitude,
-    };
-
-    const calculatedDistance = distanceKm(customer, {
-      latitude: SPOTC_DELIVERY_CENTER.latitude,
-      longitude: SPOTC_DELIVERY_CENTER.longitude,
-    });
-
-    hasValidLocationRef.current = true;
-    setCoordinates(customer);
-    setDistance(calculatedDistance);
-    setStatus(
-      calculatedDistance <= SPOTC_DELIVERY_CENTER.radiusKm
+    const cachedStatus:
+      DeliveryAvailabilityStatus =
+      calculatedDistance <=
+      SPOTC_DELIVERY_CENTER.radiusKm
         ? 'available'
-        : 'outside',
+        : 'outside';
+
+    hasValidLocationRef.current =
+      true;
+
+    lastValidStatusRef.current =
+      cachedStatus;
+
+    setCoordinates(
+      customer,
+    );
+
+    setDistance(
+      calculatedDistance,
+    );
+
+    setStatus(
+      cachedStatus,
+    );
+
+    /*
+     * Track cached result separately.
+     * Exact coordinates are NOT sent.
+     */
+    trackDeliveryStatus(
+      cachedStatus,
+      calculatedDistance,
+      'cache',
     );
   }, []);
 
-  /*
-   * Initial location check + continuous GPS watch.
-   */
+  /* =======================================================
+     INITIAL LOCATION + CONTINUOUS GPS WATCH
+     ======================================================= */
+
   useEffect(() => {
     if (
-      typeof navigator === 'undefined' ||
+      typeof navigator ===
+        'undefined' ||
       !navigator.geolocation
     ) {
-      setStatus('unavailable');
+      setStatus(
+        'unavailable',
+      );
+
+      trackDeliveryStatus(
+        'unavailable',
+        null,
+        'browser_unavailable',
+      );
+
       return;
     }
 
+    /*
+     * Initial fresh location.
+     */
     requestLocation(true);
 
+    /*
+     * Keep watching because the user
+     * may be travelling/moving.
+     */
     watchIdRef.current =
-      navigator.geolocation.watchPosition(
-        updateFromPosition,
-        handleLocationError,
-        {
-          enableHighAccuracy: true,
-          maximumAge: 0,
-          timeout: 30000,
-        },
-      );
+      navigator.geolocation
+        .watchPosition(
+          updateFromPosition,
+
+          handleLocationError,
+
+          {
+            enableHighAccuracy:
+              true,
+
+            maximumAge: 0,
+
+            timeout: 30000,
+          },
+        );
 
     return () => {
       if (
-        watchIdRef.current !== null
+        watchIdRef.current !==
+        null
       ) {
-        navigator.geolocation.clearWatch(
-          watchIdRef.current,
-        );
+        navigator.geolocation
+          .clearWatch(
+            watchIdRef.current,
+          );
 
-        watchIdRef.current = null;
+        watchIdRef.current =
+          null;
       }
     };
   }, [
@@ -286,15 +782,14 @@ export function useDeliveryAvailability() {
     handleLocationError,
   ]);
 
-  /*
-   * Detect Chrome site-permission changes.
-   *
-   * Example:
-   * Blocked → user changes to Allow → SPOTC rechecks.
-   */
+  /* =======================================================
+     BROWSER LOCATION PERMISSION WATCH
+     ======================================================= */
+
   useEffect(() => {
     if (
-      typeof navigator === 'undefined' ||
+      typeof navigator ===
+        'undefined' ||
       !navigator.permissions?.query
     ) {
       return;
@@ -306,61 +801,98 @@ export function useDeliveryAvailability() {
 
     let cancelled = false;
 
+    let permissionChangeHandler:
+      (() => void) | null =
+      null;
+
     const setupPermissionWatcher =
       async () => {
         try {
           permissionStatus =
-            await navigator.permissions.query({
-              name: 'geolocation' as PermissionName,
-            });
-
-          if (cancelled) return;
-
-          const applyPermissionState = () => {
-            if (!permissionStatus) return;
-
-            console.log(
-              '[SPOTC DELIVERY] permission',
-              permissionStatus.state,
+            await navigator.permissions.query(
+              {
+                name:
+                  'geolocation' as PermissionName,
+              },
             );
 
-            if (
-              permissionStatus.state ===
-              'granted'
-            ) {
-              requestLocation(true);
-              return;
-            }
+          if (cancelled) {
+            return;
+          }
 
-            if (
-              permissionStatus.state ===
-              'denied'
-            ) {
-              if (!hasValidLocationRef.current) {
-                setCoordinates(null);
-                setDistance(null);
-                setStatus('permission_denied');
+          permissionChangeHandler =
+            () => {
+              if (
+                !permissionStatus
+              ) {
+                return;
               }
-              return;
-            }
 
-            /*
-             * state === prompt
-             */
-            if (
-              permissionStatus.state ===
-              'prompt'
-            ) {
-              requestLocation(true);
-            }
-          };
+              console.log(
+                '[SPOTC DELIVERY] permission',
+                permissionStatus.state,
+              );
 
-          permissionStatus.addEventListener(
-            'change',
-            applyPermissionState,
-          );
+              if (
+                permissionStatus.state ===
+                'granted'
+              ) {
+                requestLocation(
+                  true,
+                );
 
-          applyPermissionState();
+                return;
+              }
+
+              if (
+                permissionStatus.state ===
+                'denied'
+              ) {
+                if (
+                  !hasValidLocationRef.current
+                ) {
+                  setCoordinates(
+                    null,
+                  );
+
+                  setDistance(
+                    null,
+                  );
+
+                  setStatus(
+                    'permission_denied',
+                  );
+
+                  trackDeliveryStatus(
+                    'permission_denied',
+                    null,
+                    'permission',
+                  );
+                }
+
+                return;
+              }
+
+              /*
+               * state === prompt
+               */
+              if (
+                permissionStatus.state ===
+                'prompt'
+              ) {
+                requestLocation(
+                  true,
+                );
+              }
+            };
+
+          permissionStatus
+            .addEventListener(
+              'change',
+              permissionChangeHandler,
+            );
+
+          permissionChangeHandler();
         } catch (error) {
           console.warn(
             '[SPOTC DELIVERY] Permissions API unavailable',
@@ -374,35 +906,51 @@ export function useDeliveryAvailability() {
     return () => {
       cancelled = true;
 
-      /*
-       * No harm if listener remains briefly during unmount;
-       * PermissionStatus is discarded with component.
-       */
-      permissionStatus = null;
-    };
-  }, [requestLocation]);
+      if (
+        permissionStatus &&
+        permissionChangeHandler
+      ) {
+        try {
+          permissionStatus
+            .removeEventListener(
+              'change',
+              permissionChangeHandler,
+            );
+        } catch {
+          // Ignore browser compatibility issue.
+        }
+      }
 
-  /*
-   * Android:
-   *
-   * User turns Location OFF/ON from quick settings
-   * and returns to Chrome.
-   *
-   * Immediately retry when page becomes visible/focused.
-   */
+      permissionStatus =
+        null;
+
+      permissionChangeHandler =
+        null;
+    };
+  }, [
+    requestLocation,
+  ]);
+
+  /* =======================================================
+     ANDROID LOCATION ON/OFF HANDLING
+     ======================================================= */
+
   useEffect(() => {
     const retry = () => {
-      requestLocation(false);
+      requestLocation(
+        false,
+      );
     };
 
-    const onVisibilityChange = () => {
-      if (
-        document.visibilityState ===
-        'visible'
-      ) {
-        retry();
-      }
-    };
+    const onVisibilityChange =
+      () => {
+        if (
+          document.visibilityState ===
+          'visible'
+        ) {
+          retry();
+        }
+      };
 
     document.addEventListener(
       'visibilitychange',
@@ -435,46 +983,61 @@ export function useDeliveryAvailability() {
         retry,
       );
     };
-  }, [requestLocation]);
+  }, [
+    requestLocation,
+  ]);
 
-  /*
-   * If Android Location service was OFF,
-   * retry every 5 seconds until GPS works.
-   *
-   * Do not repeatedly retry when browser permission
-   * is explicitly denied.
-   */
+  /* =======================================================
+     RETRY WHEN DEVICE LOCATION IS OFF
+     ======================================================= */
+
   useEffect(() => {
     if (
-      status !== 'unavailable'
+      status !==
+      'unavailable'
     ) {
       if (
-        retryTimerRef.current !== null
+        retryTimerRef.current !==
+        null
       ) {
         window.clearInterval(
           retryTimerRef.current,
         );
 
-        retryTimerRef.current = null;
+        retryTimerRef.current =
+          null;
       }
 
       return;
     }
 
+    /*
+     * Retry every 5 seconds.
+     *
+     * This helps Android users who turn
+     * device Location back ON.
+     */
     retryTimerRef.current =
-      window.setInterval(() => {
-        requestLocation(false);
-      }, 5000);
+      window.setInterval(
+        () => {
+          requestLocation(
+            false,
+          );
+        },
+        5000,
+      );
 
     return () => {
       if (
-        retryTimerRef.current !== null
+        retryTimerRef.current !==
+        null
       ) {
         window.clearInterval(
           retryTimerRef.current,
         );
 
-        retryTimerRef.current = null;
+        retryTimerRef.current =
+          null;
       }
     };
   }, [
@@ -482,43 +1045,71 @@ export function useDeliveryAvailability() {
     requestLocation,
   ]);
 
+  /* =======================================================
+     PURCHASE PERMISSION
+     ======================================================= */
+
+  /*
+   * IMPORTANT:
+   *
+   * This keeps your existing SPOTC rule.
+   *
+   * INSIDE 5 KM  = BUY ALLOWED
+   * OUTSIDE 5 KM = BROWSE ONLY
+   */
   const canPurchase =
     status === 'available';
 
-  const message = useMemo(() => {
-    if (status === 'outside') {
-      return (
-        'SPOTC is coming to your area shortly. ' +
-        'You can browse all products now. ' +
-        'Ordering will be available when SPOTC launches in your area.'
-      );
-    }
+  /* =======================================================
+     CUSTOMER MESSAGE
+     ======================================================= */
 
-    if (
-      status === 'permission_denied'
-    ) {
-      return (
-        'Allow location access to check delivery availability. ' +
-        'You can continue browsing SPOTC.'
-      );
-    }
+  const message =
+    useMemo(() => {
+      if (
+        status === 'outside'
+      ) {
+        return (
+          'SPOTC is coming to your area shortly. ' +
+          'You can browse all products now. ' +
+          'Ordering will be available when SPOTC launches in your area.'
+        );
+      }
 
-    if (
-      status === 'unavailable'
-    ) {
-      return (
-        'Turn on device location to check delivery availability. ' +
-        'You can continue browsing SPOTC.'
-      );
-    }
+      if (
+        status ===
+        'permission_denied'
+      ) {
+        return (
+          'Allow location access to check delivery availability. ' +
+          'You can continue browsing SPOTC.'
+        );
+      }
 
-    return '';
-  }, [status]);
+      if (
+        status ===
+        'unavailable'
+      ) {
+        return (
+          'Turn on device location to check delivery availability. ' +
+          'You can continue browsing SPOTC.'
+        );
+      }
+
+      return '';
+    }, [
+      status,
+    ]);
+
+  /* =======================================================
+     RETURN
+     ======================================================= */
 
   return {
     status,
 
-    distanceKm: distance,
+    distanceKm:
+      distance,
 
     coordinates,
 
@@ -526,8 +1117,11 @@ export function useDeliveryAvailability() {
 
     message,
 
-    requestLocation: () =>
-      requestLocation(true),
+    requestLocation:
+      () =>
+        requestLocation(
+          true,
+        ),
 
     radiusKm:
       SPOTC_DELIVERY_CENTER.radiusKm,
