@@ -49,7 +49,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 
 import { EmptyState } from '@/components/EmptyState';
 import { useSpotcLanguage } from '@/components/LanguageProvider';
-import { addProduct } from '@/lib/cart';
+import { addProduct, readCart, updateCartQuantity } from '@/lib/cart';
 import { getProductById, getProducts } from '@/lib/data';
 import { requireGoogleLogin } from '@/lib/auth';
 import { auth, firebaseReady } from '@/lib/firebase';
@@ -1888,31 +1888,122 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     if (!validatePurchaseOptions()) return;
 
     saveSelectedGiftsForCart();
-    addProduct(product, { size, color: showColorSelector ? color : '', qty });
 
-    sendGa4Event('add_to_cart', {
-      currency: 'INR',
-      value: price * qty,
-      items: [
+    const selectedCartColor =
+      showColorSelector ? color : '';
+
+    const existingCartItem =
+      readCart().find(
+        (item) =>
+          String(item.id) ===
+            String(product.id) &&
+          (item.size || '') ===
+            (size || '') &&
+          (item.color || '') ===
+            selectedCartColor,
+      );
+
+    let cartChanged = false;
+
+    if (existingCartItem) {
+      /*
+       * BUY NOW must not add another copy of
+       * a product that is already in the cart.
+       *
+       * Example:
+       * Add to Cart -> cart qty = 1
+       * Buy Now     -> cart qty stays 1
+       *
+       * If the customer selected a higher qty
+       * on the product page, raise the cart to
+       * that qty instead of adding it again.
+       */
+      const existingQuantity =
+        Math.max(
+          1,
+          Number(existingCartItem.qty) ||
+            1,
+        );
+
+      const desiredQuantity =
+        Math.max(
+          existingQuantity,
+          qty,
+        );
+
+      if (
+        desiredQuantity !==
+        existingQuantity
+      ) {
+        updateCartQuantity(
+          String(product.id),
+          desiredQuantity,
+          size || '',
+          selectedCartColor,
+        );
+
+        cartChanged = true;
+      }
+    } else {
+      addProduct(product, {
+        size,
+        color: selectedCartColor,
+        qty,
+      });
+
+      cartChanged = true;
+    }
+
+    /*
+     * Only report add_to_cart when Buy Now
+     * actually changed the cart.
+     * This avoids duplicate ecommerce events
+     * when the same item was already added.
+     */
+    if (cartChanged) {
+      sendGa4Event(
+        'add_to_cart',
         {
-          ...ga4ItemFromProduct(product, qty),
-          item_variant:
-            [
-              size ? `Size ${size}` : '',
-              showColorSelector && color ? `Colour ${color}` : '',
-            ]
-              .filter(Boolean)
-              .join(' / ') || undefined,
+          currency: 'INR',
+          value: price * qty,
+          items: [
+            {
+              ...ga4ItemFromProduct(
+                product,
+                qty,
+              ),
+              item_variant:
+                [
+                  size
+                    ? `Size ${size}`
+                    : '',
+                  showColorSelector &&
+                  color
+                    ? `Colour ${color}`
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' / ') ||
+                undefined,
+            },
+          ],
+          spotc_action:
+            'buy_now',
         },
-      ],
-      spotc_action: 'buy_now',
-    });
+      );
+    }
 
-    sendGa4Event('select_content', {
-      content_type: 'product',
-      content_id: String(product.id),
-      spotc_action: 'buy_now',
-    });
+    sendGa4Event(
+      'select_content',
+      {
+        content_type:
+          'product',
+        content_id:
+          String(product.id),
+        spotc_action:
+          'buy_now',
+      },
+    );
 
     router.push('/cart');
   };
