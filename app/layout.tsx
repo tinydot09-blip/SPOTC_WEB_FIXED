@@ -207,7 +207,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* Google Analytics */}
+        {/* =========================
+            GOOGLE ANALYTICS
+        ========================= */}
+
         <Script
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
           strategy="afterInteractive"
@@ -242,7 +245,10 @@ export default function RootLayout({
           `}
         </Script>
 
-        {/* Meta Pixel base code */}
+        {/* =========================
+            META PIXEL
+        ========================= */}
+
         <Script
           id="meta-pixel"
           strategy="afterInteractive"
@@ -292,10 +298,18 @@ export default function RootLayout({
               'init',
               '${META_PIXEL_ID}'
             );
+
+            fbq(
+              'track',
+              'PageView'
+            );
           `}
         </Script>
 
-        {/* Organization JSON-LD */}
+        {/* =========================
+            ORGANIZATION JSON-LD
+        ========================= */}
+
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -309,7 +323,10 @@ export default function RootLayout({
           }}
         />
 
-        {/* Website JSON-LD */}
+        {/* =========================
+            WEBSITE JSON-LD
+        ========================= */}
+
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -325,6 +342,7 @@ export default function RootLayout({
       </head>
 
       <body>
+        {/* Meta Pixel fallback */}
         <noscript>
           <img
             height="1"
@@ -337,8 +355,10 @@ export default function RootLayout({
           />
         </noscript>
 
+        {/* Existing GA4 route tracking */}
         <GoogleAnalyticsPageView />
 
+        {/* Meta Pixel route tracking */}
         <MetaPixelPageView />
 
         <LanguageProvider>

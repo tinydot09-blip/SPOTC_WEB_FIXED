@@ -4,6 +4,7 @@ import {
   usePathname,
   useSearchParams,
 } from 'next/navigation';
+
 import {
   Suspense,
   useEffect,
@@ -17,7 +18,10 @@ function MetaPixelPageViewInner() {
   const searchParams =
     useSearchParams();
 
-  const lastTrackedPathRef =
+  const firstLoad =
+    useRef(true);
+
+  const lastPath =
     useRef('');
 
   useEffect(() => {
@@ -31,40 +35,99 @@ function MetaPixelPageViewInner() {
     const query =
       searchParams.toString();
 
-    const pagePath =
+    const currentPath =
       query
         ? `${pathname}?${query}`
         : pathname;
 
+    /*
+     * First PageView is already fired
+     * from app/layout.tsx.
+     *
+     * This component tracks only
+     * Next.js client-side navigation.
+     */
+    if (firstLoad.current) {
+      firstLoad.current =
+        false;
+
+      lastPath.current =
+        currentPath;
+
+      return;
+    }
+
     if (
-      lastTrackedPathRef.current ===
-      pagePath
+      lastPath.current ===
+      currentPath
     ) {
       return;
     }
 
-    const fbq = (
-      window as typeof window & {
-        fbq?: (
-          ...args: unknown[]
-        ) => void;
+    const sendPageView = () => {
+      const fbq = (
+        window as typeof window & {
+          fbq?: (
+            ...args: unknown[]
+          ) => void;
+        }
+      ).fbq;
+
+      if (
+        typeof fbq !==
+        'function'
+      ) {
+        return false;
       }
-    ).fbq;
 
-    if (
-      typeof fbq !==
-      'function'
-    ) {
+      fbq(
+        'track',
+        'PageView',
+      );
+
+      lastPath.current =
+        currentPath;
+
+      return true;
+    };
+
+    /*
+     * In most cases Meta Pixel
+     * is already available.
+     */
+    if (sendPageView()) {
       return;
     }
 
-    fbq(
-      'track',
-      'PageView',
-    );
+    /*
+     * If the external Meta script
+     * is still loading, retry briefly
+     * instead of losing the event.
+     */
+    let attempts = 0;
 
-    lastTrackedPathRef.current =
-      pagePath;
+    const timer =
+      window.setInterval(
+        () => {
+          attempts += 1;
+
+          if (
+            sendPageView() ||
+            attempts >= 20
+          ) {
+            window.clearInterval(
+              timer,
+            );
+          }
+        },
+        250,
+      );
+
+    return () => {
+      window.clearInterval(
+        timer,
+      );
+    };
   }, [
     pathname,
     searchParams,
