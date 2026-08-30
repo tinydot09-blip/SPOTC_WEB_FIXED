@@ -16,10 +16,22 @@ export type Coordinates = {
 };
 
 /* =========================================================
+   DELIVERY STATUS
+   ========================================================= */
+
+export type DeliveryAvailabilityStatus =
+  | 'checking'
+  | 'available'
+  | 'outside'
+  | 'permission_denied'
+  | 'denied'
+  | 'unavailable';
+
+/* =========================================================
    DISTANCE CALCULATION
    ========================================================= */
 
-const toRadians = (value: number) =>
+const toRadians = (value: number): number =>
   (value * Math.PI) / 180;
 
 export function distanceKm(
@@ -62,36 +74,52 @@ export function distanceKm(
 /*
  * IMPORTANT:
  *
- * The Shop no longer asks for GPS/location permission.
+ * We DO NOT request browser GPS/location here.
  *
- * Customers can:
- *   - browse
- *   - add to cart
- *   - buy now
+ * Customers are allowed to:
+ * - browse products
+ * - add products to cart
+ * - use Buy Now
  *
- * Delivery eligibility is checked using the selected
- * delivery address at checkout.
+ * The actual 5 km delivery-area check is performed later
+ * using the customer's selected delivery address at checkout.
+ *
+ * The old API shape is kept so existing components such as
+ * ProductGrid and AppShell continue to compile.
  */
 
-export function useDeliveryAvailability() {
+export function useDeliveryAvailability(): {
+  status: DeliveryAvailabilityStatus;
+  distanceKm: number | null;
+  coordinates: Coordinates | null;
+  canPurchase: boolean;
+  message: string;
+  requestLocation: () => void;
+  radiusKm: number;
+} {
+  const status: DeliveryAvailabilityStatus =
+    'available';
+
   return {
-    status: 'available' as const,
+    status,
 
     distanceKm: null,
 
     coordinates: null,
 
     /*
-     * Do not block Shop purchasing based on browser GPS.
-     * Checkout performs the real 5-km address check.
+     * Do not block Add to Cart / Buy Now based on GPS.
      */
     canPurchase: true,
 
     message: '',
 
     /*
-     * Kept for compatibility with existing components.
-     * It intentionally does nothing.
+     * Compatibility function.
+     *
+     * Existing components may still call requestLocation().
+     * It intentionally does nothing, so the browser will
+     * NOT show a location permission popup.
      */
     requestLocation: () => {},
 
