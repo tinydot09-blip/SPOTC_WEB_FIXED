@@ -335,6 +335,49 @@ function freeGiftsFromOrder(data: DocumentData): FreeGiftInfo[] {
   return [...unique.values()];
 }
 
+type ReturnRequestInfo = {
+  index: number;
+  rawIndex: number;
+  productId: string;
+  productTitle: string;
+  quantity: number;
+  type: 'return' | 'exchange';
+  reason: string;
+  status: 'requested' | 'approved' | 'rejected' | 'completed';
+  requestedAt: number;
+};
+
+function returnRequestsFromOrder(data: DocumentData): ReturnRequestInfo[] {
+  if (!Array.isArray(data.return_requests)) return [];
+
+  return data.return_requests
+    .map((value: unknown, index: number) => {
+      const request =
+        value && typeof value === 'object'
+          ? (value as DocumentData)
+          : {};
+      const type = text(request.type).toLowerCase();
+      const status = text(request.status).toLowerCase();
+
+      if (type !== 'return' && type !== 'exchange') return null;
+
+      return {
+        index,
+        rawIndex: Math.max(0, Number(request.raw_index ?? request.rawIndex ?? 0) || 0),
+        productId: text(request.product_id ?? request.productId),
+        productTitle: text(request.product_title ?? request.productTitle) || 'Product',
+        quantity: Math.max(1, Number(request.quantity ?? request.qty ?? 1) || 1),
+        type: type as 'return' | 'exchange',
+        reason: text(request.reason),
+        status: (['requested', 'approved', 'rejected', 'completed'].includes(status)
+          ? status
+          : 'requested') as ReturnRequestInfo['status'],
+        requestedAt: Number(request.requested_at ?? request.requestedAt ?? 0) || 0,
+      };
+    })
+    .filter((value): value is ReturnRequestInfo => Boolean(value));
+}
+
 function quantityOf(item: DocumentData): number {
   return Math.max(
     1,
@@ -1646,6 +1689,172 @@ if (!response.ok) {
     }
   }
 
+  async function updateReturnRequest(
+    row: OrderRow,
+    requestIndex: number,
+    action: 'approve' | 'reject' | 'complete',
+  ) {
+    if (!db || busyId) return;
+
+    const firestore = db;
+    const request = returnRequestsFromOrder(row.data).find(
+      (item) => item.index === requestIndex,
+    );
+
+    if (!request) {
+      setMessage('Return / exchange request was not found.');
+      return;
+    }
+
+    if (action === 'complete' && request.status !== 'approved') {
+      setMessage('Approve the request before marking it received / completed.');
+      return;
+    }
+
+    const actionText =
+      action === 'approve'
+        ? 'approve'
+        : action === 'reject'
+          ? 'reject'
+          : request.type === 'return'
+            ? 'confirm the returned item was received and restore stock'
+            : 'complete this exchange';
+
+    if (
+      !window.confirm(
+        `${actionText.charAt(0).toUpperCase()}${actionText.slice(1)}?\n\n${request.productTitle}`,
+      )
+    ) {
+      return;
+    }
+
+    setBusyId(row.id);
+    setMessage('');
+
+    try {
+      const orderRef = doc(firestore, 'Orders', row.id);
+
+      await runTransaction(firestore, async (transaction) => {
+        const orderSnap = await transaction.get(orderRef);
+        if (!orderSnap.exists()) throw new Error('Order no longer exists.');
+
+        const liveOrder = orderSnap.data();
+        const requests = Array.isArray(liveOrder.return_requests)
+          ? [...liveOrder.return_requests]
+          : [];
+
+        if (requestIndex < 0 || requestIndex >= requests.length) {
+          throw new Error('Return / exchange request no longer exists.');
+        }
+
+        const currentRaw =
+          requests[requestIndex] && typeof requests[requestIndex] === 'object'
+            ? ({ ...(requests[requestIndex] as DocumentData) } as DocumentData)
+            : ({} as DocumentData);
+        const currentStatus = text(currentRaw.status).toLowerCase() || 'requested';
+        const currentType = text(currentRaw.type).toLowerCase();
+
+        if (currentStatus === 'completed' || currentStatus === 'rejected') {
+          throw new Error('This request has already been closed.');
+        }
+
+        if (action === 'approve') {
+          currentRaw.status = 'approved';
+          currentRaw.approved_at = Date.now();
+        } else if (action === 'reject') {
+          currentRaw.status = 'rejected';
+          currentRaw.rejected_at = Date.now();
+        } else {
+          if (currentStatus !== 'approved') {
+            throw new Error('Approve the request before completing it.');
+          }
+
+          if (currentType === 'return') {
+            const productId =
+              text(currentRaw.product_id ?? currentRaw.productId) ||
+              request.productId;
+            const qty = Math.max(
+              1,
+              Number(currentRaw.quantity ?? currentRaw.qty ?? request.quantity) || 1,
+            );
+
+            if (!productId) {
+              throw new Error('Returned product ID is missing, so stock cannot be restored.');
+            }
+
+            const productRef = doc(
+              firestore,
+              'BusinessProducts',
+              productId,
+            );
+            const productSnap = await transaction.get(productRef);
+            if (!productSnap.exists()) {
+              throw new Error(`Product ${productId} was not found.`);
+            }
+
+            const product = productSnap.data();
+            const currentStock = Math.max(
+              0,
+              numberValue(product.stock_qty ?? product.stock_quantity ?? 0),
+            );
+            const currentReserved = Math.max(
+              0,
+              numberValue(product.reserved_qty ?? 0),
+            );
+            const currentSold = Math.max(
+              0,
+              numberValue(product.sold_qty ?? 0),
+            );
+            const nextStock = currentStock + qty;
+            const nextSold = Math.max(0, currentSold - qty);
+
+            transaction.update(productRef, {
+              stock_qty: nextStock,
+              stock_quantity: nextStock,
+              sold_qty: nextSold,
+              available_qty: Math.max(0, nextStock - currentReserved),
+              is_in_stock: nextStock - currentReserved > 0,
+              updated_at: serverTimestamp(),
+            });
+
+            currentRaw.stock_restored = true;
+            currentRaw.stock_restored_qty = qty;
+          }
+
+          currentRaw.status = 'completed';
+          currentRaw.completed_at = Date.now();
+        }
+
+        requests[requestIndex] = currentRaw;
+
+        transaction.update(orderRef, {
+          return_requests: requests,
+          updated_at: serverTimestamp(),
+        });
+      });
+
+      await loadData(false);
+      setMessage(
+        action === 'approve'
+          ? `${request.type === 'return' ? 'Return' : 'Exchange'} request approved.`
+          : action === 'reject'
+            ? `${request.type === 'return' ? 'Return' : 'Exchange'} request rejected.`
+            : request.type === 'return'
+              ? 'Return completed. Product stock restored and Sold Qty reduced.'
+              : 'Exchange completed. Order remains delivered and stock is unchanged for the same-product exchange.',
+      );
+    } catch (error) {
+      console.error('Return / exchange update failed:', error);
+      setMessage(
+        error instanceof Error
+          ? `Return / exchange failed: ${error.message}`
+          : 'Return / exchange update failed.',
+      );
+    } finally {
+      setBusyId('');
+    }
+  }
+
   async function assignDeliveryBoy(
     row: OrderRow,
   ) {
@@ -2263,6 +2472,9 @@ if (!response.ok) {
             const freeGifts =
               freeGiftsFromOrder(row.data);
 
+            const returnRequests =
+              returnRequestsFromOrder(row.data);
+
             const expanded =
               expandedOrderId === row.id;
 
@@ -2773,6 +2985,108 @@ if (!response.ok) {
                               )}
                             </div>
                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {returnRequests.length > 0 && (
+                  <div
+                    style={{
+                      margin: '14px 16px 0',
+                      padding: 14,
+                      border: '1px solid #ead7bd',
+                      borderRadius: 14,
+                      background: '#fffaf2',
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, marginBottom: 10 }}>
+                      Return / Exchange Requests
+                    </div>
+
+                    <div style={{ display: 'grid', gap: 10 }}>
+                      {returnRequests.map((request) => (
+                        <div
+                          key={`${row.id}-return-${request.index}`}
+                          style={{
+                            padding: 12,
+                            border: '1px solid #eadfd0',
+                            borderRadius: 12,
+                            background: '#fff',
+                            display: 'grid',
+                            gap: 7,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              gap: 12,
+                              flexWrap: 'wrap',
+                            }}
+                          >
+                            <strong>
+                              {request.type === 'return' ? 'RETURN' : 'EXCHANGE'} · {request.productTitle}
+                            </strong>
+                            <span
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 800,
+                                textTransform: 'uppercase',
+                                color:
+                                  request.status === 'completed'
+                                    ? '#16723a'
+                                    : request.status === 'rejected'
+                                      ? '#b42318'
+                                      : '#9a5b00',
+                              }}
+                            >
+                              {request.status}
+                            </span>
+                          </div>
+
+                          <div style={{ fontSize: 13, color: '#665d54' }}>
+                            Qty {request.quantity} · Reason: {request.reason || 'No reason provided'}
+                          </div>
+
+                          {(request.status === 'requested' || request.status === 'approved') && (
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              {request.status === 'requested' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => void updateReturnRequest(row, request.index, 'approve')}
+                                    style={primaryAction}
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => void updateReturnRequest(row, request.index, 'reject')}
+                                    style={cancelButton}
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+
+                              {request.status === 'approved' && (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => void updateReturnRequest(row, request.index, 'complete')}
+                                  style={primaryAction}
+                                >
+                                  {request.type === 'return'
+                                    ? 'Received & Restore Stock'
+                                    : 'Complete Exchange'}
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

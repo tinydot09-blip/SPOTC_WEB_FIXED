@@ -62,6 +62,15 @@ type OrderGift = {
   status: string;
 };
 
+type ReturnRequest = {
+  rawIndex: number;
+  productId: string;
+  type: 'return' | 'exchange';
+  reason: string;
+  status: 'requested' | 'approved' | 'rejected' | 'completed';
+  requestedAt: number;
+};
+
 type OrderRecord = {
   id: string;
   orderNumber: string;
@@ -83,6 +92,8 @@ type OrderRecord = {
   deliveryOptionId: string;
   deliveryTitle: string;
   deliveryWindow: string;
+  deliveredAt: Date | null;
+  returnRequests: ReturnRequest[];
 };
 
 type OrderView = {
@@ -561,6 +572,34 @@ function deliveryDisplay(
   };
 }
 
+function returnRequestsFromData(data: DocumentData): ReturnRequest[] {
+  if (!Array.isArray(data.return_requests)) return [];
+
+  return data.return_requests
+    .map((value: unknown) => {
+      const item =
+        typeof value === 'object' && value !== null
+          ? (value as DocumentData)
+          : {};
+      const type = textOf(item.type).toLowerCase();
+      const status = textOf(item.status).toLowerCase();
+
+      if (type !== 'return' && type !== 'exchange') return null;
+
+      return {
+        rawIndex: Math.max(0, Number(item.raw_index ?? item.rawIndex ?? 0) || 0),
+        productId: textOf(item.product_id ?? item.productId),
+        type: type as 'return' | 'exchange',
+        reason: textOf(item.reason),
+        status: (['requested', 'approved', 'rejected', 'completed'].includes(status)
+          ? status
+          : 'requested') as ReturnRequest['status'],
+        requestedAt: Number(item.requested_at ?? item.requestedAt ?? 0) || 0,
+      };
+    })
+    .filter((value): value is ReturnRequest => Boolean(value));
+}
+
 function mapOrder(
   id: string,
   data: DocumentData,
@@ -693,6 +732,12 @@ function mapOrder(
       deliveryInfo.title,
     deliveryWindow:
       deliveryInfo.window,
+    deliveredAt: dateOf(
+      data.delivered_at ??
+        data.delivery_completed_at ??
+        data.updated_at,
+    ),
+    returnRequests: returnRequestsFromData(data),
   };
 }
 
@@ -820,6 +865,11 @@ export default function DashboardOrders() {
   const [
     cancellingKey,
     setCancellingKey,
+  ] = useState('');
+
+  const [
+    returnBusyKey,
+    setReturnBusyKey,
   ] = useState('');
 
   const [
@@ -1660,6 +1710,148 @@ export default function DashboardOrders() {
     }
   }
 
+  function returnRequestFor(view: OrderView): ReturnRequest | null {
+    return (
+      view.parent.returnRequests.find(
+        (request) =>
+          request.rawIndex === view.item.rawIndex &&
+          request.status !== 'rejected',
+      ) ?? null
+    );
+  }
+
+  function canRequestReturn(view: OrderView): boolean {
+    if (visibleItemStatus(view.parent, view.item) !== 'delivered') return false;
+    if (returnRequestFor(view)) return false;
+    const deliveredAt = view.parent.deliveredAt;
+    if (!deliveredAt) return false;
+    return Date.now() - deliveredAt.getTime() <= 7 * 24 * 60 * 60 * 1000;
+  }
+
+  async function requestReturnOrExchange(
+    view: OrderView,
+    type: 'return' | 'exchange',
+  ) {
+    if (!user || returnBusyKey || !canRequestReturn(view)) return;
+
+    const reason = window.prompt(
+      type === 'return'
+        ? 'Why do you want to return this product?'
+        : 'Why do you want to exchange this product?',
+      '',
+    );
+
+    if (reason === null) return;
+    const cleanReason = reason.trim();
+    if (!cleanReason) {
+      window.alert('Please enter a reason.');
+      return;
+    }
+
+    setReturnBusyKey(view.key);
+
+    try {
+      const firestore = getFirestore();
+      const orderRef = doc(firestore, 'Orders', view.parent.id);
+
+      await runTransaction(firestore, async (transaction) => {
+        const snapshot = await transaction.get(orderRef);
+        if (!snapshot.exists()) throw new Error('Order no longer exists.');
+
+        const data = snapshot.data();
+        const liveStatus = normalizeStatus(
+          data.order_status ?? data.status ?? data.delivery_status,
+        );
+        if (liveStatus !== 'delivered') {
+          throw new Error('Return or exchange is available only after delivery.');
+        }
+
+        const deliveredAt = dateOf(
+          data.delivered_at ?? data.delivery_completed_at ?? data.updated_at,
+        );
+        if (!deliveredAt || Date.now() - deliveredAt.getTime() > 7 * 24 * 60 * 60 * 1000) {
+          throw new Error('The 7-day return / exchange window has ended.');
+        }
+
+        const existing = Array.isArray(data.return_requests)
+          ? [...data.return_requests]
+          : [];
+
+        const alreadyOpen = existing.some((value) => {
+          if (!value || typeof value !== 'object') return false;
+          const request = value as DocumentData;
+          const index = Number(request.raw_index ?? request.rawIndex ?? -1);
+          const requestStatus = textOf(request.status).toLowerCase();
+          return (
+            index === view.item.rawIndex &&
+            requestStatus !== 'rejected'
+          );
+        });
+
+        if (alreadyOpen) {
+          throw new Error('A return / exchange request already exists for this product.');
+        }
+
+        existing.push({
+          raw_index: view.item.rawIndex,
+          product_id: view.item.productId,
+          product_title: view.item.title,
+          quantity: view.item.quantity,
+          type,
+          reason: cleanReason,
+          status: 'requested',
+          requested_at: Date.now(),
+          requested_by: user.uid,
+        });
+
+        transaction.update(orderRef, {
+          return_requests: existing,
+          updated_at: serverTimestamp(),
+        });
+      });
+
+      const nextRequest: ReturnRequest = {
+        rawIndex: view.item.rawIndex,
+        productId: view.item.productId,
+        type,
+        reason: cleanReason,
+        status: 'requested',
+        requestedAt: Date.now(),
+      };
+
+      setOrders((current) =>
+        current.map((order) =>
+          order.id === view.parent.id
+            ? { ...order, returnRequests: [...order.returnRequests, nextRequest] }
+            : order,
+        ),
+      );
+      setSelected((current) =>
+        current && current.key === view.key
+          ? {
+              ...current,
+              parent: {
+                ...current.parent,
+                returnRequests: [...current.parent.returnRequests, nextRequest],
+              },
+            }
+          : current,
+      );
+      window.alert(
+        `${type === 'return' ? 'Return' : 'Exchange'} request sent to SPOTC Admin.`,
+      );
+    } catch (error) {
+      console.error('Return / exchange request failed:', error);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : 'Unable to send the request. Please try again.',
+      );
+    } finally {
+      setReturnBusyKey('');
+    }
+  }
+
   const filteredViews =
     useMemo(() => {
       const queryText =
@@ -2136,6 +2328,37 @@ export default function DashboardOrders() {
                               )}`}
                         </button>
                       )}
+
+                      {canRequestReturn(view) && (
+                        <div className="simple-order-return-actions">
+                          <button
+                            type="button"
+                            disabled={returnBusyKey === view.key}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void requestReturnOrExchange(view, 'return');
+                            }}
+                          >
+                            Return
+                          </button>
+                          <button
+                            type="button"
+                            disabled={returnBusyKey === view.key}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void requestReturnOrExchange(view, 'exchange');
+                            }}
+                          >
+                            Exchange
+                          </button>
+                        </div>
+                      )}
+
+                      {returnRequestFor(view) && (
+                        <small className="simple-order-return-status">
+                          {statusLabel(returnRequestFor(view)!.type)} · {statusLabel(returnRequestFor(view)!.status)}
+                        </small>
+                      )}
                     </div>
 
                     <ChevronRight />
@@ -2260,6 +2483,36 @@ export default function DashboardOrders() {
                 </strong>
               </span>
             </div>
+
+            {returnRequestFor(selected) ? (
+              <section className="simple-details-return-box">
+                <strong>
+                  {statusLabel(returnRequestFor(selected)!.type)} request · {statusLabel(returnRequestFor(selected)!.status)}
+                </strong>
+                <span>{returnRequestFor(selected)!.reason}</span>
+              </section>
+            ) : canRequestReturn(selected) ? (
+              <section className="simple-details-return-box">
+                <strong>7 Days Return & Exchange</strong>
+                <span>Request a return or exchange for this delivered product.</span>
+                <div>
+                  <button
+                    type="button"
+                    disabled={returnBusyKey === selected.key}
+                    onClick={() => void requestReturnOrExchange(selected, 'return')}
+                  >
+                    Return
+                  </button>
+                  <button
+                    type="button"
+                    disabled={returnBusyKey === selected.key}
+                    onClick={() => void requestReturnOrExchange(selected, 'exchange')}
+                  >
+                    Exchange
+                  </button>
+                </div>
+              </section>
+            ) : null}
 
             <section className="simple-details-delivery">
               <div>
@@ -2795,6 +3048,15 @@ export default function DashboardOrders() {
           width: 13px;
           height: 13px;
         }
+
+        .simple-order-return-actions{display:flex;gap:6px;justify-content:flex-end;margin-top:7px}
+        .simple-order-return-actions button{border:1px solid #d8c5ad;background:#fffaf3;color:#8a4d00;border-radius:9px;padding:6px 9px;font-size:11px;font-weight:700;cursor:pointer}
+        .simple-order-return-status{display:block;margin-top:7px;color:#9a5b00;font-size:11px;font-weight:700}
+        .simple-details-return-box{margin:14px 0;padding:14px;border:1px solid #ead8bf;background:#fffaf2;border-radius:14px;display:grid;gap:8px}
+        .simple-details-return-box>strong{font-size:14px;color:#7d4800}
+        .simple-details-return-box>span{font-size:12px;color:#74675b}
+        .simple-details-return-box>div{display:flex;gap:8px}
+        .simple-details-return-box button{border:0;background:#111;color:#fff;border-radius:10px;padding:9px 13px;font-weight:700;cursor:pointer}
 
         .simple-order-total {
           display: flex;
