@@ -2309,13 +2309,6 @@ export function ProductGrid({
                         return;
                       }
 
-                      if (giftCount > 0) {
-                        router.push(
-                          `/product/${encodeURIComponent(String(item.id))}?gift=1&action=cart`,
-                        );
-                        return;
-                      }
-
                       addProduct(item);
                       alert(t('1 product added'));
                     }}
