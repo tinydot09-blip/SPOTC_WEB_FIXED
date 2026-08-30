@@ -2354,7 +2354,47 @@ export function ProductGrid({
                         return;
                       }
 
-                      addProduct(item);
+                      // Buy Now must not increase the quantity when this exact
+                      // product/variant is already in the cart. Add it only when it
+                      // is not already present, then continue to the cart.
+                      let alreadyInCart = false;
+
+                      if (typeof window !== 'undefined') {
+                        try {
+                          const storedCart = window.localStorage.getItem('spotc_cart');
+                          const parsedCart = storedCart ? JSON.parse(storedCart) : [];
+
+                          if (Array.isArray(parsedCart)) {
+                            const productId = String(item.id);
+                            const productSize = textValue(item.size || '');
+                            const productColor = textValue(item.color || '');
+
+                            alreadyInCart = parsedCart.some((rawItem) => {
+                              if (!rawItem || typeof rawItem !== 'object') return false;
+
+                              const cartItem = rawItem as Record<string, unknown>;
+                              const isFreeGift =
+                                cartItem.isFreeGift === true ||
+                                cartItem.is_free_gift === true;
+
+                              if (isFreeGift) return false;
+
+                              return (
+                                String(cartItem.id ?? '') === productId &&
+                                textValue(cartItem.size || '') === productSize &&
+                                textValue(cartItem.color || '') === productColor
+                              );
+                            });
+                          }
+                        } catch {
+                          alreadyInCart = false;
+                        }
+                      }
+
+                      if (!alreadyInCart) {
+                        addProduct(item);
+                      }
+
                       router.push('/cart');
                     }}
                   >
