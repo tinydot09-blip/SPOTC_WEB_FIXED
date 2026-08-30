@@ -505,24 +505,15 @@ export default function DeliveryDashboardPage() {
     }
   }
 
-  async function markDelivered(order: DeliveryOrder) {
+  async function confirmPayment(order: DeliveryOrder) {
     if (!rider || busyId) return;
 
-    const current = effectiveStatus(order);
-    if (current === 'cancelled') {
-      setMessage('CANCELLED — DO NOT DELIVER.');
-      return;
-    }
-    if (current !== 'out_for_delivery') {
-      setMessage('Mark the order Out for Delivery first.');
-      return;
-    }
-
     const confirmed = window.confirm(
-      `Confirm that ${order.orderNumber} was handed to the customer?\n\nAmount: ₹${Math.round(
+      `Confirm payment received for ${order.orderNumber}?\n\nAmount: ₹${Math.round(
         order.total,
-      )}\nPayment: ${order.paymentMethod}`,
+      )}`,
     );
+
     if (!confirmed) return;
 
     setBusyId(order.id);
@@ -530,23 +521,117 @@ export default function DeliveryDashboardPage() {
 
     try {
       await updateDoc(doc(deliveryDb, 'Orders', order.id), {
-        delivery_status: 'delivered_waiting_approval',
-        delivery_assignment_status: 'delivered_waiting_approval',
-        delivery_completed_at: serverTimestamp(),
-        delivery_completed_by: rider.uid,
-        delivery_completed_by_name: rider.name,
+        payment_status: 'paid',
+        payment_received_at: serverTimestamp(),
+        payment_received_by: rider.uid,
+        payment_received_by_name: rider.name,
         updated_at: serverTimestamp(),
       });
 
+      setShowQrOrder(null);
+
       setMessage(
-        `${order.orderNumber}: delivery reported. Waiting for Admin approval.`,
+        `${order.orderNumber}: payment marked as received.`,
       );
     } catch (error) {
       console.error(error);
       setMessage(
         error instanceof Error
           ? error.message
-          : 'Could not report delivery.',
+          : 'Could not confirm payment.',
+      );
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function markDelivered(order: DeliveryOrder) {
+    if (!rider || busyId) return;
+
+    const current = effectiveStatus(order);
+
+    if (current === 'cancelled') {
+      setMessage('CANCELLED — DO NOT DELIVER.');
+      return;
+    }
+
+    if (current !== 'out_for_delivery') {
+      setMessage('Mark the order Out for Delivery first.');
+      return;
+    }
+
+    if (normalized(order.paymentStatus) !== 'paid') {
+      setMessage(
+        'Confirm payment received before marking this order Delivered.',
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Mark ${order.orderNumber} as DELIVERED?\n\nThis will update Admin Orders and stock.`,
+    );
+
+    if (!confirmed) return;
+
+    setBusyId(order.id);
+    setMessage('');
+
+    try {
+      const user = deliveryAuth.currentUser;
+
+      if (!user) {
+        throw new Error(
+          'Delivery login expired. Please sign in again.',
+        );
+      }
+
+      const idToken = await user.getIdToken();
+
+      const response = await fetch('/api/delivery/complete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          orderId: order.id,
+        }),
+      });
+
+      const rawResponse = await response.text();
+
+      let result: {
+        ok?: boolean;
+        message?: string;
+        error?: string;
+      } = {};
+
+      try {
+        result = rawResponse
+          ? JSON.parse(rawResponse)
+          : {};
+      } catch {
+        // Keep raw response for diagnostics.
+      }
+
+      if (!response.ok || !result.ok) {
+        throw new Error(
+          result.error ||
+            rawResponse ||
+            `Delivery completion failed (${response.status}).`,
+        );
+      }
+
+      setMessage(
+        `${order.orderNumber}: Delivered. Admin and stock updated.`,
+      );
+    } catch (error) {
+      console.error(error);
+
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Could not complete delivery.',
       );
     } finally {
       setBusyId('');
@@ -781,6 +866,25 @@ export default function DeliveryDashboardPage() {
                     {!cancelled &&
                       !delivered &&
                       !waiting &&
+                      normalized(order.paymentStatus) !== 'paid' && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          style={paymentReceivedButton}
+                          onClick={() =>
+                            void confirmPayment(order)
+                          }
+                        >
+                          {busy
+                            ? 'Updating…'
+                            : '✓ Payment Received'}
+                        </button>
+                      )}
+
+                    {!cancelled &&
+                      !delivered &&
+                      !waiting &&
+                      normalized(order.paymentStatus) !== 'paid' &&
                       UPI_ID && (
                         <button
                           type="button"
@@ -954,9 +1058,24 @@ export default function DeliveryDashboardPage() {
             <a href={upiHref(showQrOrder)} style={primaryButton}>
               Open UPI App
             </a>
+
+            <button
+              type="button"
+              disabled={busyId === showQrOrder.id}
+              style={paymentReceivedLargeButton}
+              onClick={() =>
+                void confirmPayment(showQrOrder)
+              }
+            >
+              {busyId === showQrOrder.id
+                ? 'Updating…'
+                : '✓ Payment Received'}
+            </button>
+
             <p style={qrNote}>
-              Confirm the payment in your UPI/bank app before handing
-              over the order. The QR itself does not verify payment.
+              After confirming the payment in the UPI/bank app, tap
+              Payment Received. The QR will then close and the order
+              will show PAID.
             </p>
           </div>
         </div>
@@ -1299,6 +1418,12 @@ const upiButton: React.CSSProperties = {
   background: '#7f56d9',
   cursor: 'pointer',
 };
+const paymentReceivedButton: React.CSSProperties = {
+  ...mapButton,
+  border: 0,
+  background: '#178746',
+  cursor: 'pointer',
+};
 const itemsBox: React.CSSProperties = {
   padding: '0 15px 15px',
   display: 'grid',
@@ -1417,6 +1542,12 @@ const primaryButton: React.CSSProperties = {
   fontSize: 12,
   fontWeight: 800,
   cursor: 'pointer',
+};
+const paymentReceivedLargeButton: React.CSSProperties = {
+  ...primaryButton,
+  width: '100%',
+  marginTop: 10,
+  background: '#178746',
 };
 const deliveredButton: React.CSSProperties = {
   ...primaryButton,
