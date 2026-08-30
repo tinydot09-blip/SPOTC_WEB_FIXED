@@ -5,6 +5,7 @@ import './globals.css';
 
 import { LanguageProvider } from '@/components/LanguageProvider';
 import GoogleAnalyticsPageView from '@/components/GoogleAnalyticsPageView';
+import MetaPixelPageView from '@/components/MetaPixelPageView';
 import NavigationLoader from '@/components/NavigationLoader';
 import RouteShell from '@/components/RouteShell';
 
@@ -206,10 +207,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* =========================
-            GOOGLE ANALYTICS
-        ========================= */}
-
+        {/* Google Analytics */}
         <Script
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
           strategy="afterInteractive"
@@ -244,10 +242,7 @@ export default function RootLayout({
           `}
         </Script>
 
-        {/* =========================
-            META PIXEL
-        ========================= */}
-
+        {/* Meta Pixel base code */}
         <Script
           id="meta-pixel"
           strategy="afterInteractive"
@@ -297,18 +292,10 @@ export default function RootLayout({
               'init',
               '${META_PIXEL_ID}'
             );
-
-            fbq(
-              'track',
-              'PageView'
-            );
           `}
         </Script>
 
-        {/* =========================
-            ORGANIZATION JSON-LD
-        ========================= */}
-
+        {/* Organization JSON-LD */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -322,10 +309,7 @@ export default function RootLayout({
           }}
         />
 
-        {/* =========================
-            WEBSITE JSON-LD
-        ========================= */}
-
+        {/* Website JSON-LD */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -341,7 +325,6 @@ export default function RootLayout({
       </head>
 
       <body>
-        {/* Meta Pixel fallback when JavaScript is disabled */}
         <noscript>
           <img
             height="1"
@@ -354,8 +337,9 @@ export default function RootLayout({
           />
         </noscript>
 
-        {/* Existing Google Analytics page tracking */}
         <GoogleAnalyticsPageView />
+
+        <MetaPixelPageView />
 
         <LanguageProvider>
           <NavigationLoader />
