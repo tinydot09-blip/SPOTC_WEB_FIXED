@@ -2154,27 +2154,12 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     return `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
   };
 
-  const openCampaignWhatsApp = () => {
+  const openCampaignWhatsApp = async () => {
     if (typeof window === 'undefined') return;
 
     const whatsappWebUrl = campaignWhatsAppUrl();
     if (!whatsappWebUrl) return;
 
-    /*
-     * MOBILE SHARE FIX
-     * ----------------
-     * Do NOT open wa.me/api.whatsapp.com in a new browser tab.
-     * On Android that leaves the customer on WhatsApp's
-     * "Share on WhatsApp / Open app" web page when they come back.
-     *
-     * Open the installed WhatsApp app directly instead. The SPOTC
-     * product page stays in Chrome underneath, so when the customer
-     * returns from WhatsApp the existing focus listener can show the
-     * "Did you send this product?" confirmation.
-     *
-     * If WhatsApp is not installed / the app URL is unsupported,
-     * fall back to the normal WhatsApp web hand-off page.
-     */
     const queryIndex = whatsappWebUrl.indexOf('?text=');
     const encodedMessage =
       queryIndex >= 0
@@ -2186,44 +2171,64 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
       return;
     }
 
-    const whatsappAppUrl =
-      `whatsapp://send?text=${encodedMessage}`;
+    const shareText = decodeURIComponent(encodedMessage);
 
-    let appOpened = false;
+    /*
+     * BEST MOBILE FLOW
+     * ----------------
+     * Use Android/iPhone's native Share sheet instead of navigating
+     * Chrome to api.whatsapp.com.
+     *
+     * This lets the customer choose either:
+     *   - WhatsApp
+     *   - WhatsApp Business
+     *
+     * Most importantly, SPOTC remains the active browser page underneath.
+     * After sending in WhatsApp and pressing Back, the customer returns
+     * to the same SPOTC product page instead of the WhatsApp web page.
+     */
+    if (
+      typeof navigator !== 'undefined' &&
+      typeof navigator.share === 'function'
+    ) {
+      try {
+        await navigator.share({
+          text: shareText,
+        });
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        appOpened = true;
+        /*
+         * The native share sheet completed/closed.
+         * Do not navigate anywhere. SPOTC stays open.
+         */
+        return;
+      } catch (error) {
+        /*
+         * AbortError means the customer simply closed/cancelled
+         * the share sheet. Keep them on SPOTC.
+         */
+        if (
+          error instanceof DOMException &&
+          error.name === 'AbortError'
+        ) {
+          return;
+        }
       }
-    };
+    }
 
-    document.addEventListener(
-      'visibilitychange',
-      handleVisibilityChange,
+    /*
+     * Fallback for browsers without Web Share API.
+     * Open WhatsApp in a separate tab/window so the current SPOTC
+     * product page is not replaced.
+     */
+    const opened = window.open(
+      whatsappWebUrl,
+      '_blank',
+      'noopener,noreferrer',
     );
 
-    window.location.href = whatsappAppUrl;
-
-    window.setTimeout(() => {
-      document.removeEventListener(
-        'visibilitychange',
-        handleVisibilityChange,
-      );
-
-      /*
-       * If the browser never became hidden, WhatsApp probably
-       * did not open. Use the web hand-off as a safe fallback.
-       *
-       * If WhatsApp DID open, do nothing here. This is important:
-       * when the user returns, Chrome must still be on SPOTC.
-       */
-      if (
-        !appOpened &&
-        document.visibilityState === 'visible'
-      ) {
-        window.location.href = whatsappWebUrl;
-      }
-    }, 1400);
+    if (!opened) {
+      window.location.href = whatsappWebUrl;
+    }
   };
 
   const shareProductForCampaign = () => {
