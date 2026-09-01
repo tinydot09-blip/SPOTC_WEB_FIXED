@@ -164,6 +164,8 @@ export default function ShareRewardProofPage() {
     string[]
   >([]);
   const [mobile, setMobile] = useState('');
+  const [mobileMissing, setMobileMissing] =
+    useState(false);
   const [existingStatus, setExistingStatus] =
     useState('');
 
@@ -229,6 +231,7 @@ export default function ShareRewardProofPage() {
 
       if (!normalizedMobile) {
         if (active) {
+          setMobileMissing(true);
           setClosed(true);
           setMessage(
             'A valid 10-digit mobile number is required in your SPOTC profile before using this offer.',
@@ -238,6 +241,7 @@ export default function ShareRewardProofPage() {
         return;
       }
 
+      setMobileMissing(false);
       setMobile(normalizedMobile);
 
       /*
@@ -783,6 +787,27 @@ export default function ShareRewardProofPage() {
           </div>
         )}
 
+        {mobileMissing && !alreadyUsed && (
+          <button
+            type="button"
+            className="sr-add-mobile"
+            onClick={() => {
+              try {
+                window.localStorage.setItem(
+                  'spotc-profile-return-path',
+                  '/share-reward/proof',
+                );
+              } catch {
+                // Ignore browser storage errors.
+              }
+
+              router.push('/dashboard');
+            }}
+          >
+            Add Mobile Number
+          </button>
+        )}
+
         {!closed && (
           <>
             <label className="sr-upload">
@@ -1021,6 +1046,23 @@ const styles = `
 
   .sr-progress svg{
     width:20px
+  }
+
+  .sr-add-mobile{
+    width:100%;
+    min-height:50px;
+    margin:0 0 18px;
+    border:0;
+    border-radius:14px;
+    background:#111;
+    color:#fff;
+    font-size:15px;
+    font-weight:800;
+    cursor:pointer
+  }
+
+  .sr-add-mobile:active{
+    transform:translateY(1px)
   }
 
   .sr-upload{
