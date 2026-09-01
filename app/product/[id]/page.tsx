@@ -195,6 +195,16 @@ function getProductPrice(
   return mrp;
 }
 
+function getProductActualPrice(
+  product: ProductRecord,
+): number {
+  return numberValue(
+    product.mrp ??
+      product.old_price ??
+      product.actual_price,
+  );
+}
+
 function productInStock(
   product: ProductRecord,
 ): boolean {
@@ -394,12 +404,18 @@ export async function generateMetadata({
     const seoTitle =
       `${title} in Karamadai`;
 
-    const rawDescription =
-      getProductDescription(record);
+    const offerPrice =
+      getProductPrice(record);
+
+    const actualPrice =
+      getProductActualPrice(record);
 
     const description =
-      `Shop ${title} online in Karamadai at SPOTC. ${rawDescription}`
-        .slice(0, 160);
+      actualPrice > offerPrice && offerPrice > 0
+        ? `Actual Price ₹${Math.round(actualPrice)} • Offer Price ₹${Math.round(offerPrice)}`
+        : offerPrice > 0
+          ? `Offer Price ₹${Math.round(offerPrice)}`
+          : 'Shop this product on SPOTC.';
 
     const image =
       getProductImage(record);

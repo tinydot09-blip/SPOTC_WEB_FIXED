@@ -2131,7 +2131,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     const productId = String(product.id);
     const productUrl = `${window.location.origin}/product/${encodeURIComponent(
       productId,
-    )}`;
+    )}?share=2`;
 
     const shareMessage = [
       productUrl,
