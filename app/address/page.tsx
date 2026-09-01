@@ -1364,9 +1364,27 @@ export default function AddressPage() {
                   return;
                 }
 
-                router.push(
-                  '/checkout',
-                );
+                const requestedNext =
+                  typeof window !== 'undefined'
+                    ? new URLSearchParams(window.location.search).get('next')
+                    : '';
+
+                const storedNext =
+                  typeof window !== 'undefined'
+                    ? window.localStorage.getItem('spotc-address-return-path') || ''
+                    : '';
+
+                const candidate = requestedNext || storedNext || '/checkout';
+                const safeNext =
+                  candidate.startsWith('/') && !candidate.startsWith('//')
+                    ? candidate
+                    : '/checkout';
+
+                if (typeof window !== 'undefined') {
+                  window.localStorage.removeItem('spotc-address-return-path');
+                }
+
+                router.push(safeNext);
               }}
             >
               Continue to Checkout

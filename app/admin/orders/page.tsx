@@ -1653,10 +1653,77 @@ if (!response.ok) {
               serverTimestamp();
           }
 
+          const isShareCampaignOrder =
+            text(liveOrder.campaign_type) ===
+            'share5_get1free';
+
+          const shareRewardClaimId =
+            text(liveOrder.share_reward_claim_id);
+
+          if (isShareCampaignOrder) {
+            if (nextStatus === 'confirmed') {
+              orderUpdate.campaign_verification_status =
+                'approved';
+              orderUpdate.campaign_verified_at =
+                serverTimestamp();
+            }
+
+            if (nextStatus === 'cancelled') {
+              orderUpdate.campaign_verification_status =
+                'rejected';
+              orderUpdate.campaign_rejected_at =
+                serverTimestamp();
+            }
+
+            if (nextStatus === 'delivered') {
+              orderUpdate.campaign_verification_status =
+                'delivered';
+            }
+          }
+
           transaction.update(
             orderRef,
             orderUpdate,
           );
+
+          if (
+            isShareCampaignOrder &&
+            shareRewardClaimId
+          ) {
+            const claimRef = doc(
+              firestore,
+              'ShareRewardClaims',
+              shareRewardClaimId,
+            );
+
+            const claimUpdate: DocumentData = {
+              updated_at: serverTimestamp(),
+            };
+
+            if (nextStatus === 'confirmed') {
+              claimUpdate.status = 'approved';
+              claimUpdate.verification_status = 'approved';
+              claimUpdate.approved_at = serverTimestamp();
+            }
+
+            if (nextStatus === 'cancelled') {
+              claimUpdate.status = 'rejected';
+              claimUpdate.verification_status = 'rejected';
+              claimUpdate.rejected_at = serverTimestamp();
+            }
+
+            if (nextStatus === 'delivered') {
+              claimUpdate.status = 'delivered';
+              claimUpdate.verification_status = 'delivered';
+              claimUpdate.delivered_at = serverTimestamp();
+            }
+
+            transaction.set(
+              claimRef,
+              claimUpdate,
+              { merge: true },
+            );
+          }
         },
       );
 
@@ -2596,6 +2663,29 @@ if (!response.ok) {
             const freeGifts =
               freeGiftsFromOrder(row.data);
 
+            const isShareCampaign =
+              text(row.data.campaign_type) ===
+              'share5_get1free';
+
+            const shareProofUrls =
+              Array.isArray(row.data.share_proof_urls)
+                ? row.data.share_proof_urls
+                    .map((value: unknown) => text(value))
+                    .filter(Boolean)
+                : [];
+
+            const sharedProductIds =
+              Array.isArray(row.data.shared_product_ids)
+                ? row.data.shared_product_ids
+                    .map((value: unknown) => text(value))
+                    .filter(Boolean)
+                : [];
+
+            const campaignVerificationStatus =
+              text(
+                row.data.campaign_verification_status,
+              ) || 'pending';
+
             const returnRequests =
               returnRequestsFromOrder(row.data);
 
@@ -3031,6 +3121,165 @@ if (!response.ok) {
                     </div>
                   </div>
                 </div>
+
+                {isShareCampaign && (
+                  <div
+                    style={{
+                      marginTop: 16,
+                      padding: 16,
+                      border: '2px solid #e91e63',
+                      borderRadius: 16,
+                      background: '#fff7fa',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <div>
+                        <div
+                          style={{
+                            color: '#e91e63',
+                            fontSize: 12,
+                            fontWeight: 900,
+                            letterSpacing: '.08em',
+                          }}
+                        >
+                          SHARE 5 → GET 1 FREE
+                        </div>
+                        <strong
+                          style={{
+                            display: 'block',
+                            marginTop: 4,
+                            fontSize: 18,
+                          }}
+                        >
+                          WhatsApp Proof Verification
+                        </strong>
+                      </div>
+
+                      <span
+                        style={{
+                          padding: '7px 10px',
+                          borderRadius: 999,
+                          background:
+                            campaignVerificationStatus === 'approved'
+                              ? '#e8f7ed'
+                              : campaignVerificationStatus === 'rejected'
+                                ? '#feecec'
+                                : '#fff0c7',
+                          color:
+                            campaignVerificationStatus === 'approved'
+                              ? '#16733a'
+                              : campaignVerificationStatus === 'rejected'
+                                ? '#a61f1f'
+                                : '#745400',
+                          fontSize: 12,
+                          fontWeight: 900,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {campaignVerificationStatus}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: 12,
+                        display: 'grid',
+                        gap: 5,
+                        color: '#5f514b',
+                        fontSize: 13,
+                      }}
+                    >
+                      <span>
+                        Shared products: <strong>{sharedProductIds.length} / 5</strong>
+                      </span>
+                      <span>
+                        Local share declaration:{' '}
+                        <strong>
+                          {row.data.local_share_declared === true
+                            ? 'YES'
+                            : 'NOT CONFIRMED'}
+                        </strong>
+                      </span>
+                      <span>
+                        Delivery promise after approval:{' '}
+                        <strong>Within 5 hours</strong>
+                      </span>
+                    </div>
+
+                    {shareProofUrls.length > 0 ? (
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns:
+                            'repeat(auto-fill,minmax(110px,1fr))',
+                          gap: 9,
+                          marginTop: 13,
+                        }}
+                      >
+                        {shareProofUrls.map(
+                          (proofUrl: string, index: number) => (
+                            <button
+                              key={`${row.id}-proof-${index}`}
+                              type="button"
+                              onClick={() =>
+                                setPreviewImage({
+                                  src: proofUrl,
+                                  title: `WhatsApp Proof ${index + 1}`,
+                                })
+                              }
+                              style={{
+                                border: '1px solid #ead6de',
+                                background: '#fff',
+                                padding: 5,
+                                borderRadius: 12,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <img
+                                src={proofUrl}
+                                alt={`WhatsApp Proof ${index + 1}`}
+                                style={{
+                                  width: '100%',
+                                  aspectRatio: '1 / 1',
+                                  objectFit: 'cover',
+                                  borderRadius: 8,
+                                }}
+                              />
+                              <span
+                                style={{
+                                  display: 'block',
+                                  marginTop: 5,
+                                  fontSize: 11,
+                                  fontWeight: 800,
+                                }}
+                              >
+                                Proof {index + 1}
+                              </span>
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          marginTop: 12,
+                          color: '#a61f1f',
+                          fontWeight: 800,
+                        }}
+                      >
+                        No WhatsApp proof image stored.
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {freeGifts.length > 0 && (
                   <div style={freeGiftSection}>
@@ -3490,7 +3739,9 @@ if (!response.ok) {
                     >
                       {nextStatus ===
                       'confirmed'
-                        ? 'Confirm Order'
+                        ? isShareCampaign
+                          ? 'Approve Proof & Confirm Gift'
+                          : 'Confirm Order'
                         : nextStatus ===
                             'picking'
                           ? 'Start Picking'
@@ -3523,7 +3774,9 @@ if (!response.ok) {
                             : 1,
                         }}
                       >
-                        Cancel
+                        {isShareCampaign && status === 'pending'
+                          ? 'Reject Proof'
+                          : 'Cancel'}
                       </button>
                     )}
 

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { ProductGrid } from '@/components/ProductGrid';
+import ShareCampaignBar from '@/components/ShareCampaignBar';
 
 export const metadata: Metadata = {
   title: 'Kids Wear, Toys & Fancy Items in Karamadai',
@@ -84,7 +85,6 @@ const shopJsonLd = {
 export default function ShopPage() {
   return (
     <main className="page shop-page">
-
       <h1
         style={{
           position: 'absolute',
@@ -110,6 +110,8 @@ export default function ShopPage() {
           ),
         }}
       />
+
+      <ShareCampaignBar />
 
       <ProductGrid />
 

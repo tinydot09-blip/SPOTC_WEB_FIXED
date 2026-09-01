@@ -19,6 +19,7 @@ import {
   Play,
   Plus,
   RefreshCcw,
+  Share2,
   ShieldCheck,
   ShoppingBag,
   Star,
@@ -344,6 +345,58 @@ type CompareState = 'closed' | 'loading' | 'ready' | 'error';
 
 const PRODUCT_SUPPORT_PHONE = '8072098066';
 const PRODUCT_SUPPORT_WHATSAPP = '918072098066';
+
+const SHARE_CAMPAIGN_STORAGE_KEY = 'spotc-share5-campaign-v1';
+const SHARE_CAMPAIGN_LIMIT = 5;
+
+type ShareCampaignState = {
+  sharedProductIds: string[];
+  proofSubmitted?: boolean;
+};
+
+const readShareCampaignState = (): ShareCampaignState => {
+  if (typeof window === 'undefined') {
+    return { sharedProductIds: [] };
+  }
+
+  try {
+    const raw = window.localStorage.getItem(SHARE_CAMPAIGN_STORAGE_KEY);
+    if (!raw) return { sharedProductIds: [] };
+
+    const parsed = JSON.parse(raw) as Partial<ShareCampaignState>;
+    const sharedProductIds = Array.isArray(parsed.sharedProductIds)
+      ? Array.from(
+          new Set(
+            parsed.sharedProductIds
+              .map((value) => String(value || '').trim())
+              .filter(Boolean),
+          ),
+        ).slice(0, SHARE_CAMPAIGN_LIMIT)
+      : [];
+
+    return {
+      sharedProductIds,
+      proofSubmitted: parsed.proofSubmitted === true,
+    };
+  } catch {
+    return { sharedProductIds: [] };
+  }
+};
+
+const writeShareCampaignState = (state: ShareCampaignState) => {
+  if (typeof window === 'undefined') return;
+
+  window.localStorage.setItem(
+    SHARE_CAMPAIGN_STORAGE_KEY,
+    JSON.stringify({
+      ...state,
+      sharedProductIds: Array.from(new Set(state.sharedProductIds)).slice(
+        0,
+        SHARE_CAMPAIGN_LIMIT,
+      ),
+    }),
+  );
+};
 
 const productSupportQuestions = [
   {
@@ -745,6 +798,8 @@ export default function ProductDetailPage({ initialProduct }: { initialProduct?:
   const [compareError, setCompareError] = useState('');
   const [productSupportOpen, setProductSupportOpen] = useState(false);
   const [askFriendsLoading, setAskFriendsLoading] = useState(false);
+  const [campaignSharedCount, setCampaignSharedCount] = useState(0);
+  const [campaignCurrentProductShared, setCampaignCurrentProductShared] = useState(false);
   const [circleResult, setCircleResult] = useState<{
     id: string;
     shareCode: string;
@@ -960,6 +1015,27 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
       active = false;
     };
   }, [id, initialProduct]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const refreshCampaign = () => {
+      const campaign = readShareCampaignState();
+      setCampaignSharedCount(campaign.sharedProductIds.length);
+      setCampaignCurrentProductShared(
+        campaign.sharedProductIds.includes(String(id || '')),
+      );
+    };
+
+    refreshCampaign();
+    window.addEventListener('focus', refreshCampaign);
+    window.addEventListener('storage', refreshCampaign);
+
+    return () => {
+      window.removeEventListener('focus', refreshCampaign);
+      window.removeEventListener('storage', refreshCampaign);
+    };
+  }, [id]);
 
   useEffect(() => {
     if (!product || !firebaseReady) return;
@@ -2030,6 +2106,56 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
 
   const openCompareOnline = () => {
     router.push(`/compare-online?id=${encodeURIComponent(product.id)}`);
+  };
+
+  const shareProductForCampaign = () => {
+    if (typeof window === 'undefined') return;
+
+    const productId = String(product.id);
+    const campaign = readShareCampaignState();
+    const alreadyShared = campaign.sharedProductIds.includes(productId);
+
+    const nextIds = alreadyShared
+      ? campaign.sharedProductIds
+      : [...campaign.sharedProductIds, productId].slice(0, SHARE_CAMPAIGN_LIMIT);
+
+    writeShareCampaignState({
+      ...campaign,
+      sharedProductIds: nextIds,
+    });
+
+    setCampaignSharedCount(nextIds.length);
+    setCampaignCurrentProductShared(true);
+
+    sendGa4Event('share', {
+      method: 'WhatsApp',
+      content_type: 'product',
+      item_id: productId,
+      item_name: displayProductTitle,
+      spotc_campaign: 'share_5_get_1_free',
+      campaign_progress: nextIds.length,
+    });
+
+    const productUrl = `${window.location.origin}/product/${encodeURIComponent(
+      productId,
+    )}`;
+
+    const shareMessage = [
+      `Check out this product on SPOTC.IN:`,
+      displayProductTitle,
+      `₹${Math.round(price)}`,
+      '',
+      productUrl,
+      '',
+      'SPOTC.IN — Namma Area. Namma Kadai.',
+    ].join('\n');
+
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
+    const opened = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+
+    if (!opened) {
+      window.location.href = whatsappUrl;
+    }
   };
 
   const productSupportHref = (message: string): string => {
@@ -3170,6 +3296,52 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
             </button>
           </div>
 
+          <section className="pd-share-campaign-card" aria-label="Share 5 get 1 free campaign">
+            <div className="pd-share-campaign-heading">
+              <span className="pd-share-campaign-icon" aria-hidden="true">
+                <Gift />
+              </span>
+              <span className="pd-share-campaign-copy">
+                <strong>Share &amp; Get 1 FREE Gift</strong>
+                <small>
+                  Share this product with a different local friend or family member on WhatsApp.
+                </small>
+              </span>
+              <span className="pd-share-campaign-progress">
+                {campaignSharedCount} / 5
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className={`pd-share-campaign-button${campaignCurrentProductShared ? ' is-shared' : ''}`}
+              onClick={shareProductForCampaign}
+              disabled={campaignCurrentProductShared || campaignSharedCount >= SHARE_CAMPAIGN_LIMIT}
+            >
+              {campaignCurrentProductShared ? (
+                <>
+                  <CheckCircle2 />
+                  <span>Shared — choose another product</span>
+                </>
+              ) : campaignSharedCount >= SHARE_CAMPAIGN_LIMIT ? (
+                <>
+                  <CheckCircle2 />
+                  <span>5 / 5 complete — upload proof from Shop</span>
+                </>
+              ) : (
+                <>
+                  <Share2 />
+                  <span>Share this product on WhatsApp</span>
+                </>
+              )}
+            </button>
+
+            <p className="pd-share-campaign-note">
+              Share 5 different products with 5 different people in Karamadai, Teacher Colony,
+              EB Colony or Gandhinagar. Upload WhatsApp proof after 5 / 5.
+            </p>
+          </section>
+
           {productDetailRows.length > 0 && (
             <section
               className="pd-inline-details"
@@ -3854,6 +4026,94 @@ onClick={openShoppingCircle}
 )}
 
       <style jsx global>{`
+        .pd-share-campaign-card{
+          margin:16px 0 0;
+          padding:14px;
+          border:1px solid #f2bfd0;
+          border-radius:18px;
+          background:linear-gradient(135deg,#fff7fa 0%,#fff 58%,#fff8e8 100%);
+          box-shadow:0 8px 24px rgba(66,32,44,.06);
+        }
+        .pd-share-campaign-heading{
+          display:grid;
+          grid-template-columns:42px minmax(0,1fr) auto;
+          gap:10px;
+          align-items:center;
+        }
+        .pd-share-campaign-icon{
+          width:42px;
+          height:42px;
+          border-radius:13px;
+          display:grid;
+          place-items:center;
+          background:#e91e63;
+          color:#fff;
+        }
+        .pd-share-campaign-icon svg{
+          width:21px;
+          height:21px;
+        }
+        .pd-share-campaign-copy{
+          min-width:0;
+          display:grid;
+          gap:3px;
+        }
+        .pd-share-campaign-copy strong{
+          color:#171717;
+          font-size:15px;
+          line-height:1.2;
+          font-weight:900;
+        }
+        .pd-share-campaign-copy small{
+          color:#675b60;
+          font-size:11.5px;
+          line-height:1.35;
+          font-weight:700;
+        }
+        .pd-share-campaign-progress{
+          white-space:nowrap;
+          border-radius:999px;
+          padding:5px 9px;
+          background:#fff0c2;
+          color:#6f5000;
+          font-size:11px;
+          font-weight:900;
+        }
+        .pd-share-campaign-button{
+          width:100%;
+          min-height:48px;
+          margin-top:12px;
+          border:0;
+          border-radius:13px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          gap:8px;
+          background:#25d366;
+          color:#fff;
+          font-size:13px;
+          font-weight:900;
+          cursor:pointer;
+        }
+        .pd-share-campaign-button svg{
+          width:18px;
+          height:18px;
+        }
+        .pd-share-campaign-button.is-shared,
+        .pd-share-campaign-button:disabled{
+          background:#eaf7ee;
+          color:#16723a;
+          border:1px solid #c9ead4;
+          cursor:default;
+        }
+        .pd-share-campaign-note{
+          margin:9px 1px 0;
+          color:#7a6870;
+          font-size:10.5px;
+          line-height:1.4;
+          font-weight:700;
+        }
+
         /* FREE GIFT — FINAL PREMIUM SOFT STYLE */
         .pd-free-gift-cta{
           border:1px solid #efd49f!important;
