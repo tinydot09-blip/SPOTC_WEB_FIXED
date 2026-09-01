@@ -2157,18 +2157,73 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   const openCampaignWhatsApp = () => {
     if (typeof window === 'undefined') return;
 
-    const whatsappUrl = campaignWhatsAppUrl();
-    if (!whatsappUrl) return;
+    const whatsappWebUrl = campaignWhatsAppUrl();
+    if (!whatsappWebUrl) return;
 
-    const opened = window.open(
-      whatsappUrl,
-      '_blank',
-      'noopener,noreferrer',
+    /*
+     * MOBILE SHARE FIX
+     * ----------------
+     * Do NOT open wa.me/api.whatsapp.com in a new browser tab.
+     * On Android that leaves the customer on WhatsApp's
+     * "Share on WhatsApp / Open app" web page when they come back.
+     *
+     * Open the installed WhatsApp app directly instead. The SPOTC
+     * product page stays in Chrome underneath, so when the customer
+     * returns from WhatsApp the existing focus listener can show the
+     * "Did you send this product?" confirmation.
+     *
+     * If WhatsApp is not installed / the app URL is unsupported,
+     * fall back to the normal WhatsApp web hand-off page.
+     */
+    const queryIndex = whatsappWebUrl.indexOf('?text=');
+    const encodedMessage =
+      queryIndex >= 0
+        ? whatsappWebUrl.slice(queryIndex + 6)
+        : '';
+
+    if (!encodedMessage) {
+      window.location.href = whatsappWebUrl;
+      return;
+    }
+
+    const whatsappAppUrl =
+      `whatsapp://send?text=${encodedMessage}`;
+
+    let appOpened = false;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        appOpened = true;
+      }
+    };
+
+    document.addEventListener(
+      'visibilitychange',
+      handleVisibilityChange,
     );
 
-    if (!opened) {
-      window.location.href = whatsappUrl;
-    }
+    window.location.href = whatsappAppUrl;
+
+    window.setTimeout(() => {
+      document.removeEventListener(
+        'visibilitychange',
+        handleVisibilityChange,
+      );
+
+      /*
+       * If the browser never became hidden, WhatsApp probably
+       * did not open. Use the web hand-off as a safe fallback.
+       *
+       * If WhatsApp DID open, do nothing here. This is important:
+       * when the user returns, Chrome must still be on SPOTC.
+       */
+      if (
+        !appOpened &&
+        document.visibilityState === 'visible'
+      ) {
+        window.location.href = whatsappWebUrl;
+      }
+    }, 1400);
   };
 
   const shareProductForCampaign = () => {
