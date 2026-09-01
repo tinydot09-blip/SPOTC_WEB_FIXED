@@ -2154,11 +2154,13 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     return `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
   };
 
-  const openCampaignWhatsApp = async () => {
-    if (typeof window === 'undefined') return;
+  const openCampaignWhatsApp = async (): Promise<
+    'shared' | 'cancelled' | 'fallback'
+  > => {
+    if (typeof window === 'undefined') return 'cancelled';
 
     const whatsappWebUrl = campaignWhatsAppUrl();
-    if (!whatsappWebUrl) return;
+    if (!whatsappWebUrl) return 'cancelled';
 
     const queryIndex = whatsappWebUrl.indexOf('?text=');
     const encodedMessage =
@@ -2168,7 +2170,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
 
     if (!encodedMessage) {
       window.location.href = whatsappWebUrl;
-      return;
+      return 'fallback';
     }
 
     const shareText = decodeURIComponent(encodedMessage);
@@ -2197,10 +2199,11 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
         });
 
         /*
-         * The native share sheet completed/closed.
-         * Do not navigate anywhere. SPOTC stays open.
+         * The native share sheet completed successfully.
+         * Treat this as the completed campaign share so the
+         * 0/5 -> 1/5 progress is saved immediately.
          */
-        return;
+        return 'shared';
       } catch (error) {
         /*
          * AbortError means the customer simply closed/cancelled
@@ -2210,7 +2213,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
           error instanceof DOMException &&
           error.name === 'AbortError'
         ) {
-          return;
+          return 'cancelled';
         }
       }
     }
@@ -2229,9 +2232,11 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     if (!opened) {
       window.location.href = whatsappWebUrl;
     }
+
+    return 'fallback';
   };
 
-  const shareProductForCampaign = () => {
+  const shareProductForCampaign = async () => {
     if (typeof window === 'undefined') return;
 
     const productId = String(product.id);
@@ -2252,7 +2257,18 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     );
 
     setCampaignShareConfirmOpen(false);
-    openCampaignWhatsApp();
+
+    const result = await openCampaignWhatsApp();
+
+    /*
+     * navigator.share() resolves only after the native share action
+     * completes. Save the campaign progress immediately so when the
+     * customer goes back to /shop the campaign card shows 1/5, 2/5,
+     * etc. without needing another confirmation step.
+     */
+    if (result === 'shared') {
+      confirmCampaignShare();
+    }
   };
 
   const confirmCampaignShare = () => {
