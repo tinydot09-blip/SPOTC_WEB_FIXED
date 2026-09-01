@@ -347,6 +347,7 @@ const PRODUCT_SUPPORT_PHONE = '8072098066';
 const PRODUCT_SUPPORT_WHATSAPP = '918072098066';
 
 const SHARE_CAMPAIGN_STORAGE_KEY = 'spotc-share5-campaign-v1';
+const SHARE_CAMPAIGN_PENDING_KEY = 'spotc-share5-pending-product';
 const SHARE_CAMPAIGN_LIMIT = 5;
 
 type ShareCampaignState = {
@@ -800,6 +801,7 @@ export default function ProductDetailPage({ initialProduct }: { initialProduct?:
   const [askFriendsLoading, setAskFriendsLoading] = useState(false);
   const [campaignSharedCount, setCampaignSharedCount] = useState(0);
   const [campaignCurrentProductShared, setCampaignCurrentProductShared] = useState(false);
+  const [campaignShareConfirmOpen, setCampaignShareConfirmOpen] = useState(false);
   const [circleResult, setCircleResult] = useState<{
     id: string;
     shareCode: string;
@@ -1021,10 +1023,25 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
 
     const refreshCampaign = () => {
       const campaign = readShareCampaignState();
+      const currentProductId = String(id || '');
+
       setCampaignSharedCount(campaign.sharedProductIds.length);
       setCampaignCurrentProductShared(
-        campaign.sharedProductIds.includes(String(id || '')),
+        campaign.sharedProductIds.includes(currentProductId),
       );
+
+      // A product is only counted AFTER the user returns from WhatsApp
+      // and confirms that the message was actually sent.
+      const pendingProductId = window.sessionStorage.getItem(
+        SHARE_CAMPAIGN_PENDING_KEY,
+      );
+
+      if (
+        pendingProductId === currentProductId &&
+        !campaign.sharedProductIds.includes(currentProductId)
+      ) {
+        setCampaignShareConfirmOpen(true);
+      }
     };
 
     refreshCampaign();
@@ -2108,40 +2125,16 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     router.push(`/compare-online?id=${encodeURIComponent(product.id)}`);
   };
 
-  const shareProductForCampaign = () => {
-    if (typeof window === 'undefined') return;
+  const campaignWhatsAppUrl = () => {
+    if (typeof window === 'undefined') return '';
 
     const productId = String(product.id);
-    const campaign = readShareCampaignState();
-    const alreadyShared = campaign.sharedProductIds.includes(productId);
-
-    const nextIds = alreadyShared
-      ? campaign.sharedProductIds
-      : [...campaign.sharedProductIds, productId].slice(0, SHARE_CAMPAIGN_LIMIT);
-
-    writeShareCampaignState({
-      ...campaign,
-      sharedProductIds: nextIds,
-    });
-
-    setCampaignSharedCount(nextIds.length);
-    setCampaignCurrentProductShared(true);
-
-    sendGa4Event('share', {
-      method: 'WhatsApp',
-      content_type: 'product',
-      item_id: productId,
-      item_name: displayProductTitle,
-      spotc_campaign: 'share_5_get_1_free',
-      campaign_progress: nextIds.length,
-    });
-
     const productUrl = `${window.location.origin}/product/${encodeURIComponent(
       productId,
     )}`;
 
     const shareMessage = [
-      `Check out this product on SPOTC.IN:`,
+      'Check out this product on SPOTC.IN:',
       displayProductTitle,
       `₹${Math.round(price)}`,
       '',
@@ -2150,13 +2143,112 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
       'SPOTC.IN — Namma Area. Namma Kadai.',
     ].join('\n');
 
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
-    const opened = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    return `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
+  };
+
+  const openCampaignWhatsApp = () => {
+    if (typeof window === 'undefined') return;
+
+    const whatsappUrl = campaignWhatsAppUrl();
+    if (!whatsappUrl) return;
+
+    const opened = window.open(
+      whatsappUrl,
+      '_blank',
+      'noopener,noreferrer',
+    );
 
     if (!opened) {
       window.location.href = whatsappUrl;
     }
   };
+
+  const shareProductForCampaign = () => {
+    if (typeof window === 'undefined') return;
+
+    const productId = String(product.id);
+    const campaign = readShareCampaignState();
+
+    if (
+      campaign.sharedProductIds.includes(productId) ||
+      campaign.sharedProductIds.length >= SHARE_CAMPAIGN_LIMIT
+    ) {
+      return;
+    }
+
+    // IMPORTANT: do NOT increase 3/5 -> 4/5 here.
+    // Opening WhatsApp does not prove the product was sent.
+    window.sessionStorage.setItem(
+      SHARE_CAMPAIGN_PENDING_KEY,
+      productId,
+    );
+
+    setCampaignShareConfirmOpen(false);
+    openCampaignWhatsApp();
+  };
+
+  const confirmCampaignShare = () => {
+    if (typeof window === 'undefined') return;
+
+    const productId = String(product.id);
+    const pendingProductId = window.sessionStorage.getItem(
+      SHARE_CAMPAIGN_PENDING_KEY,
+    );
+
+    if (pendingProductId !== productId) {
+      setCampaignShareConfirmOpen(false);
+      return;
+    }
+
+    const campaign = readShareCampaignState();
+    const alreadyShared = campaign.sharedProductIds.includes(productId);
+
+    const nextIds = alreadyShared
+      ? campaign.sharedProductIds
+      : [...campaign.sharedProductIds, productId].slice(
+          0,
+          SHARE_CAMPAIGN_LIMIT,
+        );
+
+    writeShareCampaignState({
+      ...campaign,
+      sharedProductIds: nextIds,
+    });
+
+    window.sessionStorage.removeItem(
+      SHARE_CAMPAIGN_PENDING_KEY,
+    );
+
+    setCampaignSharedCount(nextIds.length);
+    setCampaignCurrentProductShared(true);
+    setCampaignShareConfirmOpen(false);
+
+    sendGa4Event('share', {
+      method: 'WhatsApp',
+      content_type: 'product',
+      item_id: productId,
+      item_name: displayProductTitle,
+      spotc_campaign: 'share_5_get_1_free',
+      campaign_progress: nextIds.length,
+      spotc_share_confirmed: true,
+    });
+  };
+
+  const cancelCampaignShareConfirmation = () => {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem(
+        SHARE_CAMPAIGN_PENDING_KEY,
+      );
+    }
+
+    setCampaignShareConfirmOpen(false);
+  };
+
+  const retryCampaignShare = () => {
+    setCampaignShareConfirmOpen(false);
+    openCampaignWhatsApp();
+  };
+
 
   const productSupportHref = (message: string): string => {
     const productUrl = `https://www.spotc.in/product/${encodeURIComponent(
@@ -3342,6 +3434,63 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
             </p>
           </section>
 
+          {campaignShareConfirmOpen && !campaignCurrentProductShared && (
+            <div
+              className="pd-share-confirm-backdrop"
+              role="presentation"
+              onClick={cancelCampaignShareConfirmation}
+            >
+              <section
+                className="pd-share-confirm-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="pd-share-confirm-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <span className="pd-share-confirm-icon" aria-hidden="true">
+                  <Share2 />
+                </span>
+
+                <small>SHARE 5 → GET 1 FREE</small>
+                <h3 id="pd-share-confirm-title">Did you send this product?</h3>
+                <p>
+                  Confirm only if you actually sent this product to a different local
+                  friend or family member on WhatsApp.
+                </p>
+
+                <button
+                  type="button"
+                  className="pd-share-confirm-yes"
+                  onClick={confirmCampaignShare}
+                >
+                  <CheckCircle2 />
+                  Yes, I shared it
+                </button>
+
+                <button
+                  type="button"
+                  className="pd-share-confirm-retry"
+                  onClick={retryCampaignShare}
+                >
+                  <Share2 />
+                  Share again on WhatsApp
+                </button>
+
+                <button
+                  type="button"
+                  className="pd-share-confirm-notyet"
+                  onClick={cancelCampaignShareConfirmation}
+                >
+                  Not shared yet
+                </button>
+
+                <p className="pd-share-confirm-proof-note">
+                  After 5 / 5, take screenshot proof from WhatsApp and upload it to SPOTC.
+                </p>
+              </section>
+            </div>
+          )}
+
           {productDetailRows.length > 0 && (
             <section
               className="pd-inline-details"
@@ -4112,6 +4261,114 @@ onClick={openShoppingCircle}
           font-size:10.5px;
           line-height:1.4;
           font-weight:700;
+        }
+
+        .pd-share-confirm-backdrop{
+          position:fixed;
+          inset:0;
+          z-index:10050;
+          display:flex;
+          align-items:flex-end;
+          justify-content:center;
+          padding:14px;
+          background:rgba(17,17,17,.48);
+          backdrop-filter:blur(4px);
+        }
+        .pd-share-confirm-modal{
+          width:min(460px,100%);
+          border-radius:24px 24px 18px 18px;
+          background:#fff;
+          padding:22px 18px 18px;
+          box-shadow:0 24px 70px rgba(0,0,0,.25);
+          text-align:center;
+        }
+        .pd-share-confirm-icon{
+          width:54px;
+          height:54px;
+          margin:0 auto 12px;
+          border-radius:17px;
+          display:grid;
+          place-items:center;
+          background:#e9fbef;
+          color:#168a43;
+        }
+        .pd-share-confirm-icon svg{
+          width:26px;
+          height:26px;
+        }
+        .pd-share-confirm-modal>small{
+          display:block;
+          color:#d81b60;
+          font-size:10px;
+          font-weight:900;
+          letter-spacing:.08em;
+        }
+        .pd-share-confirm-modal h3{
+          margin:6px 0 7px;
+          color:#171717;
+          font-size:23px;
+          line-height:1.15;
+          font-weight:950;
+        }
+        .pd-share-confirm-modal>p{
+          margin:0 auto;
+          max-width:390px;
+          color:#6a6064;
+          font-size:13px;
+          line-height:1.5;
+          font-weight:650;
+        }
+        .pd-share-confirm-yes,
+        .pd-share-confirm-retry,
+        .pd-share-confirm-notyet{
+          width:100%;
+          min-height:48px;
+          border-radius:14px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          gap:8px;
+          font-size:13px;
+          font-weight:900;
+          cursor:pointer;
+        }
+        .pd-share-confirm-yes{
+          margin-top:18px;
+          border:0;
+          background:#25d366;
+          color:#fff;
+        }
+        .pd-share-confirm-retry{
+          margin-top:9px;
+          border:1px solid #ccebd6;
+          background:#effbf3;
+          color:#16723a;
+        }
+        .pd-share-confirm-notyet{
+          margin-top:8px;
+          border:0;
+          background:transparent;
+          color:#6c6266;
+        }
+        .pd-share-confirm-yes svg,
+        .pd-share-confirm-retry svg{
+          width:18px;
+          height:18px;
+        }
+        .pd-share-confirm-modal .pd-share-confirm-proof-note{
+          margin-top:8px;
+          color:#8a777f;
+          font-size:10.5px;
+          line-height:1.4;
+        }
+
+        @media(min-width:700px){
+          .pd-share-confirm-backdrop{
+            align-items:center;
+          }
+          .pd-share-confirm-modal{
+            border-radius:22px;
+          }
         }
 
         /* FREE GIFT — FINAL PREMIUM SOFT STYLE */
