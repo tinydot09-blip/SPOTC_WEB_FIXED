@@ -801,7 +801,7 @@ export default function ShareRewardProofPage() {
                 // Ignore browser storage errors.
               }
 
-              router.push('/dashboard');
+              router.push('/profile');
             }}
           >
             Add Mobile Number
@@ -1219,3 +1219,4 @@ const styles = `
     }
   }
 `;
+
