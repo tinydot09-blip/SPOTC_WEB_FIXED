@@ -443,9 +443,9 @@ export default function ShareRewardProofPage() {
       return;
     }
 
-    if (files.length < 1) {
+    if (files.length !== 5) {
       setMessage(
-        'Upload at least one WhatsApp screenshot showing your shares.',
+        'Please upload exactly 5 WhatsApp screenshots — one proof image for each shared product.',
       );
       return;
     }
@@ -836,7 +836,7 @@ export default function ShareRewardProofPage() {
               </strong>
 
               <span>
-                1–5 images • JPG / PNG /
+                5 screenshots required • JPG / PNG /
                 WEBP • Max 8 MB each
               </span>
             </label>
@@ -882,7 +882,7 @@ export default function ShareRewardProofPage() {
               className="sr-submit"
               type="button"
               onClick={submit}
-              disabled={uploading}
+              disabled={uploading || files.length !== 5}
             >
               {uploading ? (
                 <Loader2 className="sr-spin" />
@@ -1162,7 +1162,9 @@ const styles = `
   }
 
   .sr-submit:disabled{
-    opacity:.6;
+    background:#c9c9c9;
+    color:#737373;
+    opacity:1;
     cursor:not-allowed
   }
 
