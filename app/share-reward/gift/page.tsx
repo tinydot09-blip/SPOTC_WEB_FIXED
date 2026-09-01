@@ -26,7 +26,20 @@ type SelectedCampaignGift = {
 };
 
 const numberValue = (value: unknown): number | null => {
-  const parsed = Number(String(value ?? '').replace(/[₹,%]/g, '').trim());
+  if (
+    value === null ||
+    value === undefined ||
+    String(value).trim() === ''
+  ) {
+    return null;
+  }
+
+  const parsed = Number(
+    String(value)
+      .replace(/[₹,%]/g, '')
+      .trim(),
+  );
+
   return Number.isFinite(parsed) ? parsed : null;
 };
 
