@@ -9,6 +9,9 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { onAuthStateChanged } from 'firebase/auth';
+
+import { auth } from '@/lib/firebase';
 
 const STORAGE_KEY = 'spotc-share5-campaign-v1';
 const DISMISS_KEY = 'spotc-share5-banner-hidden';
@@ -54,6 +57,7 @@ export default function ShareCampaignBar() {
   const [howOpen, setHowOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [ready, setReady] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
 
   const refreshProgress = () => {
     const state = readCampaign();
@@ -68,16 +72,58 @@ export default function ShareCampaignBar() {
       window.sessionStorage.getItem(DISMISS_KEY) === '1';
 
     setDismissed(hidden);
-    refreshProgress();
-    setReady(true);
 
-    const onFocus = () => refreshProgress();
-    const onStorage = () => refreshProgress();
+    const onFocus = () => {
+      if (auth?.currentUser) refreshProgress();
+    };
+
+    const onStorage = () => {
+      if (auth?.currentUser) refreshProgress();
+    };
 
     window.addEventListener('focus', onFocus);
     window.addEventListener('storage', onStorage);
 
+    // The campaign belongs to the signed-in customer.
+    // Do not leave a previous customer's 5/5 / Proof Submitted state
+    // visible after logout on a shared phone/browser.
+    if (!auth) {
+      setSignedIn(false);
+      setProgress(0);
+      setProofSubmitted(false);
+      setReady(true);
+
+      return () => {
+        window.removeEventListener('focus', onFocus);
+        window.removeEventListener('storage', onStorage);
+      };
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        setSignedIn(false);
+        setHowOpen(false);
+        setProgress(0);
+        setProofSubmitted(false);
+
+        try {
+          window.localStorage.removeItem(STORAGE_KEY);
+          window.sessionStorage.removeItem('spotc-share5-pending-product');
+        } catch {
+          // Ignore browser storage errors.
+        }
+
+        setReady(true);
+        return;
+      }
+
+      setSignedIn(true);
+      refreshProgress();
+      setReady(true);
+    });
+
     return () => {
+      unsubscribe();
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('storage', onStorage);
     };
@@ -96,7 +142,7 @@ export default function ShareCampaignBar() {
     setDismissed(true);
   };
 
-  if (!ready || dismissed) {
+  if (!ready || !signedIn || dismissed) {
     return null;
   }
 
