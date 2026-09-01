@@ -2134,11 +2134,19 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     )}`;
 
     const shareMessage = [
-      'Check out this product on SPOTC.IN:',
-      displayProductTitle,
-      `₹${Math.round(price)}`,
-      '',
       productUrl,
+      '',
+      '#41-1, Kembe Gowder Colony 1st Street,',
+      'Near EB Colony Bus Stop,',
+      'Karamadai, Coimbatore - 641104,',
+      'Tamil Nadu, India',
+      '',
+      '📞 Call us: 8072098066',
+      '✉️ Email: support@spotc.in',
+      '',
+      '⚡ 15 minutes delivery',
+      '💵 Cash on Delivery',
+      '🔄 Return / Exchange within 6 hours',
       '',
       'SPOTC.IN — Namma Area. Namma Kadai.',
     ].join('\n');
