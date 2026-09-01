@@ -106,17 +106,25 @@ export default function ShareCampaignBar() {
         className="share5-campaign-card"
         aria-label="Share 5 get 1 free campaign"
       >
-        <button
-          type="button"
-          className="share5-campaign-close"
-          aria-label="Close Share 5 offer"
-          title="Close"
-          onClick={dismissCampaign}
-        >
-          <X size={17} strokeWidth={2.6} />
-        </button>
+        {progress === 0 && !proofSubmitted && (
+          <button
+            type="button"
+            className="share5-campaign-close"
+            aria-label="Close Share 5 offer"
+            title="Close"
+            onClick={dismissCampaign}
+          >
+            <X size={17} strokeWidth={2.6} />
+          </button>
+        )}
 
-        <div className="share5-campaign-head">
+        <div
+          className={`share5-campaign-head ${
+            progress > 0 || proofSubmitted
+              ? 'share5-campaign-head-no-close'
+              : ''
+          }`}
+        >
           <div className="share5-campaign-gift-icon">
             <Gift size={23} strokeWidth={2.2} />
           </div>
@@ -346,6 +354,10 @@ export default function ShareCampaignBar() {
           align-items: flex-start;
           gap: 11px;
           padding: 13px 44px 8px 14px;
+        }
+
+        .share5-campaign-head-no-close {
+          padding-right: 14px;
         }
 
         .share5-campaign-gift-icon {
@@ -665,7 +677,11 @@ export default function ShareCampaignBar() {
             padding: 12px 42px 7px 12px;
           }
 
-          .share5-campaign-gift-icon {
+          .share5-campaign-head-no-close {
+          padding-right: 14px;
+        }
+
+        .share5-campaign-gift-icon {
             width: 40px;
             height: 40px;
             min-width: 40px;
