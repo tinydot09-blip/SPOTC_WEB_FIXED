@@ -2261,13 +2261,15 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     const result = await openCampaignWhatsApp();
 
     /*
-     * navigator.share() resolves only after the native share action
-     * completes. Save the campaign progress immediately so when the
-     * customer goes back to /shop the campaign card shows 1/5, 2/5,
-     * etc. without needing another confirmation step.
+     * Keep the product PENDING after returning from WhatsApp.
+     * Do NOT count it automatically.
+     *
+     * When the native share sheet closes/returns to SPOTC, show the
+     * confirmation bottom sheet. Only "Yes, I shared it" will write
+     * the product into localStorage and update Shop to 1/5, 2/5, etc.
      */
     if (result === 'shared') {
-      confirmCampaignShare();
+      setCampaignShareConfirmOpen(true);
     }
   };
 
