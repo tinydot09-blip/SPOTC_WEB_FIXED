@@ -142,7 +142,7 @@ export default function ShareCampaignBar() {
     setDismissed(true);
   };
 
-  if (!ready || !signedIn || dismissed) {
+  if (!ready || dismissed) {
     return null;
   }
 
