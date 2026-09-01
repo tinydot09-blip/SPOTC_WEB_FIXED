@@ -74,28 +74,49 @@ export default function ShareCampaignBar() {
     setDismissed(hidden);
 
     const onFocus = () => {
-      if (auth?.currentUser) refreshProgress();
+      refreshProgress();
     };
 
     const onStorage = () => {
-      if (auth?.currentUser) refreshProgress();
+      refreshProgress();
+    };
+
+    const onPageShow = () => {
+      refreshProgress();
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshProgress();
+      }
     };
 
     window.addEventListener('focus', onFocus);
     window.addEventListener('storage', onStorage);
+    window.addEventListener('pageshow', onPageShow);
+    document.addEventListener(
+      'visibilitychange',
+      onVisibilityChange,
+    );
 
-    // The campaign belongs to the signed-in customer.
-    // Do not leave a previous customer's 5/5 / Proof Submitted state
-    // visible after logout on a shared phone/browser.
+    /*
+     * The Share-5 campaign can be started before sign-in.
+     * Always restore browser campaign progress, including for guests.
+     */
+    refreshProgress();
+
     if (!auth) {
       setSignedIn(false);
-      setProgress(0);
-      setProofSubmitted(false);
       setReady(true);
 
       return () => {
         window.removeEventListener('focus', onFocus);
         window.removeEventListener('storage', onStorage);
+        window.removeEventListener('pageshow', onPageShow);
+        document.removeEventListener(
+          'visibilitychange',
+          onVisibilityChange,
+        );
       };
     }
 
@@ -103,16 +124,13 @@ export default function ShareCampaignBar() {
       if (!user) {
         setSignedIn(false);
         setHowOpen(false);
-        setProgress(0);
-        setProofSubmitted(false);
 
-        try {
-          window.localStorage.removeItem(STORAGE_KEY);
-          window.sessionStorage.removeItem('spotc-share5-pending-product');
-        } catch {
-          // Ignore browser storage errors.
-        }
-
+        /*
+         * Do NOT clear Share-5 progress on logout.
+         * Guests are allowed to start the campaign before signing in,
+         * and the same browser progress must continue to update on Shop.
+         */
+        refreshProgress();
         setReady(true);
         return;
       }
@@ -126,6 +144,11 @@ export default function ShareCampaignBar() {
       unsubscribe();
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('storage', onStorage);
+      window.removeEventListener('pageshow', onPageShow);
+      document.removeEventListener(
+        'visibilitychange',
+        onVisibilityChange,
+      );
     };
   }, []);
 
