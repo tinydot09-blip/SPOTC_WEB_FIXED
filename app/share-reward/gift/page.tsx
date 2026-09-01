@@ -111,23 +111,39 @@ export default function ShareRewardGiftPage() {
         .filter((item) => {
           const record = item as ProductRecord;
           const price = priceOfGift(item);
-          const stock = numberValue(record.stock_qty ?? record.stock_quantity);
+          const stock = numberValue(
+            record.stock_qty ?? record.stock_quantity,
+          );
           const reserved = numberValue(record.reserved_qty) ?? 0;
           const availableStored = numberValue(record.available_qty);
-          const available =
-            availableStored !== null
-              ? availableStored
-              : stock !== null
-                ? Math.max(0, stock - reserved)
-                : null;
 
-          const activeProduct = boolValue(record.isActive ?? record.is_active) !== false;
+          /*
+           * IMPORTANT:
+           * Some existing products have stale available_qty values even
+           * though stock_qty still shows stock on the live Shop page.
+           *
+           * Prefer the real physical stock calculation when stock_qty
+           * exists. Only fall back to available_qty when no stock field
+           * exists at all.
+           */
+          const available =
+            stock !== null
+              ? Math.max(0, stock - reserved)
+              : availableStored;
+
+          const activeProduct =
+            boolValue(record.isActive ?? record.is_active) !== false;
+
           const inStock =
             boolValue(record.is_in_stock) !== false &&
-            !(available !== null && available <= 0) &&
-            !(stock !== null && stock <= 0);
+            (available === null || available > 0);
 
-          return activeProduct && inStock && price > 0 && price < 50;
+          return (
+            activeProduct &&
+            inStock &&
+            price > 0 &&
+            price < 50
+          );
         })
         .sort((a, b) => priceOfGift(b) - priceOfGift(a));
 
@@ -236,6 +252,12 @@ export default function ShareRewardGiftPage() {
       </header>
 
       {message && <div className="sr-message">{message}</div>}
+
+      {!message && products.length === 0 && (
+        <div className="sr-message">
+          No FREE gifts are available right now. Please try again shortly.
+        </div>
+      )}
 
       {products.length > 0 && (
         <>
