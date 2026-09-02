@@ -800,6 +800,19 @@ export default function ShareCampaignBar() {
           font-weight: 700;
         }
 
+        /*
+         * IMPORTANT: ProductGrid's trust strip has margin-top:-24px,
+         * which pulls the black Secure Checkout bar upward underneath
+         * this campaign card. That is the actual overlap source.
+         *
+         * Override it only while this Shop campaign component is mounted.
+         * Keep the trust strip in normal flow so the card's 8px bottom
+         * margin remains visible.
+         */
+        :global(body:has(.shop-page) .spotc-shop-trust-strip) {
+          margin-top: 0 !important;
+        }
+
         @media (max-width: 620px) {
           /*
            * The normal shop page has generous page-top spacing.
