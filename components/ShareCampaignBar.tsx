@@ -20,6 +20,7 @@ const CAMPAIGN_LIMIT = 5;
 type CampaignState = {
   sharedProductIds?: string[];
   proofSubmitted?: boolean;
+  ownerUid?: string;
 };
 
 function readCampaign(): CampaignState {
@@ -43,6 +44,10 @@ function readCampaign(): CampaignState {
           ).slice(0, CAMPAIGN_LIMIT)
         : [],
       proofSubmitted: parsed.proofSubmitted === true,
+      ownerUid:
+        typeof parsed.ownerUid === 'string'
+          ? parsed.ownerUid
+          : undefined,
     };
   } catch {
     return {};
@@ -121,22 +126,79 @@ export default function ShareCampaignBar() {
     }
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      const state = readCampaign();
+
       if (!user) {
         setSignedIn(false);
         setHowOpen(false);
 
         /*
-         * Do NOT clear Share-5 progress on logout.
-         * Guests are allowed to start the campaign before signing in,
-         * and the same browser progress must continue to update on Shop.
+         * If this campaign state belonged to a signed-in customer,
+         * logout must remove it so another person using the same phone
+         * never sees 5/5 or Proof Submitted.
+         *
+         * Guest-only progress has no ownerUid, so it can still work
+         * before the customer signs in.
          */
-        refreshProgress();
+        if (state.ownerUid) {
+          try {
+            window.localStorage.removeItem(STORAGE_KEY);
+            window.sessionStorage.removeItem(
+              'spotc-share5-pending-product',
+            );
+          } catch {
+            // Ignore browser storage errors.
+          }
+
+          setProgress(0);
+          setProofSubmitted(false);
+        } else {
+          refreshProgress();
+        }
+
         setReady(true);
         return;
       }
 
       setSignedIn(true);
-      refreshProgress();
+
+      /*
+       * Claim current guest progress for the signed-in customer.
+       * If the browser contains another customer's state, clear it.
+       */
+      if (state.ownerUid && state.ownerUid !== user.uid) {
+        try {
+          window.localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({
+              sharedProductIds: [],
+              proofSubmitted: false,
+              ownerUid: user.uid,
+            }),
+          );
+        } catch {
+          // Ignore browser storage errors.
+        }
+
+        setProgress(0);
+        setProofSubmitted(false);
+      } else {
+        try {
+          window.localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({
+              ...state,
+              sharedProductIds: state.sharedProductIds || [],
+              ownerUid: user.uid,
+            }),
+          );
+        } catch {
+          // Ignore browser storage errors.
+        }
+
+        refreshProgress();
+      }
+
       setReady(true);
     });
 

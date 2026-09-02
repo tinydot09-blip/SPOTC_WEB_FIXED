@@ -47,6 +47,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { onAuthStateChanged } from 'firebase/auth';
 
 import { EmptyState } from '@/components/EmptyState';
 import { useSpotcLanguage } from '@/components/LanguageProvider';
@@ -353,6 +354,7 @@ const SHARE_CAMPAIGN_LIMIT = 5;
 type ShareCampaignState = {
   sharedProductIds: string[];
   proofSubmitted?: boolean;
+  ownerUid?: string;
 };
 
 const readShareCampaignState = (): ShareCampaignState => {
@@ -378,6 +380,10 @@ const readShareCampaignState = (): ShareCampaignState => {
     return {
       sharedProductIds,
       proofSubmitted: parsed.proofSubmitted === true,
+      ownerUid:
+        typeof parsed.ownerUid === 'string'
+          ? parsed.ownerUid
+          : undefined,
     };
   } catch {
     return { sharedProductIds: [] };
@@ -1017,6 +1023,67 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
       active = false;
     };
   }, [id, initialProduct]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !auth) return;
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      const campaign = readShareCampaignState();
+
+      if (!user) {
+        /*
+         * Clear only state that was owned by a signed-in customer.
+         * Guest-only campaign progress has no ownerUid and can still
+         * be started before login.
+         */
+        if (campaign.ownerUid) {
+          try {
+            window.localStorage.removeItem(
+              SHARE_CAMPAIGN_STORAGE_KEY,
+            );
+            window.sessionStorage.removeItem(
+              SHARE_CAMPAIGN_PENDING_KEY,
+            );
+          } catch {
+            // Ignore browser storage errors.
+          }
+
+          setCampaignSharedCount(0);
+          setCampaignCurrentProductShared(false);
+          setCampaignShareConfirmOpen(false);
+        }
+
+        return;
+      }
+
+      /*
+       * If another signed-in user owns the browser campaign state,
+       * reset it. Otherwise attach current guest progress to this UID.
+       */
+      if (
+        campaign.ownerUid &&
+        campaign.ownerUid !== user.uid
+      ) {
+        writeShareCampaignState({
+          sharedProductIds: [],
+          proofSubmitted: false,
+          ownerUid: user.uid,
+        });
+
+        setCampaignSharedCount(0);
+        setCampaignCurrentProductShared(false);
+        setCampaignShareConfirmOpen(false);
+        return;
+      }
+
+      writeShareCampaignState({
+        ...campaign,
+        ownerUid: user.uid,
+      });
+    });
+
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -2299,6 +2366,9 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     writeShareCampaignState({
       ...campaign,
       sharedProductIds: nextIds,
+      ownerUid:
+        auth?.currentUser?.uid ||
+        campaign.ownerUid,
     });
 
     window.sessionStorage.removeItem(
