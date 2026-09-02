@@ -1226,7 +1226,46 @@ if (!response.ok) {
       return;
     }
 
+    const isShareCampaignRow =
+      text(row.data.campaign_type) ===
+      'share5_get1free';
+
+    let campaignRejectionReason = '';
+
     if (
+      nextStatus === 'cancelled' &&
+      isShareCampaignRow
+    ) {
+      const reason = window.prompt(
+        'Why are you rejecting this WhatsApp proof?\n\nThis reason will be shown to the customer in My Orders.',
+        '',
+      );
+
+      if (reason === null) {
+        return;
+      }
+
+      campaignRejectionReason =
+        reason.trim();
+
+      if (!campaignRejectionReason) {
+        window.alert(
+          'Please enter a rejection reason before rejecting the proof.',
+        );
+        return;
+      }
+
+      const confirmed =
+        window.confirm(
+          `Reject FREE gift proof for ${orderNumber(
+            row,
+          )}?\n\nReason: ${campaignRejectionReason}\n\nReserved gift stock will be released.`,
+        );
+
+      if (!confirmed) {
+        return;
+      }
+    } else if (
       nextStatus === 'cancelled' &&
       !window.confirm(
         `Cancel order ${orderNumber(
@@ -1673,6 +1712,9 @@ if (!response.ok) {
                 'rejected';
               orderUpdate.campaign_rejected_at =
                 serverTimestamp();
+              orderUpdate.campaign_rejection_reason =
+                campaignRejectionReason ||
+                'WhatsApp proof was not approved.';
             }
 
             if (nextStatus === 'delivered') {
@@ -1710,6 +1752,12 @@ if (!response.ok) {
               claimUpdate.status = 'rejected';
               claimUpdate.verification_status = 'rejected';
               claimUpdate.rejected_at = serverTimestamp();
+              claimUpdate.rejection_reason =
+                campaignRejectionReason ||
+                'WhatsApp proof was not approved.';
+              claimUpdate.campaign_rejection_reason =
+                campaignRejectionReason ||
+                'WhatsApp proof was not approved.';
             }
 
             if (nextStatus === 'delivered') {
