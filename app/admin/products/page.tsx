@@ -19,6 +19,20 @@ import { auth, db } from '@/lib/firebase';
 
 type ProductRow = { id: string; data: DocumentData };
 
+type GeneratedPoster = {
+  dataUrl: string;
+  fileName: string;
+};
+
+const POSTER_WIDTH = 1080;
+const POSTER_HEIGHT = 1350;
+const SPOTC_WEBSITE = 'www.spotc.in';
+const SPOTC_PHONE = '+91 80720 98066';
+const SPOTC_EMAIL = 'support@spotc.in';
+const SPOTC_AREAS = 'Karamadai • Teacher Colony • EB Colony • Gandhinagar';
+const SPOTC_FULL_ADDRESS =
+  'SPOTC TECHNOLOGIES, #41-1, Kembe Gowder Colony 1st Street, Near EB Colony Bus Stop, Karamadai, Coimbatore - 641104, Tamil Nadu, India';
+
 type ProductCategoryConfig = {
   id: string;
   name: string;
@@ -689,6 +703,148 @@ function editFormFromProduct(data: DocumentData): EditForm {
   };
 }
 
+
+function freeGiftCountOf(data: DocumentData): number {
+  const explicit = Number(
+    data.free_gift_count ?? data.gift_count ?? data.free_gift_qty ?? 0,
+  );
+
+  if (Number.isFinite(explicit) && explicit > 0) {
+    return Math.max(1, Math.floor(explicit));
+  }
+
+  if (data.free_gift_eligible !== true) return 0;
+
+  // Current SPOTC rule: 1 free gift for every ₹100 spent.
+  const price = displayPriceOf(data);
+  return Math.max(1, Math.floor(price / 100));
+}
+
+function roundedRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
+}
+
+function drawRoundedBox(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  fill: string,
+  stroke = '',
+  lineWidth = 1,
+) {
+  roundedRectPath(ctx, x, y, width, height, radius);
+  ctx.fillStyle = fill;
+  ctx.fill();
+
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+  }
+}
+
+function drawWrappedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+  maxLines = 3,
+): number {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return y;
+
+  const lines: string[] = [];
+  let line = '';
+
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width <= maxWidth) {
+      line = test;
+      continue;
+    }
+
+    if (line) lines.push(line);
+    line = word;
+
+    if (lines.length >= maxLines - 1) break;
+  }
+
+  if (line && lines.length < maxLines) lines.push(line);
+
+  const consumedWords = lines.join(' ').split(/\s+/).length;
+  if (consumedWords < words.length && lines.length) {
+    let last = lines[lines.length - 1];
+    while (last && ctx.measureText(`${last}…`).width > maxWidth) {
+      last = last.slice(0, -1);
+    }
+    lines[lines.length - 1] = `${last.trim()}…`;
+  }
+
+  lines.forEach((value, index) => {
+    ctx.fillText(value, x, y + index * lineHeight);
+  });
+
+  return y + lines.length * lineHeight;
+}
+
+function drawImageCover(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  const scale = Math.max(width / sourceWidth, height / sourceHeight);
+  const drawWidth = sourceWidth * scale;
+  const drawHeight = sourceHeight * scale;
+  const dx = x + (width - drawWidth) / 2;
+  const dy = y + (height - drawHeight) / 2;
+
+  ctx.save();
+  roundedRectPath(ctx, x, y, width, height, 26);
+  ctx.clip();
+  ctx.drawImage(image, dx, dy, drawWidth, drawHeight);
+  ctx.restore();
+}
+
+async function loadImageFromFile(file: File): Promise<HTMLImageElement> {
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    return await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Could not load product image for poster.'));
+      image.src = objectUrl;
+    });
+  } finally {
+    // Revoking is delayed one tick so the decoded image remains available for canvas draw.
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+  }
+}
+
 export default function AdminProductsPage() {
   const [rows, setRows] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -731,6 +887,10 @@ export default function AdminProductsPage() {
   const [optimizedImageCount, setOptimizedImageCount] = useState(0);
   const [failedOldImages, setFailedOldImages] = useState<FailedOldImage[]>([]);
   const [showOptimizeFailures, setShowOptimizeFailures] = useState(false);
+
+  const [generatedPosters, setGeneratedPosters] = useState<Record<string, GeneratedPoster>>({});
+  const [generatingPosterId, setGeneratingPosterId] = useState('');
+  const [previewPosterId, setPreviewPosterId] = useState('');
 
   async function loadProducts(showLoader = true) {
     if (!db) {
@@ -2194,6 +2354,230 @@ export default function AdminProductsPage() {
     }
   }
 
+
+  async function generatePoster(row: ProductRow) {
+    if (generatingPosterId) return;
+
+    const sourceUrl = productImage(row.data);
+    if (!sourceUrl) {
+      setMessage('This product has no image. Add a product image before generating the poster.');
+      return;
+    }
+
+    setGeneratingPosterId(row.id);
+    setMessage('Generating 1080 × 1350 product poster…');
+
+    try {
+      const imageFile = await fetchImageAsFile(
+        sourceUrl,
+        `${safeFilePart(titleOf(row.data)) || 'product'}-poster-source.jpg`,
+      );
+      const image = await loadImageFromFile(imageFile);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = POSTER_WIDTH;
+      canvas.height = POSTER_HEIGHT;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Browser could not create poster canvas.');
+
+      const title = titleOf(row.data);
+      const price = displayPriceOf(row.data);
+      const mrp = mrpOf(row.data);
+      const discount = automaticOfferOf(row.data);
+      const giftCount = freeGiftCountOf(row.data);
+
+      // Background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, POSTER_WIDTH, POSTER_HEIGHT);
+
+      // Header brand
+      ctx.fillStyle = '#061b53';
+      ctx.font = '700 86px Arial, sans-serif';
+      ctx.fillText('Spotc', 58, 105);
+      const spotcWidth = ctx.measureText('Spotc').width;
+      ctx.fillStyle = '#ed0b55';
+      ctx.fillText('.in', 58 + spotcWidth, 105);
+
+      ctx.font = '700 30px Arial, sans-serif';
+      ctx.fillStyle = '#061b53';
+      ctx.fillText('Namma Area.', 62, 150);
+      const firstTagWidth = ctx.measureText('Namma Area.').width;
+      ctx.fillStyle = '#ed0b55';
+      ctx.fillText(' Namma Kadai.', 62 + firstTagWidth, 150);
+
+      // Delivery badge
+      drawRoundedBox(ctx, 715, 48, 305, 112, 28, '#10b95b');
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 42px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('15 MIN', 868, 96);
+      ctx.font = '700 28px Arial, sans-serif';
+      ctx.fillText('DELIVERY*', 868, 132);
+      ctx.textAlign = 'left';
+
+      // Product image card
+      drawRoundedBox(ctx, 50, 190, 520, 700, 30, '#f7f4f1', '#efc2d0', 2);
+      drawImageCover(ctx, image, 50, 190, 520, 700);
+
+      // Product information
+      ctx.fillStyle = '#111111';
+      ctx.font = '700 48px Arial, sans-serif';
+      const titleEndY = drawWrappedText(ctx, title, 615, 245, 410, 58, 4);
+
+      ctx.strokeStyle = '#ed0b55';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(615, titleEndY + 6);
+      ctx.lineTo(1018, titleEndY + 6);
+      ctx.stroke();
+
+      const priceY = Math.max(500, titleEndY + 95);
+      ctx.fillStyle = '#ed0b55';
+      ctx.font = '700 84px Arial, sans-serif';
+      ctx.fillText(price > 0 ? `₹${price}` : 'Price on request', 615, priceY);
+
+      if (mrp > 0 && price > 0 && mrp > price) {
+        ctx.font = '600 27px Arial, sans-serif';
+        ctx.fillStyle = '#666666';
+        const mrpText = `MRP ₹${mrp}`;
+        ctx.fillText(mrpText, 620, priceY + 52);
+        const mrpTextWidth = ctx.measureText(mrpText).width;
+        ctx.strokeStyle = '#666666';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(620, priceY + 42);
+        ctx.lineTo(620 + mrpTextWidth, priceY + 42);
+        ctx.stroke();
+      }
+
+      if (discount) {
+        drawRoundedBox(ctx, 850, priceY + 13, 168, 52, 14, '#fff0f5', '#ed0b55', 1.5);
+        ctx.fillStyle = '#ed0b55';
+        ctx.font = '700 25px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(discount, 934, priceY + 48);
+        ctx.textAlign = 'left';
+      }
+
+      // Free gift box
+      const giftY = priceY + 100;
+      if (giftCount > 0) {
+        drawRoundedBox(ctx, 615, giftY, 405, 112, 22, '#f1fff6', '#18a957', 2);
+        ctx.fillStyle = '#159447';
+        ctx.font = '700 34px Arial, sans-serif';
+        ctx.fillText('FREE GIFT', 648, giftY + 44);
+        ctx.fillStyle = '#111111';
+        ctx.font = '700 27px Arial, sans-serif';
+        ctx.fillText(
+          `${giftCount} ${giftCount === 1 ? 'GIFT' : 'GIFTS'} INCLUDED`,
+          648,
+          giftY + 82,
+        );
+      } else {
+        drawRoundedBox(ctx, 615, giftY, 405, 112, 22, '#f7f7f7', '#e4e4e4', 1.5);
+        ctx.fillStyle = '#666666';
+        ctx.font = '700 29px Arial, sans-serif';
+        ctx.fillText('NO FREE GIFT', 648, giftY + 68);
+      }
+
+      // Delivery areas
+      const areaY = giftY + 155;
+      ctx.fillStyle = '#061b53';
+      ctx.font = '700 28px Arial, sans-serif';
+      ctx.fillText('DELIVERY AREAS', 615, areaY);
+      ctx.fillStyle = '#222222';
+      ctx.font = '500 24px Arial, sans-serif';
+      drawWrappedText(ctx, SPOTC_AREAS, 615, areaY + 38, 405, 34, 3);
+
+      // Highlights strip
+      drawRoundedBox(ctx, 50, 925, 970, 126, 24, '#fff9fb', '#f5bfd1', 1.5);
+      const highlights = [
+        ['15 MIN DELIVERY*', 'Selected products'],
+        ['COD AVAILABLE', 'Pay on Delivery'],
+        [giftCount > 0 ? `${giftCount} FREE GIFT${giftCount === 1 ? '' : 'S'}` : 'FREE GIFT', giftCount > 0 ? 'Included' : 'Not included'],
+      ];
+      const highlightWidth = 970 / highlights.length;
+      highlights.forEach(([heading, sub], index) => {
+        const centerX = 50 + highlightWidth * index + highlightWidth / 2;
+        if (index > 0) {
+          ctx.strokeStyle = '#eadce1';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(50 + highlightWidth * index, 946);
+          ctx.lineTo(50 + highlightWidth * index, 1030);
+          ctx.stroke();
+        }
+        ctx.textAlign = 'center';
+        ctx.fillStyle = index === 1 ? '#159447' : '#ed0b55';
+        ctx.font = '700 23px Arial, sans-serif';
+        ctx.fillText(heading, centerX, 975);
+        ctx.fillStyle = '#222222';
+        ctx.font = '500 20px Arial, sans-serif';
+        ctx.fillText(sub, centerX, 1014);
+      });
+      ctx.textAlign = 'left';
+
+      // Contact / address card
+      drawRoundedBox(ctx, 50, 1080, 970, 190, 24, '#061b53');
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 25px Arial, sans-serif';
+      ctx.fillText(`WEB  ${SPOTC_WEBSITE}`, 82, 1122);
+      ctx.fillText(`WHATSAPP / PHONE  ${SPOTC_PHONE}`, 470, 1122);
+      ctx.fillText(`EMAIL  ${SPOTC_EMAIL}`, 82, 1160);
+
+      ctx.fillStyle = '#f6bfd0';
+      ctx.font = '700 20px Arial, sans-serif';
+      ctx.fillText('FULL ADDRESS', 82, 1201);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '500 18px Arial, sans-serif';
+      drawWrappedText(ctx, SPOTC_FULL_ADDRESS, 82, 1228, 895, 26, 2);
+
+      // CTA
+      drawRoundedBox(ctx, 50, 1290, 970, 50, 18, '#ed0b55');
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 27px Arial, sans-serif';
+      ctx.fillText(`ORDER NOW  •  ${SPOTC_WEBSITE}`, 535, 1324);
+      ctx.textAlign = 'left';
+
+      const dataUrl = canvas.toDataURL('image/png');
+      const fileName = `${safeFilePart(title) || row.id}-spotc-poster.png`;
+
+      setGeneratedPosters((current) => ({
+        ...current,
+        [row.id]: { dataUrl, fileName },
+      }));
+      setMessage('Poster generated. Preview and Download are now enabled.');
+    } catch (error) {
+      console.error('Poster generation failed:', error);
+      setMessage(
+        error instanceof Error
+          ? `Poster generation failed: ${error.message}`
+          : 'Poster generation failed.',
+      );
+    } finally {
+      setGeneratingPosterId('');
+    }
+  }
+
+  function previewPoster(rowId: string) {
+    if (!generatedPosters[rowId]) return;
+    setPreviewPosterId(rowId);
+  }
+
+  function downloadPoster(rowId: string) {
+    const poster = generatedPosters[rowId];
+    if (!poster) return;
+
+    const link = document.createElement('a');
+    link.href = poster.dataUrl;
+    link.download = poster.fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
   function clearFilters() {
     setSearch('');
     setCategoryFilter('all');
@@ -2574,7 +2958,7 @@ export default function AdminProductsPage() {
           <table style={tableStyle}>
             <thead>
               <tr style={tableHeadRow}>
-                {['Product', 'Purchase', 'MRP', 'Sell', 'Offer', 'Stock', 'Sold', 'Location', 'Gift', 'Status', ''].map((heading) => (
+                {['Product', 'Purchase', 'MRP', 'Sell', 'Offer', 'Stock', 'Sold', 'Location', 'Gift', 'Status', 'Poster', ''].map((heading) => (
                   <th key={heading} style={tableHeadCell}>{heading}</th>
                 ))}
               </tr>
@@ -2594,6 +2978,8 @@ export default function AdminProductsPage() {
                 const { rack, box, slot } = locationParts(data);
                 const status = productStatus(data);
                 const busy = busyId === id;
+                const poster = generatedPosters[id];
+                const generatingPoster = generatingPosterId === id;
 
                 return (
                   <tr key={id} style={tableRow}>
@@ -2694,6 +3080,53 @@ export default function AdminProductsPage() {
 
                     <td style={normalCell}><StatusBadge status={status} /></td>
 
+                    <td style={posterCell}>
+                      <div style={posterActionRow}>
+                        <button
+                          type="button"
+                          disabled={generatingPoster}
+                          onClick={() => void generatePoster(row)}
+                          style={{
+                            ...posterGenerateButton,
+                            opacity: generatingPoster ? 0.5 : 1,
+                            cursor: generatingPoster ? 'wait' : 'pointer',
+                          }}
+                        >
+                          {generatingPoster
+                            ? 'Generating…'
+                            : poster
+                              ? 'Regenerate'
+                              : 'Generate'}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={!poster}
+                          onClick={() => previewPoster(id)}
+                          style={{
+                            ...posterSecondaryButton,
+                            opacity: poster ? 1 : 0.4,
+                            cursor: poster ? 'pointer' : 'not-allowed',
+                          }}
+                        >
+                          Preview
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={!poster}
+                          onClick={() => downloadPoster(id)}
+                          style={{
+                            ...posterDownloadButton,
+                            opacity: poster ? 1 : 0.4,
+                            cursor: poster ? 'pointer' : 'not-allowed',
+                          }}
+                        >
+                          Download
+                        </button>
+                      </div>
+                    </td>
+
                     <td style={actionsCell}>
                       <div style={actionRow}>
                         <button
@@ -2758,6 +3191,56 @@ export default function AdminProductsPage() {
             <button type="button" disabled={page <= 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))} style={{ ...pageButton, opacity: page <= 1 ? 0.4 : 1 }}>‹</button>
             <div style={pageNumber}>Page {page} of {totalPages}</div>
             <button type="button" disabled={page >= totalPages} onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))} style={{ ...pageButton, opacity: page >= totalPages ? 0.4 : 1 }}>›</button>
+          </div>
+        </div>
+      )}
+
+      {previewPosterId && generatedPosters[previewPosterId] && (
+        <div
+          style={posterPreviewBackdrop}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setPreviewPosterId('');
+          }}
+        >
+          <div style={posterPreviewCard}>
+            <div style={posterPreviewHeader}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>Product Poster Preview</div>
+                <div style={{ color: '#777', fontSize: 12, marginTop: 3 }}>1080 × 1350 PNG</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewPosterId('')}
+                style={modalClose}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={posterPreviewBody}>
+              <img
+                src={generatedPosters[previewPosterId].dataUrl}
+                alt="Generated product poster preview"
+                style={posterPreviewImage}
+              />
+            </div>
+
+            <div style={posterPreviewFooter}>
+              <button
+                type="button"
+                onClick={() => setPreviewPosterId('')}
+                style={secondaryButton}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadPoster(previewPosterId)}
+                style={posterDownloadButton}
+              >
+                Download PNG
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -3585,7 +4068,7 @@ const clearButton: React.CSSProperties = { border: 0, background: 'transparent',
 const messageBox: React.CSSProperties = { position: 'relative', marginBottom: 14, padding: '12px 44px 12px 14px', border: '1px solid #f0d69a', background: '#fff8e7', borderRadius: 12, fontWeight: 400 };
 const messageClose: React.CSSProperties = { position: 'absolute', right: 10, top: 6, border: 0, background: 'transparent', fontSize: 22, cursor: 'pointer' };
 const tableCard: React.CSSProperties = { background: 'white', border: '1px solid #e7e7e7', borderRadius: 16, overflowX: 'auto' };
-const tableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', minWidth: 1260 };
+const tableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', minWidth: 1610 };
 const tableHeadRow: React.CSSProperties = { textAlign: 'left', background: '#fafafa' };
 const tableHeadCell: React.CSSProperties = { padding: 13, borderBottom: '1px solid #eee', fontSize: 12, fontWeight: 400, whiteSpace: 'nowrap' };
 const tableRow: React.CSSProperties = { borderBottom: '1px solid #f0f0f0' };
@@ -3610,6 +4093,11 @@ const giftBadge: React.CSSProperties = { display: 'inline-flex', padding: '5px 8
 const activeBadge: React.CSSProperties = { display: 'inline-flex', padding: '5px 8px', background: '#ecf8ef', color: '#137333', borderRadius: 8, fontSize: 11, fontWeight: 400 };
 const hiddenBadge: React.CSSProperties = { display: 'inline-flex', padding: '5px 8px', background: '#efefef', color: '#666', borderRadius: 8, fontSize: 11, fontWeight: 400 };
 const outBadge: React.CSSProperties = { display: 'inline-flex', padding: '5px 8px', background: '#fff0f0', color: '#b42318', borderRadius: 8, fontSize: 11, fontWeight: 400 };
+const posterCell: React.CSSProperties = { padding: 8, width: 250, minWidth: 250 };
+const posterActionRow: React.CSSProperties = { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' };
+const posterGenerateButton: React.CSSProperties = { border: 0, background: '#111', color: '#fff', padding: '8px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer' };
+const posterSecondaryButton: React.CSSProperties = { border: '1px solid #d7d7d7', background: '#fff', color: '#222', padding: '8px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer' };
+const posterDownloadButton: React.CSSProperties = { border: 0, background: '#0f9d58', color: '#fff', padding: '8px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' };
 const actionsCell: React.CSSProperties = { padding: 8, width: 112, minWidth: 112 };
 const actionRow: React.CSSProperties = { display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'nowrap' };
 const iconEditButton: React.CSSProperties = { width: 30, height: 30, border: 0, background: '#111', color: '#fff', borderRadius: 8, fontSize: 17, fontWeight: 400, cursor: 'pointer', display: 'grid', placeItems: 'center', padding: 0 };
@@ -3623,6 +4111,12 @@ const rowsLabel: React.CSSProperties = { display: 'flex', alignItems: 'center', 
 const pageSizeSelect: React.CSSProperties = { border: '1px solid #ddd', borderRadius: 8, padding: '7px 8px', background: '#fff', fontWeight: 400 };
 const pageButton: React.CSSProperties = { width: 34, height: 34, border: '1px solid #ddd', borderRadius: 9, background: '#fff', fontSize: 20, fontWeight: 400, cursor: 'pointer' };
 const pageNumber: React.CSSProperties = { minWidth: 100, textAlign: 'center', fontSize: 12, fontWeight: 400 };
+const posterPreviewBackdrop: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.62)', zIndex: 1200, display: 'grid', placeItems: 'center', padding: 18 };
+const posterPreviewCard: React.CSSProperties = { width: 'min(620px, 100%)', maxHeight: '94vh', background: '#fff', borderRadius: 18, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 80px rgba(0,0,0,.28)' };
+const posterPreviewHeader: React.CSSProperties = { padding: '14px 16px', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 };
+const posterPreviewBody: React.CSSProperties = { padding: 14, background: '#f3f4f6', overflowY: 'auto', display: 'grid', placeItems: 'center' };
+const posterPreviewImage: React.CSSProperties = { display: 'block', width: '100%', maxWidth: 540, height: 'auto', borderRadius: 12, boxShadow: '0 6px 24px rgba(0,0,0,.14)' };
+const posterPreviewFooter: React.CSSProperties = { padding: 14, borderTop: '1px solid #e8e8e8', display: 'flex', justifyContent: 'flex-end', gap: 10 };
 const modalBackdrop: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 18 };
 const modalCard: React.CSSProperties = { width: 'min(980px, 100%)', maxHeight: '92vh', background: '#f6f7f9', borderRadius: 20, boxShadow: '0 25px 80px rgba(0,0,0,.25)', display: 'flex', flexDirection: 'column', overflow: 'hidden' };
 const modalHeader: React.CSSProperties = { background: '#fff', borderBottom: '1px solid #e7e7e7', padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 };
