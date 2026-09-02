@@ -94,6 +94,11 @@ type OrderRecord = {
   deliveryWindow: string;
   deliveredAt: Date | null;
   returnRequests: ReturnRequest[];
+
+  // Share 5 → Get 1 FREE campaign status.
+  campaignType: string;
+  campaignVerificationStatus: string;
+  campaignRejectionReason: string;
 };
 
 type OrderView = {
@@ -738,6 +743,20 @@ function mapOrder(
         data.updated_at,
     ),
     returnRequests: returnRequestsFromData(data),
+
+    campaignType:
+      textOf(data.campaign_type),
+    campaignVerificationStatus:
+      textOf(
+        data.campaign_verification_status ??
+          data.verification_status,
+      ).toLowerCase(),
+    campaignRejectionReason:
+      textOf(
+        data.campaign_rejection_reason ??
+          data.rejection_reason ??
+          data.proof_rejection_reason,
+      ),
   };
 }
 
@@ -801,6 +820,26 @@ function statusMessage(
     default:
       return statusLabel(status);
   }
+}
+
+function isShareCampaignRejected(
+  order: OrderRecord,
+): boolean {
+  return (
+    order.campaignType ===
+      'share5_get1free' &&
+    order.campaignVerificationStatus ===
+      'rejected'
+  );
+}
+
+function campaignRejectReason(
+  order: OrderRecord,
+): string {
+  return (
+    order.campaignRejectionReason ||
+    'WhatsApp sharing proof was not approved by SPOTC.'
+  );
 }
 
 function visibleItemStatus(
@@ -2228,9 +2267,13 @@ export default function DashboardOrders() {
                           '-',
                         )}`}
                       >
-                        {statusLabel(
-                          itemStatus,
-                        )}
+                        {isShareCampaignRejected(
+                          view.parent,
+                        )
+                          ? 'Proof Rejected'
+                          : statusLabel(
+                              itemStatus,
+                            )}
                       </em>
                     </div>
 
@@ -2242,10 +2285,32 @@ export default function DashboardOrders() {
                     </strong>
 
                     <small className="simple-order-status-line">
-                      {statusMessage(
-                        itemStatus,
-                      )}
+                      {isShareCampaignRejected(
+                        view.parent,
+                      )
+                        ? 'FREE Gift Request Rejected'
+                        : statusMessage(
+                            itemStatus,
+                          )}
                     </small>
+
+                    {isShareCampaignRejected(
+                      view.parent,
+                    ) && (
+                      <div className="simple-order-rejection">
+                        <strong>
+                          Why it was rejected
+                        </strong>
+                        <span>
+                          {campaignRejectReason(
+                            view.parent,
+                          )}
+                        </span>
+                        <small>
+                          You can upload corrected proof again from the Share 5 offer.
+                        </small>
+                      </div>
+                    )}
 
                     <small>
                       Qty{' '}
@@ -2483,6 +2548,25 @@ export default function DashboardOrders() {
                 </strong>
               </span>
             </div>
+
+            {isShareCampaignRejected(
+              selected.parent,
+            ) && (
+              <section className="simple-details-rejection">
+                <strong>
+                  FREE Gift Request Rejected
+                </strong>
+                <span>
+                  <b>Reason:</b>{' '}
+                  {campaignRejectReason(
+                    selected.parent,
+                  )}
+                </span>
+                <small>
+                  Please correct the WhatsApp proof and upload it again from the Share 5 offer.
+                </small>
+              </section>
+            )}
 
             {returnRequestFor(selected) ? (
               <section className="simple-details-return-box">
@@ -3034,6 +3118,61 @@ export default function DashboardOrders() {
         .simple-order-delivery-line {
           color: #6d756f !important;
           font-size: 10px !important;
+        }
+
+        .simple-order-rejection {
+          margin-top: 8px;
+          padding: 10px 12px;
+          border: 1px solid #f3b9b9;
+          border-radius: 12px;
+          background: #fff1f1;
+          color: #991b1b;
+          display: grid;
+          gap: 3px;
+        }
+
+        .simple-order-rejection strong {
+          font-size: 12px;
+          font-weight: 900;
+        }
+
+        .simple-order-rejection span {
+          font-size: 12px;
+          line-height: 1.45;
+          color: #7f1d1d;
+        }
+
+        .simple-order-rejection small {
+          font-size: 11px;
+          line-height: 1.4;
+          color: #a33a3a;
+        }
+
+        .simple-details-rejection {
+          margin: 0 0 16px;
+          padding: 14px 16px;
+          border: 1px solid #f0b5b5;
+          border-radius: 16px;
+          background: #fff1f1;
+          color: #8f1d1d;
+          display: grid;
+          gap: 6px;
+        }
+
+        .simple-details-rejection strong {
+          font-size: 15px;
+          font-weight: 900;
+        }
+
+        .simple-details-rejection span {
+          font-size: 13px;
+          line-height: 1.5;
+        }
+
+        .simple-details-rejection small {
+          font-size: 12px;
+          line-height: 1.45;
+          color: #9c3a3a;
         }
 
         .simple-order-gift-count {
