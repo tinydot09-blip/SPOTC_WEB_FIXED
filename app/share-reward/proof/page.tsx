@@ -41,6 +41,9 @@ type CampaignLocalState = {
   proofUrls?: string[];
   offerAlreadyRegistered?: boolean;
   existingClaimStatus?: string;
+  proofRejected?: boolean;
+  rejectionReason?: string;
+  rejectedProofNumbers?: number[];
 };
 
 type ClaimData = {
@@ -53,6 +56,13 @@ type ClaimData = {
   verification_status?: unknown;
   gift_product_id?: unknown;
   selected_gift_id?: unknown;
+  proof_urls?: unknown;
+  rejected_proof_numbers?: unknown;
+  campaign_rejected_proof_numbers?: unknown;
+  rejection_reason?: unknown;
+  campaign_rejection_reason?: unknown;
+  order_id?: unknown;
+  order_number?: unknown;
   created_at?: unknown;
 };
 
@@ -150,6 +160,47 @@ const alreadyClaimedMessage = (
   return 'This mobile number is already registered for the Share 5 → Get 1 FREE offer. This offer can be used only once per mobile number.';
 };
 
+const proofNumbersFromClaim = (
+  data: ClaimData | null,
+): number[] => {
+  const source =
+    data?.rejected_proof_numbers ??
+    data?.campaign_rejected_proof_numbers;
+
+  if (!Array.isArray(source)) return [];
+
+  return Array.from(
+    new Set(
+      source
+        .map((value) =>
+          Number.parseInt(
+            String(value ?? ''),
+            10,
+          ),
+        )
+        .filter(
+          (value) =>
+            Number.isInteger(value) &&
+            value >= 1 &&
+            value <= 5,
+        ),
+    ),
+  ).sort((a, b) => a - b);
+};
+
+const proofUrlsFromClaim = (
+  data: ClaimData | null,
+): string[] => {
+  if (!Array.isArray(data?.proof_urls)) {
+    return [];
+  }
+
+  return data!.proof_urls
+    .map((value) => cleanText(value))
+    .filter(Boolean)
+    .slice(0, 5);
+};
+
 export default function ShareRewardProofPage() {
   const router = useRouter();
 
@@ -169,6 +220,14 @@ export default function ShareRewardProofPage() {
   const [mobileMissing, setMobileMissing] =
     useState(false);
   const [existingStatus, setExistingStatus] =
+    useState('');
+  const [retryProofNumbers, setRetryProofNumbers] =
+    useState<number[]>([]);
+  const [existingProofUrls, setExistingProofUrls] =
+    useState<string[]>([]);
+  const [rejectionReason, setRejectionReason] =
+    useState('');
+  const [existingOrderId, setExistingOrderId] =
     useState('');
 
   useEffect(() => {
@@ -307,10 +366,42 @@ export default function ShareRewardProofPage() {
         ) {
           if (active) {
             const localState = readCampaignState();
+            const rejectedNumbers =
+              proofNumbersFromClaim(data);
+            const previousProofUrls =
+              proofUrlsFromClaim(data);
+            const rejectReason = cleanText(
+              data.campaign_rejection_reason ??
+                data.rejection_reason,
+            );
+            const orderId = cleanText(
+              data.order_id,
+            );
+
+            setRetryProofNumbers(
+              rejectedNumbers.length > 0
+                ? rejectedNumbers
+                : [1, 2, 3, 4, 5],
+            );
+            setExistingProofUrls(
+              previousProofUrls,
+            );
+            setRejectionReason(
+              rejectReason,
+            );
+            setExistingOrderId(orderId);
 
             writeCampaignState({
               ...localState,
               offerAlreadyRegistered: false,
+              proofSubmitted: false,
+              proofRejected: true,
+              rejectionReason:
+                rejectReason,
+              rejectedProofNumbers:
+                rejectedNumbers.length > 0
+                  ? rejectedNumbers
+                  : [1, 2, 3, 4, 5],
               existingClaimStatus: status,
             });
 
@@ -319,7 +410,19 @@ export default function ShareRewardProofPage() {
             );
 
             setMessage(
-              'Your previous proof was rejected. You can upload corrected WhatsApp proof for the same offer.',
+              rejectedNumbers.length > 0
+                ? `Proof ${rejectedNumbers.join(
+                    ', ',
+                  )} ${
+                    rejectedNumbers.length === 1
+                      ? 'was'
+                      : 'were'
+                  } rejected. Replace only ${
+                    rejectedNumbers.length === 1
+                      ? 'this screenshot'
+                      : 'these screenshots'
+                  }.`
+                : 'Your previous proof was rejected. Upload corrected WhatsApp proof for the same offer.',
             );
           }
         } else {
@@ -427,6 +530,11 @@ export default function ShareRewardProofPage() {
   ) => {
     if (!list) return;
 
+    const requiredFiles =
+      retryProofNumbers.length > 0
+        ? retryProofNumbers.length
+        : MAX_FILES;
+
     const selected = Array.from(list)
       .filter((file) =>
         file.type.startsWith('image/'),
@@ -435,13 +543,15 @@ export default function ShareRewardProofPage() {
         (file) =>
           file.size <= MAX_FILE_BYTES,
       )
-      .slice(0, MAX_FILES);
+      .slice(0, requiredFiles);
 
     setFiles(selected);
 
     setMessage(
       selected.length !== list.length
-        ? 'Use up to 5 image screenshots, maximum 8 MB each.'
+        ? `Select exactly ${requiredFiles} image screenshot${
+            requiredFiles === 1 ? '' : 's'
+          }, maximum 8 MB each.`
         : '',
     );
   };
@@ -476,9 +586,18 @@ export default function ShareRewardProofPage() {
       return;
     }
 
-    if (files.length !== 5) {
+    const requiredFiles =
+      retryProofNumbers.length > 0
+        ? retryProofNumbers.length
+        : 5;
+
+    if (files.length !== requiredFiles) {
       setMessage(
-        'Please upload exactly 5 WhatsApp screenshots — one proof image for each shared product.',
+        retryProofNumbers.length > 0
+          ? `Please upload exactly ${requiredFiles} replacement screenshot${
+              requiredFiles === 1 ? '' : 's'
+            } for Proof ${retryProofNumbers.join(', ')}.`
+          : 'Please upload exactly 5 WhatsApp screenshots — one proof image for each shared product.',
       );
       return;
     }
@@ -670,6 +789,39 @@ export default function ShareRewardProofPage() {
         );
       }
 
+      const finalProofUrls =
+        retryProofNumbers.length > 0
+          ? (() => {
+              const merged = [
+                ...existingProofUrls,
+              ];
+
+              while (merged.length < 5) {
+                merged.push('');
+              }
+
+              retryProofNumbers.forEach(
+                (proofNumber, index) => {
+                  merged[proofNumber - 1] =
+                    proofUrls[index] || '';
+                },
+              );
+
+              return merged.slice(0, 5);
+            })()
+          : proofUrls;
+
+      if (
+        finalProofUrls.length !== 5 ||
+        finalProofUrls.some(
+          (value) => !cleanText(value),
+        )
+      ) {
+        throw new Error(
+          'Unable to rebuild all 5 proof screenshots. Please reopen this page and try again.',
+        );
+      }
+
       await setDoc(
         claimRef,
         {
@@ -689,9 +841,13 @@ export default function ShareRewardProofPage() {
             sharedIds,
           shared_product_count:
             sharedIds.length,
-          proof_urls: proofUrls,
+          proof_urls: finalProofUrls,
           proof_count:
-            proofUrls.length,
+            finalProofUrls.length,
+          rejected_proof_numbers: [],
+          campaign_rejected_proof_numbers: [],
+          rejection_reason: '',
+          campaign_rejection_reason: '',
           local_share_declared: true,
           allowed_share_areas: [
             'Karamadai',
@@ -710,6 +866,31 @@ export default function ShareRewardProofPage() {
         { merge: true },
       );
 
+      if (
+        retryProofNumbers.length > 0 &&
+        existingOrderId
+      ) {
+        await setDoc(
+          doc(db, 'Orders', existingOrderId),
+          {
+            order_status:
+              'pending_verification',
+            status:
+              'pending_verification',
+            campaign_verification_status:
+              'pending',
+            campaign_rejection_reason: '',
+            campaign_rejected_proof_numbers:
+              [],
+            share_proof_urls:
+              finalProofUrls,
+            updated_at:
+              serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+
       const local =
         readCampaignState();
 
@@ -718,8 +899,11 @@ export default function ShareRewardProofPage() {
         sharedProductIds: sharedIds,
         proofSubmitted: true,
         claimId,
-        proofUrls,
+        proofUrls: finalProofUrls,
         offerAlreadyRegistered: false,
+        proofRejected: false,
+        rejectionReason: '',
+        rejectedProofNumbers: [],
         existingClaimStatus: 'proof_submitted',
       });
 
@@ -727,9 +911,20 @@ export default function ShareRewardProofPage() {
         new CustomEvent('spotc-share5-progress-change'),
       );
 
-      router.push(
-        '/share-reward/gift',
-      );
+      if (
+        retryProofNumbers.length > 0 &&
+        existingOrderId
+      ) {
+        router.push(
+          `/share-reward/success?id=${encodeURIComponent(
+            existingOrderId,
+          )}`,
+        );
+      } else {
+        router.push(
+          '/share-reward/gift',
+        );
+      }
     } catch (error) {
       console.error(
         'Share reward proof upload failed:',
@@ -795,15 +990,18 @@ export default function ShareRewardProofPage() {
         <h1>
           {alreadyUsed
             ? 'Offer Already Registered'
-            : 'Upload WhatsApp Proof'}
+            : retryProofNumbers.length > 0
+              ? 'Replace Rejected Proof'
+              : 'Upload WhatsApp Proof'}
         </h1>
 
         {!alreadyUsed && (
           <p className="sr-lead">
-            Your 5 different product
-            shares are complete. Upload
-            screenshot proof to unlock
-            your FREE gift selection.
+            {retryProofNumbers.length > 0
+              ? `Your 5 / 5 shares stay complete. Replace only Proof ${retryProofNumbers.join(
+                  ', ',
+                )}.`
+              : 'Your 5 different product shares are complete. Upload screenshot proof to unlock your FREE gift selection.'}
           </p>
         )}
 
@@ -849,6 +1047,61 @@ export default function ShareRewardProofPage() {
 
         {!closed && (
           <>
+            {retryProofNumbers.length > 0 && (
+              <div className="sr-rejected-box">
+                <strong>
+                  Proof Rejected
+                </strong>
+
+                <span>
+                  Replace Proof{' '}
+                  {retryProofNumbers.join(', ')}
+                </span>
+
+                {rejectionReason && (
+                  <p>
+                    <b>Reason:</b>{' '}
+                    {rejectionReason}
+                  </p>
+                )}
+
+                {existingProofUrls.length > 0 && (
+                  <div className="sr-existing-proofs">
+                    {existingProofUrls.map(
+                      (url, index) =>
+                        url ? (
+                          <div
+                            key={`old-proof-${index}`}
+                            className={
+                              retryProofNumbers.includes(
+                                index + 1,
+                              )
+                                ? 'sr-existing-proof sr-existing-proof-rejected'
+                                : 'sr-existing-proof'
+                            }
+                          >
+                            <img
+                              src={url}
+                              alt={`Existing Proof ${
+                                index + 1
+                              }`}
+                            />
+                            <small>
+                              Proof {index + 1}
+                              {retryProofNumbers.includes(
+                                index + 1,
+                              )
+                                ? ' • Replace'
+                                : ' • Kept'}
+                            </small>
+                          </div>
+                        ) : null,
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <label className="sr-upload">
               <input
                 type="file"
@@ -875,8 +1128,13 @@ export default function ShareRewardProofPage() {
               </strong>
 
               <span>
-                5 screenshots required • JPG / PNG /
-                WEBP • Max 8 MB each
+                {retryProofNumbers.length > 0
+                  ? `${retryProofNumbers.length} replacement screenshot${
+                      retryProofNumbers.length === 1
+                        ? ''
+                        : 's'
+                    } required • JPG / PNG / WEBP • Max 8 MB each`
+                  : '5 screenshots required • JPG / PNG / WEBP • Max 8 MB each'}
               </span>
             </label>
 
@@ -921,7 +1179,13 @@ export default function ShareRewardProofPage() {
               className="sr-submit"
               type="button"
               onClick={submit}
-              disabled={uploading || files.length !== 5}
+              disabled={
+                uploading ||
+                files.length !==
+                  (retryProofNumbers.length > 0
+                    ? retryProofNumbers.length
+                    : 5)
+              }
             >
               {uploading ? (
                 <Loader2 className="sr-spin" />
@@ -931,7 +1195,9 @@ export default function ShareRewardProofPage() {
 
               {uploading
                 ? 'Uploading…'
-                : 'Upload Proof & Choose Gift'}
+                : retryProofNumbers.length > 0
+                  ? 'Upload Corrected Proof'
+                  : 'Upload Proof & Choose Gift'}
             </button>
           </>
         )}
@@ -1104,6 +1370,74 @@ const styles = `
     transform:translateY(1px)
   }
 
+  .sr-rejected-box{
+    margin:0 0 16px;
+    padding:14px;
+    border:1px solid #f0b4b4;
+    border-radius:16px;
+    background:#fff1f1;
+    color:#8f1d1d;
+    display:grid;
+    gap:6px
+  }
+
+  .sr-rejected-box>strong{
+    font-size:15px;
+    font-weight:900
+  }
+
+  .sr-rejected-box>span{
+    font-size:13px;
+    font-weight:800
+  }
+
+  .sr-rejected-box>p{
+    margin:0;
+    font-size:13px;
+    line-height:1.5
+  }
+
+  .sr-existing-proofs{
+    margin-top:7px;
+    display:grid;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    gap:7px
+  }
+
+  .sr-existing-proof{
+    border:1px solid #d9e5dc;
+    border-radius:10px;
+    overflow:hidden;
+    background:#f6fbf7
+  }
+
+  .sr-existing-proof-rejected{
+    border:2px solid #dc2626;
+    background:#fff
+  }
+
+  .sr-existing-proof img{
+    width:100%;
+    aspect-ratio:1/1;
+    object-fit:cover;
+    display:block
+  }
+
+  .sr-existing-proof small{
+    display:block;
+    padding:5px 3px;
+    margin:0;
+    color:#5f5f5f;
+    font-size:9px;
+    font-weight:800;
+    text-align:center;
+    letter-spacing:0
+  }
+
+  .sr-existing-proof-rejected small{
+    color:#b42318
+  }
+
   .sr-upload{
     min-height:138px;
     border:2px dashed #e5b3c3;
@@ -1257,6 +1591,10 @@ const styles = `
 
     .sr-previews{
       grid-template-columns:repeat(2,minmax(0,1fr))
+    }
+
+    .sr-existing-proofs{
+      grid-template-columns:repeat(3,minmax(0,1fr))
     }
   }
 `;

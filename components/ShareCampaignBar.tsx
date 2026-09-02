@@ -10,8 +10,9 @@ import {
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 
 const STORAGE_KEY = 'spotc-share5-campaign-v1';
 const DISMISS_KEY = 'spotc-share5-banner-hidden';
@@ -23,6 +24,10 @@ type CampaignState = {
   ownerUid?: string;
   offerAlreadyRegistered?: boolean;
   existingClaimStatus?: string;
+  claimId?: string;
+  proofRejected?: boolean;
+  rejectionReason?: string;
+  rejectedProofNumbers?: number[];
 };
 
 function readCampaign(): CampaignState {
@@ -56,6 +61,34 @@ function readCampaign(): CampaignState {
         typeof parsed.existingClaimStatus === 'string'
           ? parsed.existingClaimStatus
           : undefined,
+      claimId:
+        typeof parsed.claimId === 'string'
+          ? parsed.claimId
+          : undefined,
+      proofRejected:
+        parsed.proofRejected === true,
+      rejectionReason:
+        typeof parsed.rejectionReason === 'string'
+          ? parsed.rejectionReason
+          : undefined,
+      rejectedProofNumbers:
+        Array.isArray(
+          parsed.rejectedProofNumbers,
+        )
+          ? parsed.rejectedProofNumbers
+              .map((value) =>
+                Number.parseInt(
+                  String(value ?? ''),
+                  10,
+                ),
+              )
+              .filter(
+                (value) =>
+                  Number.isInteger(value) &&
+                  value >= 1 &&
+                  value <= 5,
+              )
+          : [],
     };
   } catch {
     return {};
@@ -68,6 +101,8 @@ export default function ShareCampaignBar() {
   const [progress, setProgress] = useState(0);
   const [proofSubmitted, setProofSubmitted] = useState(false);
   const [offerAlreadyRegistered, setOfferAlreadyRegistered] =
+    useState(false);
+  const [proofRejected, setProofRejected] =
     useState(false);
   const [howOpen, setHowOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -83,6 +118,114 @@ export default function ShareCampaignBar() {
     setOfferAlreadyRegistered(
       state.offerAlreadyRegistered === true,
     );
+    setProofRejected(
+      state.proofRejected === true ||
+        state.existingClaimStatus ===
+          'rejected' ||
+        state.existingClaimStatus ===
+          'proof_rejected',
+    );
+
+    /*
+     * Admin rejection happens in Firestore, not localStorage.
+     * When the customer returns to Shop, pull the current claim status
+     * and convert "Proof Submitted ✓" into "Upload Proof Again".
+     */
+    if (
+      db &&
+      state.claimId &&
+      state.proofSubmitted === true
+    ) {
+      void getDoc(
+        doc(
+          db,
+          'ShareRewardClaims',
+          state.claimId,
+        ),
+      )
+        .then((snapshot) => {
+          if (!snapshot.exists()) return;
+
+          const data = snapshot.data();
+          const status = String(
+            data.verification_status ??
+              data.status ??
+              '',
+          )
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, '_');
+
+          if (
+            status !== 'rejected' &&
+            status !== 'proof_rejected'
+          ) {
+            return;
+          }
+
+          const rejectedProofNumbers =
+            Array.isArray(
+              data.rejected_proof_numbers ??
+                data.campaign_rejected_proof_numbers,
+            )
+              ? (
+                  data.rejected_proof_numbers ??
+                  data.campaign_rejected_proof_numbers
+                )
+                  .map((value: unknown) =>
+                    Number.parseInt(
+                      String(value ?? ''),
+                      10,
+                    ),
+                  )
+                  .filter(
+                    (value: number) =>
+                      Number.isInteger(value) &&
+                      value >= 1 &&
+                      value <= 5,
+                  )
+              : [];
+
+          const rejectionReason = String(
+            data.campaign_rejection_reason ??
+              data.rejection_reason ??
+              '',
+          ).trim();
+
+          const current =
+            readCampaign();
+
+          const next: CampaignState = {
+            ...current,
+            proofSubmitted: false,
+            proofRejected: true,
+            offerAlreadyRegistered: false,
+            existingClaimStatus:
+              'rejected',
+            rejectionReason,
+            rejectedProofNumbers,
+          };
+
+          try {
+            window.localStorage.setItem(
+              STORAGE_KEY,
+              JSON.stringify(next),
+            );
+          } catch {
+            // Ignore browser storage errors.
+          }
+
+          setProofSubmitted(false);
+          setProofRejected(true);
+          setOfferAlreadyRegistered(false);
+        })
+        .catch((error) => {
+          console.error(
+            'Share 5 claim status refresh failed:',
+            error,
+          );
+        });
+    }
   };
 
   useEffect(() => {
@@ -180,6 +323,7 @@ export default function ShareCampaignBar() {
           setProgress(0);
           setProofSubmitted(false);
           setOfferAlreadyRegistered(false);
+          setProofRejected(false);
         } else {
           refreshProgress();
         }
@@ -211,6 +355,7 @@ export default function ShareCampaignBar() {
         setProgress(0);
         setProofSubmitted(false);
         setOfferAlreadyRegistered(false);
+        setProofRejected(false);
       } else {
         try {
           window.localStorage.setItem(
@@ -394,7 +539,9 @@ export default function ShareCampaignBar() {
                     }
                   >
                     <UploadCloud size={15} />
-                    Upload Proof
+                    {proofRejected
+                      ? 'Upload Proof Again'
+                      : 'Upload Proof'}
                   </button>
                 )}
 

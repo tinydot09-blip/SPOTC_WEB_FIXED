@@ -1231,13 +1231,68 @@ if (!response.ok) {
       'share5_get1free';
 
     let campaignRejectionReason = '';
+    let campaignRejectedProofNumbers: number[] = [];
 
     if (
       nextStatus === 'cancelled' &&
       isShareCampaignRow
     ) {
+      const proofUrls = Array.isArray(
+        row.data.share_proof_urls,
+      )
+        ? row.data.share_proof_urls
+        : [];
+
+      const proofNumberText = window.prompt(
+        `Which proof image is wrong?\n\nEnter proof number(s) from 1 to ${Math.max(
+          5,
+          proofUrls.length,
+        )}.\nExample: 2   or   2,3,5\n\nThe customer will replace only these screenshot(s).`,
+        '',
+      );
+
+      if (proofNumberText === null) {
+        return;
+      }
+
+      campaignRejectedProofNumbers =
+        Array.from(
+          new Set(
+            proofNumberText
+              .split(',')
+              .map((value) =>
+                Number.parseInt(
+                  value.trim(),
+                  10,
+                ),
+              )
+              .filter(
+                (value) =>
+                  Number.isInteger(value) &&
+                  value >= 1 &&
+                  value <=
+                    Math.max(
+                      5,
+                      proofUrls.length,
+                    ),
+              ),
+          ),
+        ).sort((a, b) => a - b);
+
+      if (
+        campaignRejectedProofNumbers.length ===
+        0
+      ) {
+        window.alert(
+          'Please enter at least one valid proof number, for example 2 or 2,3.',
+        );
+        return;
+      }
+
       const reason = window.prompt(
-        'Why are you rejecting this WhatsApp proof?\n\nThis reason will be shown to the customer in My Orders.',
+        `Why are you rejecting Proof ${campaignRejectedProofNumbers.join(
+          ', ',
+        )}?\n\nThis reason will be shown to the customer in My Orders.`,
         '',
       );
 
@@ -1259,7 +1314,9 @@ if (!response.ok) {
         window.confirm(
           `Reject FREE gift proof for ${orderNumber(
             row,
-          )}?\n\nReason: ${campaignRejectionReason}\n\nReserved gift stock will be released.`,
+          )}?\n\nReplace: Proof ${campaignRejectedProofNumbers.join(
+            ', ',
+          )}\nReason: ${campaignRejectionReason}\n\nThe customer can upload only the rejected screenshot(s). Reserved gift stock will be released until the corrected proof is approved.`,
         );
 
       if (!confirmed) {
@@ -1387,7 +1444,10 @@ if (!response.ok) {
 
           if (
             movingIntoReservedFlow &&
-            liveInventoryState === 'none'
+            (
+              liveInventoryState === 'none' ||
+              liveInventoryState === 'released'
+            )
           ) {
             for (const [
               productId,
@@ -1715,6 +1775,8 @@ if (!response.ok) {
               orderUpdate.campaign_rejection_reason =
                 campaignRejectionReason ||
                 'WhatsApp proof was not approved.';
+              orderUpdate.campaign_rejected_proof_numbers =
+                campaignRejectedProofNumbers;
             }
 
             if (nextStatus === 'delivered') {
@@ -1758,6 +1820,10 @@ if (!response.ok) {
               claimUpdate.campaign_rejection_reason =
                 campaignRejectionReason ||
                 'WhatsApp proof was not approved.';
+              claimUpdate.rejected_proof_numbers =
+                campaignRejectedProofNumbers;
+              claimUpdate.campaign_rejected_proof_numbers =
+                campaignRejectedProofNumbers;
             }
 
             if (nextStatus === 'delivered') {
