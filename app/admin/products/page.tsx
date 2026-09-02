@@ -2511,7 +2511,7 @@ export default function AdminProductsPage() {
       // Keep MRP and discount visually grouped with the selling price.
       // This avoids the large empty gap visible for short prices such as ₹29 / ₹49.
       const priceWidth = ctx.measureText(priceText).width;
-      let infoX = Math.max(205, 55 + priceWidth + 58);
+      let infoX = Math.max(190, 55 + priceWidth + 28);
       const infoY = priceBaseY - 15;
 
       if (mrp > 0 && price > 0 && mrp > price) {
@@ -2529,7 +2529,7 @@ export default function AdminProductsPage() {
         ctx.moveTo(infoX - 4, infoY - 12);
         ctx.lineTo(infoX + mrpW + 5, infoY - 12);
         ctx.stroke();
-        infoX += mrpW + 62;
+        infoX += mrpW + 38;
       }
 
       if (discount) {
@@ -2632,75 +2632,78 @@ export default function AdminProductsPage() {
       ctx.font = '500 17px Arial, sans-serif';
       drawWrappedText(ctx, SPOTC_FULL_ADDRESS, 125, addressY + 64, 850, 24, 2);
 
-      // ---------- CONTACTS: ONE CLEAN LINE BELOW ADDRESS ----------
-      const contactY = addressY + addressH + 18;
+      // ---------- CONTACTS: ONE COMPACT LINE BELOW ADDRESS ----------
+      // Keep all contact details on ONE baseline so they never collide with
+      // the ORDER NOW footer on the 1080 × 1350 canvas.
+      const contactY = addressY + addressH + 25;
+      const contactTextY = contactY + 8;
 
-      // WhatsApp icon circle + handset.
+      // WhatsApp icon.
       ctx.save();
       ctx.fillStyle = '#1bad52';
       ctx.beginPath();
-      ctx.arc(72, contactY + 25, 20, 0, Math.PI * 2);
+      ctx.arc(67, contactY, 17, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 3.2;
+      ctx.lineWidth = 2.8;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(64, contactY + 16);
-      ctx.quadraticCurveTo(61, contactY + 24, 70, contactY + 32);
-      ctx.quadraticCurveTo(79, contactY + 40, 86, contactY + 33);
+      ctx.moveTo(60, contactY - 7);
+      ctx.quadraticCurveTo(58, contactY, 65, contactY + 6);
+      ctx.quadraticCurveTo(72, contactY + 12, 78, contactY + 6);
       ctx.stroke();
       ctx.restore();
 
-      ctx.fillStyle = '#159447';
+      ctx.fillStyle = '#138c43';
       ctx.font = '900 15px Arial, sans-serif';
-      ctx.fillText('WHATSAPP', 102, contactY + 18);
+      ctx.fillText('WHATSAPP', 92, contactTextY);
       ctx.fillStyle = '#181b20';
       ctx.font = '800 15px Arial, sans-serif';
-      ctx.fillText(SPOTC_PHONE, 102, contactY + 40);
+      ctx.fillText(SPOTC_PHONE, 188, contactTextY);
 
-      // Email icon.
+      // Email icon + email on the same baseline.
       ctx.save();
       ctx.strokeStyle = '#ec0a4f';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(390, contactY + 10, 35, 27);
+      ctx.lineWidth = 2.6;
+      ctx.strokeRect(410, contactY - 12, 31, 23);
       ctx.beginPath();
-      ctx.moveTo(391, contactY + 12);
-      ctx.lineTo(407.5, contactY + 25);
-      ctx.lineTo(424, contactY + 12);
+      ctx.moveTo(411, contactY - 10);
+      ctx.lineTo(425.5, contactY + 1);
+      ctx.lineTo(440, contactY - 10);
       ctx.stroke();
       ctx.restore();
 
       ctx.fillStyle = '#ec0a4f';
       ctx.font = '900 15px Arial, sans-serif';
-      ctx.fillText('EMAIL', 440, contactY + 18);
+      ctx.fillText('EMAIL', 454, contactTextY);
       ctx.fillStyle = '#181b20';
       ctx.font = '800 15px Arial, sans-serif';
-      ctx.fillText(SPOTC_EMAIL, 440, contactY + 40);
+      ctx.fillText(SPOTC_EMAIL, 510, contactTextY);
 
-      // Website / globe icon.
+      // Website icon + website on the same baseline.
       ctx.save();
       ctx.strokeStyle = '#ec0a4f';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2.6;
       ctx.beginPath();
-      ctx.arc(750, contactY + 25, 19, 0, Math.PI * 2);
+      ctx.arc(790, contactY, 16, 0, Math.PI * 2);
       ctx.stroke();
       ctx.beginPath();
-      ctx.ellipse(750, contactY + 25, 8, 19, 0, 0, Math.PI * 2);
-      ctx.moveTo(732, contactY + 25);
-      ctx.lineTo(768, contactY + 25);
+      ctx.ellipse(790, contactY, 7, 16, 0, 0, Math.PI * 2);
+      ctx.moveTo(775, contactY);
+      ctx.lineTo(805, contactY);
       ctx.stroke();
       ctx.restore();
 
       ctx.fillStyle = '#ec0a4f';
       ctx.font = '900 15px Arial, sans-serif';
-      ctx.fillText('WEBSITE', 780, contactY + 18);
+      ctx.fillText('WEBSITE', 818, contactTextY);
       ctx.fillStyle = '#181b20';
       ctx.font = '800 15px Arial, sans-serif';
-      ctx.fillText(SPOTC_WEBSITE, 780, contactY + 40);
+      ctx.fillText(SPOTC_WEBSITE, 895, contactTextY);
 
       // ---------- ORDER NOW FOOTER ----------
-      const orderY = 1292;
-      drawRoundedBox(ctx, 38, orderY, 1004, 52, 16, '#ec0a4f');
+      const orderY = 1298;
+      drawRoundedBox(ctx, 38, orderY, 1004, 46, 16, '#ec0a4f');
 
       // Cart icon.
       ctx.save();
@@ -2725,7 +2728,7 @@ export default function AdminProductsPage() {
 
       ctx.fillStyle = '#ffffff';
       ctx.font = '900 44px Arial, sans-serif';
-      ctx.fillText('ORDER NOW', 190, orderY + 51);
+      ctx.fillText('ORDER NOW', 190, orderY + 39);
 
       ctx.strokeStyle = 'rgba(255,255,255,.65)';
       ctx.lineWidth = 2;
@@ -2736,7 +2739,7 @@ export default function AdminProductsPage() {
 
       ctx.fillStyle = '#ffd21f';
       ctx.font = '900 28px Arial, sans-serif';
-      ctx.fillText('SPOTC.in', 770, orderY + 47);
+      ctx.fillText('SPOTC.in', 770, orderY + 36);
 
       const dataUrl = canvas.toDataURL('image/png');
       const fileName = `${safeFilePart(title) || row.id}-spotc-poster.png`;
