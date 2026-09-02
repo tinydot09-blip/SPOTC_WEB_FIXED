@@ -808,7 +808,13 @@ export default function ShareCampaignBar() {
            * the normal ProductGrid / desktop layout.
            */
           .share5-campaign-card {
-            margin: 8px 12px 8px;
+            /*
+             * Shop mobile alignment:
+             * the Shop page already adds a large top spacer before this
+             * component. Pull only the campaign card upward, while keeping
+             * an 8px visual gap below it before the black trust bar.
+             */
+            margin: -54px 12px 8px;
             border-radius: 17px;
           }
 
