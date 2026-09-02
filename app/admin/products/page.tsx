@@ -2404,172 +2404,332 @@ export default function AdminProductsPage() {
       const giftCount = freeGiftCountOf(row.data);
 
       // ==========================================================
-      // CLEAN SPOTC PRODUCT POSTER — 1080 × 1350
+      // SPOTC SHARE POSTER — 1080 × 1350
+      // Big product-first layout with vector brand/icons.
       // ==========================================================
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, POSTER_WIDTH, POSTER_HEIGHT);
 
-      // ---------- HEADER ----------
+      // ---------- BRAND LOGO ----------
+      // Drawn as vectors/text so the poster never depends on a missing logo asset.
       ctx.textAlign = 'left';
       ctx.textBaseline = 'alphabetic';
-      ctx.fillStyle = '#061b53';
-      ctx.font = '700 72px Arial, sans-serif';
-      ctx.fillText('Spotc', 52, 88);
+      ctx.fillStyle = '#071e5b';
+      ctx.font = '800 76px Arial, sans-serif';
+      ctx.fillText('Spotc', 48, 88);
       const spotcWidth = ctx.measureText('Spotc').width;
+      const dotX = 48 + spotcWidth;
       ctx.fillStyle = '#ed0b55';
-      ctx.fillText('.in', 52 + spotcWidth, 88);
+      ctx.fillText('.in', dotX, 88);
 
-      ctx.font = '700 22px Arial, sans-serif';
-      ctx.fillStyle = '#061b53';
-      ctx.fillText('Namma Area.', 55, 123);
-      const tagWidth = ctx.measureText('Namma Area.').width;
-      ctx.fillStyle = '#ed0b55';
-      ctx.fillText(' Namma Kadai.', 55 + tagWidth, 123);
-
-      drawRoundedBox(ctx, 775, 34, 252, 96, 24, '#ed0b55');
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '700 31px Arial, sans-serif';
-      ctx.fillText('15 MIN', 901, 74);
-      ctx.font = '700 21px Arial, sans-serif';
-      ctx.fillText('DELIVERY*', 901, 106);
-      ctx.textAlign = 'left';
-
-      // ---------- HERO PRODUCT IMAGE ----------
-      // The product should dominate the poster. Crop only enough to fill the frame.
-      const imageX = 34;
-      const imageY = 155;
-      const imageW = 1012;
-      const imageH = 700;
-      drawRoundedBox(
-        ctx,
-        imageX,
-        imageY,
-        imageW,
-        imageH,
-        28,
-        '#f7f7f7',
-        '#ededed',
-        1.5,
-      );
+      // SPOTC spark mark above the "in".
       ctx.save();
-      roundedRectPath(ctx, imageX, imageY, imageW, imageH, 28);
-      ctx.clip();
-      const sourceAspect =
-        (image.naturalWidth || image.width) /
-        Math.max(1, image.naturalHeight || image.height);
-      // Portrait/tall product photos are contained so dresses and full products are not cut.
-      // Wider product photos fill the hero frame for a stronger ad-style result.
-      if (sourceAspect < 0.95 || sourceAspect > 2.1) {
-        drawImageContain(ctx, image, imageX, imageY, imageW, imageH);
-      } else {
-        drawImageCover(ctx, image, imageX, imageY, imageW, imageH);
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 7;
+      const sparkX = dotX + 72;
+      const sparkY = 27;
+      const rays = [
+        { dx1: -24, dy1: 8, dx2: -36, dy2: -2, color: '#ffb000' },
+        { dx1: 0, dy1: 0, dx2: 0, dy2: -18, color: '#ed0b55' },
+        { dx1: 22, dy1: 8, dx2: 35, dy2: -1, color: '#f47b20' },
+        { dx1: 11, dy1: 2, dx2: 19, dy2: -14, color: '#2ca44f' },
+      ];
+      for (const ray of rays) {
+        ctx.strokeStyle = ray.color;
+        ctx.beginPath();
+        ctx.moveTo(sparkX + ray.dx1, sparkY + ray.dy1);
+        ctx.lineTo(sparkX + ray.dx2, sparkY + ray.dy2);
+        ctx.stroke();
       }
       ctx.restore();
 
+      ctx.font = '700 21px Arial, sans-serif';
+      ctx.fillStyle = '#071e5b';
+      ctx.fillText('Namma Area.', 52, 122);
+      const tagWidth = ctx.measureText('Namma Area.').width;
+      ctx.fillStyle = '#ed0b55';
+      ctx.fillText(' Namma Kadai.', 52 + tagWidth, 122);
+
+      // ---------- 15 MIN DELIVERY BADGE + CLOCK ICON ----------
+      const deliveryX = 760;
+      const deliveryY = 29;
+      const deliveryW = 270;
+      const deliveryH = 100;
+      drawRoundedBox(ctx, deliveryX, deliveryY, deliveryW, deliveryH, 27, '#ed0b55');
+
+      // Clock icon.
+      ctx.save();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(deliveryX + 50, deliveryY + 50, 25, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(deliveryX + 50, deliveryY + 50);
+      ctx.lineTo(deliveryX + 50, deliveryY + 34);
+      ctx.moveTo(deliveryX + 50, deliveryY + 50);
+      ctx.lineTo(deliveryX + 63, deliveryY + 56);
+      ctx.stroke();
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(deliveryX + 12, deliveryY + 39);
+      ctx.lineTo(deliveryX + 26, deliveryY + 39);
+      ctx.moveTo(deliveryX + 8, deliveryY + 52);
+      ctx.lineTo(deliveryX + 24, deliveryY + 52);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '800 29px Arial, sans-serif';
+      ctx.fillText('15 MIN', deliveryX + 178, deliveryY + 43);
+      ctx.font = '800 20px Arial, sans-serif';
+      ctx.fillText('DELIVERY*', deliveryX + 178, deliveryY + 74);
+      ctx.textAlign = 'left';
+
+      // ---------- HERO PRODUCT IMAGE ----------
+      // Fill the full hero region with the same photo as a soft background,
+      // then place the COMPLETE product photo on top. This removes empty side bars
+      // while keeping tall dress/keychain images fully visible.
+      const imageX = 30;
+      const imageY = 150;
+      const imageW = 1020;
+      const imageH = 700;
+
+      ctx.save();
+      roundedRectPath(ctx, imageX, imageY, imageW, imageH, 30);
+      ctx.clip();
+
+      // Background fill from product photo.
+      ctx.filter = 'blur(22px) brightness(0.72) saturate(1.08)';
+      drawImageCover(ctx, image, imageX - 28, imageY - 28, imageW + 56, imageH + 56);
+      ctx.filter = 'none';
+      ctx.fillStyle = 'rgba(0,0,0,.10)';
+      ctx.fillRect(imageX, imageY, imageW, imageH);
+
+      const sourceWidth = image.naturalWidth || image.width;
+      const sourceHeight = image.naturalHeight || image.height;
+      const sourceAspect = sourceWidth / Math.max(1, sourceHeight);
+
+      if (sourceAspect < 1.05) {
+        // Portrait products: show the entire source as large as possible.
+        const innerX = imageX + 24;
+        const innerY = imageY + 18;
+        const innerW = imageW - 48;
+        const innerH = imageH - 36;
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,.30)';
+        ctx.shadowBlur = 24;
+        ctx.shadowOffsetY = 7;
+        drawImageContain(ctx, image, innerX, innerY, innerW, innerH);
+        ctx.restore();
+      } else {
+        // Landscape/square product photos can fill the whole hero frame.
+        drawImageCover(ctx, image, imageX, imageY, imageW, imageH);
+      }
+
+      // Soft bottom gradient for a premium finish.
+      const heroGradient = ctx.createLinearGradient(0, imageY + imageH - 150, 0, imageY + imageH);
+      heroGradient.addColorStop(0, 'rgba(0,0,0,0)');
+      heroGradient.addColorStop(1, 'rgba(0,0,0,.16)');
+      ctx.fillStyle = heroGradient;
+      ctx.fillRect(imageX, imageY + imageH - 150, imageW, 150);
+      ctx.restore();
+
+      // Thin brand outline.
+      roundedRectPath(ctx, imageX, imageY, imageW, imageH, 30);
+      ctx.strokeStyle = '#f3b2c8';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
       // ---------- PRODUCT NAME ----------
-      // Always left aligned so long names can never disappear off the canvas.
       ctx.textAlign = 'left';
       ctx.fillStyle = '#111827';
-      ctx.font = '700 28px Arial, sans-serif';
-      const titleEndY = drawWrappedText(ctx, title, 55, 900, 970, 34, 2);
+      ctx.font = '700 25px Arial, sans-serif';
+      const titleEndY = drawWrappedText(ctx, title, 48, 894, 980, 31, 2);
 
       // ---------- PRICE / MRP / OFF / OPTIONAL GIFT ----------
-      const priceBaseY = Math.max(988, titleEndY + 42);
-
+      const priceBaseY = Math.max(978, titleEndY + 35);
       ctx.fillStyle = '#ed0b55';
-      ctx.font = '700 62px Arial, sans-serif';
+      ctx.font = '800 58px Arial, sans-serif';
       const priceText = price > 0 ? `₹${price}` : 'Price on request';
-      ctx.fillText(priceText, 55, priceBaseY);
+      ctx.fillText(priceText, 48, priceBaseY);
 
-      let infoX = 260;
+      let infoX = 245;
+      const infoY = priceBaseY - 9;
 
       if (mrp > 0 && price > 0 && mrp > price) {
-        ctx.fillStyle = '#6b7280';
-        ctx.font = '700 23px Arial, sans-serif';
-        ctx.fillText('MRP', infoX, priceBaseY - 7);
+        ctx.fillStyle = '#667085';
+        ctx.font = '700 22px Arial, sans-serif';
+        ctx.fillText('MRP', infoX, infoY);
         infoX += ctx.measureText('MRP').width + 12;
 
         const mrpText = `₹${mrp}`;
-        ctx.fillText(mrpText, infoX, priceBaseY - 7);
+        ctx.fillText(mrpText, infoX, infoY);
         const mrpW = ctx.measureText(mrpText).width;
-        ctx.strokeStyle = '#6b7280';
+        ctx.strokeStyle = '#667085';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(infoX - 2, priceBaseY - 17);
-        ctx.lineTo(infoX + mrpW + 2, priceBaseY - 17);
+        ctx.moveTo(infoX - 2, infoY - 9);
+        ctx.lineTo(infoX + mrpW + 2, infoY - 9);
         ctx.stroke();
         infoX += mrpW + 34;
       }
 
       if (discount) {
+        drawRoundedBox(ctx, infoX, priceBaseY - 40, 118, 40, 10, '#fff0f5');
         ctx.fillStyle = '#ed0b55';
-        ctx.font = '700 24px Arial, sans-serif';
-        ctx.fillText(discount, infoX, priceBaseY - 7);
+        ctx.font = '800 20px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(discount, infoX + 59, priceBaseY - 13);
+        ctx.textAlign = 'left';
+        infoX += 138;
       }
 
-      // Gift badge appears only when a real explicit gift count is present.
+      // Gift is shown ONLY if an explicit gift count exists.
       if (giftCount > 0) {
         const giftText = `${giftCount} GIFT${giftCount === 1 ? '' : 'S'} INCLUDED`;
-        const giftX = 760;
-        const giftY = priceBaseY - 52;
-        const giftW = 265;
-        const giftH = 62;
-        drawRoundedBox(ctx, giftX, giftY, giftW, giftH, 16, '#eaf8ef', '#b9e4c8', 1.5);
-        ctx.fillStyle = '#138a45';
-        ctx.textAlign = 'center';
-        ctx.font = '700 21px Arial, sans-serif';
-        ctx.fillText(giftText, giftX + giftW / 2, giftY + 39);
-        ctx.textAlign = 'left';
+        const giftX = Math.max(720, infoX + 8);
+        const giftY = priceBaseY - 47;
+        const giftW = 305;
+        const giftH = 54;
+        drawRoundedBox(ctx, giftX, giftY, giftW, giftH, 14, '#eaf8ef', '#bce7cb', 1.3);
+
+        // Gift icon.
+        ctx.save();
+        ctx.strokeStyle = '#179447';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(giftX + 18, giftY + 21, 31, 22);
+        ctx.beginPath();
+        ctx.moveTo(giftX + 33.5, giftY + 19);
+        ctx.lineTo(giftX + 33.5, giftY + 44);
+        ctx.moveTo(giftX + 15, giftY + 20);
+        ctx.lineTo(giftX + 52, giftY + 20);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(giftX + 27, giftY + 14, 8, 5, -0.6, 0, Math.PI * 2);
+        ctx.ellipse(giftX + 40, giftY + 14, 8, 5, 0.6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.fillStyle = '#127d3b';
+        ctx.font = '800 19px Arial, sans-serif';
+        ctx.fillText(giftText, giftX + 63, giftY + 34);
       }
 
-      // ---------- DIVIDER ----------
-      const dividerY = priceBaseY + 30;
-      ctx.strokeStyle = '#ececec';
+      // ---------- DELIVERY AREAS ----------
+      const dividerY = priceBaseY + 28;
+      ctx.strokeStyle = '#ededed';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(55, dividerY);
-      ctx.lineTo(1025, dividerY);
+      ctx.moveTo(48, dividerY);
+      ctx.lineTo(1032, dividerY);
       ctx.stroke();
 
-      // ---------- DELIVERY AREAS ----------
-      const areaTitleY = dividerY + 45;
-      ctx.fillStyle = '#ed0b55';
-      ctx.font = '700 22px Arial, sans-serif';
-      ctx.fillText('DELIVERY AREAS', 58, areaTitleY);
+      const areaY = dividerY + 45;
 
-      ctx.fillStyle = '#111827';
-      ctx.font = '500 19px Arial, sans-serif';
-      drawWrappedText(ctx, SPOTC_AREAS, 58, areaTitleY + 30, 965, 26, 2);
+      // Location pin icon.
+      ctx.save();
+      ctx.fillStyle = '#ed0b55';
+      ctx.beginPath();
+      ctx.arc(69, areaY - 8, 17, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(57, areaY + 4);
+      ctx.lineTo(69, areaY + 25);
+      ctx.lineTo(81, areaY + 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(69, areaY - 8, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.fillStyle = '#ed0b55';
+      ctx.font = '800 20px Arial, sans-serif';
+      ctx.fillText('DELIVERY AREAS', 100, areaY - 3);
+
+      ctx.fillStyle = '#1f2937';
+      ctx.font = '500 18px Arial, sans-serif';
+      drawWrappedText(ctx, SPOTC_AREAS, 100, areaY + 25, 920, 24, 2);
 
       // ---------- ADDRESS ----------
-      const addressY = areaTitleY + 64;
+      const addressY = areaY + 63;
       const addressH = 126;
-      drawRoundedBox(ctx, 45, addressY, 990, addressH, 18, '#fafafa', '#dedede', 1.2);
+      drawRoundedBox(ctx, 44, addressY, 992, addressH, 18, '#fafafa', '#e5e7eb', 1.2);
+
+      // Address pin icon.
+      ctx.save();
+      ctx.fillStyle = '#ed0b55';
+      ctx.beginPath();
+      ctx.arc(73, addressY + 34, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(63, addressY + 44);
+      ctx.lineTo(73, addressY + 62);
+      ctx.lineTo(83, addressY + 44);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(73, addressY + 34, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
 
       ctx.fillStyle = '#ed0b55';
-      ctx.font = '700 17px Arial, sans-serif';
-      ctx.fillText('ADDRESS', 68, addressY + 29);
+      ctx.font = '800 16px Arial, sans-serif';
+      ctx.fillText('ADDRESS', 103, addressY + 28);
 
-      ctx.fillStyle = '#222222';
-      ctx.font = '500 16px Arial, sans-serif';
-      drawWrappedText(ctx, SPOTC_FULL_ADDRESS, 68, addressY + 56, 935, 22, 3);
+      ctx.fillStyle = '#2b2f36';
+      ctx.font = '500 15px Arial, sans-serif';
+      drawWrappedText(ctx, SPOTC_FULL_ADDRESS, 103, addressY + 54, 895, 21, 3);
 
-      // ---------- SMALL CONTACT ROW ----------
-      const contactY = addressY + addressH + 22;
+      // ---------- SMALL WHATSAPP + WEBSITE ROW ----------
+      const contactY = addressY + addressH + 18;
+
+      // WhatsApp-style icon.
+      ctx.save();
+      ctx.fillStyle = '#18a74b';
+      ctx.beginPath();
+      ctx.arc(64, contactY + 20, 18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 19px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('☎', 64, contactY + 27);
+      ctx.restore();
+
+      ctx.textAlign = 'left';
       ctx.fillStyle = '#159447';
-      ctx.font = '700 16px Arial, sans-serif';
-      ctx.fillText('WHATSAPP', 68, contactY);
-      ctx.fillStyle = '#222222';
-      ctx.font = '600 16px Arial, sans-serif';
-      ctx.fillText(SPOTC_PHONE, 68, contactY + 23);
+      ctx.font = '800 14px Arial, sans-serif';
+      ctx.fillText('WHATSAPP', 91, contactY + 12);
+      ctx.fillStyle = '#252a31';
+      ctx.font = '700 14px Arial, sans-serif';
+      ctx.fillText(SPOTC_PHONE, 91, contactY + 32);
+
+      // Website globe icon.
+      ctx.save();
+      ctx.strokeStyle = '#ed0b55';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(600, contactY + 20, 17, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(600, contactY + 20, 8, 17, 0, 0, Math.PI * 2);
+      ctx.moveTo(584, contactY + 20);
+      ctx.lineTo(616, contactY + 20);
+      ctx.stroke();
+      ctx.restore();
 
       ctx.fillStyle = '#ed0b55';
-      ctx.font = '700 16px Arial, sans-serif';
-      ctx.fillText('WEBSITE', 610, contactY);
-      ctx.fillStyle = '#222222';
-      ctx.font = '600 16px Arial, sans-serif';
-      ctx.fillText(SPOTC_WEBSITE, 610, contactY + 23);
+      ctx.font = '800 14px Arial, sans-serif';
+      ctx.fillText('WEBSITE', 627, contactY + 12);
+      ctx.fillStyle = '#252a31';
+      ctx.font = '700 14px Arial, sans-serif';
+      ctx.fillText(SPOTC_WEBSITE, 627, contactY + 32);
 
       const dataUrl = canvas.toDataURL('image/png');
       const fileName = `${safeFilePart(title) || row.id}-spotc-poster.png`;
