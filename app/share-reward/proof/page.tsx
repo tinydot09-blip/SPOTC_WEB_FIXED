@@ -39,6 +39,8 @@ type CampaignLocalState = {
   proofSubmitted?: boolean;
   claimId?: string;
   proofUrls?: string[];
+  offerAlreadyRegistered?: boolean;
+  existingClaimStatus?: string;
 };
 
 type ClaimData = {
@@ -304,6 +306,18 @@ export default function ShareRewardProofPage() {
           canRetryProof(status)
         ) {
           if (active) {
+            const localState = readCampaignState();
+
+            writeCampaignState({
+              ...localState,
+              offerAlreadyRegistered: false,
+              existingClaimStatus: status,
+            });
+
+            window.dispatchEvent(
+              new CustomEvent('spotc-share5-progress-change'),
+            );
+
             setMessage(
               'Your previous proof was rejected. You can upload corrected WhatsApp proof for the same offer.',
             );
@@ -315,6 +329,25 @@ export default function ShareRewardProofPage() {
             setMessage(
               alreadyClaimedMessage(status),
             );
+
+            /*
+             * Tell the Shop campaign card that this mobile number already
+             * has a Share-5 claim. Do NOT leave "Upload Proof" visible.
+             */
+            const localState = readCampaignState();
+
+            writeCampaignState({
+              ...localState,
+              sharedProductIds: ids,
+              proofSubmitted: false,
+              offerAlreadyRegistered: true,
+              existingClaimStatus: status,
+            });
+
+            window.dispatchEvent(
+              new CustomEvent('spotc-share5-progress-change'),
+            );
+
             setLoading(false);
           }
           return;
@@ -686,7 +719,13 @@ export default function ShareRewardProofPage() {
         proofSubmitted: true,
         claimId,
         proofUrls,
+        offerAlreadyRegistered: false,
+        existingClaimStatus: 'proof_submitted',
       });
+
+      window.dispatchEvent(
+        new CustomEvent('spotc-share5-progress-change'),
+      );
 
       router.push(
         '/share-reward/gift',

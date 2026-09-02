@@ -21,6 +21,8 @@ type CampaignState = {
   sharedProductIds?: string[];
   proofSubmitted?: boolean;
   ownerUid?: string;
+  offerAlreadyRegistered?: boolean;
+  existingClaimStatus?: string;
 };
 
 function readCampaign(): CampaignState {
@@ -48,6 +50,12 @@ function readCampaign(): CampaignState {
         typeof parsed.ownerUid === 'string'
           ? parsed.ownerUid
           : undefined,
+      offerAlreadyRegistered:
+        parsed.offerAlreadyRegistered === true,
+      existingClaimStatus:
+        typeof parsed.existingClaimStatus === 'string'
+          ? parsed.existingClaimStatus
+          : undefined,
     };
   } catch {
     return {};
@@ -59,6 +67,8 @@ export default function ShareCampaignBar() {
 
   const [progress, setProgress] = useState(0);
   const [proofSubmitted, setProofSubmitted] = useState(false);
+  const [offerAlreadyRegistered, setOfferAlreadyRegistered] =
+    useState(false);
   const [howOpen, setHowOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [ready, setReady] = useState(false);
@@ -70,6 +80,9 @@ export default function ShareCampaignBar() {
 
     setProgress(Math.min(ids.length, CAMPAIGN_LIMIT));
     setProofSubmitted(state.proofSubmitted === true);
+    setOfferAlreadyRegistered(
+      state.offerAlreadyRegistered === true,
+    );
   };
 
   useEffect(() => {
@@ -166,6 +179,7 @@ export default function ShareCampaignBar() {
 
           setProgress(0);
           setProofSubmitted(false);
+          setOfferAlreadyRegistered(false);
         } else {
           refreshProgress();
         }
@@ -196,6 +210,7 @@ export default function ShareCampaignBar() {
 
         setProgress(0);
         setProofSubmitted(false);
+        setOfferAlreadyRegistered(false);
       } else {
         try {
           window.localStorage.setItem(
@@ -368,24 +383,33 @@ export default function ShareCampaignBar() {
                 How It Works
               </button>
 
-              {completed && !proofSubmitted && (
-                <button
-                  type="button"
-                  className="share5-proof-button"
-                  onClick={() =>
-                    router.push('/share-reward/proof')
-                  }
-                >
-                  <UploadCloud size={15} />
-                  Upload Proof
-                </button>
-              )}
+              {completed &&
+                !proofSubmitted &&
+                !offerAlreadyRegistered && (
+                  <button
+                    type="button"
+                    className="share5-proof-button"
+                    onClick={() =>
+                      router.push('/share-reward/proof')
+                    }
+                  >
+                    <UploadCloud size={15} />
+                    Upload Proof
+                  </button>
+                )}
 
-              {proofSubmitted && (
+              {offerAlreadyRegistered && (
                 <span className="share5-proof-submitted">
-                  Proof Submitted ✓
+                  Offer Already Registered ✓
                 </span>
               )}
+
+              {proofSubmitted &&
+                !offerAlreadyRegistered && (
+                  <span className="share5-proof-submitted">
+                    Proof Submitted ✓
+                  </span>
+                )}
             </div>
           </div>
         </div>
