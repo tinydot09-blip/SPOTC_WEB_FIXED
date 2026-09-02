@@ -158,14 +158,18 @@ export default function ShareRewardGiftPage() {
             boolValue(record.is_in_stock) !== false &&
             (available === null || available > 0);
 
-          const explicitlyGiftEligible =
-            boolValue(record.free_gift_eligible) === true;
-
+          /*
+           * Match the CURRENT SPOTC ProductDetail free-gift selector:
+           * active + in stock + price below ₹50.
+           *
+           * Do not require free_gift_eligible here because the existing
+           * customer gift picker does not use that field.
+           */
           return (
             activeProduct &&
             inStock &&
-            explicitlyGiftEligible &&
-            price > 0
+            price > 0 &&
+            price < 50
           );
         })
         .sort((a, b) => priceOfGift(b) - priceOfGift(a));
@@ -278,7 +282,7 @@ export default function ShareRewardGiftPage() {
 
       {!message && products.length === 0 && (
         <div className="sr-message">
-          No products are marked as FREE Gift Eligible in Admin with available stock.
+          No eligible FREE gift products under ₹50 are available with stock right now.
         </div>
       )}
 
