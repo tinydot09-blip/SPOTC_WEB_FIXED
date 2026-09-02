@@ -108,7 +108,13 @@ export default function ShareRewardGiftPage() {
         }
       })();
 
-      const resolvedClaimId = local.claimId || `${CAMPAIGN_ID}_${user.uid}`;
+      const resolvedClaimId = local.claimId || `${CAMPAIGN_ID}_${user.uid}@media (max-width:640px){
+  .sr-gift-page{padding:28px 24px 220px}
+  .sr-bottom{bottom:92px;padding-left:16px;padding-right:16px}
+  .sr-bottom-copy strong{max-width:40vw}
+  .sr-bottom button{min-width:168px;padding:0 14px}
+}
+`;
       const claimSnap = await getDoc(doc(db, 'ShareRewardClaims', resolvedClaimId));
 
       if (!claimSnap.exists() || claimSnap.data().user_uid !== user.uid) {
@@ -307,7 +313,6 @@ export default function ShareRewardGiftPage() {
               const id = String(item.id);
               const isSelected = id === selectedId;
               const image = imageOf(item);
-              const value = priceOfGift(item);
 
               return (
                 <button key={id} type="button" className={`sr-gift-card${isSelected ? ' selected' : ''}`} onClick={() => setSelectedId(id)}>
@@ -316,23 +321,39 @@ export default function ShareRewardGiftPage() {
                     {isSelected && <span className="sr-selected"><Check /></span>}
                   </div>
                   <strong>{titleOf(item)}</strong>
-                  <div className="sr-price"><span>₹{Math.round(value)}</span><b>FREE</b></div>
+                  <div className="sr-price">
+                    <b>FREE</b>
+                    <small>{isSelected ? '✓ Selected' : 'Tap to select'}</small>
+                  </div>
                 </button>
               );
             })}
           </section>
 
-          <div className="sr-bottom">
-            <div>
+          <div className={`sr-bottom${selected ? ' has-selection' : ''}`}>
+            <div className="sr-bottom-copy">
               {selected ? (
-                <><small>SELECTED</small><strong>{titleOf(selected)}</strong></>
+                <>
+                  <small>YOUR FREE GIFT</small>
+                  <strong>{titleOf(selected)}</strong>
+                  <span>Selected ✓</span>
+                </>
               ) : (
-                <strong>Select any 1 FREE gift</strong>
+                <>
+                  <small>STEP 1 OF 2</small>
+                  <strong>Select any 1 FREE gift</strong>
+                  <span>Tap a product above to continue</span>
+                </>
               )}
             </div>
-            <button type="button" disabled={!selected || saving} onClick={continueWithGift}>
+
+            <button
+              type="button"
+              disabled={!selected || saving}
+              onClick={continueWithGift}
+            >
               {saving ? <Loader2 className="sr-spin" /> : <Gift />}
-              {saving ? 'Saving…' : 'Continue'}
+              {saving ? 'Saving…' : 'Continue to Delivery'}
             </button>
           </div>
         </>
@@ -344,5 +365,5 @@ export default function ShareRewardGiftPage() {
 }
 
 const styles = `
-  .sr-gift-page{min-height:100vh;background:#fbfaf7;padding:22px 14px 110px;color:#171717}.sr-gift-state{display:grid;place-items:center;text-align:center}.sr-gift-head,.sr-tools,.sr-grid,.sr-message{width:min(980px,100%);margin-left:auto;margin-right:auto}.sr-gift-head{display:flex;gap:14px;align-items:flex-start}.sr-gift-title-icon{width:54px;height:54px;min-width:54px;border-radius:17px;display:grid;place-items:center;background:#ffe7ef;color:#d81b60}.sr-gift-title-icon svg{width:28px}.sr-gift-head small{color:#16803b;font-weight:900;letter-spacing:.08em}.sr-gift-head h1{margin:5px 0 5px;font-size:clamp(28px,5vw,42px)}.sr-gift-head p{margin:0;color:#70645f}.sr-message{margin-top:14px;padding:12px 14px;border-radius:13px;background:#fff1cf;color:#6b5200;font-weight:700}.sr-tools{margin-top:20px}.sr-search{height:46px;border:1px solid #ddd4ce;border-radius:14px;background:#fff;display:flex;align-items:center;gap:9px;padding:0 13px}.sr-search svg{width:19px;color:#716660}.sr-search input{border:0;outline:0;flex:1;font:inherit;background:transparent}.sr-categories{display:flex;gap:8px;overflow-x:auto;padding:10px 0 4px;scrollbar-width:none}.sr-categories::-webkit-scrollbar{display:none}.sr-categories button{white-space:nowrap;border:1px solid #e0d7d1;border-radius:999px;background:#fff;padding:8px 12px;font-weight:800;color:#514943}.sr-categories button.active{border-color:#d81b60;background:#d81b60;color:#fff}.sr-grid{margin-top:12px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}.sr-gift-card{border:1px solid #e8dfd9;border-radius:17px;background:#fff;padding:8px;text-align:left;cursor:pointer;box-shadow:0 6px 18px rgba(32,18,10,.04)}.sr-gift-card.selected{border:2px solid #d81b60;box-shadow:0 9px 24px rgba(216,27,96,.13)}.sr-image-wrap{position:relative;aspect-ratio:1/1;border-radius:13px;overflow:hidden;background:#f6f2ed}.sr-image-wrap img{width:100%;height:100%;object-fit:cover}.sr-image-empty{height:100%;display:grid;place-items:center;color:#b9aaa1}.sr-selected{position:absolute;right:8px;top:8px;width:28px;height:28px;border-radius:999px;background:#d81b60;color:#fff;display:grid;place-items:center}.sr-selected svg{width:16px}.sr-gift-card>strong{display:block;margin:9px 3px 5px;font-size:13px;line-height:1.35;min-height:35px}.sr-price{display:flex;align-items:center;gap:7px;margin:0 3px 4px}.sr-price span{text-decoration:line-through;color:#8a7d75;font-size:12px}.sr-price b{color:#16803b}.sr-bottom{position:fixed;left:0;right:0;bottom:0;z-index:20;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-top:1px solid #e9e1dc;padding:11px max(14px,calc((100vw - 980px)/2));display:flex;align-items:center;justify-content:space-between;gap:12px}.sr-bottom>div{min-width:0;display:grid}.sr-bottom small{color:#16803b;font-size:10px;font-weight:900}.sr-bottom strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sr-bottom button{min-height:48px;border:0;border-radius:14px;background:#d81b60;color:#fff;padding:0 18px;font-weight:900;display:flex;align-items:center;gap:7px}.sr-bottom button:disabled{opacity:.5}.sr-bottom button svg{width:19px}.sr-spin{animation:srspin .8s linear infinite}@keyframes srspin{to{transform:rotate(360deg)}}@media(max-width:760px){.sr-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.sr-gift-head{align-items:center}.sr-gift-card>strong{font-size:12px}}
+  .sr-gift-page{min-height:100vh;background:#fbfaf7;padding:22px 14px 110px;color:#171717}.sr-gift-state{display:grid;place-items:center;text-align:center}.sr-gift-head,.sr-tools,.sr-grid,.sr-message{width:min(980px,100%);margin-left:auto;margin-right:auto}.sr-gift-head{display:flex;gap:14px;align-items:flex-start}.sr-gift-title-icon{width:54px;height:54px;min-width:54px;border-radius:17px;display:grid;place-items:center;background:#ffe7ef;color:#d81b60}.sr-gift-title-icon svg{width:28px}.sr-gift-head small{color:#16803b;font-weight:900;letter-spacing:.08em}.sr-gift-head h1{margin:5px 0 5px;font-size:clamp(28px,5vw,42px)}.sr-gift-head p{margin:0;color:#70645f}.sr-message{margin-top:14px;padding:12px 14px;border-radius:13px;background:#fff1cf;color:#6b5200;font-weight:700}.sr-tools{margin-top:20px}.sr-search{height:46px;border:1px solid #ddd4ce;border-radius:14px;background:#fff;display:flex;align-items:center;gap:9px;padding:0 13px}.sr-search svg{width:19px;color:#716660}.sr-search input{border:0;outline:0;flex:1;font:inherit;background:transparent}.sr-categories{display:flex;gap:8px;overflow-x:auto;padding:10px 0 4px;scrollbar-width:none}.sr-categories::-webkit-scrollbar{display:none}.sr-categories button{white-space:nowrap;border:1px solid #e0d7d1;border-radius:999px;background:#fff;padding:8px 12px;font-weight:800;color:#514943}.sr-categories button.active{border-color:#d81b60;background:#d81b60;color:#fff}.sr-grid{margin-top:12px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}.sr-gift-card{border:1px solid #e8dfd9;border-radius:17px;background:#fff;padding:8px;text-align:left;cursor:pointer;box-shadow:0 6px 18px rgba(32,18,10,.04)}.sr-gift-card.selected{border:2px solid #d81b60;box-shadow:0 9px 24px rgba(216,27,96,.13)}.sr-image-wrap{position:relative;aspect-ratio:1/1;border-radius:13px;overflow:hidden;background:#f6f2ed}.sr-image-wrap img{width:100%;height:100%;object-fit:cover}.sr-image-empty{height:100%;display:grid;place-items:center;color:#b9aaa1}.sr-selected{position:absolute;right:8px;top:8px;width:28px;height:28px;border-radius:999px;background:#d81b60;color:#fff;display:grid;place-items:center}.sr-selected svg{width:16px}.sr-gift-card>strong{display:block;margin:9px 3px 5px;font-size:13px;line-height:1.35;min-height:35px}.sr-price{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}.sr-price b{font-size:18px;color:#11863b}.sr-price small{font-size:12px;font-weight:800;color:#6b625d}.sr-price span{text-decoration:line-through;color:#8a7d75;font-size:12px}.sr-price b{color:#16803b}.sr-bottom{position:fixed;left:0;right:0;bottom:92px;z-index:45;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px calc(12px + env(safe-area-inset-bottom));background:rgba(255,255,255,.98);border-top:1px solid #eadfd9;box-shadow:0 -8px 24px rgba(0,0,0,.08);backdrop-filter:blur(8px)}.sr-bottom-copy{min-width:0;display:flex;flex-direction:column;gap:2px}.sr-bottom-copy small{font-size:10px;font-weight:900;letter-spacing:.08em;color:#d71561}.sr-bottom-copy strong{max-width:42vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}.sr-bottom-copy span{font-size:11px;color:#6d625e}.sr-bottom button{border:0;border-radius:14px;background:#e81764;color:#fff;font-weight:900;min-height:50px;padding:0 18px;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}.sr-bottom button:disabled{background:#d6d2d0;color:#8f8986;cursor:not-allowed}.sr-bottom.has-selection button{box-shadow:0 8px 20px rgba(232,23,100,.22)}.sr-bottom>div{min-width:0;display:grid}.sr-bottom small{color:#16803b;font-size:10px;font-weight:900}.sr-bottom strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sr-bottom button{min-height:48px;border:0;border-radius:14px;background:#d81b60;color:#fff;padding:0 18px;font-weight:900;display:flex;align-items:center;gap:7px}.sr-bottom button:disabled{opacity:.5}.sr-bottom button svg{width:19px}.sr-spin{animation:srspin .8s linear infinite}@keyframes srspin{to{transform:rotate(360deg)}}@media(max-width:760px){.sr-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.sr-gift-head{align-items:center}.sr-gift-card>strong{font-size:12px}}
 `;
