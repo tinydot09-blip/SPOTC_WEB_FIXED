@@ -1032,25 +1032,16 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
 
       if (!user) {
         /*
-         * Clear signed-in customer state and also clean up old completed
-         * Share-5 data that was created before ownerUid existed.
+         * IMPORTANT CAMPAIGN RULE
+         * -----------------------
+         * Guests are allowed to complete 5/5 before signing in.
+         * Therefore NEVER clear a guest campaign just because it reached 5/5.
          *
-         * This fixes the case where logout still showed:
-         *   5 / 5 complete
-         *   Proof Submitted
-         * on Shop and Product Detail.
-         *
-         * Fresh guest progress below 5/5 is still allowed.
+         * Only clear browser campaign state when it is explicitly owned by
+         * a previously signed-in customer. That prevents one customer's
+         * completed campaign from leaking to the next person after logout.
          */
-        const isLegacyCompletedState =
-          campaign.proofSubmitted === true ||
-          campaign.sharedProductIds.length >=
-            SHARE_CAMPAIGN_LIMIT;
-
-        if (
-          campaign.ownerUid ||
-          isLegacyCompletedState
-        ) {
+        if (campaign.ownerUid) {
           try {
             window.localStorage.removeItem(
               SHARE_CAMPAIGN_STORAGE_KEY,
@@ -2375,13 +2366,12 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
      */
     if (result === 'shared') {
       /*
-       * navigator.share() resolved successfully.
-       * Count this product immediately so Shop updates to 1/5, 2/5, etc.
-       *
-       * Screenshot proof is still required later, so this progress is
-       * only campaign progress — not final proof verification.
+       * Native share returned to SPOTC.
+       * IMPORTANT: do NOT count the product yet.
+       * Show the confirmation sheet first.
+       * Only "Yes, I shared it" will add this product to campaign progress.
        */
-      confirmCampaignShare();
+      setCampaignShareConfirmOpen(true);
     }
   };
 
