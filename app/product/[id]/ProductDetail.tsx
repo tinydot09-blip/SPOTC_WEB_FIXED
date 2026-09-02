@@ -1125,13 +1125,37 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
       }
     };
 
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshCampaign();
+      }
+    };
+
     refreshCampaign();
     window.addEventListener('focus', refreshCampaign);
     window.addEventListener('storage', refreshCampaign);
+    window.addEventListener('pageshow', refreshCampaign);
+    window.addEventListener(
+      'spotc-share5-progress-change',
+      refreshCampaign as EventListener,
+    );
+    document.addEventListener(
+      'visibilitychange',
+      onVisibilityChange,
+    );
 
     return () => {
       window.removeEventListener('focus', refreshCampaign);
       window.removeEventListener('storage', refreshCampaign);
+      window.removeEventListener('pageshow', refreshCampaign);
+      window.removeEventListener(
+        'spotc-share5-progress-change',
+        refreshCampaign as EventListener,
+      );
+      document.removeEventListener(
+        'visibilitychange',
+        onVisibilityChange,
+      );
     };
   }, [id]);
 
@@ -2350,7 +2374,14 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
      * the product into localStorage and update Shop to 1/5, 2/5, etc.
      */
     if (result === 'shared') {
-      setCampaignShareConfirmOpen(true);
+      /*
+       * navigator.share() resolved successfully.
+       * Count this product immediately so Shop updates to 1/5, 2/5, etc.
+       *
+       * Screenshot proof is still required later, so this progress is
+       * only campaign progress — not final proof verification.
+       */
+      confirmCampaignShare();
     }
   };
 
@@ -2392,6 +2423,19 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     setCampaignSharedCount(nextIds.length);
     setCampaignCurrentProductShared(true);
     setCampaignShareConfirmOpen(false);
+
+    /*
+     * localStorage's native 'storage' event does not fire in the same tab.
+     * Tell Shop/ShareCampaignBar immediately that campaign progress changed.
+     */
+    window.dispatchEvent(
+      new CustomEvent('spotc-share5-progress-change', {
+        detail: {
+          progress: nextIds.length,
+          sharedProductIds: nextIds,
+        },
+      }),
+    );
 
     sendGa4Event('share', {
       method: 'WhatsApp',

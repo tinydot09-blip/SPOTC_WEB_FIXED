@@ -96,9 +96,17 @@ export default function ShareCampaignBar() {
       }
     };
 
+    const onCampaignProgressChange = () => {
+      refreshProgress();
+    };
+
     window.addEventListener('focus', onFocus);
     window.addEventListener('storage', onStorage);
     window.addEventListener('pageshow', onPageShow);
+    window.addEventListener(
+      'spotc-share5-progress-change',
+      onCampaignProgressChange,
+    );
     document.addEventListener(
       'visibilitychange',
       onVisibilityChange,
@@ -118,6 +126,10 @@ export default function ShareCampaignBar() {
         window.removeEventListener('focus', onFocus);
         window.removeEventListener('storage', onStorage);
         window.removeEventListener('pageshow', onPageShow);
+        window.removeEventListener(
+          'spotc-share5-progress-change',
+          onCampaignProgressChange,
+        );
         document.removeEventListener(
           'visibilitychange',
           onVisibilityChange,
@@ -216,6 +228,10 @@ export default function ShareCampaignBar() {
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('storage', onStorage);
       window.removeEventListener('pageshow', onPageShow);
+      window.removeEventListener(
+        'spotc-share5-progress-change',
+        onCampaignProgressChange,
+      );
       document.removeEventListener(
         'visibilitychange',
         onVisibilityChange,
