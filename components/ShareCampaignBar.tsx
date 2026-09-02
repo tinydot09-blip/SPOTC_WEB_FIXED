@@ -133,14 +133,23 @@ export default function ShareCampaignBar() {
         setHowOpen(false);
 
         /*
-         * If this campaign state belonged to a signed-in customer,
-         * logout must remove it so another person using the same phone
-         * never sees 5/5 or Proof Submitted.
+         * LOGOUT / LEGACY-STATE CLEANUP
+         * -----------------------------
+         * Older Share-5 data created before ownerUid was added can contain
+         * 5/5 + Proof Submitted but no ownerUid. That stale state was being
+         * treated as guest progress and remained visible after logout.
          *
-         * Guest-only progress has no ownerUid, so it can still work
-         * before the customer signs in.
+         * Clear:
+         *   1) any state owned by a signed-in customer, OR
+         *   2) any completed/proof-submitted legacy state.
+         *
+         * Fresh guest progress below 5/5 is still allowed.
          */
-        if (state.ownerUid) {
+        const isLegacyCompletedState =
+          state.proofSubmitted === true ||
+          (state.sharedProductIds || []).length >= CAMPAIGN_LIMIT;
+
+        if (state.ownerUid || isLegacyCompletedState) {
           try {
             window.localStorage.removeItem(STORAGE_KEY);
             window.sessionStorage.removeItem(

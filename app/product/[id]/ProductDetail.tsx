@@ -1032,11 +1032,25 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
 
       if (!user) {
         /*
-         * Clear only state that was owned by a signed-in customer.
-         * Guest-only campaign progress has no ownerUid and can still
-         * be started before login.
+         * Clear signed-in customer state and also clean up old completed
+         * Share-5 data that was created before ownerUid existed.
+         *
+         * This fixes the case where logout still showed:
+         *   5 / 5 complete
+         *   Proof Submitted
+         * on Shop and Product Detail.
+         *
+         * Fresh guest progress below 5/5 is still allowed.
          */
-        if (campaign.ownerUid) {
+        const isLegacyCompletedState =
+          campaign.proofSubmitted === true ||
+          campaign.sharedProductIds.length >=
+            SHARE_CAMPAIGN_LIMIT;
+
+        if (
+          campaign.ownerUid ||
+          isLegacyCompletedState
+        ) {
           try {
             window.localStorage.removeItem(
               SHARE_CAMPAIGN_STORAGE_KEY,
