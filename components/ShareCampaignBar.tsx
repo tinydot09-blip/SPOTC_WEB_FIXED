@@ -809,12 +809,14 @@ export default function ShareCampaignBar() {
            */
           .share5-campaign-card {
             /*
-             * Shop mobile alignment:
-             * the Shop page already adds a large top spacer before this
-             * component. Pull only the campaign card upward, while keeping
-             * an 8px visual gap below it before the black trust bar.
+             * FINAL MOBILE ALIGNMENT
+             * Shop CSS already gives .shop-page 24px top padding.
+             * We want exactly 8px between the header area and this card:
+             * 24px + (-16px) = 8px.
+             *
+             * Keep 8px at the bottom before the black trust bar.
              */
-            margin: -54px 12px 8px;
+            margin: -16px 12px 8px !important;
             border-radius: 17px;
           }
 
