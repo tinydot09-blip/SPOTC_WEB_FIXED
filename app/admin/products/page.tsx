@@ -3093,7 +3093,7 @@ export default function AdminProductsPage() {
                         <button
                           type="button"
                           disabled={!poster}
-                          onClick={() => previewPoster(id)}
+                          onClick={() => setPreviewPosterId(id)}
                           style={{
                             ...posterSecondaryButton,
                             opacity: poster ? 1 : 0.4,
