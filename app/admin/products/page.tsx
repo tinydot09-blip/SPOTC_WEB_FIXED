@@ -2375,7 +2375,9 @@ export default function AdminProductsPage() {
 
     const sourceUrl = productImage(row.data);
     if (!sourceUrl) {
-      setMessage('This product has no image. Add a product image before generating the poster.');
+      setMessage(
+        'This product has no image. Add a product image before generating the poster.',
+      );
       return;
     }
 
@@ -2401,141 +2403,173 @@ export default function AdminProductsPage() {
       const discount = automaticOfferOf(row.data);
       const giftCount = freeGiftCountOf(row.data);
 
-      // ---------- BACKGROUND ----------
+      // ==========================================================
+      // CLEAN SPOTC PRODUCT POSTER — 1080 × 1350
+      // ==========================================================
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, POSTER_WIDTH, POSTER_HEIGHT);
 
-      // ---------- HEADER: logo + delivery ----------
+      // ---------- HEADER ----------
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
       ctx.fillStyle = '#061b53';
-      ctx.font = '700 76px Arial, sans-serif';
-      ctx.fillText('Spotc', 52, 92);
+      ctx.font = '700 72px Arial, sans-serif';
+      ctx.fillText('Spotc', 52, 88);
       const spotcWidth = ctx.measureText('Spotc').width;
       ctx.fillStyle = '#ed0b55';
-      ctx.fillText('.in', 52 + spotcWidth, 92);
+      ctx.fillText('.in', 52 + spotcWidth, 88);
 
-      ctx.font = '700 24px Arial, sans-serif';
+      ctx.font = '700 22px Arial, sans-serif';
       ctx.fillStyle = '#061b53';
-      ctx.fillText('Namma Area.', 55, 128);
+      ctx.fillText('Namma Area.', 55, 123);
       const tagWidth = ctx.measureText('Namma Area.').width;
       ctx.fillStyle = '#ed0b55';
-      ctx.fillText(' Namma Kadai.', 55 + tagWidth, 128);
+      ctx.fillText(' Namma Kadai.', 55 + tagWidth, 123);
 
-      drawRoundedBox(ctx, 742, 35, 285, 100, 24, '#ed0b55');
+      drawRoundedBox(ctx, 775, 34, 252, 96, 24, '#ed0b55');
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffffff';
-      ctx.font = '700 34px Arial, sans-serif';
-      ctx.fillText('15 MIN', 884, 78);
-      ctx.font = '700 23px Arial, sans-serif';
-      ctx.fillText('DELIVERY*', 884, 111);
+      ctx.font = '700 31px Arial, sans-serif';
+      ctx.fillText('15 MIN', 901, 74);
+      ctx.font = '700 21px Arial, sans-serif';
+      ctx.fillText('DELIVERY*', 901, 106);
       ctx.textAlign = 'left';
 
-      // ---------- BIG PRODUCT IMAGE ----------
-      // Dominant visual, like the approved reference. Keep actual product image unchanged.
+      // ---------- HERO PRODUCT IMAGE ----------
+      // The product should dominate the poster. Crop only enough to fill the frame.
       const imageX = 34;
-      const imageY = 165;
+      const imageY = 155;
       const imageW = 1012;
-      const imageH = 690;
-      drawRoundedBox(ctx, imageX, imageY, imageW, imageH, 28, '#f7f7f7', '#eeeeee', 1.5);
+      const imageH = 700;
+      drawRoundedBox(
+        ctx,
+        imageX,
+        imageY,
+        imageW,
+        imageH,
+        28,
+        '#f7f7f7',
+        '#ededed',
+        1.5,
+      );
       ctx.save();
       roundedRectPath(ctx, imageX, imageY, imageW, imageH, 28);
       ctx.clip();
-      drawImageCover(ctx, image, imageX, imageY, imageW, imageH);
+      const sourceAspect =
+        (image.naturalWidth || image.width) /
+        Math.max(1, image.naturalHeight || image.height);
+      // Portrait/tall product photos are contained so dresses and full products are not cut.
+      // Wider product photos fill the hero frame for a stronger ad-style result.
+      if (sourceAspect < 0.95 || sourceAspect > 2.1) {
+        drawImageContain(ctx, image, imageX, imageY, imageW, imageH);
+      } else {
+        drawImageCover(ctx, image, imageX, imageY, imageW, imageH);
+      }
       ctx.restore();
 
-      // ---------- SMALL PRODUCT NAME ----------
-      ctx.fillStyle = '#111827';
-      ctx.font = '700 29px Arial, sans-serif';
-      ctx.textAlign = 'center';
-      const titleEndY = drawWrappedText(ctx, title, 70, 895, 940, 35, 2);
+      // ---------- PRODUCT NAME ----------
+      // Always left aligned so long names can never disappear off the canvas.
       ctx.textAlign = 'left';
+      ctx.fillStyle = '#111827';
+      ctx.font = '700 28px Arial, sans-serif';
+      const titleEndY = drawWrappedText(ctx, title, 55, 900, 970, 34, 2);
 
-      // ---------- PRICE / MRP / OFF / OPTIONAL GIFT: ONE LINE ----------
-      const priceY = titleEndY + 55;
+      // ---------- PRICE / MRP / OFF / OPTIONAL GIFT ----------
+      const priceBaseY = Math.max(988, titleEndY + 42);
+
       ctx.fillStyle = '#ed0b55';
-      ctx.font = '700 66px Arial, sans-serif';
+      ctx.font = '700 62px Arial, sans-serif';
       const priceText = price > 0 ? `₹${price}` : 'Price on request';
-      ctx.fillText(priceText, 58, priceY);
-      let cursorX = 58 + ctx.measureText(priceText).width + 34;
+      ctx.fillText(priceText, 55, priceBaseY);
+
+      let infoX = 260;
 
       if (mrp > 0 && price > 0 && mrp > price) {
         ctx.fillStyle = '#6b7280';
-        ctx.font = '700 27px Arial, sans-serif';
-        ctx.fillText('MRP', cursorX, priceY - 8);
-        cursorX += ctx.measureText('MRP').width + 14;
+        ctx.font = '700 23px Arial, sans-serif';
+        ctx.fillText('MRP', infoX, priceBaseY - 7);
+        infoX += ctx.measureText('MRP').width + 12;
+
         const mrpText = `₹${mrp}`;
-        ctx.fillText(mrpText, cursorX, priceY - 8);
+        ctx.fillText(mrpText, infoX, priceBaseY - 7);
         const mrpW = ctx.measureText(mrpText).width;
         ctx.strokeStyle = '#6b7280';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(cursorX - 3, priceY - 18);
-        ctx.lineTo(cursorX + mrpW + 3, priceY - 18);
+        ctx.moveTo(infoX - 2, priceBaseY - 17);
+        ctx.lineTo(infoX + mrpW + 2, priceBaseY - 17);
         ctx.stroke();
-        cursorX += mrpW + 34;
+        infoX += mrpW + 34;
       }
 
       if (discount) {
         ctx.fillStyle = '#ed0b55';
-        ctx.font = '700 27px Arial, sans-serif';
-        ctx.fillText(discount, cursorX, priceY - 8);
-        cursorX += ctx.measureText(discount).width + 28;
+        ctx.font = '700 24px Arial, sans-serif';
+        ctx.fillText(discount, infoX, priceBaseY - 7);
       }
 
-      // Gift is shown ONLY when the product has an explicit gift count.
+      // Gift badge appears only when a real explicit gift count is present.
       if (giftCount > 0) {
         const giftText = `${giftCount} GIFT${giftCount === 1 ? '' : 'S'} INCLUDED`;
-        ctx.font = '700 22px Arial, sans-serif';
-        const giftW = Math.min(235, ctx.measureText(giftText).width + 42);
-        const giftX = Math.min(cursorX, POSTER_WIDTH - giftW - 58);
-        drawRoundedBox(ctx, giftX, priceY - 50, giftW, 54, 14, '#eaf8ef', '#b9e4c8', 1.5);
+        const giftX = 760;
+        const giftY = priceBaseY - 52;
+        const giftW = 265;
+        const giftH = 62;
+        drawRoundedBox(ctx, giftX, giftY, giftW, giftH, 16, '#eaf8ef', '#b9e4c8', 1.5);
         ctx.fillStyle = '#138a45';
         ctx.textAlign = 'center';
-        ctx.fillText(giftText, giftX + giftW / 2, priceY - 15);
+        ctx.font = '700 21px Arial, sans-serif';
+        ctx.fillText(giftText, giftX + giftW / 2, giftY + 39);
         ctx.textAlign = 'left';
       }
 
-      // separator
-      ctx.strokeStyle = '#ededed';
+      // ---------- DIVIDER ----------
+      const dividerY = priceBaseY + 30;
+      ctx.strokeStyle = '#ececec';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(55, priceY + 25);
-      ctx.lineTo(1025, priceY + 25);
+      ctx.moveTo(55, dividerY);
+      ctx.lineTo(1025, dividerY);
       ctx.stroke();
 
-      // ---------- DELIVERY AREA ----------
-      const areaY = priceY + 72;
+      // ---------- DELIVERY AREAS ----------
+      const areaTitleY = dividerY + 45;
       ctx.fillStyle = '#ed0b55';
-      ctx.font = '700 25px Arial, sans-serif';
-      ctx.fillText('DELIVERY AREAS', 58, areaY);
+      ctx.font = '700 22px Arial, sans-serif';
+      ctx.fillText('DELIVERY AREAS', 58, areaTitleY);
+
       ctx.fillStyle = '#111827';
-      ctx.font = '500 22px Arial, sans-serif';
-      ctx.fillText(SPOTC_AREAS, 58, areaY + 35);
+      ctx.font = '500 19px Arial, sans-serif';
+      drawWrappedText(ctx, SPOTC_AREAS, 58, areaTitleY + 30, 965, 26, 2);
 
-      // ---------- ADDRESS FIRST ----------
-      const addressY = areaY + 82;
-      drawRoundedBox(ctx, 45, addressY, 990, 142, 20, '#fafafa', '#dedede', 1.2);
+      // ---------- ADDRESS ----------
+      const addressY = areaTitleY + 64;
+      const addressH = 126;
+      drawRoundedBox(ctx, 45, addressY, 990, addressH, 18, '#fafafa', '#dedede', 1.2);
+
       ctx.fillStyle = '#ed0b55';
-      ctx.font = '700 20px Arial, sans-serif';
-      ctx.fillText('ADDRESS', 70, addressY + 34);
-      ctx.fillStyle = '#222222';
-      ctx.font = '500 18px Arial, sans-serif';
-      drawWrappedText(ctx, SPOTC_FULL_ADDRESS, 70, addressY + 66, 930, 25, 3);
+      ctx.font = '700 17px Arial, sans-serif';
+      ctx.fillText('ADDRESS', 68, addressY + 29);
 
-      // ---------- SMALL WHATSAPP + WEBSITE, SAME VISUAL WEIGHT AS ADDRESS ----------
-      const contactY = addressY + 158;
+      ctx.fillStyle = '#222222';
+      ctx.font = '500 16px Arial, sans-serif';
+      drawWrappedText(ctx, SPOTC_FULL_ADDRESS, 68, addressY + 56, 935, 22, 3);
+
+      // ---------- SMALL CONTACT ROW ----------
+      const contactY = addressY + addressH + 22;
       ctx.fillStyle = '#159447';
-      ctx.font = '700 18px Arial, sans-serif';
-      ctx.fillText('WHATSAPP', 70, contactY + 22);
+      ctx.font = '700 16px Arial, sans-serif';
+      ctx.fillText('WHATSAPP', 68, contactY);
       ctx.fillStyle = '#222222';
-      ctx.font = '600 18px Arial, sans-serif';
-      ctx.fillText(SPOTC_PHONE, 70, contactY + 49);
+      ctx.font = '600 16px Arial, sans-serif';
+      ctx.fillText(SPOTC_PHONE, 68, contactY + 23);
 
       ctx.fillStyle = '#ed0b55';
-      ctx.font = '700 18px Arial, sans-serif';
-      ctx.fillText('WEBSITE', 570, contactY + 22);
+      ctx.font = '700 16px Arial, sans-serif';
+      ctx.fillText('WEBSITE', 610, contactY);
       ctx.fillStyle = '#222222';
-      ctx.font = '600 18px Arial, sans-serif';
-      ctx.fillText(SPOTC_WEBSITE, 570, contactY + 49);
+      ctx.font = '600 16px Arial, sans-serif';
+      ctx.fillText(SPOTC_WEBSITE, 610, contactY + 23);
 
       const dataUrl = canvas.toDataURL('image/png');
       const fileName = `${safeFilePart(title) || row.id}-spotc-poster.png`;
