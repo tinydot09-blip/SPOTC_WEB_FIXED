@@ -2508,7 +2508,10 @@ export default function AdminProductsPage() {
       const priceText = price > 0 ? `₹${price}` : 'Price on request';
       ctx.fillText(priceText, 55, priceBaseY);
 
-      let infoX = 300;
+      // Keep MRP and discount visually grouped with the selling price.
+      // This avoids the large empty gap visible for short prices such as ₹29 / ₹49.
+      const priceWidth = ctx.measureText(priceText).width;
+      let infoX = Math.max(205, 55 + priceWidth + 58);
       const infoY = priceBaseY - 15;
 
       if (mrp > 0 && price > 0 && mrp > price) {
@@ -2602,7 +2605,7 @@ export default function AdminProductsPage() {
 
       // ---------- ADDRESS ----------
       const addressY = areaY + 75;
-      const addressH = 122;
+      const addressH = 96;
       drawRoundedBox(ctx, 38, addressY, 1004, addressH, 18, '#ffffff', '#dfdfdf', 1.5);
 
       ctx.save();
@@ -2629,56 +2632,75 @@ export default function AdminProductsPage() {
       ctx.font = '500 17px Arial, sans-serif';
       drawWrappedText(ctx, SPOTC_FULL_ADDRESS, 125, addressY + 64, 850, 24, 2);
 
-      // ---------- WHATSAPP + WEBSITE ----------
+      // ---------- CONTACTS: ONE CLEAN LINE BELOW ADDRESS ----------
       const contactY = addressY + addressH + 18;
 
       // WhatsApp icon circle + handset.
       ctx.save();
       ctx.fillStyle = '#1bad52';
       ctx.beginPath();
-      ctx.arc(126, contactY + 30, 25, 0, Math.PI * 2);
+      ctx.arc(72, contactY + 25, 20, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 4;
+      ctx.lineWidth = 3.2;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(116, contactY + 19);
-      ctx.quadraticCurveTo(112, contactY + 28, 123, contactY + 38);
-      ctx.quadraticCurveTo(134, contactY + 47, 142, contactY + 39);
+      ctx.moveTo(64, contactY + 16);
+      ctx.quadraticCurveTo(61, contactY + 24, 70, contactY + 32);
+      ctx.quadraticCurveTo(79, contactY + 40, 86, contactY + 33);
       ctx.stroke();
       ctx.restore();
 
       ctx.fillStyle = '#159447';
-      ctx.font = '900 17px Arial, sans-serif';
-      ctx.fillText('WHATSAPP', 166, contactY + 22);
+      ctx.font = '900 15px Arial, sans-serif';
+      ctx.fillText('WHATSAPP', 102, contactY + 18);
       ctx.fillStyle = '#181b20';
-      ctx.font = '800 17px Arial, sans-serif';
-      ctx.fillText(SPOTC_PHONE, 166, contactY + 49);
+      ctx.font = '800 15px Arial, sans-serif';
+      ctx.fillText(SPOTC_PHONE, 102, contactY + 40);
 
-      // Globe icon.
+      // Email icon.
       ctx.save();
       ctx.strokeStyle = '#ec0a4f';
-      ctx.lineWidth = 4;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(390, contactY + 10, 35, 27);
       ctx.beginPath();
-      ctx.arc(610, contactY + 30, 24, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.ellipse(610, contactY + 30, 11, 24, 0, 0, Math.PI * 2);
-      ctx.moveTo(587, contactY + 30);
-      ctx.lineTo(633, contactY + 30);
+      ctx.moveTo(391, contactY + 12);
+      ctx.lineTo(407.5, contactY + 25);
+      ctx.lineTo(424, contactY + 12);
       ctx.stroke();
       ctx.restore();
 
       ctx.fillStyle = '#ec0a4f';
-      ctx.font = '900 17px Arial, sans-serif';
-      ctx.fillText('WEBSITE', 650, contactY + 22);
+      ctx.font = '900 15px Arial, sans-serif';
+      ctx.fillText('EMAIL', 440, contactY + 18);
       ctx.fillStyle = '#181b20';
-      ctx.font = '800 17px Arial, sans-serif';
-      ctx.fillText(SPOTC_WEBSITE, 650, contactY + 49);
+      ctx.font = '800 15px Arial, sans-serif';
+      ctx.fillText(SPOTC_EMAIL, 440, contactY + 40);
+
+      // Website / globe icon.
+      ctx.save();
+      ctx.strokeStyle = '#ec0a4f';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(750, contactY + 25, 19, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(750, contactY + 25, 8, 19, 0, 0, Math.PI * 2);
+      ctx.moveTo(732, contactY + 25);
+      ctx.lineTo(768, contactY + 25);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.fillStyle = '#ec0a4f';
+      ctx.font = '900 15px Arial, sans-serif';
+      ctx.fillText('WEBSITE', 780, contactY + 18);
+      ctx.fillStyle = '#181b20';
+      ctx.font = '800 15px Arial, sans-serif';
+      ctx.fillText(SPOTC_WEBSITE, 780, contactY + 40);
 
       // ---------- ORDER NOW FOOTER ----------
-      const orderY = 1261;
-      drawRoundedBox(ctx, 38, orderY, 1004, 72, 18, '#ec0a4f');
+      const orderY = 1292;
+      drawRoundedBox(ctx, 38, orderY, 1004, 52, 16, '#ec0a4f');
 
       // Cart icon.
       ctx.save();
