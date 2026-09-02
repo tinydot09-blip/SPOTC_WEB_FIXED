@@ -53,13 +53,20 @@ const boolValue = (value: unknown): boolean | null => {
 
 const priceOfGift = (product: BusinessProduct) => {
   const record = product as ProductRecord;
-  return (
-    numberValue(record.offer_price) ??
-    numberValue(record.selling_price) ??
-    numberValue(record.price) ??
-    numberValue(record.mrp ?? record.old_price) ??
-    0
-  );
+
+  const giftValue = numberValue(record.free_gift_value);
+  if (giftValue !== null && giftValue > 0) return giftValue;
+
+  const offerPrice = numberValue(record.offer_price);
+  if (offerPrice !== null && offerPrice > 0) return offerPrice;
+
+  const sellingPrice = numberValue(record.selling_price);
+  if (sellingPrice !== null && sellingPrice > 0) return sellingPrice;
+
+  const price = numberValue(record.price);
+  if (price !== null && price > 0) return price;
+
+  return numberValue(record.mrp ?? record.old_price) ?? 0;
 };
 
 export default function ShareRewardGiftPage() {
@@ -151,11 +158,14 @@ export default function ShareRewardGiftPage() {
             boolValue(record.is_in_stock) !== false &&
             (available === null || available > 0);
 
+          const explicitlyGiftEligible =
+            boolValue(record.free_gift_eligible) === true;
+
           return (
             activeProduct &&
             inStock &&
-            price > 0 &&
-            price < 50
+            explicitlyGiftEligible &&
+            price > 0
           );
         })
         .sort((a, b) => priceOfGift(b) - priceOfGift(a));
@@ -268,7 +278,7 @@ export default function ShareRewardGiftPage() {
 
       {!message && products.length === 0 && (
         <div className="sr-message">
-          No FREE gifts are available right now. Please try again shortly.
+          No products are marked as FREE Gift Eligible in Admin with available stock.
         </div>
       )}
 
