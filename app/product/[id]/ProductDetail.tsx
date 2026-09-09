@@ -3592,7 +3592,8 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
             </button>
           </div>
 
-          <section className="pd-share-campaign-card" aria-label="Share 5 get 1 free campaign">
+          {false && (
+            <section className="pd-share-campaign-card" aria-label="Share 5 get 1 free campaign">
             <div className="pd-share-campaign-heading">
               <span className="pd-share-campaign-icon" aria-hidden="true">
                 <Gift />
@@ -3636,9 +3637,10 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
               Share 5 different products with 5 different people in Karamadai, Teacher Colony,
               EB Colony or Gandhinagar. Upload WhatsApp proof after 5 / 5.
             </p>
-          </section>
+            </section>
+          )}
 
-          {campaignShareConfirmOpen && !campaignCurrentProductShared && (
+          {false && campaignShareConfirmOpen && !campaignCurrentProductShared && (
             <div
               className="pd-share-confirm-backdrop"
               role="presentation"
