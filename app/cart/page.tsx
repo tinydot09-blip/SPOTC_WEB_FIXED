@@ -164,6 +164,42 @@ const preferredDeliveryOptionId = (
 };
 
 
+type TryAtHomeCartItem = CartItem & {
+  try_at_home?: boolean;
+  tryAtHome?: boolean;
+};
+
+const tryAtHomeMetaOf = (item: CartItem): TryAtHomeCartItem =>
+  item as TryAtHomeCartItem;
+
+const isTryAtHomeCartItem = (
+  item: CartItem,
+  selectedIds: Set<string>,
+): boolean => {
+  // Combo children never inherit Try at Home automatically.
+  if (isComboCartItem(item)) return false;
+
+  const meta = tryAtHomeMetaOf(item);
+
+  return (
+    meta.try_at_home === true ||
+    meta.tryAtHome === true ||
+    selectedIds.has(String(item.id))
+  );
+};
+
+type TryAtHomeSlot = {
+  id: string;
+  label: string;
+};
+
+const TRY_AT_HOME_SLOTS: TryAtHomeSlot[] = [
+  { id: '10:00-10:30', label: '10:00 AM – 10:30 AM' },
+  { id: '12:00-12:30', label: '12:00 PM – 12:30 PM' },
+  { id: '16:00-16:30', label: '4:00 PM – 4:30 PM' },
+  { id: '18:00-18:30', label: '6:00 PM – 6:30 PM' },
+];
+
 type SavedFreeGift = {
   id: string;
   title: string;
@@ -273,6 +309,12 @@ export default function CartPage() {
   const [selectedDeliveryId, setSelectedDeliveryId] =
     useState<DeliveryOptionId>('instant');
 
+  const [tryAtHomeIds, setTryAtHomeIds] =
+    useState<Set<string>>(new Set());
+
+  const [selectedTryAtHomeSlotId, setSelectedTryAtHomeSlotId] =
+    useState<string>(TRY_AT_HOME_SLOTS[0].id);
+
   const [deliveryClock, setDeliveryClock] =
     useState(() => new Date());
 
@@ -311,6 +353,23 @@ export default function CartPage() {
       );
     }
   };
+
+  const selectTryAtHomeSlot = (slot: TryAtHomeSlot) => {
+    setSelectedTryAtHomeSlotId(slot.id);
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(
+        'spotc-try-at-home-slot-id',
+        slot.id,
+      );
+
+      window.localStorage.setItem(
+        'spotc-try-at-home-slot',
+        JSON.stringify(slot),
+      );
+    }
+  };
+
   const viewCartTrackedRef = useRef(false);
 
   useEffect(() => {
@@ -333,6 +392,38 @@ export default function CartPage() {
     }
 
     setItems(validatedCartItems);
+
+    try {
+      const rawTryAtHomeIds =
+        window.localStorage.getItem('spotc_try_at_home_ids');
+      const parsedTryAtHomeIds = rawTryAtHomeIds
+        ? JSON.parse(rawTryAtHomeIds)
+        : [];
+
+      if (Array.isArray(parsedTryAtHomeIds)) {
+        setTryAtHomeIds(
+          new Set(
+            parsedTryAtHomeIds
+              .map((value) => String(value))
+              .filter(Boolean),
+          ),
+        );
+      }
+    } catch {
+      setTryAtHomeIds(new Set());
+    }
+
+    const savedTryAtHomeSlotId =
+      window.localStorage.getItem('spotc-try-at-home-slot-id');
+
+    if (
+      savedTryAtHomeSlotId &&
+      TRY_AT_HOME_SLOTS.some(
+        (slot) => slot.id === savedTryAtHomeSlotId,
+      )
+    ) {
+      setSelectedTryAtHomeSlotId(savedTryAtHomeSlotId);
+    }
 
     const nextGiftBundles: Record<
       string,
@@ -651,6 +742,30 @@ export default function CartPage() {
     [items],
   );
 
+  const tryAtHomeItems = useMemo(
+    () =>
+      items.filter((item) =>
+        isTryAtHomeCartItem(item, tryAtHomeIds),
+      ),
+    [items, tryAtHomeIds],
+  );
+
+  const directDeliveryItems = useMemo(
+    () =>
+      items.filter(
+        (item) => !isTryAtHomeCartItem(item, tryAtHomeIds),
+      ),
+    [items, tryAtHomeIds],
+  );
+
+  const hasTryAtHomeItems = tryAtHomeItems.length > 0;
+  const hasDirectDeliveryItems = directDeliveryItems.length > 0;
+
+  const selectedTryAtHomeSlot =
+    TRY_AT_HOME_SLOTS.find(
+      (slot) => slot.id === selectedTryAtHomeSlotId,
+    ) ?? TRY_AT_HOME_SLOTS[0];
+
   /*
    * SINGLE DELIVERY SOURCE OF TRUTH
    * --------------------------------
@@ -662,7 +777,7 @@ export default function CartPage() {
    * - GA4 checkout shipping value
    */
   const delivery =
-    items.length === 0
+    !hasDirectDeliveryItems
       ? 0
       : selectedDeliveryId === 'instant'
         ? 20
@@ -1094,6 +1209,12 @@ export default function CartPage() {
                                     </p>
                                   )}
 
+                                  {isTryAtHomeCartItem(item, tryAtHomeIds) && (
+                                    <span className="spotc-try-at-home-badge">
+                                      ✓ Try at Home
+                                    </span>
+                                  )}
+
                                   <div className="spotc-product-price-row">
                                     <strong>
                                       {money(
@@ -1206,84 +1327,140 @@ export default function CartPage() {
                 })}
               </div>
 
-              <section
-                key={selectedDeliveryId}
-                className="spotc-delivery-section"
-              >
-                <div className="spotc-delivery-section-head">
-                  <div>
-                    <small>DELIVERY OPTION</small>
-                    <h3>Choose delivery time</h3>
+              {hasTryAtHomeItems && (
+                <section className="spotc-try-at-home-section">
+                  <div className="spotc-try-at-home-section-head">
+                    <div className="spotc-try-at-home-section-title">
+                      <span className="spotc-try-at-home-section-icon">
+                        <Clock3 size={20} />
+                      </span>
+                      <div>
+                        <small>TRY AT HOME</small>
+                        <h3>Book your visit slot</h3>
+                        <p>
+                          {tryAtHomeItems.length} selected item
+                          {tryAtHomeItems.length === 1 ? '' : 's'} will be
+                          brought for trial.
+                        </p>
+                      </div>
+                    </div>
+
+                    <strong>FREE</strong>
                   </div>
 
-                  <strong>{delivery === 0 ? 'FREE' : money(delivery)}</strong>
-                </div>
+                  <div className="spotc-try-at-home-slots">
+                    {TRY_AT_HOME_SLOTS.map((slot) => {
+                      const selected =
+                        slot.id === selectedTryAtHomeSlot.id;
 
-                <div className="spotc-delivery-options">
-                  {DELIVERY_OPTIONS.map((option) => {
-                    const available =
-                      isDeliveryOptionAvailable(
-                        option.id,
-                        deliveryClock,
-                      );
-
-                    const selected =
-                      available &&
-                      option.id === selectedDelivery.id;
-
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        disabled={!available}
-                        aria-disabled={!available}
-                        className={`spotc-delivery-option ${
-                          selected ? 'active' : ''
-                        } ${
-                          !available ? 'disabled' : ''
-                        }`}
-                        onClick={() =>
-                          selectDelivery(option)
-                        }
-                      >
-                        <span className="spotc-delivery-option-icon">
-                          {option.id === 'instant' ? (
-                            <Truck size={20} />
-                          ) : (
-                            <Clock3 size={20} />
-                          )}
-                        </span>
-
-                        <span className="spotc-delivery-option-copy">
-                          <span className="spotc-delivery-option-title-row">
-                            <strong>{option.title}</strong>
-                            <b className={`spotc-delivery-fee ${
-                              option.fee === 0 ? 'free' : ''
-                            }`}>
-                              {option.fee === 0
-                                ? 'FREE'
-                                : money(option.fee)}
-                            </b>
-                          </span>
-                          <small>{option.orderWindow}</small>
-                          <em>
-                            {available
-                              ? option.deliveryWindow
-                              : 'Unavailable now'}
-                          </em>
-                        </span>
-
-                        <span
-                          className="spotc-delivery-radio"
-                          aria-hidden="true"
+                      return (
+                        <button
+                          key={slot.id}
+                          type="button"
+                          className={`spotc-try-at-home-slot ${
+                            selected ? 'active' : ''
+                          }`}
+                          aria-pressed={selected}
+                          onClick={() => selectTryAtHomeSlot(slot)}
                         >
-                          {selected ? '✓' : ''}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
+                          <span className="spotc-delivery-radio" aria-hidden="true">
+                            {selected ? '✓' : ''}
+                          </span>
+                          <strong>{slot.label}</strong>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="spotc-try-at-home-info">
+                    <strong>Try before you buy</strong>
+                    <span>
+                      Maximum 2 dresses + 2 earrings · One booking per day.
+                    </span>
+                  </div>
+                </section>
+              )}
+
+              {hasDirectDeliveryItems && (
+                <section
+                  key={selectedDeliveryId}
+                  className="spotc-delivery-section"
+                >
+                  <div className="spotc-delivery-section-head">
+                    <div>
+                      <small>DELIVERY OPTION</small>
+                      <h3>Choose delivery time</h3>
+                    </div>
+
+                    <strong>{delivery === 0 ? 'FREE' : money(delivery)}</strong>
+                  </div>
+
+                  <div className="spotc-delivery-options">
+                    {DELIVERY_OPTIONS.map((option) => {
+                      const available =
+                        isDeliveryOptionAvailable(
+                          option.id,
+                          deliveryClock,
+                        );
+
+                      const selected =
+                        available &&
+                        option.id === selectedDelivery.id;
+
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          disabled={!available}
+                          aria-disabled={!available}
+                          className={`spotc-delivery-option ${
+                            selected ? 'active' : ''
+                          } ${
+                            !available ? 'disabled' : ''
+                          }`}
+                          onClick={() =>
+                            selectDelivery(option)
+                          }
+                        >
+                          <span className="spotc-delivery-option-icon">
+                            {option.id === 'instant' ? (
+                              <Truck size={20} />
+                            ) : (
+                              <Clock3 size={20} />
+                            )}
+                          </span>
+
+                          <span className="spotc-delivery-option-copy">
+                            <span className="spotc-delivery-option-title-row">
+                              <strong>{option.title}</strong>
+                              <b className={`spotc-delivery-fee ${
+                                option.fee === 0 ? 'free' : ''
+                              }`}>
+                                {option.fee === 0
+                                  ? 'FREE'
+                                  : money(option.fee)}
+                              </b>
+                            </span>
+                            <small>{option.orderWindow}</small>
+                            <em>
+                              {available
+                                ? option.deliveryWindow
+                                : 'Unavailable now'}
+                            </em>
+                          </span>
+
+                          <span
+                            className="spotc-delivery-radio"
+                            aria-hidden="true"
+                          >
+                            {selected ? '✓' : ''}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
 
             </article>
           </section>
@@ -1328,25 +1505,55 @@ export default function CartPage() {
               </strong>
             </div>
 
-            <div className="spotc-delivery-note">
-              <Truck size={19} />
+            {hasTryAtHomeItems && (
+              <div className="spotc-delivery-note spotc-try-note">
+                <Clock3 size={19} />
 
-              <span>
-                <strong>{selectedDelivery.title}</strong>
-                <small>{selectedDelivery.deliveryWindow}</small>
-              </span>
-            </div>
+                <span>
+                  <strong>Try at Home</strong>
+                  <small>{selectedTryAtHomeSlot.label}</small>
+                </span>
+              </div>
+            )}
+
+            {hasDirectDeliveryItems && (
+              <div className="spotc-delivery-note">
+                <Truck size={19} />
+
+                <span>
+                  <strong>{selectedDelivery.title}</strong>
+                  <small>{selectedDelivery.deliveryWindow}</small>
+                </span>
+              </div>
+            )}
 
             <Link
               className="spotc-checkout-button"
               href="/address"
               onClick={(event) => {
+                if (hasTryAtHomeItems && typeof window !== 'undefined') {
+                  window.localStorage.setItem(
+                    'spotc-try-at-home-slot-id',
+                    selectedTryAtHomeSlot.id,
+                  );
+                  window.localStorage.setItem(
+                    'spotc-try-at-home-slot',
+                    JSON.stringify(selectedTryAtHomeSlot),
+                  );
+                }
+
                 sendGa4Event('begin_checkout', {
                   currency: 'INR',
                   value: total,
                   shipping: delivery,
                   items: items.map(ga4ItemFromCart),
-                  delivery_option: selectedDelivery.id,
+                  delivery_option: hasDirectDeliveryItems
+                    ? selectedDelivery.id
+                    : undefined,
+                  try_at_home: hasTryAtHomeItems,
+                  try_at_home_slot: hasTryAtHomeItems
+                    ? selectedTryAtHomeSlot.id
+                    : undefined,
                 });
               }}
             >
@@ -2336,7 +2543,137 @@ const styles = `
       grid-template-columns: 1fr;
     }
 
-    .spotc-delivery-section {
+    .spotc-try-at-home-badge {
+    width: fit-content;
+    margin-top: 9px;
+    padding: 5px 9px;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #f0cfd7;
+    border-radius: 999px;
+    color: #a72f54;
+    background: #fff2f6;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .spotc-try-at-home-section {
+    margin-top: 16px;
+    padding: 16px;
+    border: 1px solid #f0cfd7;
+    border-radius: 17px;
+    background: #fff9fb;
+  }
+
+  .spotc-try-at-home-section-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 13px;
+  }
+
+  .spotc-try-at-home-section-title {
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+  }
+
+  .spotc-try-at-home-section-icon {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    color: #a72f54;
+    background: #fde8ef;
+  }
+
+  .spotc-try-at-home-section-head small {
+    display: block;
+    color: #a72f54;
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: 0.12em;
+  }
+
+  .spotc-try-at-home-section-head h3 {
+    margin: 3px 0 0;
+    font-size: 18px;
+    font-weight: 750;
+  }
+
+  .spotc-try-at-home-section-head p {
+    margin: 4px 0 0;
+    color: #74656a;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .spotc-try-at-home-section-head > strong {
+    color: #a72f54;
+    font-size: 16px;
+    font-weight: 850;
+  }
+
+  .spotc-try-at-home-slots {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .spotc-try-at-home-slot {
+    min-height: 52px;
+    padding: 10px 12px;
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    align-items: center;
+    gap: 9px;
+    border: 1px solid #ebd8de;
+    border-radius: 13px;
+    color: #30262a;
+    background: #ffffff;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .spotc-try-at-home-slot.active {
+    border-color: #b74669;
+    background: #fff0f5;
+  }
+
+  .spotc-try-at-home-slot.active .spotc-delivery-radio {
+    border-color: #b74669;
+    background: #b74669;
+  }
+
+  .spotc-try-at-home-slot strong {
+    font-size: 12px;
+    font-weight: 750;
+  }
+
+  .spotc-try-at-home-info {
+    margin-top: 11px;
+    padding: 10px 12px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px 9px;
+    border-radius: 11px;
+    color: #6b4a55;
+    background: #fceaf0;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .spotc-try-at-home-info strong {
+    color: #91304e;
+  }
+
+  .spotc-delivery-section {
       padding: 13px;
     }
 
