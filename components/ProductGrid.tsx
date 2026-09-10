@@ -1488,6 +1488,98 @@ export function ProductGrid({
     };
   }, []);
 
+  /*
+   * CATEGORY IMAGE WARM-UP
+   * ----------------------
+   * After the main Shop content is visible, quietly preload the first two
+   * product images from the other main categories. This makes switching to
+   * Earrings, Fancy Items, Toys and Keychains feel much faster without
+   * changing product data, category logic, cart, compare, save or URLs.
+   *
+   * The delay keeps these background image requests away from the initial
+   * LCP-critical work.
+   */
+  useEffect(() => {
+    if (
+      typeof window === 'undefined' ||
+      !items ||
+      items.length === 0 ||
+      mainCategories.length === 0
+    ) {
+      return;
+    }
+
+    const categoryNames = [
+      'Girl Dress',
+      'Earrings',
+      'Fancy Items',
+      'Toys',
+      'Keychains',
+    ];
+
+    const urls = new Set<string>();
+
+    for (const categoryName of categoryNames) {
+      if (
+        categoryName.toLowerCase() ===
+        mainCategory.toLowerCase()
+      ) {
+        continue;
+      }
+
+      let added = 0;
+
+      for (const product of items) {
+        if (added >= 2) {
+          break;
+        }
+
+        const productCategory =
+          dynamicShopMainCategoryOf(
+            product,
+            mainCategories,
+          );
+
+        if (
+          !productCategory ||
+          productCategory.toLowerCase() !==
+            categoryName.toLowerCase()
+        ) {
+          continue;
+        }
+
+        const url = imageOf(product);
+
+        if (!url || urls.has(url)) {
+          continue;
+        }
+
+        urls.add(url);
+        added += 1;
+      }
+    }
+
+    if (urls.size === 0) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      urls.forEach((url) => {
+        const image = new Image();
+        image.decoding = 'async';
+        image.src = url;
+      });
+    }, 900);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    items,
+    mainCategory,
+    mainCategories,
+  ]);
+
   useEffect(() => {
     if (!auth) return;
 
