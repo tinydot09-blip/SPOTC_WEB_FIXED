@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   GitCompareArrows,
@@ -906,64 +906,6 @@ const discountOf = (product: BusinessProduct): number => {
 };
 
 
-/*
- * VISITOR-SESSION FEATURED SHUFFLE
- * --------------------------------
- * Each browser session gets its own seed, so different visitors see a
- * different Featured product order. The order remains stable while that
- * visitor browses, opens a product, and comes back during the same session.
- */
-const getOrCreateVisitorSessionSeed = (): string => {
-  if (typeof window === 'undefined') return 'server';
-
-  const key = 'spotc-visitor-session-seed';
-  const existing = window.sessionStorage.getItem(key);
-  if (existing) return existing;
-
-  const seed = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-  window.sessionStorage.setItem(key, seed);
-  return seed;
-};
-
-const seededHash = (value: string): number => {
-  let hash = 2166136261;
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-
-  return hash >>> 0;
-};
-
-const shuffleFeaturedProducts = (
-  products: BusinessProduct[],
-  visitorSeed: string,
-): BusinessProduct[] =>
-  [...products].sort((a, b) => {
-    const aValue = [
-      visitorSeed,
-      'shop',
-      textValue(a.id),
-      titleOf(a),
-      textValue(a.color),
-      textValue(a.sub_category),
-      textValue(a.age_group),
-    ].join('|');
-
-    const bValue = [
-      visitorSeed,
-      'shop',
-      textValue(b.id),
-      titleOf(b),
-      textValue(b.color),
-      textValue(b.sub_category),
-      textValue(b.age_group),
-    ].join('|');
-
-    return seededHash(aValue) - seededHash(bValue);
-  });
-
 const businessIdOf = (product: BusinessProduct): string => {
   const value =
     product.business_ref ??
@@ -1088,6 +1030,48 @@ const productMatchesGlobalSearch = (
   );
 };
 
+const mergeProductsPreservingOrder = (
+  currentProducts: BusinessProduct[],
+  incomingProducts: BusinessProduct[],
+): BusinessProduct[] => {
+  if (!currentProducts.length) return incomingProducts;
+  if (!incomingProducts.length) return currentProducts;
+
+  const incomingById = new Map<string, BusinessProduct>();
+
+  for (const product of incomingProducts) {
+    const id = textValue(product.id);
+    if (id) incomingById.set(id, product);
+  }
+
+  const seen = new Set<string>();
+
+  const merged = currentProducts.map((product) => {
+    const id = textValue(product.id);
+
+    if (!id) return product;
+
+    seen.add(id);
+
+    // Refresh product data without moving an already-painted card.
+    return incomingById.get(id) ?? product;
+  });
+
+  for (const product of incomingProducts) {
+    const id = textValue(product.id);
+
+    if (!id || !seen.has(id)) {
+      merged.push(product);
+      if (id) seen.add(id);
+    }
+  }
+
+  return merged;
+};
+
+const INITIAL_VISIBLE_PRODUCTS = 12;
+const PRODUCT_RENDER_BATCH = 12;
+
 type ProductGridProps = {
   hideBusinessName?: boolean;
   initialProducts?: BusinessProduct[];
@@ -1136,12 +1120,6 @@ export function ProductGrid({
 
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('Featured');
-  const [visitorSeed, setVisitorSeed] = useState('server');
-
-  useEffect(() => {
-    setVisitorSeed(getOrCreateVisitorSessionSeed());
-  }, []);
-
   const [categoryConfigs, setCategoryConfigs] =
     useState<ProductCategoryConfig[]>(FALLBACK_CATEGORY_CONFIGS);
   const [categoriesLoaded, setCategoriesLoaded] = useState(false);
@@ -1166,6 +1144,9 @@ export function ProductGrid({
   const [compareBusy, setCompareBusy] =
     useState(false);
   const [mounted, setMounted] = useState(false);
+  const [visibleCount, setVisibleCount] =
+    useState(INITIAL_VISIBLE_PRODUCTS);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const [tryAtHomeIds, setTryAtHomeIds] =
     useState<Set<string>>(new Set());
   const [showTryAtHomeInfo, setShowTryAtHomeInfo] =
@@ -1463,7 +1444,11 @@ export function ProductGrid({
       Date.now() - cachedAt < 5 * 60 * 1000;
 
     if (cacheIsFresh) {
-      setItems(cachedProducts);
+      setItems((current) =>
+        current && current.length > 0
+          ? mergeProductsPreservingOrder(current, cachedProducts)
+          : cachedProducts,
+      );
       setError(null);
       return;
     }
@@ -1474,7 +1459,11 @@ export function ProductGrid({
       .then((products) => {
         if (!active) return;
 
-        setItems(products);
+        setItems((current) =>
+          current && current.length > 0
+            ? mergeProductsPreservingOrder(current, products)
+            : products,
+        );
         setError(null);
 
         if (browserCache) {
@@ -1783,14 +1772,10 @@ export function ProductGrid({
     }
 
     /*
-     * Featured = shuffled/mixed catalogue order.
-     * Apply after stock/category filtering.
-     * Search and explicit sort choices keep their own order.
+     * Featured keeps the server/catalogue order.
+     * Do not reshuffle after hydration: moving already-painted cards was
+     * the dominant Lighthouse CLS source.
      */
-    if (sort === 'Featured' && !searchQuery) {
-      return shuffleFeaturedProducts(result, visitorSeed);
-    }
-
     return result;
   }, [
     items,
@@ -1799,8 +1784,48 @@ export function ProductGrid({
     mainCategory,
     subCategory,
     mainCategories,
-    visitorSeed,
   ]);
+
+  const visibleProducts = useMemo(
+    () => filteredProducts.slice(0, visibleCount),
+    [filteredProducts, visibleCount],
+  );
+
+  useEffect(() => {
+    setVisibleCount(INITIAL_VISIBLE_PRODUCTS);
+  }, [mainCategory, subCategory, search, sort]);
+
+  useEffect(() => {
+    const node = loadMoreRef.current;
+
+    if (
+      !node ||
+      visibleCount >= filteredProducts.length ||
+      typeof IntersectionObserver === 'undefined'
+    ) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) {
+          return;
+        }
+
+        setVisibleCount((current) =>
+          Math.min(
+            current + PRODUCT_RENDER_BATCH,
+            filteredProducts.length,
+          ),
+        );
+      },
+      { rootMargin: '500px 0px' },
+    );
+
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, [visibleCount, filteredProducts.length]);
 
   const getLoggedInUser = async (): Promise<User | null> => {
     /*
@@ -1811,7 +1836,7 @@ export function ProductGrid({
      * therefore does not initialize Firebase Auth or its iframe.
      */
     const { requireGoogleLogin } = await import('@/lib/auth');
-    const currentUser = await getLoggedInUser();
+    const currentUser = await requireGoogleLogin();
 
     if (!currentUser || currentUser.isAnonymous) {
       return null;
@@ -2565,7 +2590,7 @@ export function ProductGrid({
             : 'shop-product-grid'
         }`}
       >
-        {filteredProducts.map((item, itemIndex) => {
+        {visibleProducts.map((item, itemIndex) => {
           const price = priceOf(item);
           const oldPrice = oldPriceOf(item);
           const discount = discountOf(item);
@@ -2597,11 +2622,11 @@ export function ProductGrid({
                       alt={localizedTitleOf(item)}
                       width={640}
                       height={800}
-                      sizes="(max-width: 700px) 50vw, (max-width: 1100px) 33vw, 25vw"
-                      quality={72}
-                      priority={itemIndex === 0}
-                      loading={itemIndex === 0 ? 'eager' : 'lazy'}
-                      fetchPriority={itemIndex === 0 ? 'high' : 'auto'}
+                      sizes="(max-width: 700px) 46vw, (max-width: 1100px) 31vw, 23vw"
+                      quality={68}
+                      priority={itemIndex < 2}
+                      loading={itemIndex < 2 ? 'eager' : 'lazy'}
+                      fetchPriority={itemIndex < 2 ? 'high' : 'auto'}
                     />
                   ) : null}
                 </Link>
@@ -2879,6 +2904,27 @@ export function ProductGrid({
         })}
       </section>
 
+      {visibleCount < filteredProducts.length && (
+        <div
+          ref={loadMoreRef}
+          className="spotc-product-load-more"
+        >
+          <button
+            type="button"
+            onClick={() =>
+              setVisibleCount((current) =>
+                Math.min(
+                  current + PRODUCT_RENDER_BATCH,
+                  filteredProducts.length,
+                ),
+              )
+            }
+          >
+            {t('Show more products')}
+          </button>
+        </div>
+      )}
+
       {!filteredProducts.length && (
         <EmptyState
           title={t('No products found')}
@@ -2888,19 +2934,25 @@ export function ProductGrid({
 
       <style jsx global>{`
         /*
-         * PERFORMANCE
-         * -----------
-         * Let the browser skip layout/paint work for product cards that are
-         * far below the viewport. This keeps category changes and scrolling
-         * responsive even when a category contains many products.
+         * PERFORMANCE + CLS STABILITY
+         * ---------------------------
+         * Product cards are rendered in small batches, so content-visibility
+         * is not needed here. Reserve the image geometry before the request
+         * completes so cards do not change height while loading.
          */
-        .shop-product-grid > .product-card.rich {
-          content-visibility: auto;
-          contain-intrinsic-size: 520px;
+        .product-card.rich .product-image-wrap {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 4 / 5;
+          overflow: hidden;
+          background: #f4f1ec;
         }
 
         .product-card.rich .product-image {
           display: block;
+          width: 100%;
+          height: 100%;
+          aspect-ratio: 4 / 5;
           overflow: hidden;
           background: #f4f1ec;
         }
@@ -2911,6 +2963,28 @@ export function ProductGrid({
           display: block;
           object-fit: cover;
           object-position: center;
+        }
+
+        .spotc-product-load-more {
+          width: 100%;
+          min-height: 48px;
+          padding: 14px 0 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .spotc-product-load-more button {
+          min-height: 40px;
+          padding: 0 18px;
+          border: 1px solid #d8d1c7;
+          border-radius: 999px;
+          background: #ffffff;
+          color: #171717;
+          font: inherit;
+          font-size: 13px;
+          font-weight: 750;
+          cursor: pointer;
         }
 
         .spotc-global-search-status {
