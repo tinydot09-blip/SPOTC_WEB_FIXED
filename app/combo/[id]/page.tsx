@@ -37,27 +37,36 @@ const booleanValue = (value: unknown): boolean | null => {
 const customerPriceOf = (product: BusinessProduct): number => {
   const record = product as ProductRecord;
 
-  return (
-    numberValue(record.offer_price) ??
-    numberValue(record.selling_price) ??
-    numberValue(record.sell_price) ??
-    numberValue(record.price) ??
-    numberValue(record.mrp) ??
-    numberValue(record.old_price) ??
-    0
-  );
+  const candidates = [
+    record.offer_price,
+    record.offerPrice,
+    record.selling_price,
+    record.sellingPrice,
+    record.sell_price,
+    record.sale_price,
+    record.salePrice,
+    record.customer_price,
+    record.final_price,
+    record.price,
+    record.mrp,
+    record.old_price,
+  ];
+
+  for (const candidate of candidates) {
+    const value = numberValue(candidate);
+    if (value !== null && value > 0) return value;
+  }
+
+  return 0;
 };
 
 const comboPriceOf = (product: BusinessProduct): number => {
-  const record = product as ProductRecord;
+  const sellingPrice = customerPriceOf(product);
+  if (sellingPrice <= 0) return 0;
 
-  return (
-    numberValue(
-      record.combo_price ??
-        record.comboPrice ??
-        record.combo_sell_price,
-    ) ?? 0
-  );
+  // Internal launch combo pricing rule.
+  // Keep the percentage out of customer-facing UI.
+  return Math.max(1, Math.round(sellingPrice * 0.82));
 };
 
 const categoryOf = (product: BusinessProduct): string => {
@@ -72,14 +81,6 @@ const categoryOf = (product: BusinessProduct): string => {
 
 const isComboProduct = (product: BusinessProduct): boolean => {
   const record = product as ProductRecord;
-  const comboPrice = comboPriceOf(product);
-
-  const eligible =
-    booleanValue(
-      record.combo_eligible ??
-        record.is_combo_eligible ??
-        record.comboEligible,
-    ) === true;
 
   const stock = numberValue(
     record.stock_qty ?? record.stock_quantity,
@@ -92,7 +93,7 @@ const isComboProduct = (product: BusinessProduct): boolean => {
     booleanValue(record.is_in_stock) !== false &&
     !(stock !== null && stock <= 0);
 
-  return eligible && comboPrice > 0 && active && inStock;
+  return active && inStock && customerPriceOf(product) > 0;
 };
 
 const ensureBaseProductInCart = (
