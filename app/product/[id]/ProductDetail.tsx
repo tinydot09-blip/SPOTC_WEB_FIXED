@@ -1342,12 +1342,10 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
   // ₹200–₹299 = 2 gifts per item
   // ₹300–₹399 = 3 gifts per item
   // and so on — +1 gift for every completed ₹100.
-  const freeGiftCountPerItem =
-    price < 80 ? 0 : price < 200 ? 1 : Math.floor(price / 100);
-
-  // Quantity also increases the customer's FREE gift entitlement.
-  // Example: ₹999 = 9 gifts per item; qty 2 = 18 FREE gifts.
-  const freeGiftCount = freeGiftCountPerItem * qty;
+  // Legacy FREE-gift flow is disabled.
+  // Combo pricing now uses the dedicated /combo/[id] page instead.
+  const freeGiftCountPerItem = 0;
+  const freeGiftCount = 0;
 
  
   const giftCategories = [
@@ -1575,6 +1573,8 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   const isGirlDressProduct =
     mainCategoryText.toLowerCase() === 'girl dress' ||
     mainCategoryText.toLowerCase().includes('girl dress');
+
+  const comboEligible = isGirlDressProduct && price >= 100;
 
   const descriptiveColours = stringList(
     record.color,
@@ -2034,6 +2034,57 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     );
   };
 
+  const openComboPage = (action: 'cart' | 'buy') => {
+    if (!comboEligible) return false;
+
+    if (!inStock) {
+      alert('This product is out of stock');
+      return true;
+    }
+
+    if (sizes.length > 0 && !size) {
+      alert('Select a size');
+      return true;
+    }
+
+    if (showColorSelector && !color) {
+      alert('Select a colour');
+      return true;
+    }
+
+    let tryAtHome = false;
+
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem('spotc_try_at_home_ids');
+        const parsed = raw ? JSON.parse(raw) : [];
+        tryAtHome =
+          Array.isArray(parsed) &&
+          parsed.map((value) => String(value)).includes(String(product.id));
+
+        window.sessionStorage.setItem(
+          `spotc-combo-base:${product.id}`,
+          JSON.stringify({
+            productId: String(product.id),
+            size: size || '',
+            color: showColorSelector ? color : '',
+            qty: Math.max(1, qty),
+            tryAtHome,
+            action,
+          }),
+        );
+      } catch {
+        // Combo page will fall back to safe defaults.
+      }
+    }
+
+    router.push(
+      `/combo/${encodeURIComponent(String(product.id))}?action=${action}`,
+    );
+
+    return true;
+  };
+
   const validatePurchaseOptions = (): boolean => {
     if (!inStock) {
       alert('This product is out of stock');
@@ -2067,6 +2118,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   };
 
   const addToCart = () => {
+    if (openComboPage('cart')) return;
     if (!validatePurchaseOptions()) return;
 
     saveSelectedGiftsForCart();
@@ -2094,6 +2146,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   };
 
   const buyNow = () => {
+    if (openComboPage('buy')) return;
     if (!validatePurchaseOptions()) return;
 
     saveSelectedGiftsForCart();
@@ -3540,6 +3593,29 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
 
 
             </>
+          )}
+
+          {comboEligible && (
+            <button
+              type="button"
+              className="pd-free-gift-cta"
+              onClick={() => openComboPage('cart')}
+              aria-label="Choose combo products"
+            >
+              <span className="pd-free-gift-cta-icon">
+                <Gift aria-hidden="true" />
+              </span>
+
+              <span className="pd-free-gift-cta-copy">
+                <strong>Choose Combo</strong>
+                <small>Choose up to 5 favourites at Combo Price · Optional</small>
+              </span>
+
+              <ChevronLeft
+                className="pd-free-gift-cta-arrow"
+                aria-hidden="true"
+              />
+            </button>
           )}
 
           <div className={`pd-purchase-row ${stockQuantity === 1 ? 'pd-purchase-row-no-qty' : ''}`}>

@@ -395,7 +395,10 @@ export default function ComboPage() {
   );
 
   const payableTotal = useMemo(
-    () => customerPriceOf(baseProduct as BusinessProduct) + selectedComboTotal,
+    () =>
+      baseProduct
+        ? customerPriceOf(baseProduct) + selectedComboTotal
+        : selectedComboTotal,
     [baseProduct, selectedComboTotal],
   );
 
