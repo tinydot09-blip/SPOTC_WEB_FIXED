@@ -1414,28 +1414,25 @@ export default function CartPage() {
 
               {hasTryAtHomeItems && (
                 <section className="spotc-try-at-home-section">
-                  <div className="spotc-try-at-home-section-head">
-                    <div className="spotc-try-at-home-section-title">
-                      <span className="spotc-try-at-home-section-icon">
-                        <Clock3 size={20} />
-                      </span>
-                      <div>
-                        <small>TRY AT HOME</small>
-                        <h3>Book your visit slot</h3>
-                        <p>
-                          {tryAtHomeItems.length} selected item
-                          {tryAtHomeItems.length === 1 ? '' : 's'} will be
-                          brought for trial.
-                        </p>
-                      </div>
+                  <div className="spotc-try-at-home-hero">
+                    <div className="spotc-try-at-home-hero-icon">
+                      <Clock3 size={21} />
                     </div>
 
-                    <strong>FREE</strong>
-                  </div>
+                    <div className="spotc-try-at-home-hero-copy">
+                      <small>TRY AT HOME</small>
+                      <h3>Choose your visit time</h3>
+                      <p>
+                        Pick a convenient 30-minute slot between 9:00 AM and 6:00 PM.
+                      </p>
+                    </div>
 
-                  <div className="spotc-try-at-home-slot-caption">
-                    <strong>Choose a 30-minute slot</strong>
-                    <span>Available between 9:00 AM and 6:00 PM</span>
+                    <div className="spotc-try-at-home-summary">
+                      <strong>{tryAtHomeItems.length}</strong>
+                      <span>
+                        selected item{tryAtHomeItems.length === 1 ? '' : 's'}
+                      </span>
+                    </div>
                   </div>
 
                   {availableTryAtHomeSlots.length > 0 ? (
@@ -1459,18 +1456,23 @@ export default function CartPage() {
                             aria-pressed={selected}
                             onClick={() => selectTryAtHomeSlot(slot)}
                           >
+                            <span className="spotc-try-slot-time">
+                              {slot.label}
+                            </span>
+
+                            <span className="spotc-try-slot-status">
+                              {selected
+                                ? 'Selected'
+                                : available
+                                  ? 'Available'
+                                  : 'Passed'}
+                            </span>
+
                             <span
-                              className="spotc-delivery-radio"
+                              className="spotc-try-slot-check"
                               aria-hidden="true"
                             >
                               {selected ? '✓' : ''}
-                            </span>
-
-                            <span className="spotc-try-slot-copy">
-                              <strong>{slot.label}</strong>
-                              <small>
-                                {available ? 'Available' : 'Time passed'}
-                              </small>
                             </span>
                           </button>
                         );
@@ -1478,15 +1480,17 @@ export default function CartPage() {
                     </div>
                   ) : (
                     <div className="spotc-try-at-home-no-slots">
-                      Today’s Try at Home slots are finished. Please book
-                      tomorrow between 9:00 AM and 6:00 PM.
+                      <strong>No slots left for today</strong>
+                      <span>
+                        Try at Home is available daily from 9:00 AM to 6:00 PM.
+                      </span>
                     </div>
                   )}
 
-                  <div className="spotc-try-at-home-info">
-                    <strong>Try before you buy</strong>
+                  <div className="spotc-try-at-home-footer">
+                    <span className="spotc-try-at-home-free">FREE VISIT</span>
                     <span>
-                      30-minute visit · Maximum 2 dresses + 2 earrings · One booking per day.
+                      Try before you buy · Max 2 dresses + 2 earrings · One booking per day
                     </span>
                   </div>
                 </section>
@@ -2658,188 +2662,236 @@ const styles = `
     .spotc-try-at-home-badge {
     width: fit-content;
     margin-top: 9px;
-    padding: 5px 9px;
+    padding: 5px 10px;
     display: inline-flex;
     align-items: center;
-    border: 1px solid #f0cfd7;
+    border: 1px solid #ead8df;
     border-radius: 999px;
-    color: #a72f54;
-    background: #fff2f6;
+    color: #8f3151;
+    background: #fff5f8;
     font-size: 11px;
     font-weight: 800;
     line-height: 1;
   }
 
   .spotc-try-at-home-section {
-    margin-top: 16px;
-    padding: 16px;
-    border: 1px solid #f0cfd7;
-    border-radius: 17px;
-    background: #fff9fb;
+    margin-top: 18px;
+    padding: 18px;
+    overflow: hidden;
+    border: 1px solid #ecdce2;
+    border-radius: 20px;
+    background:
+      linear-gradient(180deg, #fffafb 0%, #ffffff 64%);
+    box-shadow: 0 10px 28px rgba(88, 48, 62, 0.06);
   }
 
-  .spotc-try-at-home-section-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 14px;
-    margin-bottom: 13px;
+  .spotc-try-at-home-hero {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #f1e5e9;
   }
 
-  .spotc-try-at-home-section-title {
-    min-width: 0;
-    display: flex;
-    align-items: flex-start;
-    gap: 11px;
-  }
-
-  .spotc-try-at-home-section-icon {
-    width: 40px;
-    height: 40px;
-    flex: 0 0 40px;
+  .spotc-try-at-home-hero-icon {
+    width: 44px;
+    height: 44px;
     display: grid;
     place-items: center;
-    border-radius: 12px;
-    color: #a72f54;
-    background: #fde8ef;
+    border-radius: 14px;
+    color: #9b3b5a;
+    background: #fdebf1;
   }
 
-  .spotc-try-at-home-section-head small {
+  .spotc-try-at-home-hero-copy {
+    min-width: 0;
+  }
+
+  .spotc-try-at-home-hero-copy small {
     display: block;
-    color: #a72f54;
+    color: #9b3b5a;
     font-size: 10px;
     font-weight: 850;
     letter-spacing: 0.12em;
   }
 
-  .spotc-try-at-home-section-head h3 {
+  .spotc-try-at-home-hero-copy h3 {
     margin: 3px 0 0;
-    font-size: 18px;
-    font-weight: 750;
+    color: #241c1f;
+    font-size: 20px;
+    font-weight: 780;
+    letter-spacing: -0.02em;
   }
 
-  .spotc-try-at-home-section-head p {
+  .spotc-try-at-home-hero-copy p {
     margin: 4px 0 0;
-    color: #74656a;
-    font-size: 12px;
-    line-height: 1.4;
-  }
-
-  .spotc-try-at-home-section-head > strong {
-    color: #a72f54;
-    font-size: 16px;
-    font-weight: 850;
-  }
-
-  .spotc-try-at-home-slots {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 9px;
-  }
-
-  .spotc-try-at-home-slot {
-    min-height: 52px;
-    padding: 10px 12px;
-    display: grid;
-    grid-template-columns: 22px minmax(0, 1fr);
-    align-items: center;
-    gap: 9px;
-    border: 1px solid #ebd8de;
-    border-radius: 13px;
-    color: #30262a;
-    background: #ffffff;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .spotc-try-at-home-slot.active {
-    border-color: #b74669;
-    background: #fff0f5;
-  }
-
-  .spotc-try-at-home-slot.active .spotc-delivery-radio {
-    border-color: #b74669;
-    background: #b74669;
-  }
-
-  .spotc-try-at-home-slot strong {
-    font-size: 12px;
-    font-weight: 750;
-  }
-
-  .spotc-try-at-home-slot-caption {
-    margin: 2px 0 10px;
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .spotc-try-at-home-slot-caption strong {
-    color: #3a2c31;
-    font-size: 13px;
-    font-weight: 800;
-  }
-
-  .spotc-try-at-home-slot-caption span {
-    color: #816c74;
-    font-size: 11px;
-  }
-
-  .spotc-try-slot-copy {
-    min-width: 0;
-    display: block;
-  }
-
-  .spotc-try-slot-copy strong,
-  .spotc-try-slot-copy small {
-    display: block;
-  }
-
-  .spotc-try-slot-copy small {
-    margin-top: 3px;
-    color: #8a6d77;
-    font-size: 10px;
-    font-weight: 650;
-  }
-
-  .spotc-try-at-home-slot.disabled,
-  .spotc-try-at-home-slot:disabled {
-    opacity: 0.42;
-    cursor: not-allowed;
-    background: #f5f1f2;
-  }
-
-  .spotc-try-at-home-slot.disabled .spotc-try-slot-copy small {
-    color: #9a8f93;
-  }
-
-  .spotc-try-at-home-no-slots {
-    padding: 14px;
-    border: 1px solid #ead7dd;
-    border-radius: 12px;
-    color: #805363;
-    background: #fff4f7;
+    color: #7a6a70;
     font-size: 12px;
     line-height: 1.45;
   }
 
-  .spotc-try-at-home-info {
-    margin-top: 11px;
-    padding: 10px 12px;
+  .spotc-try-at-home-summary {
+    min-width: 76px;
+    padding: 9px 11px;
+    text-align: center;
+    border: 1px solid #ead8df;
+    border-radius: 13px;
+    background: #ffffff;
+  }
+
+  .spotc-try-at-home-summary strong,
+  .spotc-try-at-home-summary span {
+    display: block;
+  }
+
+  .spotc-try-at-home-summary strong {
+    color: #8f3151;
+    font-size: 18px;
+    font-weight: 850;
+    line-height: 1;
+  }
+
+  .spotc-try-at-home-summary span {
+    margin-top: 4px;
+    color: #806f75;
+    font-size: 10px;
+    font-weight: 650;
+  }
+
+  .spotc-try-at-home-slots {
+    margin-top: 15px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .spotc-try-at-home-slot {
+    position: relative;
+    min-width: 0;
+    min-height: 70px;
+    padding: 12px 34px 11px 12px;
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 5px 9px;
-    border-radius: 11px;
-    color: #6b4a55;
-    background: #fceaf0;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    border: 1px solid #e8e0e3;
+    border-radius: 14px;
+    color: #2c2427;
+    background: #ffffff;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      transform 0.16s ease,
+      border-color 0.16s ease,
+      background 0.16s ease,
+      box-shadow 0.16s ease;
+  }
+
+  .spotc-try-at-home-slot:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: #d8b9c4;
+    box-shadow: 0 8px 18px rgba(95, 56, 70, 0.08);
+  }
+
+  .spotc-try-at-home-slot.active {
+    border-color: #9f3e5d;
+    background: #fff2f6;
+    box-shadow: inset 0 0 0 1px rgba(159, 62, 93, 0.08);
+  }
+
+  .spotc-try-at-home-slot.disabled,
+  .spotc-try-at-home-slot:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #f8f6f7;
+  }
+
+  .spotc-try-slot-time {
+    display: block;
+    color: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.25;
+    white-space: nowrap;
+  }
+
+  .spotc-try-slot-status {
+    display: block;
+    margin-top: 5px;
+    color: #8a777e;
+    font-size: 10px;
+    font-weight: 650;
+  }
+
+  .spotc-try-at-home-slot.active .spotc-try-slot-status {
+    color: #8f3151;
+  }
+
+  .spotc-try-slot-check {
+    position: absolute;
+    top: 50%;
+    right: 11px;
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    transform: translateY(-50%);
+    border: 1px solid #d9c9cf;
+    border-radius: 50%;
+    color: #ffffff;
+    background: #ffffff;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .spotc-try-at-home-slot.active .spotc-try-slot-check {
+    border-color: #9f3e5d;
+    background: #9f3e5d;
+  }
+
+  .spotc-try-at-home-no-slots {
+    margin-top: 15px;
+    padding: 14px;
+    display: grid;
+    gap: 4px;
+    border: 1px solid #ead8df;
+    border-radius: 14px;
+    color: #734a59;
+    background: #fff5f8;
+  }
+
+  .spotc-try-at-home-no-slots strong {
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .spotc-try-at-home-no-slots span {
     font-size: 11px;
     line-height: 1.4;
   }
 
-  .spotc-try-at-home-info strong {
-    color: #91304e;
+  .spotc-try-at-home-footer {
+    margin-top: 14px;
+    padding-top: 13px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+    border-top: 1px solid #f1e5e9;
+    color: #74666b;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .spotc-try-at-home-free {
+    padding: 4px 8px;
+    border-radius: 999px;
+    color: #176f43;
+    background: #eaf7ef;
+    font-size: 9px;
+    font-weight: 850;
+    letter-spacing: 0.06em;
   }
 
   .spotc-delivery-section {
