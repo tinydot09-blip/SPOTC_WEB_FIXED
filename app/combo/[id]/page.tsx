@@ -504,18 +504,6 @@ export default function ComboPage() {
           </div>
         </section>
 
-        <section className="combo-intro">
-          <div>
-            <Gift aria-hidden="true" />
-            <div>
-              <strong>Combo Prices</strong>
-              <p>
-                Choose any 1–5 eligible items. Combo is optional.
-              </p>
-            </div>
-          </div>
-        </section>
-
         <div className="combo-search">
           <Search aria-hidden="true" />
           <input
@@ -608,11 +596,22 @@ export default function ComboPage() {
       {selectedProducts.length > 0 && (
         <section className="combo-selected-strip" aria-label="Selected combo items">
           <div className="combo-selected-strip-inner">
-            <div className="combo-selected-heading">
-              <strong>Selected ({selectedProducts.length}/5)</strong>
-              <span>
-                You save ₹{Math.round(selectedSavings)} · Tap an item to remove
-              </span>
+            <div className="combo-selected-left">
+              <div className="combo-selected-heading">
+                <strong>Selected ({selectedProducts.length}/5)</strong>
+              </div>
+
+              <div
+                className="combo-progress"
+                aria-label={`${selectedProducts.length} of 5 combo items selected`}
+              >
+                {[0, 1, 2, 3, 4].map((step) => (
+                  <span
+                    key={step}
+                    className={step < selectedProducts.length ? 'active' : ''}
+                  />
+                ))}
+              </div>
             </div>
 
             <div className="combo-selected-items">
@@ -625,9 +624,14 @@ export default function ComboPage() {
                   aria-label={`Remove ${titleOf(item)} from combo`}
                 >
                   <img src={imageOf(item)} alt="" />
-                  <span>✓</span>
+                  <span>×</span>
                 </button>
               ))}
+            </div>
+
+            <div className="combo-savings">
+              <small>You save</small>
+              <strong>₹{Math.round(selectedSavings)}</strong>
             </div>
           </div>
         </section>
@@ -734,7 +738,7 @@ export default function ComboPage() {
         .combo-count {
           padding: 9px 13px;
           border-radius: 999px;
-          background: #171717;
+          background: #159447;
           color: #fff;
           white-space: nowrap;
         }
@@ -790,37 +794,6 @@ export default function ComboPage() {
           background: #eef9ef;
           font-size: 11px;
           font-weight: 800;
-        }
-
-        .combo-intro {
-          padding: 14px 16px;
-          margin-bottom: 14px;
-          border-radius: 16px;
-          background: #fff6d7;
-          border: 1px solid #f1df9d;
-        }
-
-        .combo-intro > div {
-          display: flex;
-          align-items: center;
-          gap: 11px;
-        }
-
-        .combo-intro :global(svg) {
-          width: 22px;
-          height: 22px;
-          flex: 0 0 auto;
-        }
-
-        .combo-intro strong {
-          display: block;
-          margin-bottom: 2px;
-        }
-
-        .combo-intro p {
-          margin: 0;
-          color: #665a32;
-          font-size: 13px;
         }
 
         .combo-search {
@@ -894,7 +867,8 @@ export default function ComboPage() {
         }
 
         .combo-product-card.selected {
-          border: 2px solid #171717;
+          border: 2px solid #159447;
+          box-shadow: 0 0 0 1px rgba(21, 148, 71, 0.08);
         }
 
         .combo-product-card:disabled {
@@ -992,48 +966,70 @@ export default function ComboPage() {
           right: 0;
           bottom: 86px;
           z-index: 39;
-          border-top: 1px solid #e6e6e6;
-          background: rgba(255, 255, 255, 0.98);
+          border-top: 1px solid #b7e7c4;
+          border-bottom: 1px solid #b7e7c4;
+          background: #e9f9ee;
+          box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
         }
 
         .combo-selected-strip-inner {
           width: min(1180px, calc(100% - 32px));
           margin: 0 auto;
-          min-height: 72px;
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          padding: 8px 0;
-        }
-
-        .combo-selected-heading {
-          flex: 0 0 auto;
+          min-height: 82px;
           display: grid;
-          gap: 1px;
+          grid-template-columns: auto minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 18px;
+          padding: 10px 0;
         }
 
-        .combo-selected-heading span {
-          color: #777;
-          font-size: 11px;
+        .combo-selected-left {
+          min-width: 150px;
+          display: grid;
+          gap: 9px;
+        }
+
+        .combo-selected-heading strong {
+          font-size: 18px;
+          line-height: 1.1;
+        }
+
+        .combo-progress {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(22px, 1fr));
+          gap: 5px;
+          width: 180px;
+        }
+
+        .combo-progress span {
+          height: 7px;
+          border-radius: 999px;
+          background: #cfd8d2;
+        }
+
+        .combo-progress span.active {
+          background: #159447;
         }
 
         .combo-selected-items {
           min-width: 0;
           display: flex;
-          gap: 7px;
+          gap: 8px;
           overflow-x: auto;
+          align-items: center;
         }
 
         .combo-selected-item {
           position: relative;
           flex: 0 0 auto;
-          width: 48px;
-          height: 48px;
+          width: 54px;
+          height: 54px;
           padding: 0;
-          overflow: hidden;
-          border: 1px solid #d8d8d8;
-          border-radius: 10px;
+          overflow: visible;
+          border: 2px solid #fff;
+          border-radius: 12px;
           background: #fff;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
           cursor: pointer;
         }
 
@@ -1041,21 +1037,45 @@ export default function ComboPage() {
           width: 100%;
           height: 100%;
           object-fit: cover;
+          border-radius: 10px;
         }
 
         .combo-selected-item span {
           position: absolute;
-          right: 2px;
-          bottom: 2px;
-          width: 17px;
-          height: 17px;
+          top: -7px;
+          right: -7px;
+          width: 20px;
+          height: 20px;
           display: grid;
           place-items: center;
           border-radius: 999px;
           background: #171717;
           color: #fff;
-          font-size: 10px;
+          font-size: 14px;
           font-weight: 900;
+          line-height: 1;
+        }
+
+        .combo-savings {
+          min-width: 130px;
+          padding-left: 18px;
+          border-left: 1px solid #b7e7c4;
+          display: grid;
+          justify-items: start;
+          gap: 1px;
+        }
+
+        .combo-savings small {
+          font-size: 14px;
+          font-weight: 800;
+          color: #254d32;
+        }
+
+        .combo-savings strong {
+          font-size: 34px;
+          line-height: 1;
+          color: #0b8f3d;
+          letter-spacing: -0.03em;
         }
 
         .combo-footer {
@@ -1167,21 +1187,47 @@ export default function ComboPage() {
 
           .combo-selected-strip-inner {
             width: 100%;
-            min-height: 62px;
-            padding: 7px 10px;
+            min-height: 84px;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            padding: 9px 12px;
             gap: 10px;
           }
 
-          .combo-selected-heading span {
-            display: block;
-            font-size: 10px;
-            line-height: 1.2;
-            color: #666;
+          .combo-selected-left {
+            min-width: 0;
+            gap: 7px;
+          }
+
+          .combo-selected-heading strong {
+            font-size: 17px;
+            white-space: nowrap;
+          }
+
+          .combo-progress {
+            width: 138px;
+            gap: 4px;
+          }
+
+          .combo-progress span {
+            height: 6px;
           }
 
           .combo-selected-item {
             width: 44px;
             height: 44px;
+          }
+
+          .combo-savings {
+            min-width: 92px;
+            padding-left: 10px;
+          }
+
+          .combo-savings small {
+            font-size: 12px;
+          }
+
+          .combo-savings strong {
+            font-size: 28px;
           }
 
           .combo-footer-inner {
@@ -1209,7 +1255,7 @@ export default function ComboPage() {
           }
 
           .combo-page {
-            padding-bottom: 138px;
+            padding-bottom: 158px;
           }
 
           .combo-page:not(:has(.combo-selected-strip)) {
