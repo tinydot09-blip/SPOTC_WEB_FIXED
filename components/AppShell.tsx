@@ -1421,18 +1421,25 @@ if (!signedInUser) {
           }
         }
 
-        /* Shop uses a normal content-height shell so the footer starts
-           immediately after the final product row. */
-        .spotc-app-shell-shop {
-          min-height: 0 !important;
-          height: auto !important;
-        }
+        /*
+ * SHOP LAYOUT STABILITY
+ *
+ * Reserve the initial viewport for Shop so the footer cannot appear
+ * inside the first screen and then jump downward when products hydrate.
+ *
+ * Once product content becomes taller than the viewport, the shell
+ * continues growing normally because height remains auto.
+ */
+.spotc-app-shell-shop {
+  min-height: 100vh !important;
+  height: auto !important;
+}
 
-        .spotc-app-shell-shop .spotc-site-content {
-          min-height: 0 !important;
-          height: auto !important;
-          padding-bottom: 0 !important;
-        }
+.spotc-app-shell-shop .spotc-site-content {
+  min-height: calc(100vh - 72px) !important;
+  height: auto !important;
+  padding-bottom: 0 !important;
+}
 
         @media (max-width: 700px) {
           .spotc-app-shell:has(.pd-page) .spotc-site-content {
@@ -2244,16 +2251,21 @@ if (!signedInUser) {
 
 
           /* Shop mobile: reserve space above the fixed bottom navigation. */
+/*
+ * Shop mobile layout stability.
+ * Header is 56px on mobile. Reserve the rest of the viewport for
+ * Shop content while products are loading.
+ */
 .spotc-app-shell:has(.shop-page)
 .spotc-site-content {
-  min-height: 0 !important;
+  min-height: calc(100vh - 56px) !important;
   height: auto !important;
   padding-bottom: 0 !important;
 }
 
 .spotc-app-shell:has(.shop-page)
 .shop-page {
-  min-height: 0 !important;
+  min-height: calc(100vh - 56px) !important;
   height: auto !important;
   margin-bottom: 0 !important;
   padding-bottom: 0 !important;
