@@ -39,8 +39,13 @@ type ComboCartItem = CartItem & {
 const comboMetaOf = (item: CartItem): ComboCartItem =>
   item as ComboCartItem;
 
-const isComboCartItem = (item: CartItem): boolean =>
-  comboMetaOf(item).is_combo_item === true;
+const isComboCartItem = (item: CartItem): boolean => {
+  const meta = comboMetaOf(item);
+  return (
+    meta.is_combo_item === true ||
+    Boolean(String(meta.combo_parent_id || '').trim())
+  );
+};
 
 const comboParentIdOf = (item: CartItem): string =>
   String(comboMetaOf(item).combo_parent_id || '');
