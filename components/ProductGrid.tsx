@@ -877,8 +877,13 @@ const oldPriceOf = (product: BusinessProduct): number =>
 const isComboEligible = (
   product: BusinessProduct,
   price: number,
-): boolean =>
-  isGirlDressProduct(product) && price >= 100;
+): boolean => {
+  if (isGirlDressProduct(product)) {
+    return price >= 100;
+  }
+
+  return price >= 80;
+};
 
 const discountOf = (product: BusinessProduct): number => {
   const price = priceOf(product);
@@ -2411,6 +2416,23 @@ export function ProductGrid({
                     href={`/combo/${encodeURIComponent(String(item.id))}?action=cart`}
                     className="product-image-gift-badge"
                     aria-label={`${t('Choose Combo')} · ${localizedTitleOf(item)}`}
+                    onClick={() => {
+                      try {
+                        window.sessionStorage.setItem(
+                          `spotc-combo-base:${item.id}`,
+                          JSON.stringify({
+                            productId: String(item.id),
+                            size: '',
+                            color: '',
+                            qty: 1,
+                            tryAtHome: tryAtHomeIds.has(String(item.id)),
+                            action: 'cart',
+                          }),
+                        );
+                      } catch {
+                        // Combo page can still load the product.
+                      }
+                    }}
                   >
                     <Gift size={16} strokeWidth={2.4} aria-hidden="true" />
                     <span>

@@ -129,6 +129,7 @@ const ensureBaseProductInCart = (
     size: base.size || '',
     color: selectedColor,
     qty: desiredQty,
+    tryAtHome: base.tryAtHome,
   });
 };
 
@@ -511,7 +512,7 @@ export default function ComboPage() {
           />
 
           <div className="combo-base-copy">
-            <small>YOUR DRESS</small>
+            <small>YOUR ITEM</small>
             <strong>{titleOf(baseProduct)}</strong>
             <b>₹{Math.round(basePrice)}</b>
 
@@ -604,7 +605,7 @@ export default function ComboPage() {
               <Gift aria-hidden="true" />
               <strong>No combo products found</strong>
               <p>
-                You can continue with the dress without adding a
+                You can continue with this item without adding a
                 combo.
               </p>
             </div>
