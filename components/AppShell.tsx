@@ -12,11 +12,7 @@ import {
   UsersRound,
   X,
 } from 'lucide-react';
-import {
-  onAuthStateChanged,
-  signOut,
-  type User,
-} from 'firebase/auth';
+import type { User } from 'firebase/auth';
 import {
   usePathname,
   useRouter,
@@ -30,21 +26,32 @@ import {
 } from 'react';
 
 import { readCart } from '@/lib/cart';
-import {
-  auth,
-  firebaseReady,
-} from '@/lib/firebase';
-import {
-  getProfileCompletionPercentage,
-  getSpotcUserProfile,
-  requireGoogleLogin,
-  type SpotcUserProfile,
+import type {
+  SpotcUserProfile,
 } from '@/lib/auth';
 import { useDeliveryAvailability } from '@/lib/delivery-radius';
 import { getProducts } from '@/lib/data';
 import type { BusinessProduct } from '@/lib/types';
 import { useSpotcLanguage } from '@/components/LanguageProvider';
 import { AiAssistant } from '@/components/AiAssistant';
+
+const getProfileCompletionPercentageLocal = (
+  profile: Partial<SpotcUserProfile> | null,
+): number => {
+  if (!profile) return 0;
+
+  const required = [
+    profile.gender,
+    profile.date_of_birth,
+    profile.phone_number,
+  ];
+
+  const completed = required.filter((value) =>
+    String(value ?? '').trim(),
+  ).length;
+
+  return Math.round((completed / required.length) * 100);
+};
 
 const navigation = [
   {
@@ -396,7 +403,7 @@ export function AppShell({
     useState<User | null>(null);
 
   const [authLoading, setAuthLoading] =
-    useState(true);
+    useState(false);
 
   const [spotcProfile, setSpotcProfile] =
     useState<Partial<SpotcUserProfile> | null>(null);
@@ -437,7 +444,7 @@ export function AppShell({
   pathname.startsWith('/offers');
 
   const profileCompletion = useMemo(
-    () => getProfileCompletionPercentage(spotcProfile),
+    () => getProfileCompletionPercentageLocal(spotcProfile),
     [spotcProfile],
   );
 
@@ -451,45 +458,57 @@ export function AppShell({
     return 'Search offers';
   }, [pathname]);
 
-  useEffect(() => {
-    if (!firebaseReady || !auth) {
+  const resolveAccountSession = async () => {
+    setAuthLoading(true);
+
+    try {
+      const [{ getAuth, onAuthStateChanged }, { getSpotcUserProfile }] =
+        await Promise.all([
+          import('firebase/auth'),
+          import('@/lib/auth'),
+        ]);
+
+      const firebaseAuth = getAuth();
+
+      const user = await new Promise<User | null>((resolve) => {
+        let unsubscribe = () => {};
+
+        unsubscribe = onAuthStateChanged(
+          firebaseAuth,
+          (nextUser) => {
+            unsubscribe();
+            resolve(
+              nextUser && !nextUser.isAnonymous
+                ? nextUser
+                : null,
+            );
+          },
+          () => {
+            unsubscribe();
+            resolve(null);
+          },
+        );
+      });
+
+      setFirebaseUser(user);
+
+      if (user) {
+        setSpotcProfile(await getSpotcUserProfile(user));
+      } else {
+        setSpotcProfile(null);
+      }
+
+      return user;
+    } catch (error) {
+      console.error('SPOTC account session load failed:', error);
       setFirebaseUser(null);
+      setSpotcProfile(null);
+      return null;
+    } finally {
       setAuthLoading(false);
-      return;
     }
+  };
 
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      (nextUser) => {
-        if (
-          nextUser &&
-          !nextUser.isAnonymous
-        ) {
-          setFirebaseUser(nextUser);
-
-          void getSpotcUserProfile(nextUser)
-            .then((profile) => {
-              setSpotcProfile(profile);
-            })
-            .catch((error) => {
-              console.error(
-                'SPOTC profile load failed:',
-                error,
-              );
-              setSpotcProfile(null);
-            });
-        } else {
-          setFirebaseUser(null);
-          setSpotcProfile(null);
-        }
-
-        setAuthLoading(false);
-        setMenuOpen(false);
-      },
-    );
-
-    return unsubscribe;
-  }, []);
 
   useEffect(() => {
     if (!firebaseUser) {
@@ -497,7 +516,10 @@ export function AppShell({
     }
 
     const refreshProfile = () => {
-      void getSpotcUserProfile(firebaseUser)
+      void import('@/lib/auth')
+        .then(({ getSpotcUserProfile }) =>
+          getSpotcUserProfile(firebaseUser),
+        )
         .then((profile) => {
           setSpotcProfile(profile);
         })
@@ -600,11 +622,28 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
-    if (!pathname.startsWith('/shop') && !pathname.startsWith('/product/')) {
+    if (
+      !searchFocused ||
+      !searchValue.trim() ||
+      searchProducts.length > 0 ||
+      (!pathname.startsWith('/shop') &&
+        !pathname.startsWith('/product/'))
+    ) {
       return;
     }
 
     let cancelled = false;
+
+    const browserCache = (
+      window as typeof window & {
+        __spotcProductsCache?: BusinessProduct[];
+      }
+    ).__spotcProductsCache;
+
+    if (Array.isArray(browserCache) && browserCache.length > 0) {
+      setSearchProducts(browserCache);
+      return;
+    }
 
     void getProducts()
       .then((products) => {
@@ -628,15 +667,18 @@ export function AppShell({
       })
       .catch((error) => {
         console.error('SPOTC search suggestions failed:', error);
-        if (!cancelled) {
-          setSearchProducts([]);
-        }
+        if (!cancelled) setSearchProducts([]);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [pathname]);
+  }, [
+    pathname,
+    searchFocused,
+    searchValue,
+    searchProducts.length,
+  ]);
 
   useEffect(() => {
     const closeSearchSuggestions = (event: MouseEvent) => {
@@ -764,7 +806,14 @@ export function AppShell({
   };
 
   const handleGoogleSignIn = async () => {
+    setAuthLoading(true);
+
     try {
+      const {
+        requireGoogleLogin,
+        getSpotcUserProfile,
+      } = await import('@/lib/auth');
+
       const signedInUser = await requireGoogleLogin();
 
 /*
@@ -782,8 +831,10 @@ if (!signedInUser) {
       );
       setSpotcProfile(profile);
       setMenuOpen(false);
+      setAuthLoading(false);
     } catch (error) {
       console.error('SPOTC Google sign-in failed:', error);
+      setAuthLoading(false);
       window.alert(
         error instanceof Error
           ? `Sign in failed: ${error.message}`
@@ -796,9 +847,8 @@ if (!signedInUser) {
   setMenuOpen(false);
 
   try {
-    if (auth) {
-      await signOut(auth);
-    }
+    const { getAuth, signOut } = await import('firebase/auth');
+    await signOut(getAuth());
   } catch (error) {
     console.error(
       'SPOTC logout failed:',
@@ -1049,8 +1099,7 @@ if (!signedInUser) {
               )}
             </Link>
 
-            {!authLoading && (
-              <div
+            <div
                 className="spotc-account-menu-container"
                 ref={accountMenuRef}
               >
@@ -1063,9 +1112,16 @@ if (!signedInUser) {
                   }
                   aria-label="Open profile menu"
                   aria-expanded={menuOpen}
-                  onClick={() =>
-                    setMenuOpen((current) => !current)
-                  }
+                  onClick={() => {
+                    if (menuOpen) {
+                      setMenuOpen(false);
+                      return;
+                    }
+
+                    void resolveAccountSession().then(() => {
+                      setMenuOpen(true);
+                    });
+                  }}
                 >
                   {firebaseUser?.photoURL ? (
                     <img
@@ -1185,6 +1241,7 @@ if (!signedInUser) {
                           ? '/dashboard'
                           : '/dashboard?guest=1'
                       }
+                      prefetch={false}
                       className="spotc-dropdown-item"
                       onClick={() =>
                         setMenuOpen(false)
@@ -1224,7 +1281,6 @@ if (!signedInUser) {
                   </div>
                 )}
               </div>
-            )}
           </div>
         </div>
       </header>
