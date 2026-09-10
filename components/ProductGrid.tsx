@@ -24,16 +24,14 @@ import {
   setDoc,
   where,
 } from 'firebase/firestore';
-import { onAuthStateChanged, type User } from 'firebase/auth';
+import type { User } from 'firebase/auth';
 
 import { addProduct } from '@/lib/cart';
 import { getProducts } from '@/lib/data';
 import {
-  auth,
   db,
   firebaseReady,
-} from '@/lib/firebase';
-import { requireGoogleLogin } from '@/lib/auth';
+} from '@/lib/firebase-public';
 import type { BusinessProduct } from '@/lib/types';
 import { EmptyState } from './EmptyState';
 import { useDeliveryAvailability } from '@/lib/delivery-radius';
@@ -1159,7 +1157,7 @@ export function ProductGrid({
     useState(initialSubCategoryParam || 'All');
 
   const [user, setUser] =
-    useState<User | null>(auth?.currentUser ?? null);
+    useState<User | null>(null);
   const [saved, setSaved] =
     useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState('');
@@ -1508,18 +1506,6 @@ export function ProductGrid({
    */
 
   useEffect(() => {
-    if (!auth) return;
-
-    return onAuthStateChanged(auth, (currentUser) => {
-      setUser(
-        currentUser && !currentUser.isAnonymous
-          ? currentUser
-          : null,
-      );
-    });
-  }, []);
-
-  useEffect(() => {
     if (!db || !user) {
       setSaved(new Set());
       return;
@@ -1816,6 +1802,25 @@ export function ProductGrid({
     visitorSeed,
   ]);
 
+  const getLoggedInUser = async (): Promise<User | null> => {
+    /*
+     * AUTH LAZY PATH
+     * --------------
+     * Firebase Authentication is intentionally imported only after the
+     * customer uses an account-required action. Normal Shop browsing
+     * therefore does not initialize Firebase Auth or its iframe.
+     */
+    const { requireGoogleLogin } = await import('@/lib/auth');
+    const currentUser = await getLoggedInUser();
+
+    if (!currentUser || currentUser.isAnonymous) {
+      return null;
+    }
+
+    setUser(currentUser);
+    return currentUser;
+  };
+
   const openComparisonShoppingCircle = async () => {
     if (!db || compareBusy) return;
 
@@ -1831,7 +1836,7 @@ export function ProductGrid({
     let currentUser = user;
 
     if (!currentUser) {
-      currentUser = await requireGoogleLogin();
+      currentUser = await getLoggedInUser();
 
       if (!currentUser || currentUser.isAnonymous) {
         return;
@@ -1928,7 +1933,7 @@ export function ProductGrid({
     let activeUser = user;
 
     if (!activeUser) {
-      activeUser = await requireGoogleLogin();
+      activeUser = await getLoggedInUser();
 
       if (!activeUser) return;
 
