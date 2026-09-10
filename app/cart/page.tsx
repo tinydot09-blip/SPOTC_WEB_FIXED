@@ -2855,18 +2855,18 @@ letter-spacing: 0.12em;
   }
 
   .spotc-try-at-home-hero-copy h3 {
-margin: 3px 0 0;
-color: #241c1f;
-font-size: 20px;
-font-weight: 780;
-letter-spacing: -0.02em;
+    margin: 3px 0 0;
+    color: #241c1f;
+    font-size: 22px;
+    font-weight: 650;
+    letter-spacing: -0.015em;
   }
 
   .spotc-try-at-home-hero-copy p {
-margin: 4px 0 0;
-color: #7a6a70;
-font-size: 12px;
-line-height: 1.45;
+    margin: 5px 0 0;
+    color: #6f6267;
+    font-size: 14px;
+    line-height: 1.5;
   }
 
   .spotc-try-at-home-summary {
@@ -2923,10 +2923,10 @@ letter-spacing: 0.11em;
   }
 
   .spotc-try-booking-top h4 {
-margin: 3px 0 0;
-color: #251f1b;
-font-size: 16px;
-font-weight: 750;
+    margin: 4px 0 0;
+    color: #251f1b;
+    font-size: 18px;
+    font-weight: 600;
   }
 
   .spotc-try-month-label {
@@ -2942,8 +2942,8 @@ background: #fbfaf8;
   }
 
   .spotc-try-month-label strong {
-font-size: 12px;
-font-weight: 750;
+    font-size: 13px;
+    font-weight: 600;
   }
 
   .spotc-try-date-strip {
@@ -2954,22 +2954,23 @@ gap: 8px;
   }
 
   .spotc-try-date-card {
-min-height: 66px;
-padding: 8px 6px;
-display: grid;
-place-items: center;
-align-content: center;
-gap: 4px;
-border: 1px solid transparent;
-border-radius: 14px;
-color: #746b66;
-background: transparent;
-cursor: pointer;
-transition:
-  background 0.16s ease,
-  color 0.16s ease,
-  border-color 0.16s ease,
-  transform 0.16s ease;
+    min-height: 70px;
+    padding: 9px 7px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 5px;
+    border: 1px solid #ddd5cf;
+    border-radius: 14px;
+    color: #5f5752;
+    background: #ffffff;
+    cursor: pointer;
+    transition:
+      background 0.16s ease,
+      color 0.16s ease,
+      border-color 0.16s ease,
+      transform 0.16s ease,
+      box-shadow 0.16s ease;
   }
 
   .spotc-try-date-card:hover {
@@ -2978,25 +2979,25 @@ background: #f7f4f1;
   }
 
   .spotc-try-date-card span {
-font-size: 11px;
-font-weight: 650;
+    font-size: 12px;
+    font-weight: 500;
   }
 
   .spotc-try-date-card strong {
-color: #28221f;
-font-size: 16px;
-font-weight: 800;
+    color: #28221f;
+    font-size: 18px;
+    font-weight: 600;
   }
 
   .spotc-try-date-card.active {
-border-color: #e88335;
-color: #ffffff;
-background: #ef7f2d;
-box-shadow: 0 8px 18px rgba(239, 127, 45, 0.2);
+    border-color: #ef7f2d;
+    color: #d96818;
+    background: #fff7f0;
+    box-shadow: 0 6px 16px rgba(239, 127, 45, 0.10);
   }
 
   .spotc-try-date-card.active strong {
-color: #ffffff;
+    color: #d96818;
   }
 
   .spotc-try-time-section {
@@ -3012,14 +3013,14 @@ margin-bottom: 10px;
   }
 
   .spotc-try-time-heading-row strong {
-color: #2f2925;
-font-size: 13px;
-font-weight: 800;
+    color: #2f2925;
+    font-size: 15px;
+    font-weight: 600;
   }
 
   .spotc-try-time-heading-row span {
-color: #91847d;
-font-size: 10px;
+    color: #82766f;
+    font-size: 12px;
   }
 
   .spotc-try-at-home-slots {
@@ -3047,13 +3048,13 @@ transition:
   }
 
   .spotc-try-at-home-slot strong {
-display: block;
-overflow: hidden;
-font-size: 11px;
-font-weight: 750;
-line-height: 1.2;
-white-space: nowrap;
-text-overflow: ellipsis;
+    display: block;
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 550;
+    line-height: 1.25;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 
   .spotc-try-at-home-slot:hover:not(:disabled) {
@@ -3118,26 +3119,27 @@ background: #dc6f21;
   }
 
   .spotc-try-at-home-footer {
-margin-top: 14px;
-padding-top: 13px;
-display: flex;
-align-items: center;
-gap: 9px;
-flex-wrap: wrap;
-border-top: 1px solid #f1e5e9;
-color: #74666b;
-font-size: 11px;
-line-height: 1.4;
+    margin-top: 16px;
+    padding-top: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    border-top: 1px solid #eee4e7;
+    color: #5f5559;
+    font-size: 13px;
+    line-height: 1.5;
   }
 
   .spotc-try-at-home-free {
-padding: 4px 8px;
-border-radius: 999px;
-color: #176f43;
-background: #eaf7ef;
-font-size: 9px;
-font-weight: 850;
-letter-spacing: 0.06em;
+    padding: 5px 10px;
+    border: 1px solid #cdebd8;
+    border-radius: 999px;
+    color: #176f43;
+    background: #eef9f2;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
   }
 
   @media (max-width: 980px) {
@@ -3401,6 +3403,8 @@ letter-spacing: 0.06em;
 
     /* Try at Home booking — mobile */
     .spotc-try-at-home-section {
+      display: block;
+      width: 100%;
       padding: 14px;
       border-radius: 16px;
     }
@@ -3466,8 +3470,8 @@ letter-spacing: 0.06em;
     }
 
     .spotc-try-at-home-slots {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 7px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
     }
 
     .spotc-try-at-home-slot {
@@ -3476,11 +3480,21 @@ letter-spacing: 0.06em;
     }
 
     .spotc-try-at-home-slot strong {
-      font-size: 10px;
+      font-size: 11.5px;
+      font-weight: 550;
     }
 
     .spotc-try-confirm-button {
       width: 100%;
+    }
+
+    .spotc-try-at-home-footer {
+      font-size: 12.5px;
+      line-height: 1.5;
+    }
+
+    .spotc-try-at-home-free {
+      font-size: 10.5px;
     }
 
 @media (max-width: 420px) {
