@@ -3395,8 +3395,6 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
           ) : (
             <div
               className="pd-image pd-image-zoom"
-              role="img"
-              aria-label={displayProductTitle}
               onMouseEnter={() => {
                 setZoomActive(true);
               }}
@@ -3429,14 +3427,22 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
               onMouseLeave={() => {
                 setZoomActive(false);
               }}
-              style={{
-                backgroundImage: `url("${
+            >
+              <img
+                className="pd-main-image-file"
+                src={
                   selectedMedia?.url ||
                   selectedImage ||
                   imageOf(product)
-                }")`,
-              }}
-            >
+                }
+                alt={displayProductTitle}
+                loading="eager"
+                fetchPriority="high"
+                decoding="async"
+                width={1200}
+                height={1500}
+              />
+
               {discount > 0 && (
                 <span className="pd-discount-chip">{discount}% OFF</span>
               )}
@@ -5274,6 +5280,16 @@ onClick={openShoppingCircle}
 .pd-media-video{width:100%;height:100%;display:block;object-fit:contain;background:#111}
 .pd-image-zoom{
   cursor:zoom-in;
+  overflow:hidden;
+}
+.pd-main-image-file{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit:cover;
+  border-radius:inherit;
 }
 
 .pd-zoom-panel{
