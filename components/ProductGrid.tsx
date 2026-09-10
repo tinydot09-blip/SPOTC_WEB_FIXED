@@ -877,13 +877,8 @@ const oldPriceOf = (product: BusinessProduct): number =>
 const isComboEligible = (
   product: BusinessProduct,
   price: number,
-): boolean => {
-  if (isGirlDressProduct(product)) {
-    return price >= 100;
-  }
-
-  return price >= 80;
-};
+): boolean =>
+  isGirlDressProduct(product) && price >= 100;
 
 const discountOf = (product: BusinessProduct): number => {
   const price = priceOf(product);
@@ -1176,6 +1171,16 @@ export function ProductGrid({
       setTryAtHomeIds((current) => {
         const next = new Set(current);
         next.delete(productId);
+
+        try {
+          window.localStorage.setItem(
+            'spotc_try_at_home_ids',
+            JSON.stringify(Array.from(next)),
+          );
+        } catch {
+          // Local storage is optional.
+        }
+
         return next;
       });
       return;
@@ -1214,6 +1219,16 @@ export function ProductGrid({
     setTryAtHomeIds((current) => {
       const next = new Set(current);
       next.add(productId);
+
+      try {
+        window.localStorage.setItem(
+          'spotc_try_at_home_ids',
+          JSON.stringify(Array.from(next)),
+        );
+      } catch {
+        // Local storage is optional.
+      }
+
       return next;
     });
   };
@@ -2416,23 +2431,6 @@ export function ProductGrid({
                     href={`/combo/${encodeURIComponent(String(item.id))}?action=cart`}
                     className="product-image-gift-badge"
                     aria-label={`${t('Choose Combo')} · ${localizedTitleOf(item)}`}
-                    onClick={() => {
-                      try {
-                        window.sessionStorage.setItem(
-                          `spotc-combo-base:${item.id}`,
-                          JSON.stringify({
-                            productId: String(item.id),
-                            size: '',
-                            color: '',
-                            qty: 1,
-                            tryAtHome: tryAtHomeIds.has(String(item.id)),
-                            action: 'cart',
-                          }),
-                        );
-                      } catch {
-                        // Combo page can still load the product.
-                      }
-                    }}
                   >
                     <Gift size={16} strokeWidth={2.4} aria-hidden="true" />
                     <span>
@@ -2559,7 +2557,9 @@ export function ProductGrid({
                         return;
                       }
 
-                      addProduct(item);
+                      addProduct(item, {
+                        tryAtHome: tryAtHomeIds.has(String(item.id)),
+                      });
                       alert(t('1 product added'));
                     }}
                   >
@@ -2652,7 +2652,9 @@ export function ProductGrid({
                       }
 
                       if (!alreadyInCart) {
-                        addProduct(item);
+                        addProduct(item, {
+                          tryAtHome: tryAtHomeIds.has(String(item.id)),
+                        });
                       }
 
                       router.push('/cart');
