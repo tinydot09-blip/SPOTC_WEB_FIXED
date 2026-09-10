@@ -1,9 +1,6 @@
 'use client';
 
-import {
-  onAuthStateChanged,
-  type User,
-} from 'firebase/auth';
+import type { User } from 'firebase/auth';
 
 import {
   usePathname,
@@ -16,15 +13,6 @@ import {
   useRef,
   useState,
 } from 'react';
-
-import {
-  isUserProfileComplete,
-} from '@/lib/auth';
-
-import {
-  auth,
-  firebaseReady,
-} from '@/lib/firebase';
 
 const COMPLETE_PROFILE_PATH =
   '/complete-profile';
@@ -149,6 +137,12 @@ export default function ProfileCompletionGate({
    * itself does not need to be blocked by this global gate.
    */
   const bypassGate =
+    pathname === '/shop' ||
+    pathname.startsWith('/shop/') ||
+    pathname === '/offers' ||
+    pathname.startsWith('/offers/') ||
+    pathname === '/spots' ||
+    pathname.startsWith('/spots/') ||
     pathname.startsWith('/product/');
 
   const [gateReady, setGateReady] =
@@ -182,37 +176,20 @@ export default function ProfileCompletionGate({
 
   useEffect(() => {
     /*
-     * Never attach auth/profile listeners on a product page.
-     * This keeps the product component mounted while the user
-     * changes quantity, gifts, media, etc.
+     * Public browsing routes do not need Firebase Authentication.
+     * Keeping this path completely free of runtime firebase/auth imports avoids
+     * Firebase's auth iframe and related JS on Shop / Offers / Spots / Product.
      */
     if (bypassGate) {
       setGateReady(true);
       return;
     }
 
-    if (
-      !firebaseReady ||
-      !auth
-    ) {
-      setGateReady(true);
-      return;
-    }
+    let active = true;
+    let unsubscribeAuth: (() => void) | null = null;
 
-    /*
-     * We are on a route that really uses the profile gate.
-     * Resolve the gate again for this route.
-     */
+    redirectingRef.current = false;
     setGateReady(false);
-
-    const firebaseAuth =
-      auth;
-
-    let active =
-      true;
-
-    redirectingRef.current =
-      false;
 
     const browserSearch =
       typeof window !== 'undefined'
@@ -232,13 +209,10 @@ export default function ProfileCompletionGate({
     /*
      * Preserve ?next= only when it is genuinely supplied.
      */
-    if (
-      typeof window !== 'undefined'
-    ) {
-      const params =
-        new URLSearchParams(
-          window.location.search,
-        );
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(
+        window.location.search,
+      );
 
       const nextFromQuery =
         safeReturnPath(
@@ -252,259 +226,306 @@ export default function ProfileCompletionGate({
       }
     }
 
-    const checkProfile =
-      async (
-        user: User | null,
-        force = false,
-      ) => {
+    void (async () => {
+      try {
+        /*
+         * AUTH LAZY PATH
+         * --------------
+         * These modules are downloaded only on routes that actually require
+         * profile enforcement. Public browsing never reaches this import.
+         */
+        const [
+          { getAuth, onAuthStateChanged },
+          { isUserProfileComplete },
+        ] = await Promise.all([
+          import('firebase/auth'),
+          import('@/lib/auth'),
+        ]);
+
         if (!active) {
           return;
         }
 
-        /*
-         * Guest / signed-out users:
-         * do not redirect anywhere.
-         */
-        if (
-          !user ||
-          user.isAnonymous
-        ) {
-          checkingUidRef.current =
-            null;
+        const firebaseAuth =
+          getAuth();
 
-          completeUidRef.current =
-            null;
-
-          setGateReady(true);
-          return;
-        }
-
-        const skippedUid =
-          typeof window !==
-          'undefined'
-            ? sessionStorage.getItem(
-                PROFILE_SKIP_KEY,
-              )
-            : null;
-
-        if (
-          skippedUid ===
-          user.uid
-        ) {
-          setGateReady(true);
-          return;
-        }
-
-        /*
-         * Already confirmed complete.
-         */
-        if (
-          !force &&
-          completeUidRef.current ===
-            user.uid
-        ) {
-          if (
-            pathname.startsWith(
-              COMPLETE_PROFILE_PATH,
-            )
-          ) {
-            if (
-              redirectingRef.current
-            ) {
+        const checkProfile =
+          async (
+            user: User | null,
+            force = false,
+          ) => {
+            if (!active) {
               return;
-            }
-
-            redirectingRef.current =
-              true;
-
-            const returnPath =
-              readStoredReturnPath();
-
-            clearStoredReturnPath();
-
-            router.replace(
-              returnPath ||
-                '/offers',
-            );
-
-            return;
-          }
-
-          clearStoredReturnPath();
-          setGateReady(true);
-          return;
-        }
-
-        /*
-         * Do not start the same profile check twice.
-         */
-        if (
-          checkingUidRef.current ===
-          user.uid
-        ) {
-          return;
-        }
-
-        checkingUidRef.current =
-          user.uid;
-
-        try {
-          const complete =
-            await isUserProfileComplete(
-              user,
-            );
-
-          if (!active) {
-            return;
-          }
-
-          if (complete) {
-            completeUidRef.current =
-              user.uid;
-
-            if (
-              typeof window !==
-              'undefined'
-            ) {
-              sessionStorage.removeItem(
-                PROFILE_SKIP_KEY,
-              );
             }
 
             /*
-             * Only redirect when we are actually
-             * leaving Complete Profile.
+             * Guest / signed-out users:
+             * do not redirect anywhere.
              */
             if (
-              pathname.startsWith(
-                COMPLETE_PROFILE_PATH,
-              )
+              !user ||
+              user.isAnonymous
+            ) {
+              checkingUidRef.current =
+                null;
+
+              completeUidRef.current =
+                null;
+
+              setGateReady(true);
+              return;
+            }
+
+            const skippedUid =
+              typeof window !==
+              'undefined'
+                ? sessionStorage.getItem(
+                    PROFILE_SKIP_KEY,
+                  )
+                : null;
+
+            if (
+              skippedUid ===
+              user.uid
+            ) {
+              setGateReady(true);
+              return;
+            }
+
+            /*
+             * Already confirmed complete.
+             */
+            if (
+              !force &&
+              completeUidRef.current ===
+                user.uid
             ) {
               if (
-                redirectingRef.current
+                pathname.startsWith(
+                  COMPLETE_PROFILE_PATH,
+                )
               ) {
+                if (
+                  redirectingRef.current
+                ) {
+                  return;
+                }
+
+                redirectingRef.current =
+                  true;
+
+                const returnPath =
+                  readStoredReturnPath();
+
+                clearStoredReturnPath();
+
+                router.replace(
+                  returnPath ||
+                    '/offers',
+                );
+
                 return;
               }
 
-              redirectingRef.current =
-                true;
-
-              const returnPath =
-                readStoredReturnPath();
-
               clearStoredReturnPath();
-
-              router.replace(
-                returnPath ||
-                  '/offers',
-              );
-
+              setGateReady(true);
               return;
             }
 
-            clearStoredReturnPath();
-
-            setGateReady(true);
-            return;
-          }
-
-          /*
-           * Profile incomplete.
-           */
-          completeUidRef.current =
-            null;
-
-          if (
-            !pathname.startsWith(
-              COMPLETE_PROFILE_PATH,
-            )
-          ) {
+            /*
+             * Do not start the same profile check twice.
+             */
             if (
-              redirectingRef.current
+              checkingUidRef.current ===
+              user.uid
             ) {
               return;
             }
 
-            redirectingRef.current =
-              true;
+            checkingUidRef.current =
+              user.uid;
 
-            storeReturnPath(
-              currentPath,
-            );
+            try {
+              const complete =
+                await isUserProfileComplete(
+                  user,
+                );
 
-            const returnPath =
-              readStoredReturnPath();
+              if (!active) {
+                return;
+              }
 
-            router.replace(
-              returnPath
-                ? `${COMPLETE_PROFILE_PATH}?next=${encodeURIComponent(
-                    returnPath,
-                  )}`
-                : COMPLETE_PROFILE_PATH,
-            );
+              if (complete) {
+                completeUidRef.current =
+                  user.uid;
 
-            return;
-          }
+                if (
+                  typeof window !==
+                  'undefined'
+                ) {
+                  sessionStorage.removeItem(
+                    PROFILE_SKIP_KEY,
+                  );
+                }
 
-          setGateReady(true);
-        } catch (error) {
-          console.error(
-            'Unable to check profile completion:',
-            error,
+                /*
+                 * Only redirect when we are actually
+                 * leaving Complete Profile.
+                 */
+                if (
+                  pathname.startsWith(
+                    COMPLETE_PROFILE_PATH,
+                  )
+                ) {
+                  if (
+                    redirectingRef.current
+                  ) {
+                    return;
+                  }
+
+                  redirectingRef.current =
+                    true;
+
+                  const returnPath =
+                    readStoredReturnPath();
+
+                  clearStoredReturnPath();
+
+                  router.replace(
+                    returnPath ||
+                      '/offers',
+                  );
+
+                  return;
+                }
+
+                clearStoredReturnPath();
+
+                setGateReady(true);
+                return;
+              }
+
+              /*
+               * Profile incomplete.
+               */
+              completeUidRef.current =
+                null;
+
+              if (
+                !pathname.startsWith(
+                  COMPLETE_PROFILE_PATH,
+                )
+              ) {
+                if (
+                  redirectingRef.current
+                ) {
+                  return;
+                }
+
+                redirectingRef.current =
+                  true;
+
+                storeReturnPath(
+                  currentPath,
+                );
+
+                const returnPath =
+                  readStoredReturnPath();
+
+                router.replace(
+                  returnPath
+                    ? `${COMPLETE_PROFILE_PATH}?next=${encodeURIComponent(
+                        returnPath,
+                      )}`
+                    : COMPLETE_PROFILE_PATH,
+                );
+
+                return;
+              }
+
+              setGateReady(true);
+            } catch (error) {
+              console.error(
+                'Unable to check profile completion:',
+                error,
+              );
+
+              /*
+               * Never leave the screen blank because
+               * Firestore temporarily failed.
+               */
+              setGateReady(true);
+            } finally {
+              checkingUidRef.current =
+                null;
+            }
+          };
+
+        unsubscribeAuth =
+          onAuthStateChanged(
+            firebaseAuth,
+            (user) => {
+              void checkProfile(
+                user,
+              );
+            },
           );
 
+        const refreshProfile =
+          () => {
+            completeUidRef.current =
+              null;
+
+            redirectingRef.current =
+              false;
+
+            setGateReady(false);
+
+            void checkProfile(
+              firebaseAuth.currentUser,
+              true,
+            );
+          };
+
+        window.addEventListener(
+          'spotc-profile-updated',
+          refreshProfile,
+        );
+
+        /*
+         * Attach cleanup for the profile-updated listener to the same lifecycle
+         * as the dynamically-created Auth subscription.
+         */
+        const originalUnsubscribe =
+          unsubscribeAuth;
+
+        unsubscribeAuth = () => {
+          originalUnsubscribe?.();
+
+          window.removeEventListener(
+            'spotc-profile-updated',
+            refreshProfile,
+          );
+        };
+      } catch (error) {
+        console.error(
+          'Unable to initialize profile gate:',
+          error,
+        );
+
+        if (active) {
           /*
-           * Never leave the screen blank because
-           * Firestore temporarily failed.
+           * Fail open just like the previous implementation: a temporary auth
+           * loading problem must never leave the customer on a blank screen.
            */
           setGateReady(true);
-        } finally {
-          checkingUidRef.current =
-            null;
         }
-      };
-
-    const unsubscribe =
-      onAuthStateChanged(
-        firebaseAuth,
-        (user) => {
-          void checkProfile(
-            user,
-          );
-        },
-      );
-
-    const refreshProfile =
-      () => {
-        completeUidRef.current =
-          null;
-
-        redirectingRef.current =
-          false;
-
-        setGateReady(false);
-
-        void checkProfile(
-          firebaseAuth.currentUser,
-          true,
-        );
-      };
-
-    window.addEventListener(
-      'spotc-profile-updated',
-      refreshProfile,
-    );
+      }
+    })();
 
     return () => {
-      active =
-        false;
-
-      unsubscribe();
-
-      window.removeEventListener(
-        'spotc-profile-updated',
-        refreshProfile,
-      );
+      active = false;
+      unsubscribeAuth?.();
     };
   }, [
     bypassGate,
