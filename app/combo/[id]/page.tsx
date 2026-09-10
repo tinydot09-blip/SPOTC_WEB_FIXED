@@ -438,7 +438,14 @@ export default function ComboPage() {
           combo_original_price: customerPriceOf(comboProduct),
         } as BusinessProduct;
 
-        addProduct(pricedProduct);
+        addProduct(pricedProduct, {
+          qty: 1,
+          price: comboPrice,
+          isComboItem: true,
+          comboParentId: String(baseProduct.id),
+          comboOriginalPrice: customerPriceOf(comboProduct),
+          comboPrice,
+        });
       });
     }
 
