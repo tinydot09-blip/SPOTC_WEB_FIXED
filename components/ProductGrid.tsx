@@ -3448,6 +3448,41 @@ export function ProductGrid({
             text-overflow: ellipsis !important;
           }
 
+
+          /* PRODUCT CARD TITLE + PRICE ALIGNMENT */
+          .product-card.rich .product-title-link h3 {
+            margin: 0 0 4px !important;
+            font-weight: 500 !important;
+            line-height: 1.25 !important;
+          }
+
+          .product-card.rich .price {
+            margin-top: 0 !important;
+            margin-bottom: 7px !important;
+            display: flex !important;
+            align-items: baseline !important;
+            gap: 7px !important;
+            line-height: 1.2 !important;
+          }
+
+          .product-card.rich .price strong {
+            font-weight: 700 !important;
+          }
+
+          @media (max-width: 700px) {
+            .product-card.rich .product-title-link h3 {
+              margin-bottom: 3px !important;
+              font-weight: 500 !important;
+              line-height: 1.2 !important;
+            }
+
+            .product-card.rich .price {
+              margin-top: 0 !important;
+              margin-bottom: 6px !important;
+              gap: 5px !important;
+            }
+          }
+
       `}</style>
     </>
   );
