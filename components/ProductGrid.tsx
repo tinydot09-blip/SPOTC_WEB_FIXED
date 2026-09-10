@@ -1078,10 +1078,12 @@ const productMatchesGlobalSearch = (
 
 type ProductGridProps = {
   hideBusinessName?: boolean;
+  initialProducts?: BusinessProduct[];
 };
 
 export function ProductGrid({
   hideBusinessName = false,
+  initialProducts = [],
 }: ProductGridProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1090,6 +1092,18 @@ export function ProductGrid({
 
   const [items, setItems] =
     useState<BusinessProduct[] | null>(() => {
+      /*
+       * SERVER-RENDERED FAST PATH
+       * -------------------------
+       * /shop can pass a small first batch from Firebase Admin so real
+       * product cards are present in the initial HTML. This improves
+       * first paint/LCP while the existing client request continues to
+       * refresh the full catalogue after hydration.
+       */
+      if (initialProducts.length > 0) {
+        return initialProducts;
+      }
+
       if (typeof window === 'undefined') {
         return null;
       }
