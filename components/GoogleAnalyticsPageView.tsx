@@ -33,7 +33,10 @@ const BLOCKED_ROUTE_PREFIXES = [
 ];
 
 type GtagWindow = typeof window & {
-  gtag?: (...args: unknown[]) => void;
+  gtag?: (
+    ...args: unknown[]
+  ) => void;
+
   [key: `ga-disable-${string}`]:
     | boolean
     | undefined;
@@ -88,19 +91,23 @@ function GoogleAnalyticsPageViewInner() {
   );
 
   /*
-   * Resolve Firebase authentication first.
+   * Resolve Firebase authentication.
    *
-   * This lets us determine whether the
-   * signed-in visitor is one of the
-   * SPOTC admin accounts.
+   * We need this so SPOTC admin traffic
+   * is not counted in Google Analytics.
    */
   useEffect(() => {
     const unsubscribe =
       onAuthStateChanged(
         auth,
         (user) => {
-          setCurrentUser(user);
-          setAuthResolved(true);
+          setCurrentUser(
+            user,
+          );
+
+          setAuthResolved(
+            true,
+          );
         },
         (error) => {
           console.error(
@@ -110,12 +117,15 @@ function GoogleAnalyticsPageViewInner() {
 
           /*
            * If authentication lookup fails,
-           * treat this as a normal visitor
-           * rather than blocking analytics
-           * forever.
+           * continue as a normal visitor.
            */
-          setCurrentUser(null);
-          setAuthResolved(true);
+          setCurrentUser(
+            null,
+          );
+
+          setAuthResolved(
+            true,
+          );
         },
       );
 
@@ -123,13 +133,9 @@ function GoogleAnalyticsPageViewInner() {
   }, []);
 
   /*
-   * Enable / disable Google Analytics.
-   *
-   * IMPORTANT:
-   * We disable GA while authentication
-   * is still loading. This prevents an
-   * admin from sending analytics events
-   * before Firebase tells us who they are.
+   * Keep Google Analytics disabled while
+   * authentication is resolving, or when
+   * the visitor is an admin.
    */
   useEffect(() => {
     if (
@@ -143,11 +149,15 @@ function GoogleAnalyticsPageViewInner() {
       window as GtagWindow;
 
     const blockedRoute =
-      isBlockedRoute(pathname);
+      isBlockedRoute(
+        pathname,
+      );
 
     const adminUser =
       authResolved &&
-      isAdminUser(currentUser);
+      isAdminUser(
+        currentUser,
+      );
 
     const shouldDisable =
       blockedRoute ||
@@ -164,8 +174,16 @@ function GoogleAnalyticsPageViewInner() {
   ]);
 
   /*
-   * Send SPA page_view events only for
-   * genuine customer traffic.
+   * Track customer page views.
+   *
+   * Google Analytics itself is now loaded
+   * with Next.js lazyOnload.
+   *
+   * Because of that, gtag may not exist
+   * immediately when this effect runs.
+   *
+   * We briefly retry instead of losing
+   * the page_view.
    */
   useEffect(() => {
     if (
@@ -175,54 +193,27 @@ function GoogleAnalyticsPageViewInner() {
       return;
     }
 
-    /*
-     * Never track admin/delivery pages.
-     */
     if (
-      isBlockedRoute(pathname)
+      isBlockedRoute(
+        pathname,
+      )
     ) {
       return;
     }
 
-    /*
-     * Wait until Firebase authentication
-     * is resolved.
-     */
-    if (!authResolved) {
-      return;
-    }
-
-    /*
-     * Never track either SPOTC admin
-     * account, even when the admin browses
-     * customer-facing pages.
-     */
     if (
-      isAdminUser(currentUser)
+      !authResolved
     ) {
       return;
     }
 
-    const gaWindow =
-      window as GtagWindow;
-
-    const gtag =
-      gaWindow.gtag;
-
     if (
-      typeof gtag !==
-      'function'
+      isAdminUser(
+        currentUser,
+      )
     ) {
       return;
     }
-
-    /*
-     * Make absolutely sure analytics is
-     * enabled for a normal customer.
-     */
-    gaWindow[
-      `ga-disable-${GA_MEASUREMENT_ID}`
-    ] = false;
 
     const query =
       searchParams.toString();
@@ -233,8 +224,7 @@ function GoogleAnalyticsPageViewInner() {
         : pathname;
 
     /*
-     * Prevent duplicate page_view events
-     * for the same Next.js route.
+     * Already tracked.
      */
     if (
       lastTrackedPathRef.current ===
@@ -243,26 +233,93 @@ function GoogleAnalyticsPageViewInner() {
       return;
     }
 
-    gtag(
-      'event',
-      'page_view',
-      {
-        page_title:
-          document.title,
+    const sendPageView =
+      (): boolean => {
+        const gaWindow =
+          window as GtagWindow;
 
-        page_location:
-          window.location.href,
+        const gtag =
+          gaWindow.gtag;
 
-        page_path:
-          pagePath,
+        if (
+          typeof gtag !==
+          'function'
+        ) {
+          return false;
+        }
 
-        send_to:
-          GA_MEASUREMENT_ID,
-      },
-    );
+        /*
+         * Enable tracking for genuine
+         * customer traffic.
+         */
+        gaWindow[
+          `ga-disable-${GA_MEASUREMENT_ID}`
+        ] = false;
 
-    lastTrackedPathRef.current =
-      pagePath;
+        gtag(
+          'event',
+          'page_view',
+          {
+            page_title:
+              document.title,
+
+            page_location:
+              window.location.href,
+
+            page_path:
+              pagePath,
+
+            send_to:
+              GA_MEASUREMENT_ID,
+          },
+        );
+
+        lastTrackedPathRef.current =
+          pagePath;
+
+        return true;
+      };
+
+    /*
+     * GA may already be ready.
+     */
+    if (
+      sendPageView()
+    ) {
+      return;
+    }
+
+    /*
+     * GA uses lazyOnload, so wait for
+     * the script if necessary.
+     *
+     * 40 x 250 ms gives it up to
+     * approximately 10 seconds.
+     */
+    let attempts = 0;
+
+    const timer =
+      window.setInterval(
+        () => {
+          attempts += 1;
+
+          if (
+            sendPageView() ||
+            attempts >= 40
+          ) {
+            window.clearInterval(
+              timer,
+            );
+          }
+        },
+        250,
+      );
+
+    return () => {
+      window.clearInterval(
+        timer,
+      );
+    };
   }, [
     pathname,
     searchParams,

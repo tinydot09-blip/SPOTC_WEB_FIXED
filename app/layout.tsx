@@ -209,16 +209,17 @@ export default function RootLayout({
       <head>
         {/* =========================
             GOOGLE ANALYTICS
+            Delayed until browser load
         ========================= */}
 
         <Script
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
-          strategy="afterInteractive"
+          strategy="lazyOnload"
         />
 
         <Script
           id="google-analytics"
-          strategy="afterInteractive"
+          strategy="lazyOnload"
         >
           {`
             window.dataLayer =
@@ -247,11 +248,12 @@ export default function RootLayout({
 
         {/* =========================
             META PIXEL
+            Delayed until browser load
         ========================= */}
 
         <Script
           id="meta-pixel"
-          strategy="afterInteractive"
+          strategy="lazyOnload"
         >
           {`
             !function(f,b,e,v,n,t,s)
@@ -355,10 +357,8 @@ export default function RootLayout({
           />
         </noscript>
 
-        {/* Existing GA4 route tracking */}
         <GoogleAnalyticsPageView />
 
-        {/* Meta Pixel route tracking */}
         <MetaPixelPageView />
 
         <LanguageProvider>
