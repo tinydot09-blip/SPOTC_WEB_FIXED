@@ -3483,6 +3483,64 @@ export function ProductGrid({
             }
           }
 
+
+          /* FINAL PRODUCT CARD SPACING / ALIGNMENT */
+          .product-card.rich .product-content,
+          .product-card.rich .product-info {
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+          }
+
+          .product-card.rich .product-title-link h3 {
+            margin: 0 0 3px !important;
+            font-weight: 500 !important;
+            line-height: 1.2 !important;
+          }
+
+          .product-card.rich .price {
+            margin: 0 0 10px !important;
+            padding: 0 !important;
+            display: flex !important;
+            align-items: baseline !important;
+            gap: 6px !important;
+            line-height: 1.15 !important;
+          }
+
+          .product-card.rich .product-try-home-row {
+            margin: 0 0 10px !important;
+            min-height: 22px !important;
+            padding: 0 !important;
+            align-items: center !important;
+          }
+
+          .product-card.rich .product-actions {
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+          }
+
+          @media (max-width: 700px) {
+            .product-card.rich .product-content,
+            .product-card.rich .product-info {
+              padding-left: 16px !important;
+              padding-right: 16px !important;
+            }
+
+            .product-card.rich .product-title-link h3 {
+              margin-bottom: 3px !important;
+              line-height: 1.18 !important;
+            }
+
+            .product-card.rich .price {
+              margin-bottom: 9px !important;
+              gap: 5px !important;
+            }
+
+            .product-card.rich .product-try-home-row {
+              margin-bottom: 9px !important;
+              min-height: 21px !important;
+            }
+          }
+
       `}</style>
     </>
   );
