@@ -904,6 +904,51 @@ export default function CartPage() {
     });
   };
 
+  const cartGroups = (() => {
+    const used = new Set<number>();
+    const groups: Array<{
+      parentIndex: number;
+      parent: CartItem;
+      children: Array<{ item: CartItem; index: number }>;
+      isPickedWithLove: boolean;
+    }> = [];
+
+    items.forEach((item, index) => {
+      if (used.has(index) || isComboCartItem(item)) return;
+
+      const children = items
+        .map((child, childIndex) => ({ item: child, index: childIndex }))
+        .filter(
+          ({ item: child }) =>
+            isComboCartItem(child) &&
+            comboParentIdOf(child) === String(item.id),
+        );
+
+      used.add(index);
+      children.forEach(({ index: childIndex }) => used.add(childIndex));
+
+      groups.push({
+        parentIndex: index,
+        parent: item,
+        children,
+        isPickedWithLove: children.length > 0,
+      });
+    });
+
+    // Safety fallback for any orphan line that somehow reaches the UI.
+    items.forEach((item, index) => {
+      if (used.has(index)) return;
+      groups.push({
+        parentIndex: index,
+        parent: item,
+        children: [],
+        isPickedWithLove: false,
+      });
+    });
+
+    return groups;
+  })();
+
   if (!items.length) {
     return (
       <main className="spotc-cart-page">
@@ -976,169 +1021,179 @@ export default function CartPage() {
               </div>
 
               <div className="spotc-products-list">
-                {items.map((item, index) => {
-                  const comboItem = isComboCartItem(item);
-                  const comboOriginalPrice = comboOriginalPriceOf(item);
-                  const freeGifts =
-                    giftBundles[item.id]?.gifts || [];
-                  const requiredFreeGifts =
-                    freeGiftEntitlementForItem(item);
-                  const missingFreeGifts = Math.max(
-                    0,
-                    requiredFreeGifts - freeGifts.length,
-                  );
+                {cartGroups.map((group, groupIndex) => {
+                  const groupLines = [
+                    { item: group.parent, index: group.parentIndex, isChild: false },
+                    ...group.children.map(({ item, index }) => ({
+                      item,
+                      index,
+                      isChild: true,
+                    })),
+                  ];
 
                   return (
-                    <div
-                      className="spotc-product-with-gifts"
-                      key={`${item.id}-${item.size}-${item.color}-${index}`}
+                    <section
+                      className={`spotc-cart-group${
+                        group.isPickedWithLove ? ' picked-with-love' : ''
+                      }`}
+                      key={`${group.parent.id}-${group.parent.size}-${group.parent.color}-${groupIndex}`}
                     >
-                      <div className="spotc-cart-product">
-                        <div className="spotc-product-image">
-                          {item.image ? (
-                            <img
-                              src={item.image}
-                              alt={item.title}
-                            />
-                          ) : (
-                            <ShoppingBag size={27} />
-                          )}
-                        </div>
-
-                        <div className="spotc-product-copy">
-                          <h3>{item.title}</h3>
-
-                          {(item.size || item.color) && (
-                            <p>
-                              {[
-                                item.size &&
-                                  `Size: ${item.size}`,
-                                item.color &&
-                                  `Colour: ${item.color}`,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </p>
-                          )}
-
-                          <div className="spotc-product-price-row">
-                            <strong>
-                              {money(
-                                item.price *
-                                  Math.max(
-                                    1,
-                                    Number(item.qty) || 1,
-                                  ),
-                              )}
-                            </strong>
-
-                            {comboItem && comboOriginalPrice > item.price && (
-                              <del>
-                                {money(
-                                  comboOriginalPrice *
-                                    Math.max(
-                                      1,
-                                      Number(item.qty) || 1,
-                                    ),
-                                )}
-                              </del>
-                            )}
-
-                            {comboItem && (
-                              <span className="spotc-combo-price-badge">
-                                Combo Price
-                              </span>
-                            )}
+                      {group.isPickedWithLove && (
+                        <div className="spotc-cart-group-head">
+                          <span aria-hidden="true">♡</span>
+                          <div>
+                            <small>SPOTC COLLECTION</small>
+                            <strong>Picked With Love</strong>
                           </div>
-
-                          {Math.max(
-                            1,
-                            Number(item.qty) || 1,
-                          ) > 1 && !comboItem && (
-                            <small className="spotc-line-price-note">
-                              {money(item.price)} each
-                            </small>
-                          )}
+                          <em>
+                            {groupLines.length} item{groupLines.length === 1 ? '' : 's'}
+                          </em>
                         </div>
+                      )}
 
-                        <div className="spotc-cart-controls">
-                          {!comboItem && (
-                            item.stockQty === undefined ||
-                            item.stockQty > 1
-                          ) && (
+                      <div className="spotc-cart-group-lines">
+                        {groupLines.map(({ item, index, isChild }) => {
+                          const comboItem = isComboCartItem(item);
+                          const comboOriginalPrice = comboOriginalPriceOf(item);
+
+                          return (
                             <div
-                              className="spotc-cart-quantity"
-                              aria-label="Product quantity"
+                              className={`spotc-product-with-gifts${
+                                isChild ? ' spotc-picked-child' : ''
+                              }`}
+                              key={`${item.id}-${item.size}-${item.color}-${index}`}
                             >
-                              <button
-                                type="button"
-                                aria-label="Decrease quantity"
-                                disabled={
-                                  Math.max(
-                                    1,
-                                    Number(item.qty) || 1,
-                                  ) <= 1
-                                }
-                                onClick={() =>
-                                  updateItemQuantity(
-                                    index,
-                                    Math.max(
-                                      1,
-                                      Number(item.qty) || 1,
-                                    ) - 1,
-                                  )
-                                }
-                              >
-                                <Minus size={16} />
-                              </button>
+                              <div className="spotc-cart-product">
+                                <div className="spotc-product-image">
+                                  {item.image ? (
+                                    <img src={item.image} alt={item.title} />
+                                  ) : (
+                                    <ShoppingBag size={27} />
+                                  )}
+                                </div>
 
-                              <strong>
-                                {Math.max(
-                                  1,
-                                  Number(item.qty) || 1,
-                                )}
-                              </strong>
+                                <div className="spotc-product-copy">
+                                  <h3>{item.title}</h3>
 
-                              <button
-                                type="button"
-                                aria-label="Increase quantity"
-                                disabled={
-                                  item.stockQty !== undefined &&
-                                  Math.max(
-                                    1,
-                                    Number(item.qty) || 1,
-                                  ) >= item.stockQty
-                                }
-                                onClick={() =>
-                                  updateItemQuantity(
-                                    index,
-                                    Math.max(
-                                      1,
-                                      Number(item.qty) || 1,
-                                    ) + 1,
-                                  )
-                                }
-                              >
-                                <Plus size={16} />
-                              </button>
+                                  {(item.size || item.color) && (
+                                    <p>
+                                      {[
+                                        item.size && `Size: ${item.size}`,
+                                        item.color && `Colour: ${item.color}`,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                    </p>
+                                  )}
+
+                                  <div className="spotc-product-price-row">
+                                    <strong>
+                                      {money(
+                                        item.price *
+                                          Math.max(1, Number(item.qty) || 1),
+                                      )}
+                                    </strong>
+
+                                    {comboItem &&
+                                      comboOriginalPrice > item.price && (
+                                        <del>
+                                          {money(comboOriginalPrice)}
+                                        </del>
+                                      )}
+
+                                    {comboItem && (
+                                      <span className="spotc-combo-price-badge">
+                                        Combo Price
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {!comboItem &&
+                                    Math.max(1, Number(item.qty) || 1) > 1 && (
+                                      <small className="spotc-line-price-note">
+                                        {money(item.price)} each
+                                      </small>
+                                    )}
+                                </div>
+
+                                <div className="spotc-cart-controls">
+                                  {!comboItem &&
+                                    (item.stockQty === undefined ||
+                                      item.stockQty > 1) && (
+                                      <div
+                                        className="spotc-cart-quantity"
+                                        aria-label="Product quantity"
+                                      >
+                                        <button
+                                          type="button"
+                                          aria-label="Decrease quantity"
+                                          disabled={
+                                            Math.max(
+                                              1,
+                                              Number(item.qty) || 1,
+                                            ) <= 1
+                                          }
+                                          onClick={() =>
+                                            updateItemQuantity(
+                                              index,
+                                              Math.max(
+                                                1,
+                                                Number(item.qty) || 1,
+                                              ) - 1,
+                                            )
+                                          }
+                                        >
+                                          <Minus size={16} />
+                                        </button>
+
+                                        <strong>
+                                          {Math.max(
+                                            1,
+                                            Number(item.qty) || 1,
+                                          )}
+                                        </strong>
+
+                                        <button
+                                          type="button"
+                                          aria-label="Increase quantity"
+                                          disabled={
+                                            item.stockQty !== undefined &&
+                                            Math.max(
+                                              1,
+                                              Number(item.qty) || 1,
+                                            ) >= item.stockQty
+                                          }
+                                          onClick={() =>
+                                            updateItemQuantity(
+                                              index,
+                                              Math.max(
+                                                1,
+                                                Number(item.qty) || 1,
+                                              ) + 1,
+                                            )
+                                          }
+                                        >
+                                          <Plus size={16} />
+                                        </button>
+                                      </div>
+                                    )}
+
+                                  <button
+                                    type="button"
+                                    className="spotc-remove-button"
+                                    aria-label="Remove product"
+                                    onClick={() => removeItem(index)}
+                                  >
+                                    <Trash2 size={17} />
+                                    <span>Remove</span>
+                                  </button>
+                                </div>
+                              </div>
                             </div>
-                          )}
-
-                          <button
-                            type="button"
-                            className="spotc-remove-button"
-                            aria-label="Remove product"
-                            onClick={() =>
-                              removeItem(index)
-                            }
-                          >
-                            <Trash2 size={17} />
-                            <span>Remove</span>
-                          </button>
-                        </div>
+                          );
+                        })}
                       </div>
-
-                    </div>
+                    </section>
                   );
                 })}
               </div>
@@ -1467,6 +1522,93 @@ const styles = `
     margin-top: 17px;
     display: grid;
     gap: 14px;
+  }
+
+  .spotc-cart-group {
+    overflow: hidden;
+    border: 1px solid #ebe4dc;
+    border-radius: 18px;
+    background: #fcfbf9;
+  }
+
+  .spotc-cart-group.picked-with-love {
+    border-color: #ead8c5;
+    background: #fffdf9;
+    box-shadow: 0 8px 24px rgba(94, 62, 31, 0.05);
+  }
+
+  .spotc-cart-group-head {
+    min-height: 66px;
+    padding: 12px 16px;
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 11px;
+    border-bottom: 1px solid #eee2d5;
+    background: linear-gradient(90deg, #fff6ec 0%, #fffdf9 100%);
+  }
+
+  .spotc-cart-group-head > span {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: #b76510;
+    background: #ffffff;
+    border: 1px solid #ead8c5;
+    font-size: 23px;
+    line-height: 1;
+  }
+
+  .spotc-cart-group-head small,
+  .spotc-cart-group-head strong {
+    display: block;
+  }
+
+  .spotc-cart-group-head small {
+    color: #a86a2c;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+  }
+
+  .spotc-cart-group-head strong {
+    margin-top: 2px;
+    color: #2a211a;
+    font-size: 17px;
+    font-weight: 750;
+  }
+
+  .spotc-cart-group-head em {
+    color: #7b6c5e;
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 650;
+  }
+
+  .spotc-cart-group-lines {
+    display: grid;
+  }
+
+  .spotc-cart-group .spotc-cart-product {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .spotc-cart-group .spotc-product-with-gifts + .spotc-product-with-gifts {
+    border-top: 1px solid #eee7df;
+  }
+
+  .spotc-picked-child .spotc-cart-product {
+    padding-top: 13px;
+    padding-bottom: 13px;
+  }
+
+  .spotc-picked-child .spotc-product-image {
+    width: 92px;
+    height: 92px;
   }
 
   .spotc-product-with-gifts {
@@ -2271,6 +2413,27 @@ const styles = `
     }
 
     
+    .spotc-cart-group-head {
+      min-height: 60px;
+      padding: 10px 12px;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      gap: 9px;
+    }
+
+    .spotc-cart-group-head > span {
+      width: 34px;
+      height: 34px;
+      font-size: 20px;
+    }
+
+    .spotc-cart-group-head strong {
+      font-size: 15px;
+    }
+
+    .spotc-cart-group-head em {
+      font-size: 10px;
+    }
+
     /* =========================================================
        MOBILE CART PRODUCT ALIGNMENT
        Image + product info on row 1.
