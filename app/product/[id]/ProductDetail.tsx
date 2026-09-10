@@ -842,6 +842,7 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
 
   useEffect(() => {
     let active = true;
+    let relatedLoadTimer: number | null = null;
 
     if (initialProduct === undefined || String(initialProduct?.id || '') !== String(id)) {
       setProduct(undefined);
@@ -954,73 +955,93 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
             });
         }
 
-        setRelatedLoading(true);
-        getProducts()
-          .then((allProducts) => {
-            if (!active) return;
+        /*
+         * PERFORMANCE:
+         * The main product is already supplied by the server through
+         * initialProduct. Do not immediately start the much heavier full
+         * catalogue read while the browser is painting/hydrating the product.
+         * Related products and the legacy gift pool are below-the-fold data,
+         * so load them shortly after the important product content is visible.
+         */
+        relatedLoadTimer = window.setTimeout(() => {
+          if (!active) return;
 
-            const matching = allProducts
-              .filter((item) => {
+          setRelatedLoading(true);
+
+          getProducts()
+            .then((allProducts) => {
+              if (!active) return;
+
+              const matching = allProducts
+                .filter((item) => {
+                  if (item.id === loadedProduct.id) return false;
+
+                  const itemRecord = item as ProductRecord;
+                  const stock = numberValue(
+                    itemRecord.stock_qty ?? itemRecord.stock_quantity,
+                  );
+                  const itemInStock =
+                    booleanValue(itemRecord.is_in_stock) !== false &&
+                    !(stock !== null && stock <= 0);
+
+                  if (!itemInStock) return false;
+
+                  return (
+                    item.main_category === loadedProduct.main_category ||
+                    item.sub_category === loadedProduct.sub_category ||
+                    item.category === loadedProduct.category
+                  );
+                })
+                .slice(0, 4);
+
+              setRelated(matching);
+
+              // FREE GIFT POOL
+              // Kept for compatibility with the existing flow.
+              const eligibleGifts = allProducts.filter((item) => {
                 if (item.id === loadedProduct.id) return false;
 
-                const itemRecord = item as ProductRecord;
-                const stock = numberValue(itemRecord.stock_qty ?? itemRecord.stock_quantity);
-                const itemInStock =
-                  booleanValue(itemRecord.is_in_stock) !== false &&
-                  !(stock !== null && stock <= 0);
+                const giftRecord = item as ProductRecord;
+                const giftPrice = customerPriceOf(item);
+                const giftStock = numberValue(
+                  giftRecord.stock_qty ?? giftRecord.stock_quantity,
+                );
 
-                if (!itemInStock) return false;
+                const giftActive =
+                  booleanValue(giftRecord.isActive ?? giftRecord.is_active) !== false;
+
+                const giftInStock =
+                  booleanValue(giftRecord.is_in_stock) !== false &&
+                  !(giftStock !== null && giftStock <= 0);
 
                 return (
-                  item.main_category === loadedProduct.main_category ||
-                  item.sub_category === loadedProduct.sub_category ||
-                  item.category === loadedProduct.category
+                  giftActive &&
+                  giftInStock &&
+                  giftPrice > 0 &&
+                  giftPrice < 50
                 );
-              })
-              .slice(0, 4);
+              });
 
-            setRelated(matching);
-
-            // FREE GIFT POOL
-            // Show only active + in-stock BusinessProducts with selling price below ₹50.
-            // Do not show the main paid product itself.
-            const eligibleGifts = allProducts.filter((item) => {
-              if (item.id === loadedProduct.id) return false;
-
-              const giftRecord = item as ProductRecord;
-              const giftPrice = customerPriceOf(item);
-              const giftStock = numberValue(
-                giftRecord.stock_qty ?? giftRecord.stock_quantity,
-              );
-
-              const giftActive =
-                booleanValue(giftRecord.isActive ?? giftRecord.is_active) !== false;
-
-              const giftInStock =
-                booleanValue(giftRecord.is_in_stock) !== false &&
-                !(giftStock !== null && giftStock <= 0);
-
-              return (
-                giftActive &&
-                giftInStock &&
-                giftPrice > 0 &&
-                giftPrice < 50
-              );
+              setGiftProducts(eligibleGifts);
+            })
+            .catch(() => {
+              if (!active) return;
+              setRelated([]);
+              setGiftProducts([]);
+            })
+            .finally(() => {
+              if (active) setRelatedLoading(false);
             });
-
-            setGiftProducts(eligibleGifts);
-          })
-          .catch(() => {
-            if (!active) return;
-            setRelated([]);
-            setGiftProducts([]);
-          })
-          .finally(() => active && setRelatedLoading(false));
+        }, 900);
       })
       .catch(() => active && setProduct(null));
 
     return () => {
       active = false;
+
+      if (relatedLoadTimer !== null) {
+        window.clearTimeout(relatedLoadTimer);
+      }
     };
   }, [id, initialProduct]);
 
@@ -1154,37 +1175,54 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     if (!product || !firebaseReady) return;
 
     let active = true;
-    setReviewsLoading(true);
 
-    const db = getFirestore();
-    const reviewsQuery = query(
-      collection(db, 'BusinessProducts', product.id, 'Reviews'),
-      orderBy('created_at', 'desc'),
-      limit(20),
-    );
+    /*
+     * Reviews are below the primary buying controls. Delay their Firestore
+     * request slightly so image/title/price/buttons get the network and main
+     * thread first.
+     */
+    const reviewsTimer = window.setTimeout(() => {
+      if (!active) return;
 
-    getDocs(reviewsQuery)
-      .then((snapshot) => {
-        if (!active) return;
-        setReviews(
-          snapshot.docs.map((reviewDoc) => {
-            const data = reviewDoc.data();
-            return {
-              id: reviewDoc.id,
-              rating: numberValue(data.rating) ?? 0,
-              title: text(data.title),
-              comment: text(data.comment),
-              reviewer_name: text(data.reviewer_name) || 'SPOTC customer',
-              created_at: data.created_at,
-            };
-          }),
-        );
-      })
-      .catch(() => active && setReviews([]))
-      .finally(() => active && setReviewsLoading(false));
+      setReviewsLoading(true);
+
+      const db = getFirestore();
+      const reviewsQuery = query(
+        collection(db, 'BusinessProducts', product.id, 'Reviews'),
+        orderBy('created_at', 'desc'),
+        limit(20),
+      );
+
+      getDocs(reviewsQuery)
+        .then((snapshot) => {
+          if (!active) return;
+
+          setReviews(
+            snapshot.docs.map((reviewDoc) => {
+              const data = reviewDoc.data();
+
+              return {
+                id: reviewDoc.id,
+                rating: numberValue(data.rating) ?? 0,
+                title: text(data.title),
+                comment: text(data.comment),
+                reviewer_name: text(data.reviewer_name) || 'SPOTC customer',
+                created_at: data.created_at,
+              };
+            }),
+          );
+        })
+        .catch(() => {
+          if (active) setReviews([]);
+        })
+        .finally(() => {
+          if (active) setReviewsLoading(false);
+        });
+    }, 1200);
 
     return () => {
       active = false;
+      window.clearTimeout(reviewsTimer);
     };
   }, [product]);
 
@@ -3439,7 +3477,7 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
                         src={media.url}
                         muted
                         playsInline
-                        preload="metadata"
+                        preload="none"
                       />
 
                       <span
