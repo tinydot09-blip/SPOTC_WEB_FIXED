@@ -633,9 +633,11 @@ function OfferCard({
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRef = useRef<HTMLDivElement>(null);
 
-  // Rolling 5-video window: current + 2 before + 2 after.
-  // This preloads upcoming videos without keeping the whole feed in memory.
-  const shouldLoadVideo = Math.abs(index - activeIndex) <= 2;
+  // PERFORMANCE: keep only the current video plus one neighbour on each side
+  // attached to the network. The previous 5-video window made several large
+  // video requests compete with the video the customer is actually watching.
+  const distanceFromActive = Math.abs(index - activeIndex);
+  const shouldLoadVideo = distanceFromActive <= 1;
 
   const [user, setUser] = useState<User | null>(
     auth?.currentUser && !auth.currentUser.isAnonymous
@@ -879,15 +881,6 @@ function OfferCard({
     const videoElement = videoRef.current;
     if (!videoElement || !activeVideo) return;
 
-    if (index === 0) {
-      videoElement.load();
-    }
-  }, [activeVideo, index]);
-
-  useEffect(() => {
-    const videoElement = videoRef.current;
-    if (!videoElement || !activeVideo) return;
-
     const playbackKey = `${offerId || resolvedProductId || index}`;
 
     const stopIfAnotherVideoStarts = (event: Event) => {
@@ -991,11 +984,13 @@ function OfferCard({
               loop
               muted={muted}
               preload={
-                activeVideo
-                  ? index >= activeIndex && index <= activeIndex + 2
+                !activeVideo
+                  ? "none"
+                  : index === activeIndex
                     ? "auto"
-                    : "metadata"
-                  : "none"
+                    : index === activeIndex + 1
+                      ? "metadata"
+                      : "none"
               }
               onError={() => {
                 setPlaying(false);
@@ -1532,18 +1527,25 @@ export function OfferFeed() {
         setItems([]);
       });
 
-    getProducts()
-      .then((products) => {
-        if (!cancelled) {
-          setAllProducts(products);
-        }
-      })
-      .catch((reason: unknown) => {
-        console.error("Could not load offer products:", reason);
-      });
+    // PERFORMANCE:
+    // Give the first offer video a short head start before starting the much
+    // larger BusinessProducts catalogue request. Regular offers can render
+    // immediately from getOffers(); product-linked enrichment follows shortly.
+    const productsTimer = window.setTimeout(() => {
+      getProducts()
+        .then((products) => {
+          if (!cancelled) {
+            setAllProducts(products);
+          }
+        })
+        .catch((reason: unknown) => {
+          console.error("Could not load offer products:", reason);
+        });
+    }, 1200);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(productsTimer);
     };
   }, []);
 
