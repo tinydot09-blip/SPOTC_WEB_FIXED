@@ -457,12 +457,7 @@ export default function ComboPage() {
       // Nothing to clean up.
     }
 
-    if (action === 'buy') {
-      router.push('/checkout');
-      return;
-    }
-
-    router.push('/cart');
+        router.push('/cart');
   };
 
   if (baseProduct === undefined) {
