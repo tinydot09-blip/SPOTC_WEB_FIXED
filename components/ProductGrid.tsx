@@ -2354,13 +2354,6 @@ export function ProductGrid({
                         return;
                       }
 
-                      if (giftCount > 0) {
-                        router.push(
-                          `/product/${encodeURIComponent(String(item.id))}?gift=1&action=buy`,
-                        );
-                        return;
-                      }
-
                       // Buy Now must not increase the quantity when this exact
                       // product/variant is already in the cart. Add it only when it
                       // is not already present, then continue to the cart.
