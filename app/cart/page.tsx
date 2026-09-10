@@ -2797,6 +2797,349 @@ const styles = `
     text-decoration: none;
   }
 
+.spotc-try-at-home-badge {
+width: fit-content;
+margin-top: 9px;
+padding: 5px 10px;
+display: inline-flex;
+align-items: center;
+border: 1px solid #ead8df;
+border-radius: 999px;
+color: #8f3151;
+background: #fff5f8;
+font-size: 11px;
+font-weight: 800;
+line-height: 1;
+  }
+
+  .spotc-try-at-home-section {
+margin-top: 18px;
+padding: 18px;
+overflow: hidden;
+border: 1px solid #ecdce2;
+border-radius: 20px;
+background:
+  linear-gradient(180deg, #fffafb 0%, #ffffff 64%);
+box-shadow: 0 10px 28px rgba(88, 48, 62, 0.06);
+  }
+
+  .spotc-try-at-home-hero {
+display: grid;
+grid-template-columns: 44px minmax(0, 1fr) auto;
+align-items: center;
+gap: 12px;
+padding-bottom: 15px;
+border-bottom: 1px solid #f1e5e9;
+  }
+
+  .spotc-try-at-home-hero-icon {
+width: 44px;
+height: 44px;
+display: grid;
+place-items: center;
+border-radius: 14px;
+color: #9b3b5a;
+background: #fdebf1;
+  }
+
+  .spotc-try-at-home-hero-copy {
+min-width: 0;
+  }
+
+  .spotc-try-at-home-hero-copy small {
+display: block;
+color: #9b3b5a;
+font-size: 10px;
+font-weight: 850;
+letter-spacing: 0.12em;
+  }
+
+  .spotc-try-at-home-hero-copy h3 {
+margin: 3px 0 0;
+color: #241c1f;
+font-size: 20px;
+font-weight: 780;
+letter-spacing: -0.02em;
+  }
+
+  .spotc-try-at-home-hero-copy p {
+margin: 4px 0 0;
+color: #7a6a70;
+font-size: 12px;
+line-height: 1.45;
+  }
+
+  .spotc-try-at-home-summary {
+min-width: 76px;
+padding: 9px 11px;
+text-align: center;
+border: 1px solid #ead8df;
+border-radius: 13px;
+background: #ffffff;
+  }
+
+  .spotc-try-at-home-summary strong,
+  .spotc-try-at-home-summary span {
+display: block;
+  }
+
+  .spotc-try-at-home-summary strong {
+color: #8f3151;
+font-size: 18px;
+font-weight: 850;
+line-height: 1;
+  }
+
+  .spotc-try-at-home-summary span {
+margin-top: 4px;
+color: #806f75;
+font-size: 10px;
+font-weight: 650;
+  }
+
+  .spotc-try-booking-panel {
+margin-top: 16px;
+padding: 16px;
+border: 1px solid #ece6e1;
+border-radius: 18px;
+background: #ffffff;
+  }
+
+  .spotc-try-booking-top {
+padding-bottom: 13px;
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 14px;
+border-bottom: 1px solid #eee8e4;
+  }
+
+  .spotc-try-booking-top small {
+display: block;
+color: #877b75;
+font-size: 10px;
+font-weight: 800;
+letter-spacing: 0.11em;
+  }
+
+  .spotc-try-booking-top h4 {
+margin: 3px 0 0;
+color: #251f1b;
+font-size: 16px;
+font-weight: 750;
+  }
+
+  .spotc-try-month-label {
+min-height: 38px;
+padding: 8px 11px;
+display: inline-flex;
+align-items: center;
+gap: 8px;
+border: 1px solid #e6dfda;
+border-radius: 11px;
+color: #2f2925;
+background: #fbfaf8;
+  }
+
+  .spotc-try-month-label strong {
+font-size: 12px;
+font-weight: 750;
+  }
+
+  .spotc-try-date-strip {
+margin-top: 14px;
+display: grid;
+grid-template-columns: repeat(7, minmax(58px, 1fr));
+gap: 8px;
+  }
+
+  .spotc-try-date-card {
+min-height: 66px;
+padding: 8px 6px;
+display: grid;
+place-items: center;
+align-content: center;
+gap: 4px;
+border: 1px solid transparent;
+border-radius: 14px;
+color: #746b66;
+background: transparent;
+cursor: pointer;
+transition:
+  background 0.16s ease,
+  color 0.16s ease,
+  border-color 0.16s ease,
+  transform 0.16s ease;
+  }
+
+  .spotc-try-date-card:hover {
+transform: translateY(-1px);
+background: #f7f4f1;
+  }
+
+  .spotc-try-date-card span {
+font-size: 11px;
+font-weight: 650;
+  }
+
+  .spotc-try-date-card strong {
+color: #28221f;
+font-size: 16px;
+font-weight: 800;
+  }
+
+  .spotc-try-date-card.active {
+border-color: #e88335;
+color: #ffffff;
+background: #ef7f2d;
+box-shadow: 0 8px 18px rgba(239, 127, 45, 0.2);
+  }
+
+  .spotc-try-date-card.active strong {
+color: #ffffff;
+  }
+
+  .spotc-try-time-section {
+margin-top: 16px;
+  }
+
+  .spotc-try-time-heading-row {
+display: flex;
+align-items: baseline;
+justify-content: space-between;
+gap: 12px;
+margin-bottom: 10px;
+  }
+
+  .spotc-try-time-heading-row strong {
+color: #2f2925;
+font-size: 13px;
+font-weight: 800;
+  }
+
+  .spotc-try-time-heading-row span {
+color: #91847d;
+font-size: 10px;
+  }
+
+  .spotc-try-at-home-slots {
+display: grid;
+grid-template-columns: repeat(6, minmax(0, 1fr));
+gap: 8px;
+  }
+
+  .spotc-try-at-home-slot {
+min-width: 0;
+min-height: 42px;
+padding: 9px 8px;
+border: 1px solid #ece7e3;
+border-radius: 999px;
+color: #2d2824;
+background: #f8f7f5;
+text-align: center;
+cursor: pointer;
+transition:
+  background 0.16s ease,
+  color 0.16s ease,
+  border-color 0.16s ease,
+  box-shadow 0.16s ease,
+  transform 0.16s ease;
+  }
+
+  .spotc-try-at-home-slot strong {
+display: block;
+overflow: hidden;
+font-size: 11px;
+font-weight: 750;
+line-height: 1.2;
+white-space: nowrap;
+text-overflow: ellipsis;
+  }
+
+  .spotc-try-at-home-slot:hover:not(:disabled) {
+transform: translateY(-1px);
+border-color: #e4a675;
+background: #fff8f2;
+  }
+
+  .spotc-try-at-home-slot.active {
+border-color: #ef7f2d;
+color: #d66513;
+background: #fff5ed;
+box-shadow: inset 0 0 0 1px rgba(239, 127, 45, 0.1);
+  }
+
+  .spotc-try-at-home-slot.disabled,
+  .spotc-try-at-home-slot:disabled {
+opacity: 0.42;
+cursor: not-allowed;
+color: #9f9995;
+background: #f3f2f1;
+  }
+
+  .spotc-try-at-home-no-slots {
+padding: 14px;
+display: grid;
+gap: 4px;
+border: 1px solid #eadfd8;
+border-radius: 13px;
+color: #745f53;
+background: #fff8f3;
+  }
+
+  .spotc-try-at-home-no-slots strong {
+font-size: 12px;
+font-weight: 800;
+  }
+
+  .spotc-try-at-home-no-slots span {
+font-size: 11px;
+  }
+
+  .spotc-try-confirm-button {
+width: min(240px, 100%);
+min-height: 46px;
+margin: 16px 0 0 auto;
+padding: 0 18px;
+display: block;
+border: 0;
+border-radius: 13px;
+color: #ffffff;
+background: #ef7f2d;
+font: inherit;
+font-size: 13px;
+font-weight: 850;
+cursor: pointer;
+box-shadow: 0 8px 18px rgba(239, 127, 45, 0.2);
+  }
+
+  .spotc-try-confirm-button:hover {
+background: #dc6f21;
+  }
+
+  .spotc-try-at-home-footer {
+margin-top: 14px;
+padding-top: 13px;
+display: flex;
+align-items: center;
+gap: 9px;
+flex-wrap: wrap;
+border-top: 1px solid #f1e5e9;
+color: #74666b;
+font-size: 11px;
+line-height: 1.4;
+  }
+
+  .spotc-try-at-home-free {
+padding: 4px 8px;
+border-radius: 999px;
+color: #176f43;
+background: #eaf7ef;
+font-size: 9px;
+font-weight: 850;
+letter-spacing: 0.06em;
+  }
+
   @media (max-width: 980px) {
     .spotc-cart-layout {
       grid-template-columns: 1fr;
@@ -2865,349 +3208,6 @@ const styles = `
     .spotc-delivery-options {
       grid-template-columns: 1fr;
     }
-
-    .spotc-try-at-home-badge {
-    width: fit-content;
-    margin-top: 9px;
-    padding: 5px 10px;
-    display: inline-flex;
-    align-items: center;
-    border: 1px solid #ead8df;
-    border-radius: 999px;
-    color: #8f3151;
-    background: #fff5f8;
-    font-size: 11px;
-    font-weight: 800;
-    line-height: 1;
-  }
-
-  .spotc-try-at-home-section {
-    margin-top: 18px;
-    padding: 18px;
-    overflow: hidden;
-    border: 1px solid #ecdce2;
-    border-radius: 20px;
-    background:
-      linear-gradient(180deg, #fffafb 0%, #ffffff 64%);
-    box-shadow: 0 10px 28px rgba(88, 48, 62, 0.06);
-  }
-
-  .spotc-try-at-home-hero {
-    display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 12px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid #f1e5e9;
-  }
-
-  .spotc-try-at-home-hero-icon {
-    width: 44px;
-    height: 44px;
-    display: grid;
-    place-items: center;
-    border-radius: 14px;
-    color: #9b3b5a;
-    background: #fdebf1;
-  }
-
-  .spotc-try-at-home-hero-copy {
-    min-width: 0;
-  }
-
-  .spotc-try-at-home-hero-copy small {
-    display: block;
-    color: #9b3b5a;
-    font-size: 10px;
-    font-weight: 850;
-    letter-spacing: 0.12em;
-  }
-
-  .spotc-try-at-home-hero-copy h3 {
-    margin: 3px 0 0;
-    color: #241c1f;
-    font-size: 20px;
-    font-weight: 780;
-    letter-spacing: -0.02em;
-  }
-
-  .spotc-try-at-home-hero-copy p {
-    margin: 4px 0 0;
-    color: #7a6a70;
-    font-size: 12px;
-    line-height: 1.45;
-  }
-
-  .spotc-try-at-home-summary {
-    min-width: 76px;
-    padding: 9px 11px;
-    text-align: center;
-    border: 1px solid #ead8df;
-    border-radius: 13px;
-    background: #ffffff;
-  }
-
-  .spotc-try-at-home-summary strong,
-  .spotc-try-at-home-summary span {
-    display: block;
-  }
-
-  .spotc-try-at-home-summary strong {
-    color: #8f3151;
-    font-size: 18px;
-    font-weight: 850;
-    line-height: 1;
-  }
-
-  .spotc-try-at-home-summary span {
-    margin-top: 4px;
-    color: #806f75;
-    font-size: 10px;
-    font-weight: 650;
-  }
-
-  .spotc-try-booking-panel {
-    margin-top: 16px;
-    padding: 16px;
-    border: 1px solid #ece6e1;
-    border-radius: 18px;
-    background: #ffffff;
-  }
-
-  .spotc-try-booking-top {
-    padding-bottom: 13px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    border-bottom: 1px solid #eee8e4;
-  }
-
-  .spotc-try-booking-top small {
-    display: block;
-    color: #877b75;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.11em;
-  }
-
-  .spotc-try-booking-top h4 {
-    margin: 3px 0 0;
-    color: #251f1b;
-    font-size: 16px;
-    font-weight: 750;
-  }
-
-  .spotc-try-month-label {
-    min-height: 38px;
-    padding: 8px 11px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid #e6dfda;
-    border-radius: 11px;
-    color: #2f2925;
-    background: #fbfaf8;
-  }
-
-  .spotc-try-month-label strong {
-    font-size: 12px;
-    font-weight: 750;
-  }
-
-  .spotc-try-date-strip {
-    margin-top: 14px;
-    display: grid;
-    grid-template-columns: repeat(7, minmax(58px, 1fr));
-    gap: 8px;
-  }
-
-  .spotc-try-date-card {
-    min-height: 66px;
-    padding: 8px 6px;
-    display: grid;
-    place-items: center;
-    align-content: center;
-    gap: 4px;
-    border: 1px solid transparent;
-    border-radius: 14px;
-    color: #746b66;
-    background: transparent;
-    cursor: pointer;
-    transition:
-      background 0.16s ease,
-      color 0.16s ease,
-      border-color 0.16s ease,
-      transform 0.16s ease;
-  }
-
-  .spotc-try-date-card:hover {
-    transform: translateY(-1px);
-    background: #f7f4f1;
-  }
-
-  .spotc-try-date-card span {
-    font-size: 11px;
-    font-weight: 650;
-  }
-
-  .spotc-try-date-card strong {
-    color: #28221f;
-    font-size: 16px;
-    font-weight: 800;
-  }
-
-  .spotc-try-date-card.active {
-    border-color: #e88335;
-    color: #ffffff;
-    background: #ef7f2d;
-    box-shadow: 0 8px 18px rgba(239, 127, 45, 0.2);
-  }
-
-  .spotc-try-date-card.active strong {
-    color: #ffffff;
-  }
-
-  .spotc-try-time-section {
-    margin-top: 16px;
-  }
-
-  .spotc-try-time-heading-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 10px;
-  }
-
-  .spotc-try-time-heading-row strong {
-    color: #2f2925;
-    font-size: 13px;
-    font-weight: 800;
-  }
-
-  .spotc-try-time-heading-row span {
-    color: #91847d;
-    font-size: 10px;
-  }
-
-  .spotc-try-at-home-slots {
-    display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .spotc-try-at-home-slot {
-    min-width: 0;
-    min-height: 42px;
-    padding: 9px 8px;
-    border: 1px solid #ece7e3;
-    border-radius: 999px;
-    color: #2d2824;
-    background: #f8f7f5;
-    text-align: center;
-    cursor: pointer;
-    transition:
-      background 0.16s ease,
-      color 0.16s ease,
-      border-color 0.16s ease,
-      box-shadow 0.16s ease,
-      transform 0.16s ease;
-  }
-
-  .spotc-try-at-home-slot strong {
-    display: block;
-    overflow: hidden;
-    font-size: 11px;
-    font-weight: 750;
-    line-height: 1.2;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-
-  .spotc-try-at-home-slot:hover:not(:disabled) {
-    transform: translateY(-1px);
-    border-color: #e4a675;
-    background: #fff8f2;
-  }
-
-  .spotc-try-at-home-slot.active {
-    border-color: #ef7f2d;
-    color: #d66513;
-    background: #fff5ed;
-    box-shadow: inset 0 0 0 1px rgba(239, 127, 45, 0.1);
-  }
-
-  .spotc-try-at-home-slot.disabled,
-  .spotc-try-at-home-slot:disabled {
-    opacity: 0.42;
-    cursor: not-allowed;
-    color: #9f9995;
-    background: #f3f2f1;
-  }
-
-  .spotc-try-at-home-no-slots {
-    padding: 14px;
-    display: grid;
-    gap: 4px;
-    border: 1px solid #eadfd8;
-    border-radius: 13px;
-    color: #745f53;
-    background: #fff8f3;
-  }
-
-  .spotc-try-at-home-no-slots strong {
-    font-size: 12px;
-    font-weight: 800;
-  }
-
-  .spotc-try-at-home-no-slots span {
-    font-size: 11px;
-  }
-
-  .spotc-try-confirm-button {
-    width: min(240px, 100%);
-    min-height: 46px;
-    margin: 16px 0 0 auto;
-    padding: 0 18px;
-    display: block;
-    border: 0;
-    border-radius: 13px;
-    color: #ffffff;
-    background: #ef7f2d;
-    font: inherit;
-    font-size: 13px;
-    font-weight: 850;
-    cursor: pointer;
-    box-shadow: 0 8px 18px rgba(239, 127, 45, 0.2);
-  }
-
-  .spotc-try-confirm-button:hover {
-    background: #dc6f21;
-  }
-
-  .spotc-try-at-home-footer {
-    margin-top: 14px;
-    padding-top: 13px;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    flex-wrap: wrap;
-    border-top: 1px solid #f1e5e9;
-    color: #74666b;
-    font-size: 11px;
-    line-height: 1.4;
-  }
-
-  .spotc-try-at-home-free {
-    padding: 4px 8px;
-    border-radius: 999px;
-    color: #176f43;
-    background: #eaf7ef;
-    font-size: 9px;
-    font-weight: 850;
-    letter-spacing: 0.06em;
-  }
 
   .spotc-delivery-section {
       padding: 13px;
@@ -3397,6 +3397,90 @@ const styles = `
       flex: 0 0 auto;
       justify-content: center;
       font-size: 12px;
+    }
+
+    /* Try at Home booking — mobile */
+    .spotc-try-at-home-section {
+      padding: 14px;
+      border-radius: 16px;
+    }
+
+    .spotc-try-at-home-hero {
+      grid-template-columns: 40px minmax(0, 1fr);
+      align-items: start;
+    }
+
+    .spotc-try-at-home-summary {
+      grid-column: 1 / -1;
+      min-width: 0;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      text-align: left;
+    }
+
+    .spotc-try-at-home-summary strong,
+    .spotc-try-at-home-summary span {
+      display: inline;
+      margin: 0;
+    }
+
+    .spotc-try-booking-panel {
+      padding: 13px;
+      border-radius: 15px;
+    }
+
+    .spotc-try-booking-top {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .spotc-try-month-label {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .spotc-try-date-strip {
+      display: flex;
+      overflow-x: auto;
+      gap: 7px;
+      padding-bottom: 5px;
+      scrollbar-width: none;
+    }
+
+    .spotc-try-date-strip::-webkit-scrollbar {
+      display: none;
+    }
+
+    .spotc-try-date-card {
+      min-width: 62px;
+      flex: 0 0 62px;
+      min-height: 62px;
+    }
+
+    .spotc-try-time-heading-row {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .spotc-try-at-home-slots {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .spotc-try-at-home-slot {
+      min-height: 40px;
+      padding: 8px 5px;
+    }
+
+    .spotc-try-at-home-slot strong {
+      font-size: 10px;
+    }
+
+    .spotc-try-confirm-button {
+      width: 100%;
     }
 
 @media (max-width: 420px) {
