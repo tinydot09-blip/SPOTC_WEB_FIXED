@@ -1344,8 +1344,8 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
   // and so on — +1 gift for every completed ₹100.
   // Legacy FREE-gift flow is disabled.
   // Combo pricing now uses the dedicated /combo/[id] page instead.
-  const freeGiftCountPerItem = 0;
-  const freeGiftCount = 0;
+  const freeGiftCountPerItem: number = 0;
+  const freeGiftCount: number = 0;
 
  
   const giftCategories = [
