@@ -1173,7 +1173,7 @@ export function ProductGrid({
       return;
     }
 
-    const selectedProducts = items.filter((candidate) =>
+    const selectedProducts = (items ?? []).filter((candidate) =>
       tryAtHomeIds.has(String(candidate.id)),
     );
 
