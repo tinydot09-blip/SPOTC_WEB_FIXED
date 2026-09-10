@@ -873,10 +873,8 @@ const oldPriceOf = (product: BusinessProduct): number =>
       product.mrp,
   );
 
-const freeGiftCount = (price: number): number => {
-  if (price < 100) return 0;
-  return Math.floor(price / 100);
-};
+const isComboEligible = (price: number): boolean =>
+  price >= 100;
 
 const discountOf = (product: BusinessProduct): number => {
   const price = priceOf(product);
@@ -1138,6 +1136,22 @@ export function ProductGrid({
   const [compareBusy, setCompareBusy] =
     useState(false);
   const [mounted, setMounted] = useState(false);
+  const [tryAtHomeIds, setTryAtHomeIds] =
+    useState<Set<string>>(new Set());
+
+  const toggleTryAtHome = (productId: string) => {
+    setTryAtHomeIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+
+      return next;
+    });
+  };
 
   const localizedTitleOf = (item: BusinessProduct): string => {
     const record = item as BusinessProduct & Record<string, unknown>;
@@ -2160,7 +2174,7 @@ export function ProductGrid({
           const price = priceOf(item);
           const oldPrice = oldPriceOf(item);
           const discount = discountOf(item);
-          const giftCount = freeGiftCount(price);
+          const comboEligible = isComboEligible(price);
           const image = imageOf(item);
           const stock = numberValue(
             item.stock_qty ??
@@ -2222,18 +2236,15 @@ export function ProductGrid({
 />
                 </button>
 
-                {giftCount > 0 && (
+                {comboEligible && (
                   <Link
-                    href={`/product/${item.id}?gift=1`}
+                    href={`/product/${item.id}`}
                     className="product-image-gift-badge"
-                    aria-label={`${giftCount} ${
-                      giftCount === 1 ? 'FREE Gift' : 'FREE Gifts'
-                    } included · ${localizedTitleOf(item)}`}
+                    aria-label={`${t('Choose Combo')} · ${localizedTitleOf(item)}`}
                   >
                     <Gift size={16} strokeWidth={2.4} aria-hidden="true" />
                     <span>
-                      <strong>{giftCount} FREE</strong>{' '}
-                      {giftCount === 1 ? 'GIFT' : 'GIFTS'}
+                      <strong>{t('Choose Combo')}</strong>
                     </span>
                   </Link>
                 )}
@@ -2246,25 +2257,6 @@ export function ProductGrid({
                 >
                   <h3>{localizedTitleOf(item)}</h3>
                 </Link>
-
-                <div className="product-stock-row">
-                  <span className="product-delivery-badge">
-                    <ShoppingBag
-                      size={13}
-                      strokeWidth={2}
-                      aria-hidden="true"
-                    />
-                    <span>{t('15 mins delivery')}</span>
-                  </span>
-
-                  <small className="product-stock-text">
-                    {stock > 0
-                      ? language === 'ta'
-                        ? `${stock} மட்டும் உள்ளது`
-                        : `${stock} left`
-                      : t('Out of stock')}
-                  </small>
-                </div>
 
                 <div className="price">
                   <strong>
@@ -2284,6 +2276,28 @@ export function ProductGrid({
                   )}
                 </div>
 
+                <div className="product-try-home-row">
+                  <label
+                    className="product-try-home-option"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={tryAtHomeIds.has(String(item.id))}
+                      onChange={() => toggleTryAtHome(String(item.id))}
+                      aria-label={`${t('Try at home')} · ${localizedTitleOf(item)}`}
+                    />
+                    <span>{t('Try at home')}</span>
+                  </label>
+
+                  <small className="product-stock-text">
+                    {stock > 0
+                      ? language === 'ta'
+                        ? `${stock} மட்டும் உள்ளது`
+                        : `${stock} left`
+                      : t('Out of stock')}
+                  </small>
+                </div>
 
 <div className="product-actions">
                   <button
@@ -2517,9 +2531,8 @@ export function ProductGrid({
         }
 
         /*
-         * SHOP PRODUCT CARD — FREE GIFT BADGE ON PRODUCT IMAGE
-         * Replaces the previous Ask Friends pill and makes the gift offer
-         * immediately visible without adding extra height below the image.
+         * SHOP PRODUCT CARD — CHOOSE COMBO BADGE ON PRODUCT IMAGE
+         * Dresses priced at ₹100 or more can show this combo entry point.
          */
         .product-card.rich .product-image-gift-badge {
           position: absolute;
@@ -2585,8 +2598,7 @@ export function ProductGrid({
         }
 
         /*
-         * SHOP PRODUCT CARD — DELIVERY + STOCK ROW
-         * Matches the placement used on the Business product cards.
+         * SHOP PRODUCT CARD — TRY AT HOME + STOCK ROW
          */
         .product-card.rich .product-free-gift-chip {
           width: fit-content;
@@ -2670,9 +2682,65 @@ export function ProductGrid({
           white-space: nowrap;
         }
 
+        .product-card.rich .product-try-home-row {
+          width: 100%;
+          min-height: 30px;
+          margin: 7px 0 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+
+        .product-card.rich .product-try-home-option {
+          min-width: 0;
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          color: #171717;
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1.2;
+          cursor: pointer;
+          user-select: none;
+        }
+
+        .product-card.rich .product-try-home-option input {
+          width: 17px;
+          height: 17px;
+          margin: 0;
+          flex: 0 0 17px;
+          accent-color: #171717;
+          cursor: pointer;
+        }
+
+        @media (max-width: 700px) {
+          .product-card.rich .product-try-home-row {
+            min-height: 27px;
+            margin-top: 6px;
+            margin-bottom: 8px;
+            gap: 6px;
+          }
+
+          .product-card.rich .product-try-home-option {
+            gap: 5px;
+            font-size: 11px;
+          }
+
+          .product-card.rich .product-try-home-option input {
+            width: 15px;
+            height: 15px;
+            flex-basis: 15px;
+          }
+
+          .product-card.rich .product-stock-text {
+            font-size: 11px;
+          }
+        }
+
         /*
          * PRODUCT CARD CONTENT SPACING FIX
-         * Keeps title, delivery, gift, price and actions compact
+         * Keeps title, combo, price, Try at Home and actions compact
          * and removes the large empty gaps visible in the card.
          */
         .product-card.rich .product-copy {
@@ -2684,11 +2752,6 @@ export function ProductGrid({
         .product-card.rich .product-title-link h3 {
           margin-top: 0 !important;
           margin-bottom: 0 !important;
-        }
-
-        .product-card.rich .product-stock-row {
-          margin-top: 6px !important;
-          margin-bottom: 8px !important;
         }
 
         .product-card.rich .product-free-gift-chip {
