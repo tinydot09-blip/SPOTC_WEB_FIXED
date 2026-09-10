@@ -124,19 +124,13 @@ const isDeliveryOptionAvailable = (
 ): boolean => {
   const hour = now.getHours();
 
+  // Instant delivery only during operating hours
   if (id === 'instant') {
     return hour >= 7 && hour < 20;
   }
 
-  if (id === 'morning') {
-    return hour >= 6 && hour < 12;
-  }
-
-  if (id === 'afternoon') {
-    return hour >= 12 && hour < 18;
-  }
-
-  return hour >= 18 || hour < 6;
+  // Scheduled delivery slots can be selected in advance.
+  return true;
 };
 
 const preferredDeliveryOptionId = (
