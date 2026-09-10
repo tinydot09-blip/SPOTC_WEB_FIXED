@@ -29,13 +29,33 @@ const money = (value: number): string =>
     'en-IN',
   )}`;
 
-const freeGiftCountPerItemFromPrice = (
-  price: number,
-): number => {
-  if (price < 80) return 0;
-  if (price < 200) return 1;
-  return Math.floor(price / 100);
+type ComboCartItem = CartItem & {
+  is_combo_item?: boolean;
+  combo_parent_id?: string;
+  combo_original_price?: number;
+  combo_price?: number;
 };
+
+const comboMetaOf = (item: CartItem): ComboCartItem =>
+  item as ComboCartItem;
+
+const isComboCartItem = (item: CartItem): boolean =>
+  comboMetaOf(item).is_combo_item === true;
+
+const comboParentIdOf = (item: CartItem): string =>
+  String(comboMetaOf(item).combo_parent_id || '');
+
+const comboOriginalPriceOf = (item: CartItem): number => {
+  const meta = comboMetaOf(item);
+  const original = Number(meta.combo_original_price);
+  return Number.isFinite(original) && original > 0
+    ? original
+    : Number(item.price) || 0;
+};
+
+const freeGiftCountPerItemFromPrice = (
+  _price: number,
+): number => 0;
 
 const freeGiftEntitlementForItem = (item: CartItem): number => {
   const perItem =
@@ -283,14 +303,30 @@ export default function CartPage() {
   useEffect(() => {
     const cartItems = readCart();
 
-    setItems(cartItems);
+    const parentIds = new Set(
+      cartItems
+        .filter((item) => !isComboCartItem(item))
+        .map((item) => String(item.id)),
+    );
+
+    const validatedCartItems = cartItems.filter((item) => {
+      if (!isComboCartItem(item)) return true;
+      const parentId = comboParentIdOf(item);
+      return Boolean(parentId) && parentIds.has(parentId);
+    });
+
+    if (validatedCartItems.length !== cartItems.length) {
+      writeCart(validatedCartItems);
+    }
+
+    setItems(validatedCartItems);
 
     const nextGiftBundles: Record<
       string,
       SavedGiftBundle
     > = {};
 
-    cartItems.forEach((item) => {
+    validatedCartItems.forEach((item) => {
       const bundle = readSavedGifts(item.id);
 
       if (bundle && bundle.gifts.length > 0) {
@@ -588,6 +624,20 @@ export default function CartPage() {
     [items],
   );
 
+  const comboSavings = useMemo(
+    () =>
+      items.reduce((sum, item) => {
+        if (!isComboCartItem(item)) return sum;
+
+        const qty = Math.max(1, Number(item.qty) || 1);
+        const original = comboOriginalPriceOf(item);
+        const comboPrice = Number(item.price) || 0;
+
+        return sum + Math.max(0, original - comboPrice) * qty;
+      }, 0),
+    [items],
+  );
+
   /*
    * SINGLE DELIVERY SOURCE OF TRUTH
    * --------------------------------
@@ -809,41 +859,44 @@ export default function CartPage() {
     itemIndex: number,
   ) => {
     const itemToRemove = items[itemIndex];
+    if (!itemToRemove) return;
 
-    const nextItems = items.filter(
-      (_, index) =>
-        index !== itemIndex,
-    );
+    const removingComboItem = isComboCartItem(itemToRemove);
+    const removedParentId = String(itemToRemove.id);
+
+    const nextItems = items.filter((item, index) => {
+      if (index === itemIndex) return false;
+
+      if (
+        !removingComboItem &&
+        isComboCartItem(item) &&
+        comboParentIdOf(item) === removedParentId
+      ) {
+        return false;
+      }
+
+      return true;
+    });
 
     updateCart(nextItems);
 
-    if (itemToRemove) {
-      sendGa4Event('remove_from_cart', {
-        currency: 'INR',
-        value:
-          (Number(itemToRemove.price) || 0) *
-          Math.max(1, Number(itemToRemove.qty) || 1),
-        items: [ga4ItemFromCart(itemToRemove)],
-      });
-    }
+    sendGa4Event('remove_from_cart', {
+      currency: 'INR',
+      value:
+        (Number(itemToRemove.price) || 0) *
+        Math.max(1, Number(itemToRemove.qty) || 1),
+      items: [ga4ItemFromCart(itemToRemove)],
+    });
 
-    if (
-      itemToRemove &&
-      !nextItems.some(
-        (item) =>
-          item.id === itemToRemove.id,
-      )
-    ) {
-      window.localStorage.removeItem(
-        `spotc-free-gifts:${itemToRemove.id}`,
-      );
+    window.localStorage.removeItem(
+      `spotc-free-gifts:${itemToRemove.id}`,
+    );
 
-      setGiftBundles((current) => {
-        const next = { ...current };
-        delete next[itemToRemove.id];
-        return next;
-      });
-    }
+    setGiftBundles((current) => {
+      const next = { ...current };
+      delete next[itemToRemove.id];
+      return next;
+    });
   };
 
   if (!items.length) {
@@ -903,9 +956,6 @@ export default function CartPage() {
                 <strong>Your cart</strong>
                 <small>
                   All products are sold directly by SPOTC
-                  {totalFreeGifts > 0
-                    ? ` · ${totalFreeGifts} FREE gift${totalFreeGifts === 1 ? '' : 's'} included`
-                    : ''}
                 </small>
               </div>
             </div>
@@ -922,6 +972,8 @@ export default function CartPage() {
 
               <div className="spotc-products-list">
                 {items.map((item, index) => {
+                  const comboItem = isComboCartItem(item);
+                  const comboOriginalPrice = comboOriginalPriceOf(item);
                   const freeGifts =
                     giftBundles[item.id]?.gifts || [];
                   const requiredFreeGifts =
@@ -964,20 +1016,40 @@ export default function CartPage() {
                             </p>
                           )}
 
-                          <strong>
-                            {money(
-                              item.price *
-                                Math.max(
-                                  1,
-                                  Number(item.qty) || 1,
-                                ),
+                          <div className="spotc-product-price-row">
+                            <strong>
+                              {money(
+                                item.price *
+                                  Math.max(
+                                    1,
+                                    Number(item.qty) || 1,
+                                  ),
+                              )}
+                            </strong>
+
+                            {comboItem && comboOriginalPrice > item.price && (
+                              <del>
+                                {money(
+                                  comboOriginalPrice *
+                                    Math.max(
+                                      1,
+                                      Number(item.qty) || 1,
+                                    ),
+                                )}
+                              </del>
                             )}
-                          </strong>
+
+                            {comboItem && (
+                              <span className="spotc-combo-price-badge">
+                                Combo Price
+                              </span>
+                            )}
+                          </div>
 
                           {Math.max(
                             1,
                             Number(item.qty) || 1,
-                          ) > 1 && (
+                          ) > 1 && !comboItem && (
                             <small className="spotc-line-price-note">
                               {money(item.price)} each
                             </small>
@@ -985,7 +1057,7 @@ export default function CartPage() {
                         </div>
 
                         <div className="spotc-cart-controls">
-                          {(
+                          {!comboItem && (
                             item.stockQty === undefined ||
                             item.stockQty > 1
                           ) && (
@@ -1061,112 +1133,6 @@ export default function CartPage() {
                         </div>
                       </div>
 
-                      {requiredFreeGifts > 0 && missingFreeGifts > 0 && (
-                        <div className="spotc-free-gifts spotc-free-gifts-missing">
-                          <div className="spotc-free-gifts-title">
-                            <div className="spotc-free-gifts-title-copy">
-                              <span
-                                className="spotc-free-gifts-title-icon"
-                                aria-hidden="true"
-                              >
-                                🎁
-                              </span>
-
-                              <div>
-                                <strong>
-                                  Choose {requiredFreeGifts} FREE Gift
-                                  {requiredFreeGifts === 1 ? '' : 's'}
-                                </strong>
-                                <small>
-                                  {freeGifts.length > 0
-                                    ? `${freeGifts.length} selected · Choose ${missingFreeGifts} more before checkout`
-                                    : 'FREE gifts are included with this product. Choose them before checkout.'}
-                                </small>
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              className="spotc-change-gift-button spotc-change-gift-button-header"
-                              onClick={() => chooseMissingFreeGifts(item)}
-                            >
-                              Choose
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {freeGifts.length > 0 && (
-                        <div className="spotc-free-gifts">
-                          <div className="spotc-free-gifts-title">
-                            <div className="spotc-free-gifts-title-copy">
-                              <span
-                                className="spotc-free-gifts-title-icon"
-                                aria-hidden="true"
-                              >
-                                🎁
-                              </span>
-
-                              <div>
-                                <strong>
-                                  {freeGifts.length} FREE Gift
-                                  {freeGifts.length === 1 ? '' : 's'} Included
-                                </strong>
-
-                                <small>
-                                  Your selected gifts are included at no extra cost
-                                </small>
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              className="spotc-change-gift-button spotc-change-gift-button-header"
-                              onClick={() => {
-                                const firstGift = freeGifts[0];
-
-                                if (!firstGift) return;
-
-                                changeFreeGift(
-                                  item.id,
-                                  firstGift.id,
-                                  0,
-                                );
-                              }}
-                            >
-                              Change
-                            </button>
-                          </div>
-
-                          <div className="spotc-free-gifts-list">
-                            {freeGifts.map((gift) => (
-                              <div
-                                className="spotc-free-gift"
-                                key={`${item.id}-${gift.id}`}
-                              >
-                                <div className="spotc-free-gift-image">
-                                  {gift.image ? (
-                                    <img
-                                      src={gift.image}
-                                      alt={gift.title}
-                                    />
-                                  ) : (
-                                    <ShoppingBag size={22} />
-                                  )}
-                                </div>
-
-                                <div className="spotc-free-gift-copy">
-                                  <h4>{gift.title}</h4>
-
-                                  <div className="spotc-free-gift-price">
-                                    <strong>FREE</strong>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -1279,6 +1245,12 @@ export default function CartPage() {
                 <span>Platform fee</span>
                 <strong>₹0</strong>
               </p>
+              {comboSavings > 0 && (
+                <p className="spotc-combo-savings-line">
+                  <span>Combo savings</span>
+                  <strong>-{money(comboSavings)}</strong>
+                </p>
+              )}
             </div>
 
             <div className="spotc-total-row">
@@ -1301,13 +1273,6 @@ export default function CartPage() {
               className="spotc-checkout-button"
               href="/address"
               onClick={(event) => {
-                if (hasMissingFreeGifts && firstItemMissingGifts) {
-                  event.preventDefault();
-                  alert('Choose your FREE gifts before continuing to address.');
-                  chooseMissingFreeGifts(firstItemMissingGifts);
-                  return;
-                }
-
                 sendGa4Event('begin_checkout', {
                   currency: 'INR',
                   value: total,
@@ -1890,6 +1855,41 @@ const styles = `
     color: #c7680b;
     font-size: 19px;
     font-weight: 650;
+  }
+
+  .spotc-product-price-row {
+    margin-top: 12px;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  .spotc-product-price-row > strong {
+    margin-top: 0;
+  }
+
+  .spotc-product-price-row del {
+    color: #968c83;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .spotc-combo-price-badge {
+    padding: 3px 7px;
+    border-radius: 999px;
+    color: #147c43;
+    background: #e8f7ed;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .spotc-combo-savings-line span,
+  .spotc-combo-savings-line strong {
+    color: #168648 !important;
+    font-weight: 750 !important;
   }
 
   .spotc-line-price-note {
