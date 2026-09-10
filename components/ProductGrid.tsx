@@ -874,8 +874,11 @@ const oldPriceOf = (product: BusinessProduct): number =>
       product.mrp,
   );
 
-const isComboEligible = (price: number): boolean =>
-  price >= 100;
+const isComboEligible = (
+  product: BusinessProduct,
+  price: number,
+): boolean =>
+  isGirlDressProduct(product) && price >= 100;
 
 const discountOf = (product: BusinessProduct): number => {
   const price = priceOf(product);
@@ -2339,7 +2342,7 @@ export function ProductGrid({
           const price = priceOf(item);
           const oldPrice = oldPriceOf(item);
           const discount = discountOf(item);
-          const comboEligible = isComboEligible(price);
+          const comboEligible = isComboEligible(item, price);
           const tryAtHomeKind = tryAtHomeKindOf(item);
           const tryAtHomeEligible = tryAtHomeKind !== null;
           const image = imageOf(item);
@@ -2405,7 +2408,7 @@ export function ProductGrid({
 
                 {comboEligible && (
                   <Link
-                    href={`/product/${item.id}`}
+                    href={`/product/${item.id}?combo=1&action=cart${tryAtHomeIds.has(String(item.id)) ? '&tryAtHome=1' : ''}`}
                     className="product-image-gift-badge"
                     aria-label={`${t('Choose Combo')} · ${localizedTitleOf(item)}`}
                   >
@@ -2510,6 +2513,17 @@ export function ProductGrid({
                         return;
                       }
 
+                      if (comboEligible) {
+                        const tryAtHomeQuery = tryAtHomeIds.has(String(item.id))
+                          ? '&tryAtHome=1'
+                          : '';
+
+                        router.push(
+                          `/product/${encodeURIComponent(String(item.id))}?combo=1&action=cart${tryAtHomeQuery}`,
+                        );
+                        return;
+                      }
+
                       addProduct(item);
                       alert(t('1 product added'));
                     }}
@@ -2538,6 +2552,17 @@ export function ProductGrid({
                           alert(t('Please enable location so SPOTC can check delivery availability.'));
                           delivery.requestLocation();
                         }
+                        return;
+                      }
+
+                      if (comboEligible) {
+                        const tryAtHomeQuery = tryAtHomeIds.has(String(item.id))
+                          ? '&tryAtHome=1'
+                          : '';
+
+                        router.push(
+                          `/product/${encodeURIComponent(String(item.id))}?combo=1&action=buy${tryAtHomeQuery}`,
+                        );
                         return;
                       }
 

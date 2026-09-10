@@ -1271,6 +1271,67 @@ const [fullscreenTryOn, setFullscreenTryOn] = useState(false);
     setGiftPreviewOpen(true);
   }, [product]);
 
+  useEffect(() => {
+    if (!product || typeof window === 'undefined') return;
+
+    const queryParams = new URLSearchParams(window.location.search);
+    if (queryParams.get('combo') !== '1') return;
+
+    const productRecord = product as ProductRecord;
+    const productCategory = text(
+      productRecord.main_category ||
+        productRecord.category ||
+        productRecord.sub_category,
+    )
+      .trim()
+      .toLowerCase();
+
+    const comboEligibleFromCard =
+      productCategory.includes('girl dress') &&
+      customerPriceOf(product) >= 100;
+
+    if (!comboEligibleFromCard) return;
+
+    const action = queryParams.get('action') === 'buy' ? 'buy' : 'cart';
+    const tryAtHome = queryParams.get('tryAtHome') === '1';
+
+    try {
+      window.sessionStorage.setItem(
+        `spotc-combo-base:${product.id}`,
+        JSON.stringify({
+          productId: String(product.id),
+          size: '',
+          color: '',
+          qty: 1,
+          tryAtHome,
+          action,
+        }),
+      );
+
+      if (tryAtHome) {
+        const raw = window.localStorage.getItem('spotc_try_at_home_ids');
+        const parsed = raw ? JSON.parse(raw) : [];
+        const ids = Array.isArray(parsed)
+          ? parsed.map((value) => String(value))
+          : [];
+        const productId = String(product.id);
+
+        if (!ids.includes(productId)) ids.push(productId);
+
+        window.localStorage.setItem(
+          'spotc_try_at_home_ids',
+          JSON.stringify(ids),
+        );
+      }
+    } catch {
+      // Browser storage is best-effort.
+    }
+
+    router.replace(
+      `/combo/${encodeURIComponent(String(product.id))}?action=${action}`,
+    );
+  }, [product, router]);
+
   const record = product ? (product as ProductRecord) : null;
   const images = useMemo(() => (record ? imageList(record) : []), [record]);
   const productMedia = useMemo(
@@ -1575,6 +1636,8 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   const isGirlDressProduct =
     mainCategoryText.toLowerCase() === 'girl dress' ||
     mainCategoryText.toLowerCase().includes('girl dress');
+
+  const comboEligible = isGirlDressProduct && price >= 100;
 
   const descriptiveColours = stringList(
     record.color,
@@ -2050,23 +2113,60 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
       return false;
     }
 
-    if (
-      freeGiftCount > 0 &&
-      selectedGiftIds.length !== freeGiftCount
-    ) {
-      setGiftPreviewOpen(true);
-      alert(
-        `Choose ${freeGiftCount} FREE ${
-          freeGiftCount === 1 ? 'gift' : 'gifts'
-        } before continuing.`,
-      );
-      return false;
-    }
-
     return true;
   };
 
+  const openComboPage = (action: 'cart' | 'buy') => {
+    if (!inStock) {
+      alert('This product is out of stock');
+      return;
+    }
+
+    if (sizes.length > 0 && !size) {
+      alert('Select a size');
+      return;
+    }
+
+    if (showColorSelector && !color) {
+      alert('Select a colour');
+      return;
+    }
+
+    let tryAtHome = false;
+
+    try {
+      const raw = window.localStorage.getItem('spotc_try_at_home_ids');
+      const parsed = raw ? JSON.parse(raw) : [];
+      tryAtHome =
+        Array.isArray(parsed) &&
+        parsed.map((value) => String(value)).includes(String(product.id));
+
+      window.sessionStorage.setItem(
+        `spotc-combo-base:${product.id}`,
+        JSON.stringify({
+          productId: String(product.id),
+          size,
+          color: showColorSelector ? color : '',
+          qty,
+          tryAtHome,
+          action,
+        }),
+      );
+    } catch {
+      // The combo page can still load the product without stored options.
+    }
+
+    router.push(
+      `/combo/${encodeURIComponent(String(product.id))}?action=${action}`,
+    );
+  };
+
   const addToCart = () => {
+    if (comboEligible) {
+      openComboPage('cart');
+      return;
+    }
+
     if (!validatePurchaseOptions()) return;
 
     saveSelectedGiftsForCart();
@@ -2094,6 +2194,11 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   };
 
   const buyNow = () => {
+    if (comboEligible) {
+      openComboPage('buy');
+      return;
+    }
+
     if (!validatePurchaseOptions()) return;
 
     saveSelectedGiftsForCart();
@@ -3491,55 +3596,31 @@ const submitReview = async (event: FormEvent<HTMLFormElement>) => {
             </span>
           </div>
 
-          {freeGiftCount > 0 && (
-            <>
-              <button
-                type="button"
-                className="pd-free-gift-cta"
-                onClick={() => setGiftPreviewOpen(true)}
-                aria-expanded={giftPreviewOpen}
-              >
-                <span className="pd-free-gift-cta-icon">
-                  <Gift aria-hidden="true" />
-                </span>
+          {comboEligible && (
+            <button
+              type="button"
+              className="pd-free-gift-cta pd-combo-cta"
+              onClick={() => openComboPage('cart')}
+              aria-label="Choose Combo"
+            >
+              <span className="pd-free-gift-cta-icon">
+                <Gift aria-hidden="true" />
+              </span>
 
-                <span className="pd-free-gift-cta-copy">
-                  <strong>
-                    {language === 'ta'
-                      ? `${freeGiftCount} ${freeGiftCount === 1
-                          ? 'இலவச பரிசு சேர்க்கப்பட்டுள்ளது'
-                          : 'இலவச பரிசுகள் சேர்க்கப்பட்டுள்ளன'}`
-                      : freeGiftCount === 1
-                        ? '1 FREE Gift Included'
-                        : `${freeGiftCount} FREE Gifts Included`}
-                  </strong>
-                  <small>
-                    {language === 'ta'
-                      ? selectedGiftIds.length > 0
-                        ? `${selectedGiftIds.length} / ${freeGiftCount} தேர்வு செய்யப்பட்டது · திருத்த தட்டவும்`
-                        : qty > 1
-                          ? `ஒவ்வொரு பொருளுக்கும் ${freeGiftCountPerItem} × ${qty} பொருட்கள் · பரிசுகளைத் தேர்ந்தெடுக்கவும்`
-                          : freeGiftCount === 1
-                            ? 'உங்கள் இலவச பரிசைத் தேர்ந்தெடுக்கவும்'
-                            : `${freeGiftCount} இலவச பரிசுகளைத் தேர்ந்தெடுக்கவும்`
-                      : selectedGiftIds.length > 0
-                        ? `${selectedGiftIds.length} of ${freeGiftCount} selected · Tap to edit`
-                        : qty > 1
-                          ? `${freeGiftCountPerItem} per item × ${qty} items · Choose gifts`
-                          : freeGiftCount === 1
-                            ? 'Choose your FREE gift'
-                            : `Choose any ${freeGiftCount} FREE gifts`}
-                  </small>
-                </span>
+              <span className="pd-free-gift-cta-copy">
+                <strong>{t('Choose Combo')}</strong>
+                <small>
+                  {language === 'ta'
+                    ? '5 பொருட்கள் வரை Combo Price-ல் தேர்வு செய்யுங்கள் · வேண்டாமெனில் Skip செய்யலாம்'
+                    : 'Choose up to 5 items at Combo Price · Optional'}
+                </small>
+              </span>
 
-                <ChevronLeft
-                  className="pd-free-gift-cta-arrow"
-                  aria-hidden="true"
-                />
-              </button>
-
-
-            </>
+              <ChevronLeft
+                className="pd-free-gift-cta-arrow"
+                aria-hidden="true"
+              />
+            </button>
           )}
 
           <div className={`pd-purchase-row ${stockQuantity === 1 ? 'pd-purchase-row-no-qty' : ''}`}>
@@ -3861,7 +3942,8 @@ const relatedFreeGiftCount =
         )}
       </section>
 
-      {giftPreviewOpen &&
+      {false &&
+        giftPreviewOpen &&
         freeGiftCount > 0 &&
         typeof document !== 'undefined' &&
         createPortal(
