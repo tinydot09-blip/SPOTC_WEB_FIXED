@@ -375,6 +375,16 @@ export default function ComboPage() {
     [products, selectedIds],
   );
 
+  const selectedSavings = useMemo(
+    () =>
+      selectedProducts.reduce((total, item) => {
+        const normalPrice = customerPriceOf(item);
+        const comboPrice = comboPriceOf(item);
+        return total + Math.max(0, normalPrice - comboPrice);
+      }, 0),
+    [selectedProducts],
+  );
+
   const toggleProduct = (productId: string) => {
     setSelectedIds((current) => {
       if (current.includes(productId)) {
@@ -600,7 +610,9 @@ export default function ComboPage() {
           <div className="combo-selected-strip-inner">
             <div className="combo-selected-heading">
               <strong>Selected ({selectedProducts.length}/5)</strong>
-              <span>Tap an item to remove it</span>
+              <span>
+                You save ₹{Math.round(selectedSavings)} · Tap an item to remove
+              </span>
             </div>
 
             <div className="combo-selected-items">
@@ -624,10 +636,14 @@ export default function ComboPage() {
       <footer className="combo-footer">
         <div className="combo-footer-inner">
           <div className="combo-footer-copy">
-            <strong>{selectedIds.length} of 5 selected</strong>
+            <strong>
+              {selectedIds.length
+                ? `You save ₹${Math.round(selectedSavings)}`
+                : '0 of 5 selected'}
+            </strong>
             <span>
               {selectedIds.length
-                ? 'Selected products will use Combo Price.'
+                ? `${selectedIds.length} of 5 selected`
                 : 'You can continue without a combo.'}
             </span>
           </div>
@@ -647,7 +663,7 @@ export default function ComboPage() {
               disabled={selectedIds.length === 0}
               onClick={saveComboSelection}
             >
-              {savedMessage || 'Save'}
+              {savedMessage || 'Save for Later'}
             </button>
 
             <button
@@ -1157,7 +1173,10 @@ export default function ComboPage() {
           }
 
           .combo-selected-heading span {
-            display: none;
+            display: block;
+            font-size: 10px;
+            line-height: 1.2;
+            color: #666;
           }
 
           .combo-selected-item {
@@ -1186,7 +1205,7 @@ export default function ComboPage() {
             flex: 1;
             min-width: 0;
             padding: 0 8px;
-            font-size: 13px;
+            font-size: 12px;
           }
 
           .combo-page {
