@@ -147,6 +147,7 @@ export default function ComboPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [category, setCategory] = useState('All');
   const [search, setSearch] = useState('');
+  const [savedMessage, setSavedMessage] = useState('');
   const [baseState, setBaseState] = useState<ComboBaseState>({
     productId: String(id || ''),
     size: '',
@@ -209,6 +210,127 @@ export default function ComboPage() {
       active = false;
     };
   }, [id, action]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const hiddenElements = new Map<HTMLElement, string>();
+
+    const applyMobileComboChrome = () => {
+      const isMobile = window.matchMedia('(max-width: 800px)').matches;
+
+      hiddenElements.forEach((previousDisplay, element) => {
+        element.style.display = previousDisplay;
+      });
+      hiddenElements.clear();
+
+      if (!isMobile) return;
+
+      const comboRoot = document.querySelector('.combo-page');
+      if (!comboRoot) return;
+
+      const candidates = document.querySelectorAll<HTMLElement>(
+        [
+          'body header',
+          'body nav',
+          '.mobile-bottom-nav',
+          '.bottom-nav',
+          '.mobile-nav',
+          '.app-bottom-nav',
+          '.app-header',
+          '.site-header',
+          '[data-mobile-nav]',
+          '[data-bottom-nav]',
+        ].join(','),
+      );
+
+      candidates.forEach((element) => {
+        if (comboRoot.contains(element)) return;
+
+        const classText = String(element.className || '').toLowerCase();
+        const elementText = (element.textContent || '').toLowerCase();
+        const style = window.getComputedStyle(element);
+
+        const looksLikeAppChrome =
+          element.tagName === 'HEADER' ||
+          element.tagName === 'NAV' ||
+          classText.includes('bottom-nav') ||
+          classText.includes('mobile-nav') ||
+          classText.includes('app-header') ||
+          classText.includes('site-header') ||
+          (
+            (style.position === 'fixed' || style.position === 'sticky') &&
+            (
+              elementText.includes('shop') ||
+              elementText.includes('offers') ||
+              elementText.includes('ai assistance')
+            )
+          );
+
+        if (!looksLikeAppChrome) return;
+
+        hiddenElements.set(element, element.style.display);
+        element.style.display = 'none';
+      });
+    };
+
+    const frame = window.requestAnimationFrame(applyMobileComboChrome);
+    window.addEventListener('resize', applyMobileComboChrome);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', applyMobileComboChrome);
+
+      hiddenElements.forEach((previousDisplay, element) => {
+        element.style.display = previousDisplay;
+      });
+      hiddenElements.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !id) return;
+
+    try {
+      const raw = window.localStorage.getItem(`spotc-saved-combo:${id}`);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw) as { selectedIds?: unknown };
+      if (!Array.isArray(parsed.selectedIds)) return;
+
+      const validIds = parsed.selectedIds
+        .map((value) => String(value))
+        .filter((value) =>
+          products.some((product) => String(product.id) === value),
+        )
+        .slice(0, 5);
+
+      if (validIds.length) {
+        setSelectedIds(validIds);
+      }
+    } catch {
+      // Ignore invalid saved combo data.
+    }
+  }, [id, products]);
+
+  const saveComboSelection = () => {
+    if (typeof window === 'undefined' || !id) return;
+
+    try {
+      window.localStorage.setItem(
+        `spotc-saved-combo:${id}`,
+        JSON.stringify({
+          selectedIds,
+          savedAt: Date.now(),
+        }),
+      );
+      setSavedMessage('Saved');
+      window.setTimeout(() => setSavedMessage(''), 1500);
+    } catch {
+      setSavedMessage('Could not save');
+      window.setTimeout(() => setSavedMessage(''), 1500);
+    }
+  };
 
   const categories = useMemo(
     () => [
@@ -473,6 +595,32 @@ export default function ComboPage() {
         </section>
       </div>
 
+      {selectedProducts.length > 0 && (
+        <section className="combo-selected-strip" aria-label="Selected combo items">
+          <div className="combo-selected-strip-inner">
+            <div className="combo-selected-heading">
+              <strong>Selected ({selectedProducts.length}/5)</strong>
+              <span>Tap an item to remove it</span>
+            </div>
+
+            <div className="combo-selected-items">
+              {selectedProducts.map((item) => (
+                <button
+                  type="button"
+                  key={String(item.id)}
+                  className="combo-selected-item"
+                  onClick={() => toggleProduct(String(item.id))}
+                  aria-label={`Remove ${titleOf(item)} from combo`}
+                >
+                  <img src={imageOf(item)} alt="" />
+                  <span>✓</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       <footer className="combo-footer">
         <div className="combo-footer-inner">
           <div className="combo-footer-copy">
@@ -495,11 +643,20 @@ export default function ComboPage() {
 
             <button
               type="button"
+              className="combo-save"
+              disabled={selectedIds.length === 0}
+              onClick={saveComboSelection}
+            >
+              {savedMessage || 'Save'}
+            </button>
+
+            <button
+              type="button"
               className="combo-continue"
               disabled={selectedIds.length === 0}
               onClick={() => finish(true)}
             >
-              Continue with Combo
+              Continue
             </button>
           </div>
         </div>
@@ -813,6 +970,78 @@ export default function ComboPage() {
           margin: 0;
         }
 
+        .combo-selected-strip {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: 86px;
+          z-index: 39;
+          border-top: 1px solid #e6e6e6;
+          background: rgba(255, 255, 255, 0.98);
+        }
+
+        .combo-selected-strip-inner {
+          width: min(1180px, calc(100% - 32px));
+          margin: 0 auto;
+          min-height: 72px;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 8px 0;
+        }
+
+        .combo-selected-heading {
+          flex: 0 0 auto;
+          display: grid;
+          gap: 1px;
+        }
+
+        .combo-selected-heading span {
+          color: #777;
+          font-size: 11px;
+        }
+
+        .combo-selected-items {
+          min-width: 0;
+          display: flex;
+          gap: 7px;
+          overflow-x: auto;
+        }
+
+        .combo-selected-item {
+          position: relative;
+          flex: 0 0 auto;
+          width: 48px;
+          height: 48px;
+          padding: 0;
+          overflow: hidden;
+          border: 1px solid #d8d8d8;
+          border-radius: 10px;
+          background: #fff;
+          cursor: pointer;
+        }
+
+        .combo-selected-item img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .combo-selected-item span {
+          position: absolute;
+          right: 2px;
+          bottom: 2px;
+          width: 17px;
+          height: 17px;
+          display: grid;
+          place-items: center;
+          border-radius: 999px;
+          background: #171717;
+          color: #fff;
+          font-size: 10px;
+          font-weight: 900;
+        }
+
         .combo-footer {
           position: fixed;
           left: 0;
@@ -861,6 +1090,17 @@ export default function ComboPage() {
           background: #fff;
         }
 
+        .combo-save {
+          border: 1px solid #171717;
+          background: #fff;
+          color: #171717;
+        }
+
+        .combo-save:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+
         .combo-continue {
           border: 1px solid #171717;
           background: #171717;
@@ -905,6 +1145,26 @@ export default function ComboPage() {
             font-size: 12px;
           }
 
+          .combo-selected-strip {
+            bottom: 64px;
+          }
+
+          .combo-selected-strip-inner {
+            width: 100%;
+            min-height: 62px;
+            padding: 7px 10px;
+            gap: 10px;
+          }
+
+          .combo-selected-heading span {
+            display: none;
+          }
+
+          .combo-selected-item {
+            width: 44px;
+            height: 44px;
+          }
+
           .combo-footer-inner {
             width: 100%;
             padding: 10px;
@@ -924,10 +1184,16 @@ export default function ComboPage() {
 
           .combo-footer-actions button {
             flex: 1;
-            padding: 0 10px;
+            min-width: 0;
+            padding: 0 8px;
+            font-size: 13px;
           }
 
           .combo-page {
+            padding-bottom: 138px;
+          }
+
+          .combo-page:not(:has(.combo-selected-strip)) {
             padding-bottom: 76px;
           }
         }
