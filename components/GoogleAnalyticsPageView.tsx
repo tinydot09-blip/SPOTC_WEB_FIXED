@@ -9,23 +9,10 @@ import {
   Suspense,
   useEffect,
   useRef,
-  useState,
 } from 'react';
-
-import {
-  onAuthStateChanged,
-  type User,
-} from 'firebase/auth';
-
-import { auth } from '@/lib/firebase';
 
 const GA_MEASUREMENT_ID =
   'G-YLJ3YNCN2C';
-
-const ADMIN_EMAILS = new Set([
-  'tinydot09@gmail.com',
-  'shashanth.in09@gmail.com',
-]);
 
 const BLOCKED_ROUTE_PREFIXES = [
   '/admin',
@@ -54,20 +41,6 @@ function isBlockedRoute(
   );
 }
 
-function isAdminUser(
-  user: User | null,
-): boolean {
-  const email =
-    user?.email
-      ?.trim()
-      .toLowerCase() || '';
-
-  return (
-    email.length > 0 &&
-    ADMIN_EMAILS.has(email)
-  );
-}
-
 function GoogleAnalyticsPageViewInner() {
   const pathname =
     usePathname() || '/';
@@ -78,64 +51,15 @@ function GoogleAnalyticsPageViewInner() {
   const lastTrackedPathRef =
     useRef('');
 
-  const [
-    authResolved,
-    setAuthResolved,
-  ] = useState(false);
-
-  const [
-    currentUser,
-    setCurrentUser,
-  ] = useState<User | null>(
-    null,
-  );
-
   /*
-   * Resolve Firebase authentication.
+   * Disable Google Analytics completely
+   * on internal/admin routes.
    *
-   * We need this so SPOTC admin traffic
-   * is not counted in Google Analytics.
-   */
-  useEffect(() => {
-    const unsubscribe =
-      onAuthStateChanged(
-        auth,
-        (user) => {
-          setCurrentUser(
-            user,
-          );
-
-          setAuthResolved(
-            true,
-          );
-        },
-        (error) => {
-          console.error(
-            '[SPOTC GA] Firebase auth check failed:',
-            error,
-          );
-
-          /*
-           * If authentication lookup fails,
-           * continue as a normal visitor.
-           */
-          setCurrentUser(
-            null,
-          );
-
-          setAuthResolved(
-            true,
-          );
-        },
-      );
-
-    return unsubscribe;
-  }, []);
-
-  /*
-   * Keep Google Analytics disabled while
-   * authentication is resolving, or when
-   * the visitor is an admin.
+   * IMPORTANT:
+   * Do not initialize Firebase Auth here.
+   * Normal customers should not download
+   * Firebase Authentication simply for
+   * analytics page-view tracking.
    */
   useEffect(() => {
     if (
@@ -148,42 +72,21 @@ function GoogleAnalyticsPageViewInner() {
     const gaWindow =
       window as GtagWindow;
 
-    const blockedRoute =
-      isBlockedRoute(
-        pathname,
-      );
-
-    const adminUser =
-      authResolved &&
-      isAdminUser(
-        currentUser,
-      );
-
-    const shouldDisable =
-      blockedRoute ||
-      !authResolved ||
-      adminUser;
-
     gaWindow[
       `ga-disable-${GA_MEASUREMENT_ID}`
-    ] = shouldDisable;
-  }, [
-    pathname,
-    authResolved,
-    currentUser,
-  ]);
+    ] = isBlockedRoute(
+      pathname,
+    );
+  }, [pathname]);
 
   /*
-   * Track customer page views.
+   * Track normal customer page views.
    *
-   * Google Analytics itself is now loaded
-   * with Next.js lazyOnload.
+   * Google Analytics is loaded with
+   * Next.js lazyOnload, so gtag may not
+   * exist immediately.
    *
-   * Because of that, gtag may not exist
-   * immediately when this effect runs.
-   *
-   * We briefly retry instead of losing
-   * the page_view.
+   * Briefly retry until GA is ready.
    */
   useEffect(() => {
     if (
@@ -196,20 +99,6 @@ function GoogleAnalyticsPageViewInner() {
     if (
       isBlockedRoute(
         pathname,
-      )
-    ) {
-      return;
-    }
-
-    if (
-      !authResolved
-    ) {
-      return;
-    }
-
-    if (
-      isAdminUser(
-        currentUser,
       )
     ) {
       return;
@@ -223,9 +112,6 @@ function GoogleAnalyticsPageViewInner() {
         ? `${pathname}?${query}`
         : pathname;
 
-    /*
-     * Already tracked.
-     */
     if (
       lastTrackedPathRef.current ===
       pagePath
@@ -248,10 +134,6 @@ function GoogleAnalyticsPageViewInner() {
           return false;
         }
 
-        /*
-         * Enable tracking for genuine
-         * customer traffic.
-         */
         gaWindow[
           `ga-disable-${GA_MEASUREMENT_ID}`
         ] = false;
@@ -280,22 +162,12 @@ function GoogleAnalyticsPageViewInner() {
         return true;
       };
 
-    /*
-     * GA may already be ready.
-     */
     if (
       sendPageView()
     ) {
       return;
     }
 
-    /*
-     * GA uses lazyOnload, so wait for
-     * the script if necessary.
-     *
-     * 40 x 250 ms gives it up to
-     * approximately 10 seconds.
-     */
     let attempts = 0;
 
     const timer =
@@ -323,8 +195,6 @@ function GoogleAnalyticsPageViewInner() {
   }, [
     pathname,
     searchParams,
-    authResolved,
-    currentUser,
   ]);
 
   return null;
