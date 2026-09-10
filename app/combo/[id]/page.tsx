@@ -134,95 +134,31 @@ const ensureBaseProductInCart = (
 };
 
 
-const normalizedDesignKey = (product: BusinessProduct): string => {
-  const record = product as ProductRecord;
+const stableComboHash = (value: string): number => {
+  let hash = 2166136261;
 
-  const explicitDesign = text(
-    record.design_id ||
-      record.design_code ||
-      record.style_id ||
-      record.style_code ||
-      record.model_id ||
-      record.model_code,
-  )
-    .trim()
-    .toLowerCase();
-
-  if (explicitDesign) return `design:${explicitDesign}`;
-
-  const rawTitle = titleOf(product).toLowerCase();
-
-  // Remove common colour/variant words so colour variants of the same
-  // dress are spread apart instead of appearing next to each other.
-  const colorWords = [
-    'black', 'white', 'red', 'pink', 'peach', 'orange', 'yellow',
-    'green', 'blue', 'navy', 'purple', 'violet', 'maroon', 'brown',
-    'beige', 'cream', 'grey', 'gray', 'gold', 'golden', 'silver',
-    'aqua', 'teal', 'turquoise', 'coral', 'lavender', 'magenta',
-    'mustard', 'mint', 'olive', 'wine',
-  ];
-
-  const colorPattern = new RegExp(
-    `\\b(${colorWords.join('|')})\\b`,
-    'gi',
-  );
-
-  const normalizedTitle = rawTitle
-    .replace(colorPattern, ' ')
-    .replace(/\b(colou?r|shade|variant)\b/gi, ' ')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  return normalizedTitle
-    ? `title:${normalizedTitle}`
-    : `id:${String(product.id)}`;
-};
-
-const spreadProductVariants = (
-  items: BusinessProduct[],
-): BusinessProduct[] => {
-  if (items.length <= 2) return items;
-
-  const groups = new Map<string, BusinessProduct[]>();
-
-  items.forEach((item) => {
-    const key = normalizedDesignKey(item);
-    const group = groups.get(key) || [];
-    group.push(item);
-    groups.set(key, group);
-  });
-
-  // Nothing to spread when every item is already a different design.
-  if (groups.size === items.length) return items;
-
-  const queues = Array.from(groups.values()).map((group) => [...group]);
-  const result: BusinessProduct[] = [];
-  let lastKey = '';
-
-  while (result.length < items.length) {
-    const available = queues
-      .map((queue, index) => ({
-        queue,
-        index,
-        key: queue.length ? normalizedDesignKey(queue[0]) : '',
-      }))
-      .filter((entry) => entry.queue.length > 0);
-
-    if (!available.length) break;
-
-    const next =
-      available.find((entry) => entry.key !== lastKey) || available[0];
-
-    const product = next.queue.shift();
-    if (!product) continue;
-
-    result.push(product);
-    lastKey = normalizedDesignKey(product);
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
   }
 
-  return result;
+  return hash >>> 0;
 };
+
+const shuffledComboProducts = (
+  items: BusinessProduct[],
+  seed: string,
+): BusinessProduct[] =>
+  [...items].sort((a, b) => {
+    const aKey = stableComboHash(
+      `${seed}|${String(a.id)}|${titleOf(a)}|${categoryOf(a)}`,
+    );
+    const bKey = stableComboHash(
+      `${seed}|${String(b.id)}|${titleOf(b)}|${categoryOf(b)}`,
+    );
+
+    return aKey - bKey;
+  });
 
 export default function ComboPage() {
   const params = useParams<{ id: string | string[] }>();
@@ -458,10 +394,14 @@ export default function ComboPage() {
         .includes(q);
     });
 
-    // Spread colour/variant versions of the same design apart.
-    // All products remain available; this changes display order only.
-    return spreadProductVariants(filtered);
-  }, [products, category, search]);
+    // Stable shuffle for every category so similar colour/style variants
+    // are mixed instead of following Firestore upload/order sequence.
+    // The order stays stable while this combo page is open/revisited.
+    return shuffledComboProducts(
+      filtered,
+      `${String(id || '')}|${category}|${q || 'browse'}`,
+    );
+  }, [products, category, search, id]);
 
   const selectedProducts = useMemo(
     () =>
