@@ -84,6 +84,178 @@ const shopJsonLd = {
   ],
 };
 
+const SHOP_CATEGORIES = [
+  'Girl Dress',
+  'Earrings',
+  'Fancy Items',
+  'Toys',
+  'Keychains',
+] as const;
+
+type ShopCategory = (typeof SHOP_CATEGORIES)[number];
+
+type ShopPageProps = {
+  searchParams?: {
+    category?: string | string[];
+  };
+};
+
+function normalizeCategory(value: unknown): ShopCategory {
+  const raw = Array.isArray(value)
+    ? String(value[0] || '').trim()
+    : String(value || '').trim();
+
+  const matched = SHOP_CATEGORIES.find(
+    (category) =>
+      category.toLowerCase() === raw.toLowerCase(),
+  );
+
+  return matched || 'Girl Dress';
+}
+
+function categoryAliases(
+  category: ShopCategory,
+): string[] {
+  switch (category) {
+    case 'Earrings':
+      return ['Earrings', 'Earring'];
+
+    case 'Fancy Items':
+      return [
+        'Fancy Items',
+        'Fancy Item',
+        'Accessories',
+        'Hair Accessories',
+      ];
+
+    case 'Toys':
+      return ['Toys', 'Toy'];
+
+    case 'Keychains':
+      return [
+        'Keychains',
+        'Keychain',
+        'Key Chain',
+      ];
+
+    case 'Girl Dress':
+    default:
+      return [
+        'Girl Dress',
+        'Girls Dress',
+        'Kids Wear',
+      ];
+  }
+}
+
+function normalizedText(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
+}
+
+function productMatchesCategory(
+  product: Record<string, unknown>,
+  category: ShopCategory,
+): boolean {
+  const main = normalizedText(
+    product.main_category,
+  );
+  const fallbackCategory = normalizedText(
+    product.category,
+  );
+  const sub = normalizedText(
+    product.sub_category,
+  );
+  const title = normalizedText(
+    product.title ?? product.product_name,
+  );
+
+  const aliases = categoryAliases(category).map(
+    (item) => item.toLowerCase(),
+  );
+
+  if (
+    aliases.includes(main) ||
+    aliases.includes(fallbackCategory)
+  ) {
+    return true;
+  }
+
+  const combined = [
+    main,
+    fallbackCategory,
+    sub,
+    title,
+  ].join(' ');
+
+  if (category === 'Earrings') {
+    return (
+      combined.includes('earring') ||
+      combined.includes('ear ring') ||
+      combined.includes('jhumka') ||
+      combined.includes('jhumki')
+    );
+  }
+
+  if (category === 'Keychains') {
+    return (
+      combined.includes('keychain') ||
+      combined.includes('key chain')
+    );
+  }
+
+  if (category === 'Toys') {
+    return (
+      combined.includes('toy') ||
+      combined.includes('doll') ||
+      combined.includes('magic slate') ||
+      combined.includes('drawing board') ||
+      combined.includes('fidget')
+    );
+  }
+
+  if (category === 'Fancy Items') {
+    const fancyWords = [
+      'fancy',
+      'hair band',
+      'hairband',
+      'hair clip',
+      'hairclip',
+      'hair pin',
+      'hairpin',
+      'headband',
+      'bangle',
+      'bracelet',
+      'necklace',
+      'chain',
+      'pottu',
+      'bindi',
+      'sunglass',
+      'watch',
+      'crown',
+      'tiara',
+    ];
+
+    return fancyWords.some((word) =>
+      combined.includes(word),
+    );
+  }
+
+  return (
+    combined.includes('girl dress') ||
+    combined.includes('girls dress') ||
+    combined.includes('girl frock') ||
+    combined.includes('girls frock') ||
+    combined.includes('kids frock') ||
+    combined.includes('baby frock') ||
+    combined.includes('girls kurti') ||
+    combined.includes('girl kurti') ||
+    combined.includes('girls lehenga') ||
+    combined.includes('girl lehenga')
+  );
+}
+
 /*
  * Firebase Admin values such as Timestamp, GeoPoint and DocumentReference
  * cannot be passed directly from a Server Component into ProductGrid.
@@ -107,32 +279,39 @@ function toSerializable(value: unknown): unknown {
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => toSerializable(item));
+    return value.map((item) =>
+      toSerializable(item),
+    );
   }
 
   if (typeof value === 'object') {
-    const record = value as Record<string, unknown> & {
+    const record = value as Record<
+      string,
+      unknown
+    > & {
       toDate?: () => Date;
       path?: string;
       latitude?: number;
       longitude?: number;
     };
 
-    // Firestore Timestamp
     if (typeof record.toDate === 'function') {
       try {
-        return record.toDate().toISOString();
+        return record
+          .toDate()
+          .toISOString();
       } catch {
-        // Continue with the plain-object fallback below.
+        // Continue with plain-object fallback.
       }
     }
 
-    // Firestore DocumentReference
-    if (typeof record.path === 'string' && record.path) {
+    if (
+      typeof record.path === 'string' &&
+      record.path
+    ) {
       return record.path;
     }
 
-    // Firestore GeoPoint
     if (
       typeof record.latitude === 'number' &&
       typeof record.longitude === 'number'
@@ -143,11 +322,23 @@ function toSerializable(value: unknown): unknown {
       };
     }
 
-    const output: Record<string, unknown> = {};
+    const output: Record<
+      string,
+      unknown
+    > = {};
 
-    for (const [key, item] of Object.entries(record)) {
-      if (typeof item === 'function' || item === undefined) continue;
-      output[key] = toSerializable(item);
+    for (const [key, item] of Object.entries(
+      record,
+    )) {
+      if (
+        typeof item === 'function' ||
+        item === undefined
+      ) {
+        continue;
+      }
+
+      output[key] =
+        toSerializable(item);
     }
 
     return output;
@@ -156,8 +347,13 @@ function toSerializable(value: unknown): unknown {
   return String(value);
 }
 
-function isAvailableProduct(product: Record<string, unknown>): boolean {
-  if (product.isActive === false || product.is_active === false) {
+function isAvailableProduct(
+  product: Record<string, unknown>,
+): boolean {
+  if (
+    product.isActive === false ||
+    product.is_active === false
+  ) {
     return false;
   }
 
@@ -165,12 +361,21 @@ function isAvailableProduct(product: Record<string, unknown>): boolean {
     return false;
   }
 
-  const rawStock = product.stock_qty ?? product.stock_quantity;
+  const rawStock =
+    product.stock_qty ??
+    product.stock_quantity;
 
-  if (rawStock !== undefined && rawStock !== null && rawStock !== '') {
+  if (
+    rawStock !== undefined &&
+    rawStock !== null &&
+    rawStock !== ''
+  ) {
     const stock = Number(rawStock);
 
-    if (Number.isFinite(stock) && stock <= 0) {
+    if (
+      Number.isFinite(stock) &&
+      stock <= 0
+    ) {
       return false;
     }
   }
@@ -178,87 +383,190 @@ function isAvailableProduct(product: Record<string, unknown>): boolean {
   return true;
 }
 
+function addProductToMap(
+  productsById: Map<
+    string,
+    BusinessProduct
+  >,
+  id: string,
+  data: Record<string, unknown>,
+  requestedCategory: ShopCategory,
+) {
+  if (productsById.size >= 16) return;
+
+  const raw = {
+    id,
+    ...data,
+  } as Record<string, unknown>;
+
+  if (!isAvailableProduct(raw)) return;
+
+  if (
+    !productMatchesCategory(
+      raw,
+      requestedCategory,
+    )
+  ) {
+    return;
+  }
+
+  productsById.set(
+    id,
+    toSerializable(raw) as BusinessProduct,
+  );
+}
+
 /*
- * Keep this first payload deliberately small.
- * We try Girl Dress first because it is the default /shop category.
- * If older records do not use main_category consistently, the fallback
- * query fills the batch from the normal BusinessProducts collection.
+ * CATEGORY-AWARE FIRST PAYLOAD
+ * ----------------------------
+ * When Product Details sends the customer to:
+ *   /shop?category=Earrings
+ *   /shop?category=Fancy%20Items
+ *   /shop?category=Toys
+ *   /shop?category=Keychains
+ *
+ * load that category's first products on the server instead of always
+ * returning Girl Dress first. The full client catalogue still refreshes
+ * normally after hydration.
  */
 const getInitialShopProducts = unstable_cache(
-  async (): Promise<BusinessProduct[]> => {
+  async (
+    requestedCategory: ShopCategory,
+  ): Promise<BusinessProduct[]> => {
     const db = getAdminDb();
-    const productsById = new Map<string, BusinessProduct>();
+    const productsById = new Map<
+      string,
+      BusinessProduct
+    >();
+
+    const aliases =
+      categoryAliases(requestedCategory);
 
     try {
-      const dressSnapshot = await db
+      const mainSnapshot = await db
         .collection('BusinessProducts')
-        .where('main_category', 'in', [
-          'Girl Dress',
-          'Girls Dress',
-          'Kids Wear',
-        ])
+        .where(
+          'main_category',
+          'in',
+          aliases,
+        )
         .limit(16)
         .get();
 
-      for (const item of dressSnapshot.docs) {
-        const raw = {
-          id: item.id,
-          ...item.data(),
-        } as Record<string, unknown>;
-
-        if (!isAvailableProduct(raw)) continue;
-
-        productsById.set(
+      for (const item of mainSnapshot.docs) {
+        addProductToMap(
+          productsById,
           item.id,
-          toSerializable(raw) as BusinessProduct,
+          item.data(),
+          requestedCategory,
         );
       }
     } catch (error) {
-      console.error('Initial Girl Dress query failed:', error);
+      console.error(
+        `Initial ${requestedCategory} main_category query failed:`,
+        error,
+      );
     }
 
     if (productsById.size < 12) {
-      const fallbackSnapshot = await db
-        .collection('BusinessProducts')
-        .limit(40)
-        .get();
+      try {
+        const categorySnapshot = await db
+          .collection('BusinessProducts')
+          .where(
+            'category',
+            'in',
+            aliases,
+          )
+          .limit(16)
+          .get();
 
-      for (const item of fallbackSnapshot.docs) {
-        if (productsById.size >= 16) break;
-
-        const raw = {
-          id: item.id,
-          ...item.data(),
-        } as Record<string, unknown>;
-
-        if (!isAvailableProduct(raw)) continue;
-
-        productsById.set(
-          item.id,
-          toSerializable(raw) as BusinessProduct,
+        for (const item of categorySnapshot.docs) {
+          addProductToMap(
+            productsById,
+            item.id,
+            item.data(),
+            requestedCategory,
+          );
+        }
+      } catch (error) {
+        console.error(
+          `Initial ${requestedCategory} category query failed:`,
+          error,
         );
       }
     }
 
-    return Array.from(productsById.values()).slice(0, 16);
+    /*
+     * Compatibility fallback for older records whose category values
+     * are inconsistent. We still filter this batch to the category the
+     * customer requested before sending it to ProductGrid.
+     */
+    if (productsById.size < 12) {
+      try {
+        const fallbackSnapshot = await db
+          .collection('BusinessProducts')
+          .limit(80)
+          .get();
+
+        for (
+          const item of fallbackSnapshot.docs
+        ) {
+          if (
+            productsById.size >= 16
+          ) {
+            break;
+          }
+
+          addProductToMap(
+            productsById,
+            item.id,
+            item.data(),
+            requestedCategory,
+          );
+        }
+      } catch (error) {
+        console.error(
+          'Initial shop fallback query failed:',
+          error,
+        );
+      }
+    }
+
+    return Array.from(
+      productsById.values(),
+    ).slice(0, 16);
   },
-  ['spotc-shop-initial-products-v1'],
+  ['spotc-shop-initial-products-v2'],
   {
     revalidate: 60,
   },
 );
 
-export default async function ShopPage() {
-  let initialProducts: BusinessProduct[] = [];
+export default async function ShopPage({
+  searchParams,
+}: ShopPageProps) {
+  const requestedCategory =
+    normalizeCategory(
+      searchParams?.category,
+    );
+
+  let initialProducts:
+    BusinessProduct[] = [];
 
   try {
-    initialProducts = await getInitialShopProducts();
+    initialProducts =
+      await getInitialShopProducts(
+        requestedCategory,
+      );
   } catch (error) {
     /*
-     * Fail safely. If Firebase Admin is temporarily unavailable, ProductGrid
-     * falls back to its existing client-side Firebase loading path.
+     * Fail safely. If Firebase Admin is temporarily unavailable,
+     * ProductGrid falls back to its existing client-side loading path.
      */
-    console.error('Initial shop product load failed:', error);
+    console.error(
+      'Initial shop product load failed:',
+      error,
+    );
   }
 
   return (
@@ -276,20 +584,25 @@ export default async function ShopPage() {
           border: 0,
         }}
       >
-        Kids Wear, Toys & Fancy Items in Karamadai
+        Kids Wear, Toys & Fancy Items in
+        Karamadai
       </h1>
 
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(shopJsonLd).replace(
+          __html: JSON.stringify(
+            shopJsonLd,
+          ).replace(
             /</g,
             '\\u003c',
           ),
         }}
       />
 
-      <ProductGrid initialProducts={initialProducts} />
+      <ProductGrid
+        initialProducts={initialProducts}
+      />
 
       <div
         aria-hidden="true"
@@ -314,21 +627,25 @@ export default async function ShopPage() {
         <div
           style={{
             width: '100%',
-            paddingLeft: 'clamp(20px, 12.8vw, 245px)',
-            paddingRight: 'clamp(20px, 12.8vw, 245px)',
+            paddingLeft:
+              'clamp(20px, 12.8vw, 245px)',
+            paddingRight:
+              'clamp(20px, 12.8vw, 245px)',
             boxSizing: 'border-box',
           }}
         >
           <h2
             style={{
               margin: '0 0 14px',
-              fontSize: 'clamp(22px, 3vw, 30px)',
+              fontSize:
+                'clamp(22px, 3vw, 30px)',
               lineHeight: 1.2,
               fontWeight: 800,
               color: '#111',
             }}
           >
-            Shop Kids Wear, Toys & Fancy Items in Karamadai
+            Shop Kids Wear, Toys & Fancy
+            Items in Karamadai
           </h2>
 
           <p
@@ -340,12 +657,15 @@ export default async function ShopPage() {
               color: '#333',
             }}
           >
-            Shop kids wear, girls dresses, boys wear, toys,
-            earrings, hair accessories, keychains, gifts and
-            fancy items online at SPOTC in Karamadai.
-            Discover kids party dresses, girls frocks, casual
-            wear, toys and accessories with special offers
-            and free gifts on eligible orders.
+            Shop kids wear, girls dresses,
+            boys wear, toys, earrings, hair
+            accessories, keychains, gifts
+            and fancy items online at SPOTC
+            in Karamadai. Discover kids party
+            dresses, girls frocks, casual
+            wear, toys and accessories with
+            special offers and free gifts on
+            eligible orders.
           </p>
 
           <p
@@ -357,10 +677,12 @@ export default async function ShopPage() {
               color: '#555',
             }}
           >
-            Looking for a kids wear shop, toy shop, gift shop
-            or fancy items in Karamadai? Browse SPOTC online
-            for products available for local delivery in
-            Karamadai, Teacher Colony, EB Colony and nearby
+            Looking for a kids wear shop, toy
+            shop, gift shop or fancy items in
+            Karamadai? Browse SPOTC online
+            for products available for local
+            delivery in Karamadai, Teacher
+            Colony, EB Colony and nearby
             areas.
           </p>
 
@@ -373,10 +695,12 @@ export default async function ShopPage() {
               color: '#555',
             }}
           >
-            SPOTC also serves shoppers looking for kids wear,
-            toys and accessories around Mettupalayam.
-            Delivery times and availability depend on the
-            customer's location and selected products.
+            SPOTC also serves shoppers
+            looking for kids wear, toys and
+            accessories around Mettupalayam.
+            Delivery times and availability
+            depend on the customer's location
+            and selected products.
           </p>
         </div>
       </section>

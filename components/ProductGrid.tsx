@@ -30,7 +30,6 @@ import { getProducts } from '@/lib/data';
 import {
   auth,
   db,
-  firebaseProjectId,
   firebaseReady,
 } from '@/lib/firebase';
 import { requireGoogleLogin } from '@/lib/auth';
@@ -88,6 +87,13 @@ const FALLBACK_CATEGORY_CONFIGS: ProductCategoryConfig[] = [
     sortOrder: 2,
   },
   {
+    id: 'fancy-items',
+    name: 'Fancy Items',
+    subcategories: [],
+    isActive: true,
+    sortOrder: 3,
+  },
+  {
     id: 'toys',
     name: 'Toys',
     subcategories: [
@@ -99,7 +105,14 @@ const FALLBACK_CATEGORY_CONFIGS: ProductCategoryConfig[] = [
       'Other Toys',
     ],
     isActive: true,
-    sortOrder: 3,
+    sortOrder: 4,
+  },
+  {
+    id: 'keychains',
+    name: 'Keychains',
+    subcategories: [],
+    isActive: true,
+    sortOrder: 5,
   },
 ];
 
@@ -2323,10 +2336,8 @@ export function ProductGrid({
   if (error) {
     return (
       <EmptyState
-        title="Firebase could not load products"
-        body={`${error} Project: ${
-          firebaseProjectId || 'not configured'
-        }`}
+        title="Products are temporarily unavailable"
+        body="Please try again in a moment."
       />
     );
   }
@@ -2334,8 +2345,8 @@ export function ProductGrid({
   if (!firebaseReady) {
     return (
       <EmptyState
-        title="Firebase configuration is missing"
-        body="Create .env.local beside package.json, then restart npm.cmd run dev."
+        title="Shop is temporarily unavailable"
+        body="Please try again in a moment."
       />
     );
   }
@@ -2343,8 +2354,8 @@ export function ProductGrid({
   if (!items.length) {
     return (
       <EmptyState
-        title="Firebase connected — no available products found"
-        body="BusinessProducts was read successfully, but no active in-stock products matched the current rules."
+        title="No products available right now"
+        body="Please check again shortly."
       />
     );
   }
