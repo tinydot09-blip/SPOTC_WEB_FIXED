@@ -13,6 +13,11 @@ export type CartItem = {
   size?: string;
   color?: string;
   freeGiftCountPerItem?: number;
+  is_combo_item?: boolean;
+  combo_parent_id?: string;
+  combo_original_price?: number;
+  combo_price?: number;
+  try_at_home?: boolean;
 };
 
 const CART_KEY = 'spotc_cart';
@@ -70,14 +75,9 @@ function stockQuantityOf(
 }
 
 function freeGiftCountPerItemOf(
-  product: BusinessProduct,
+  _product: BusinessProduct,
 ): number {
-  const price = priceOf(product);
-
-  if (price < 80) return 0;
-  if (price < 200) return 1;
-
-  return Math.floor(price / 100);
+  return 0;
 }
 
 const businessIdOf = (
@@ -140,12 +140,12 @@ const businessIdOf = (
 const cartItemKey = (
   item: Pick<
     CartItem,
-    'id' | 'size' | 'color'
+    'id' | 'size' | 'color' | 'is_combo_item' | 'combo_parent_id'
   >,
 ): string =>
-  `${item.id}:${item.size || ''}:${
-    item.color || ''
-  }`;
+  `${item.id}:${item.size || ''}:${item.color || ''}:${
+    item.is_combo_item ? 'combo' : 'normal'
+  }:${item.combo_parent_id || ''}`;
 
 export function readCart(): CartItem[] {
   if (
@@ -237,10 +237,18 @@ export function readCart(): CartItem[] {
               item.color || '',
             ),
 
-            freeGiftCountPerItem:
-              Number.isFinite(Number(item.freeGiftCountPerItem))
-                ? Math.max(0, Math.floor(Number(item.freeGiftCountPerItem)))
+            freeGiftCountPerItem: 0,
+            is_combo_item: item.is_combo_item === true,
+            combo_parent_id: String(item.combo_parent_id || ''),
+            combo_original_price:
+              Number.isFinite(Number(item.combo_original_price))
+                ? Number(item.combo_original_price)
                 : undefined,
+            combo_price:
+              Number.isFinite(Number(item.combo_price))
+                ? Number(item.combo_price)
+                : undefined,
+            try_at_home: item.try_at_home === true,
           };
 
         const key =
@@ -257,6 +265,11 @@ export function readCart(): CartItem[] {
          * combine their quantities.
          */
         if (existing) {
+          if (existing.is_combo_item || normalizedItem.is_combo_item) {
+            existing.qty = 1;
+            existing.price = normalizedItem.price;
+            return;
+          }
           const mergedQuantity =
             existing.qty +
             normalizedItem.qty;
@@ -429,10 +442,18 @@ export function writeCart(
           color:
             item.color || '',
 
-          freeGiftCountPerItem:
-            Number.isFinite(Number(item.freeGiftCountPerItem))
-              ? Math.max(0, Math.floor(Number(item.freeGiftCountPerItem)))
+          freeGiftCountPerItem: 0,
+          is_combo_item: item.is_combo_item === true,
+          combo_parent_id: String(item.combo_parent_id || ''),
+          combo_original_price:
+            Number.isFinite(Number(item.combo_original_price))
+              ? Number(item.combo_original_price)
               : undefined,
+          combo_price:
+            Number.isFinite(Number(item.combo_price))
+              ? Number(item.combo_price)
+              : undefined,
+          try_at_home: item.try_at_home === true,
         };
 
       const key =
@@ -444,6 +465,11 @@ export function writeCart(
         merged.get(key);
 
       if (existing) {
+        if (existing.is_combo_item || normalizedItem.is_combo_item) {
+          existing.qty = 1;
+          existing.price = normalizedItem.price;
+          return;
+        }
         const mergedQuantity =
           existing.qty +
           normalizedItem.qty;
@@ -495,6 +521,12 @@ export function addProduct(
     size?: string;
     color?: string;
     qty?: number;
+    price?: number;
+    isComboItem?: boolean;
+    comboParentId?: string;
+    comboOriginalPrice?: number;
+    comboPrice?: number;
+    tryAtHome?: boolean;
   },
 ): void {
   if (
@@ -536,8 +568,16 @@ export function addProduct(
       product.id,
     );
 
-  const cartKey =
-    `${productId}:${size}:${color}`;
+  const isComboItem = options?.isComboItem === true;
+  const comboParentId = String(options?.comboParentId || '');
+
+  const cartKey = cartItemKey({
+    id: productId,
+    size,
+    color,
+    is_combo_item: isComboItem,
+    combo_parent_id: comboParentId,
+  });
 
   const existingItem =
     items.find(
@@ -554,8 +594,20 @@ export function addProduct(
      */
     existingItem.stockQty =
       availableStock;
-    existingItem.freeGiftCountPerItem =
-      freeGiftCountPerItemOf(product);
+    existingItem.freeGiftCountPerItem = 0;
+    existingItem.is_combo_item = isComboItem;
+    existingItem.combo_parent_id = comboParentId;
+    existingItem.combo_original_price = options?.comboOriginalPrice;
+    existingItem.combo_price = options?.comboPrice;
+    existingItem.try_at_home = options?.tryAtHome === true;
+
+    if (isComboItem) {
+      existingItem.qty = 1;
+      existingItem.price =
+        Number(options?.comboPrice ?? options?.price) || priceOf(product);
+      writeCart(items);
+      return;
+    }
 
     const requestedQuantity =
       safeQuantity(
@@ -585,23 +637,28 @@ export function addProduct(
         ),
 
       price:
-        priceOf(
-          product,
-        ),
+        Number(options?.comboPrice ?? options?.price) ||
+        priceOf(product),
 
       qty:
-        availableStock === undefined
-          ? quantityToAdd
-          : Math.min(
-              quantityToAdd,
-              availableStock,
-            ),
+        isComboItem
+          ? 1
+          : availableStock === undefined
+            ? quantityToAdd
+            : Math.min(
+                quantityToAdd,
+                availableStock,
+              ),
 
       stockQty:
         availableStock,
 
-      freeGiftCountPerItem:
-        freeGiftCountPerItemOf(product),
+      freeGiftCountPerItem: 0,
+      is_combo_item: isComboItem,
+      combo_parent_id: comboParentId,
+      combo_original_price: options?.comboOriginalPrice,
+      combo_price: options?.comboPrice,
+      try_at_home: options?.tryAtHome === true,
 
       businessId:
         businessIdOf(
@@ -660,6 +717,12 @@ export function updateCartQuantity(
     );
 
   if (!item) {
+    return;
+  }
+
+  if (item.is_combo_item) {
+    item.qty = 1;
+    writeCart(items);
     return;
   }
 
