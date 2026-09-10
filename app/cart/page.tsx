@@ -97,21 +97,21 @@ const DELIVERY_OPTIONS: DeliveryOption[] = [
   {
     id: 'morning',
     title: 'Morning Slot',
-    orderWindow: 'Order between 6 AM – 12 PM',
+    orderWindow: 'Book before 12 PM',
     deliveryWindow: 'Delivery between 12 PM – 2 PM',
     fee: 0,
   },
   {
     id: 'afternoon',
     title: 'Afternoon Slot',
-    orderWindow: 'Order between 12 PM – 6 PM',
+    orderWindow: 'Book before 6 PM',
     deliveryWindow: 'Delivery between 6 PM – 7 PM',
     fee: 0,
   },
   {
     id: 'overnight',
     title: 'Night Slot',
-    orderWindow: 'Order between 6 PM – 6 AM',
+    orderWindow: 'Available for next morning',
     deliveryWindow: 'Delivery between 6 AM – 8 AM',
     fee: 0,
   },
@@ -124,13 +124,27 @@ const isDeliveryOptionAvailable = (
 ): boolean => {
   const hour = now.getHours();
 
-  // Instant delivery only during operating hours
+  // Instant delivery is available from 7 AM to 8 PM.
   if (id === 'instant') {
     return hour >= 7 && hour < 20;
   }
 
-  // Scheduled delivery slots can be selected in advance.
-  return true;
+  // Morning slot can be booked until the 12 PM cutoff.
+  if (id === 'morning') {
+    return hour < 12;
+  }
+
+  // Afternoon slot can be booked until the 6 PM cutoff.
+  if (id === 'afternoon') {
+    return hour < 18;
+  }
+
+  // Night slot is the final scheduled option and remains bookable.
+  if (id === 'overnight') {
+    return true;
+  }
+
+  return false;
 };
 
 const preferredDeliveryOptionId = (
