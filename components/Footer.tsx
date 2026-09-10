@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 
 export default function Footer() {
@@ -11,10 +12,14 @@ export default function Footer() {
             className="spotc-footer-logo-link"
             aria-label="SPOTC Home"
           >
-            <img
+            <Image
               src="/images/web-logo-color-footer.png"
               alt="Spotc.in"
               className="spotc-footer-logo"
+              width={242}
+              height={65}
+              sizes="(max-width: 420px) 138px, (max-width: 700px) 150px, 180px"
+              loading="eager"
             />
           </Link>
 
@@ -48,8 +53,7 @@ export default function Footer() {
           <Link href="/dashboard?tab=saved">
             Saved
           </Link>
-
-                 </div>
+        </div>
 
         {/* COMPANY */}
         <div className="spotc-footer-column">
@@ -73,6 +77,7 @@ export default function Footer() {
           padding: 52px 24px 22px;
           color: #ffffff;
           background: #111111;
+          box-sizing: border-box;
         }
 
         .spotc-footer-grid {
@@ -97,15 +102,18 @@ export default function Footer() {
         .spotc-footer-logo-link {
           display: inline-flex;
           align-items: center;
+          justify-content: flex-start;
+          width: 180px;
+          height: 49px;
           margin-bottom: 14px;
           text-decoration: none;
         }
 
         .spotc-footer-logo {
           display: block;
-          width: 180px;
-          height: auto;
-          max-height: 62px;
+          width: 180px !important;
+          height: auto !important;
+          max-width: 100%;
           object-fit: contain;
         }
 
@@ -217,12 +225,13 @@ export default function Footer() {
           }
 
           .spotc-footer-logo-link {
+            width: 150px;
+            height: 40px;
             margin-bottom: 9px;
           }
 
           .spotc-footer-logo {
-            width: 150px;
-            max-height: 52px;
+            width: 150px !important;
           }
 
           .spotc-footer h4 {
@@ -270,8 +279,13 @@ export default function Footer() {
             gap: 20px 16px;
           }
 
-          .spotc-footer-logo {
+          .spotc-footer-logo-link {
             width: 138px;
+            height: 37px;
+          }
+
+          .spotc-footer-logo {
+            width: 138px !important;
           }
 
           .spotc-footer h4 {
