@@ -3541,6 +3541,66 @@ export function ProductGrid({
             }
           }
 
+
+          /* FINAL CARD CONTENT SPACING — uses the actual .product-copy wrapper */
+          .product-card.rich .product-copy {
+            padding: 10px 16px 14px !important;
+          }
+
+          .product-card.rich .product-title-link {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          .product-card.rich .product-title-link h3 {
+            margin: 0 0 2px !important;
+            padding: 0 !important;
+            font-weight: 500 !important;
+            line-height: 1.2 !important;
+          }
+
+          .product-card.rich .price {
+            margin: 0 0 9px !important;
+            padding: 0 !important;
+            display: flex !important;
+            align-items: baseline !important;
+            gap: 6px !important;
+            line-height: 1.15 !important;
+          }
+
+          .product-card.rich .product-try-home-row {
+            margin: 0 0 10px !important;
+            padding: 0 !important;
+            min-height: 20px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+          }
+
+          .product-card.rich .product-actions {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          @media (max-width: 700px) {
+            .product-card.rich .product-copy {
+              padding: 9px 16px 12px !important;
+            }
+
+            .product-card.rich .product-title-link h3 {
+              margin-bottom: 2px !important;
+            }
+
+            .product-card.rich .price {
+              margin-bottom: 8px !important;
+            }
+
+            .product-card.rich .product-try-home-row {
+              margin-bottom: 9px !important;
+              min-height: 20px !important;
+            }
+          }
+
       `}</style>
     </>
   );
