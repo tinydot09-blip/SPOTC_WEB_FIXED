@@ -2037,9 +2037,180 @@ export function ProductGrid({
 
   if (items === null) {
     return (
-      <div className="loading-grid">
-        Loading products from Firebase…
-      </div>
+      <>
+        <section
+          className="spotc-shop-loading-shell"
+          aria-busy="true"
+          aria-label="Loading products"
+        >
+          <div className="spotc-shop-loading-toolbar" aria-hidden="true">
+            <div className="spotc-shop-skeleton spotc-shop-skeleton-tab" />
+            <div className="spotc-shop-skeleton spotc-shop-skeleton-tab" />
+            <div className="spotc-shop-skeleton spotc-shop-skeleton-tab" />
+          </div>
+
+          <div className="spotc-shop-loading-grid" aria-hidden="true">
+            {Array.from({ length: 8 }, (_, index) => (
+              <div
+                className="spotc-shop-loading-card"
+                key={`shop-loading-${index}`}
+              >
+                <div className="spotc-shop-skeleton spotc-shop-loading-image" />
+                <div className="spotc-shop-loading-copy">
+                  <div className="spotc-shop-skeleton spotc-shop-loading-title" />
+                  <div className="spotc-shop-skeleton spotc-shop-loading-title short" />
+                  <div className="spotc-shop-skeleton spotc-shop-loading-price" />
+                  <div className="spotc-shop-skeleton spotc-shop-loading-action" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <style jsx global>{`
+          .spotc-shop-loading-shell {
+            width: 100%;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 12px 16px 32px;
+            box-sizing: border-box;
+            min-height: 1120px;
+          }
+
+          .spotc-shop-loading-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 46px;
+            margin-bottom: 16px;
+            overflow: hidden;
+          }
+
+          .spotc-shop-loading-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 18px;
+            width: 100%;
+          }
+
+          .spotc-shop-loading-card {
+            min-width: 0;
+            min-height: 490px;
+            overflow: hidden;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 18px;
+            background: #fff;
+          }
+
+          .spotc-shop-skeleton {
+            position: relative;
+            overflow: hidden;
+            background: #f1f1f1;
+          }
+
+          .spotc-shop-skeleton::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            transform: translateX(-100%);
+            background: linear-gradient(
+              90deg,
+              transparent,
+              rgba(255, 255, 255, 0.62),
+              transparent
+            );
+            animation: spotcShopSkeletonShimmer 1.35s infinite;
+          }
+
+          .spotc-shop-skeleton-tab {
+            flex: 0 0 112px;
+            height: 38px;
+            border-radius: 999px;
+          }
+
+          .spotc-shop-loading-image {
+            width: 100%;
+            aspect-ratio: 4 / 5;
+          }
+
+          .spotc-shop-loading-copy {
+            padding: 12px;
+          }
+
+          .spotc-shop-loading-title {
+            width: 88%;
+            height: 15px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+          }
+
+          .spotc-shop-loading-title.short {
+            width: 60%;
+          }
+
+          .spotc-shop-loading-price {
+            width: 42%;
+            height: 18px;
+            border-radius: 6px;
+            margin: 15px 0 14px;
+          }
+
+          .spotc-shop-loading-action {
+            width: 100%;
+            height: 42px;
+            border-radius: 11px;
+          }
+
+          @keyframes spotcShopSkeletonShimmer {
+            100% {
+              transform: translateX(100%);
+            }
+          }
+
+          @media (max-width: 1000px) {
+            .spotc-shop-loading-grid {
+              grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+          }
+
+          @media (max-width: 700px) {
+            .spotc-shop-loading-shell {
+              padding: 8px 10px 24px;
+              min-height: 2140px;
+            }
+
+            .spotc-shop-loading-toolbar {
+              margin-bottom: 12px;
+            }
+
+            .spotc-shop-skeleton-tab {
+              flex-basis: 96px;
+              height: 36px;
+            }
+
+            .spotc-shop-loading-grid {
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              column-gap: 10px;
+              row-gap: 14px;
+            }
+
+            .spotc-shop-loading-card {
+              min-height: 500px;
+              border-radius: 14px;
+            }
+
+            .spotc-shop-loading-copy {
+              padding: 10px;
+            }
+          }
+
+          @media (prefers-reduced-motion: reduce) {
+            .spotc-shop-skeleton::after {
+              animation: none;
+            }
+          }
+        `}</style>
+      </>
     );
   }
 
