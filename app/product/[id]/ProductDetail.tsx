@@ -1574,7 +1574,10 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
     mainCategoryText.toLowerCase() === 'girl dress' ||
     mainCategoryText.toLowerCase().includes('girl dress');
 
-  const comboEligible = isGirlDressProduct && price >= 100;
+  const comboEligible =
+    isGirlDressProduct
+      ? price >= 100
+      : price >= 80;
 
   const descriptiveColours = stringList(
     record.color,
