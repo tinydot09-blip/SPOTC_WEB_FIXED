@@ -385,6 +385,20 @@ export default function ComboPage() {
     [selectedProducts],
   );
 
+  const selectedComboTotal = useMemo(
+    () =>
+      selectedProducts.reduce(
+        (total, item) => total + comboPriceOf(item),
+        0,
+      ),
+    [selectedProducts],
+  );
+
+  const payableTotal = useMemo(
+    () => customerPriceOf(baseProduct as BusinessProduct) + selectedComboTotal,
+    [baseProduct, selectedComboTotal],
+  );
+
   const toggleProduct = (productId: string) => {
     setSelectedIds((current) => {
       if (current.includes(productId)) {
@@ -594,11 +608,18 @@ export default function ComboPage() {
       </div>
 
       {selectedProducts.length > 0 && (
-        <section className="combo-selected-strip" aria-label="Selected combo items">
+        <section
+          className="combo-selected-strip"
+          aria-label="Selected combo summary"
+        >
           <div className="combo-selected-strip-inner">
-            <div className="combo-selected-left">
-              <div className="combo-selected-heading">
-                <strong>Selected ({selectedProducts.length}/5)</strong>
+            <div className="combo-summary-main">
+              <div className="combo-summary-top">
+                <strong>Selected {selectedProducts.length}/5</strong>
+                <div className="combo-summary-total">
+                  <small>Total</small>
+                  <strong>₹{Math.round(payableTotal)}</strong>
+                </div>
               </div>
 
               <div
@@ -612,26 +633,28 @@ export default function ComboPage() {
                   />
                 ))}
               </div>
-            </div>
 
-            <div className="combo-selected-items">
-              {selectedProducts.map((item) => (
-                <button
-                  type="button"
-                  key={String(item.id)}
-                  className="combo-selected-item"
-                  onClick={() => toggleProduct(String(item.id))}
-                  aria-label={`Remove ${titleOf(item)} from combo`}
-                >
-                  <img src={imageOf(item)} alt="" />
-                  <span>×</span>
-                </button>
-              ))}
-            </div>
+              <div className="combo-summary-bottom">
+                <div className="combo-selected-items">
+                  {selectedProducts.map((item) => (
+                    <button
+                      type="button"
+                      key={String(item.id)}
+                      className="combo-selected-item"
+                      onClick={() => toggleProduct(String(item.id))}
+                      aria-label={`Remove ${titleOf(item)} from combo`}
+                    >
+                      <img src={imageOf(item)} alt="" />
+                      <span>×</span>
+                    </button>
+                  ))}
+                </div>
 
-            <div className="combo-savings">
-              <small>You save</small>
-              <strong>₹{Math.round(selectedSavings)}</strong>
+                <div className="combo-savings">
+                  <small>You save</small>
+                  <strong>₹{Math.round(selectedSavings)}</strong>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -667,7 +690,7 @@ export default function ComboPage() {
               disabled={selectedIds.length === 0}
               onClick={saveComboSelection}
             >
-              {savedMessage || 'Save for Later'}
+              {savedMessage || 'Save'}
             </button>
 
             <button
@@ -966,70 +989,92 @@ export default function ComboPage() {
           right: 0;
           bottom: 86px;
           z-index: 39;
-          border-top: 1px solid #b7e7c4;
-          border-bottom: 1px solid #b7e7c4;
-          background: #e9f9ee;
-          box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
+          background: #f2fbf5;
+          border-top: 1px solid #d7eadc;
+          box-shadow: 0 -8px 26px rgba(0, 0, 0, 0.06);
         }
 
         .combo-selected-strip-inner {
           width: min(1180px, calc(100% - 32px));
           margin: 0 auto;
-          min-height: 82px;
+          padding: 12px 0;
+        }
+
+        .combo-summary-main {
           display: grid;
-          grid-template-columns: auto minmax(0, 1fr) auto;
+          gap: 10px;
+        }
+
+        .combo-summary-top {
+          display: flex;
           align-items: center;
-          gap: 18px;
-          padding: 10px 0;
+          justify-content: space-between;
+          gap: 16px;
         }
 
-        .combo-selected-left {
-          min-width: 150px;
-          display: grid;
-          gap: 9px;
-        }
-
-        .combo-selected-heading strong {
+        .combo-summary-top > strong {
           font-size: 18px;
           line-height: 1.1;
         }
 
+        .combo-summary-total {
+          display: flex;
+          align-items: baseline;
+          gap: 8px;
+        }
+
+        .combo-summary-total small {
+          color: #666;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .combo-summary-total strong {
+          font-size: 26px;
+          line-height: 1;
+          letter-spacing: -0.02em;
+        }
+
         .combo-progress {
           display: grid;
-          grid-template-columns: repeat(5, minmax(22px, 1fr));
+          grid-template-columns: repeat(5, 1fr);
           gap: 5px;
-          width: 180px;
         }
 
         .combo-progress span {
-          height: 7px;
+          height: 5px;
           border-radius: 999px;
-          background: #cfd8d2;
+          background: #d7ded9;
         }
 
         .combo-progress span.active {
           background: #159447;
         }
 
+        .combo-summary-bottom {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
         .combo-selected-items {
           min-width: 0;
           display: flex;
-          gap: 8px;
+          gap: 7px;
           overflow-x: auto;
-          align-items: center;
         }
 
         .combo-selected-item {
           position: relative;
           flex: 0 0 auto;
-          width: 54px;
-          height: 54px;
+          width: 44px;
+          height: 44px;
           padding: 0;
-          overflow: visible;
-          border: 2px solid #fff;
-          border-radius: 12px;
+          border: 0;
+          border-radius: 10px;
           background: #fff;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+          box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);
           cursor: pointer;
         }
 
@@ -1042,40 +1087,39 @@ export default function ComboPage() {
 
         .combo-selected-item span {
           position: absolute;
-          top: -7px;
-          right: -7px;
-          width: 20px;
-          height: 20px;
+          top: -6px;
+          right: -6px;
+          width: 18px;
+          height: 18px;
           display: grid;
           place-items: center;
           border-radius: 999px;
           background: #171717;
           color: #fff;
-          font-size: 14px;
+          font-size: 12px;
           font-weight: 900;
           line-height: 1;
         }
 
         .combo-savings {
-          min-width: 130px;
-          padding-left: 18px;
-          border-left: 1px solid #b7e7c4;
-          display: grid;
-          justify-items: start;
-          gap: 1px;
+          flex: 0 0 auto;
+          display: flex;
+          align-items: baseline;
+          gap: 7px;
+          padding-left: 12px;
+          border-left: 1px solid #cfe3d5;
         }
 
         .combo-savings small {
-          font-size: 14px;
-          font-weight: 800;
-          color: #254d32;
+          color: #52705b;
+          font-size: 12px;
+          font-weight: 700;
         }
 
         .combo-savings strong {
-          font-size: 34px;
-          line-height: 1;
           color: #0b8f3d;
-          letter-spacing: -0.03em;
+          font-size: 22px;
+          line-height: 1;
         }
 
         .combo-footer {
@@ -1187,47 +1231,40 @@ export default function ComboPage() {
 
           .combo-selected-strip-inner {
             width: 100%;
-            min-height: 84px;
-            grid-template-columns: auto minmax(0, 1fr) auto;
-            padding: 9px 12px;
-            gap: 10px;
+            padding: 10px 12px;
           }
 
-          .combo-selected-left {
-            min-width: 0;
-            gap: 7px;
+          .combo-summary-main {
+            gap: 8px;
           }
 
-          .combo-selected-heading strong {
+          .combo-summary-top > strong {
             font-size: 17px;
-            white-space: nowrap;
           }
 
-          .combo-progress {
-            width: 138px;
-            gap: 4px;
+          .combo-summary-total strong {
+            font-size: 24px;
           }
 
-          .combo-progress span {
-            height: 6px;
+          .combo-summary-bottom {
+            gap: 8px;
           }
 
           .combo-selected-item {
-            width: 44px;
-            height: 44px;
+            width: 40px;
+            height: 40px;
           }
 
           .combo-savings {
-            min-width: 92px;
-            padding-left: 10px;
+            padding-left: 9px;
           }
 
           .combo-savings small {
-            font-size: 12px;
+            font-size: 11px;
           }
 
           .combo-savings strong {
-            font-size: 28px;
+            font-size: 20px;
           }
 
           .combo-footer-inner {
@@ -1255,7 +1292,7 @@ export default function ComboPage() {
           }
 
           .combo-page {
-            padding-bottom: 158px;
+            padding-bottom: 170px;
           }
 
           .combo-page:not(:has(.combo-selected-strip)) {
