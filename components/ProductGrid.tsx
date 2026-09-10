@@ -2408,7 +2408,7 @@ export function ProductGrid({
 
                 {comboEligible && (
                   <Link
-                    href={`/product/${item.id}?combo=1&action=cart${tryAtHomeIds.has(String(item.id)) ? '&tryAtHome=1' : ''}`}
+                    href={`/combo/${encodeURIComponent(String(item.id))}?action=cart`}
                     className="product-image-gift-badge"
                     aria-label={`${t('Choose Combo')} · ${localizedTitleOf(item)}`}
                   >
@@ -2514,12 +2514,25 @@ export function ProductGrid({
                       }
 
                       if (comboEligible) {
-                        const tryAtHomeQuery = tryAtHomeIds.has(String(item.id))
-                          ? '&tryAtHome=1'
-                          : '';
+
+                        try {
+                          window.sessionStorage.setItem(
+                            `spotc-combo-base:${item.id}`,
+                            JSON.stringify({
+                              productId: String(item.id),
+                              size: '',
+                              color: '',
+                              qty: 1,
+                              tryAtHome: tryAtHomeIds.has(String(item.id)),
+                              action: 'cart',
+                            }),
+                          );
+                        } catch {
+                          // Combo page can still load the product.
+                        }
 
                         router.push(
-                          `/product/${encodeURIComponent(String(item.id))}?combo=1&action=cart${tryAtHomeQuery}`,
+                          `/combo/${encodeURIComponent(String(item.id))}?action=cart`,
                         );
                         return;
                       }
@@ -2556,12 +2569,25 @@ export function ProductGrid({
                       }
 
                       if (comboEligible) {
-                        const tryAtHomeQuery = tryAtHomeIds.has(String(item.id))
-                          ? '&tryAtHome=1'
-                          : '';
+
+                        try {
+                          window.sessionStorage.setItem(
+                            `spotc-combo-base:${item.id}`,
+                            JSON.stringify({
+                              productId: String(item.id),
+                              size: '',
+                              color: '',
+                              qty: 1,
+                              tryAtHome: tryAtHomeIds.has(String(item.id)),
+                              action: 'buy',
+                            }),
+                          );
+                        } catch {
+                          // Combo page can still load the product.
+                        }
 
                         router.push(
-                          `/product/${encodeURIComponent(String(item.id))}?combo=1&action=buy${tryAtHomeQuery}`,
+                          `/combo/${encodeURIComponent(String(item.id))}?action=buy`,
                         );
                         return;
                       }
