@@ -2352,7 +2352,7 @@ const styles = `
 
   .spotc-try-at-home-switch-row {
     width: fit-content;
-    min-width: 176px;
+    min-width: 160px;
     margin-top: 10px;
     padding: 8px 10px;
     display: inline-flex;
@@ -2883,7 +2883,7 @@ const styles = `
     padding: 16px;
     display: grid;
     grid-template-columns:
-      120px minmax(0, 1fr) 160px;
+      120px minmax(0, 1fr) minmax(250px, 300px);
     gap: 20px;
     align-items: center;
     border: 1px solid #ebe4dc;
@@ -3000,10 +3000,12 @@ const styles = `
   }
 
   .spotc-cart-controls {
+    min-width: 0;
+    width: 100%;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 14px;
+    gap: 12px;
   }
 
   .spotc-cart-controls-left {
@@ -3015,6 +3017,7 @@ const styles = `
 
 
   .spotc-remove-button {
+    flex: 0 0 auto;
     padding: 7px 10px;
     display: inline-flex;
     align-items: center;

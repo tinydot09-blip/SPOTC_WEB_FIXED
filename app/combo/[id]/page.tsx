@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Check, Gift, Search } from 'lucide-react';
 
-import { addProduct, readCart, updateCartQuantity } from '@/lib/cart';
+import { addProduct, readCart, updateCartQuantity, writeCart } from '@/lib/cart';
 import { getProductById, getProducts } from '@/lib/data';
 import type { BusinessProduct } from '@/lib/types';
+import type { CartItem } from '@/lib/cart';
 import { imageOf, text, titleOf } from '@/lib/utils';
 
 type ProductRecord = BusinessProduct & Record<string, unknown>;
@@ -60,6 +61,69 @@ const customerPriceOf = (product: BusinessProduct): number => {
   return 0;
 };
 
+const originalPriceOf = (product: BusinessProduct): number => {
+  const record = product as ProductRecord;
+  const sellingPrice = customerPriceOf(product);
+
+  const candidates = [
+    record.mrp,
+    record.old_price,
+    record.oldPrice,
+    record.original_price,
+    record.originalPrice,
+    record.compare_at_price,
+    record.compareAtPrice,
+    record.list_price,
+    record.listPrice,
+  ];
+
+  for (const candidate of candidates) {
+    const value = numberValue(candidate);
+    if (value !== null && value > sellingPrice) {
+      return value;
+    }
+  }
+
+  return sellingPrice;
+};
+
+const productColorOf = (product: BusinessProduct): string => {
+  const record = product as ProductRecord;
+
+  const direct = text(
+    record.color ||
+      record.colour ||
+      record.product_color ||
+      record.productColor ||
+      record.color_name ||
+      record.colour_name ||
+      '',
+  ).trim();
+
+  if (direct) return direct;
+
+  if (Array.isArray(record.colors) && record.colors.length > 0) {
+    return text(record.colors[0]).trim();
+  }
+
+  if (Array.isArray(record.colours) && record.colours.length > 0) {
+    return text(record.colours[0]).trim();
+  }
+
+  return '';
+};
+
+const productSizeOf = (product: BusinessProduct): string => {
+  const record = product as ProductRecord;
+
+  return text(
+    record.size ||
+      record.selected_size ||
+      record.selectedSize ||
+      '',
+  ).trim();
+};
+
 const comboPriceOf = (product: BusinessProduct): number => {
   const sellingPrice = customerPriceOf(product);
   if (sellingPrice <= 0) return 0;
@@ -100,11 +164,13 @@ const ensureBaseProductInCart = (
   product: BusinessProduct,
   base: ComboBaseState,
 ) => {
-  const selectedColor = base.color || '';
+  const selectedColor = base.color || productColorOf(product);
+  const selectedSize = base.size || productSizeOf(product);
+
   const existing = readCart().find(
     (item) =>
       String(item.id) === String(product.id) &&
-      (item.size || '') === (base.size || '') &&
+      (item.size || '') === selectedSize &&
       (item.color || '') === selectedColor,
   );
 
@@ -117,20 +183,59 @@ const ensureBaseProductInCart = (
       updateCartQuantity(
         String(product.id),
         desiredQty,
-        base.size || '',
+        selectedSize,
         selectedColor,
       );
     }
-
-    return;
+  } else {
+    addProduct(product, {
+      size: selectedSize,
+      color: selectedColor,
+      qty: desiredQty,
+      tryAtHome: base.tryAtHome,
+    });
   }
 
-  addProduct(product, {
-    size: base.size || '',
-    color: selectedColor,
-    qty: desiredQty,
-    tryAtHome: base.tryAtHome,
+  // Preserve the hero/main product metadata that the cart UI needs.
+  // This fixes missing MRP/discount and missing colour after a combo is added.
+  const originalPrice = originalPriceOf(product);
+  const sellingPrice = customerPriceOf(product);
+  const productRecord = product as ProductRecord;
+
+  const nextCart = readCart().map((item) => {
+    if (String(item.id) !== String(product.id)) {
+      return item;
+    }
+
+    if ((item.size || '') !== selectedSize) {
+      return item;
+    }
+
+    return {
+      ...item,
+      color: item.color || selectedColor,
+      old_price:
+        originalPrice > sellingPrice
+          ? originalPrice
+          : (item as CartItem & { old_price?: number }).old_price,
+      mrp:
+        originalPrice > sellingPrice
+          ? originalPrice
+          : (item as CartItem & { mrp?: number }).mrp,
+      original_price:
+        originalPrice > sellingPrice
+          ? originalPrice
+          : (item as CartItem & { original_price?: number }).original_price,
+      discount:
+        originalPrice > sellingPrice && originalPrice > 0
+          ? Math.round(
+              ((originalPrice - sellingPrice) / originalPrice) * 100,
+            )
+          : productRecord.discount,
+    };
   });
+
+  writeCart(nextCart);
 };
 
 
