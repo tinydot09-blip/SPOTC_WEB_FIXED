@@ -120,6 +120,55 @@ const orderItem = (
       text(item.color),
 
     /*
+     * Preserve cart/combo/Try-at-Home metadata in the order snapshot.
+     */
+    mrp:
+      num(
+        (item as CartItem & { mrp?: unknown }).mrp,
+      ),
+
+    old_price:
+      num(
+        (item as CartItem & { old_price?: unknown }).old_price,
+      ),
+
+    original_price:
+      num(
+        (item as CartItem & { original_price?: unknown }).original_price,
+      ),
+
+    discount:
+      num(
+        (item as CartItem & { discount?: unknown }).discount,
+      ),
+
+    is_combo_item:
+      item.is_combo_item === true,
+
+    combo_parent_id:
+      text(item.combo_parent_id),
+
+    combo_original_price:
+      num(item.combo_original_price),
+
+    combo_price:
+      num(item.combo_price),
+
+    try_at_home:
+      (
+        item as CartItem & {
+          try_at_home?: boolean;
+          tryAtHome?: boolean;
+        }
+      ).try_at_home === true ||
+      (
+        item as CartItem & {
+          try_at_home?: boolean;
+          tryAtHome?: boolean;
+        }
+      ).tryAtHome === true,
+
+    /*
      * Current products are SPOTC-owned.
      */
     seller_type:
@@ -154,7 +203,12 @@ export async function createBusinessOrder({
   group: BusinessCartGroup;
   address: SavedAddress;
   deliveryOption: {
-    id: 'instant' | 'morning' | 'afternoon' | 'overnight';
+    id:
+      | 'instant'
+      | 'morning'
+      | 'afternoon'
+      | 'overnight'
+      | 'try_at_home';
     title: string;
     deliveryWindow: string;
     fee: number;
@@ -226,6 +280,25 @@ export async function createBusinessOrder({
     (deliveryOptionId === 'instant'
       ? 'Delivery in about 15 mins'
       : 'Delivery time selected at checkout');
+
+  const isTryAtHomeOrder =
+    deliveryOptionId === 'try_at_home' ||
+    deliveryOptionTitle.toLowerCase() ===
+      'try at home';
+
+  const tryAtHomeItems =
+    group.items.filter((item) => {
+      const meta =
+        item as CartItem & {
+          try_at_home?: boolean;
+          tryAtHome?: boolean;
+        };
+
+      return (
+        meta.try_at_home === true ||
+        meta.tryAtHome === true
+      );
+    });
 
   const safeDiscount =
     num(discount);
@@ -612,9 +685,39 @@ export async function createBusinessOrder({
         deliveryOptionTitle,
 
       delivery_type:
-        deliveryOptionId === 'instant'
-          ? 'instant'
-          : 'scheduled',
+        isTryAtHomeOrder
+          ? 'try_at_home'
+          : deliveryOptionId === 'instant'
+            ? 'instant'
+            : 'scheduled',
+
+      fulfillment_type:
+        isTryAtHomeOrder
+          ? 'try_at_home'
+          : 'delivery',
+
+      is_try_at_home:
+        isTryAtHomeOrder,
+
+      try_at_home:
+        isTryAtHomeOrder,
+
+      try_at_home_window:
+        isTryAtHomeOrder
+          ? deliveryWindow
+          : '',
+
+      try_at_home_item_count:
+        isTryAtHomeOrder
+          ? tryAtHomeItems.length
+          : 0,
+
+      try_at_home_item_ids:
+        isTryAtHomeOrder
+          ? tryAtHomeItems.map((item) =>
+              text(item.id),
+            )
+          : [],
 
       estimated_delivery:
         deliveryWindow,

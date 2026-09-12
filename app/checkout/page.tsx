@@ -665,11 +665,9 @@ export default function CheckoutPage() {
           },
           address: selectedAddress,
           deliveryOption: {
-            // createBusinessOrder currently accepts only the existing
-            // delivery ids: instant | morning | afternoon | overnight.
-            // Keep the valid id for type safety, while the customer-facing
-            // title/window below carry the Try at Home booking details.
-            id: selectedDelivery.id,
+            id: hasTryAtHomeItems
+              ? 'try_at_home'
+              : selectedDelivery.id,
             title: hasTryAtHomeItems
               ? 'Try at Home'
               : selectedDelivery.title,
