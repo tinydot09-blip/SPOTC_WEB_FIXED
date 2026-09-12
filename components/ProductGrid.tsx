@@ -26,7 +26,7 @@ import {
 } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 
-import { addProduct, readCart, writeCart } from '@/lib/cart';
+import { addProduct } from '@/lib/cart';
 import { getProducts } from '@/lib/data';
 import {
   db,
@@ -1147,11 +1147,6 @@ export function ProductGrid({
   const [visibleCount, setVisibleCount] =
     useState(INITIAL_VISIBLE_PRODUCTS);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
-  const [tryAtHomeIds, setTryAtHomeIds] =
-    useState<Set<string>>(new Set());
-  const [showTryAtHomeInfo, setShowTryAtHomeInfo] =
-    useState(false);
-
   const tryAtHomeKindOf = (
     product: BusinessProduct,
   ): 'dress' | 'earring' | null => {
@@ -1168,78 +1163,6 @@ export function ProductGrid({
     return null;
   };
 
-  const toggleTryAtHome = (product: BusinessProduct) => {
-    const productId = String(product.id);
-    const kind = tryAtHomeKindOf(product);
-
-    if (!kind) return;
-
-    if (tryAtHomeIds.has(productId)) {
-      setTryAtHomeIds((current) => {
-        const next = new Set(current);
-        next.delete(productId);
-
-        try {
-          window.localStorage.setItem(
-            'spotc_try_at_home_ids',
-            JSON.stringify(Array.from(next)),
-          );
-        } catch {
-          // Local storage is optional.
-        }
-
-        return next;
-      });
-      return;
-    }
-
-    const selectedProducts = (items ?? []).filter((candidate) =>
-      tryAtHomeIds.has(String(candidate.id)),
-    );
-
-    const selectedDressCount = selectedProducts.filter(
-      (candidate) => tryAtHomeKindOf(candidate) === 'dress',
-    ).length;
-
-    const selectedEarringCount = selectedProducts.filter(
-      (candidate) => tryAtHomeKindOf(candidate) === 'earring',
-    ).length;
-
-    if (kind === 'dress' && selectedDressCount >= 2) {
-      alert(
-        language === 'ta'
-          ? 'Try at Home-க்கு அதிகபட்சம் 2 dress மட்டும் தேர்வு செய்யலாம்.'
-          : 'You can select a maximum of 2 dresses for Try at Home.',
-      );
-      return;
-    }
-
-    if (kind === 'earring' && selectedEarringCount >= 2) {
-      alert(
-        language === 'ta'
-          ? 'Try at Home-க்கு அதிகபட்சம் 2 earrings மட்டும் தேர்வு செய்யலாம்.'
-          : 'You can select a maximum of 2 earrings for Try at Home.',
-      );
-      return;
-    }
-
-    setTryAtHomeIds((current) => {
-      const next = new Set(current);
-      next.add(productId);
-
-      try {
-        window.localStorage.setItem(
-          'spotc_try_at_home_ids',
-          JSON.stringify(Array.from(next)),
-        );
-      } catch {
-        // Local storage is optional.
-      }
-
-      return next;
-    });
-  };
-
   const localizedTitleOf = (item: BusinessProduct): string => {
     const record = item as BusinessProduct & Record<string, unknown>;
     const tamilTitle = textValue(record.title_ta ?? record.product_name_ta);
@@ -1254,127 +1177,9 @@ export function ProductGrid({
 
   const categoryLabel = (value: string): string => t(value);
 
-  const selectedTryAtHomeProducts = useMemo(
-    () =>
-      (items ?? []).filter((product) =>
-        tryAtHomeIds.has(String(product.id)),
-      ),
-    [items, tryAtHomeIds],
-  );
-
-  const selectedTryAtHomeDressCount = useMemo(
-    () =>
-      selectedTryAtHomeProducts.filter(
-        (product) => tryAtHomeKindOf(product) === 'dress',
-      ).length,
-    [selectedTryAtHomeProducts],
-  );
-
-  const selectedTryAtHomeEarringCount = useMemo(
-    () =>
-      selectedTryAtHomeProducts.filter(
-        (product) => tryAtHomeKindOf(product) === 'earring',
-      ).length,
-    [selectedTryAtHomeProducts],
-  );
-
-  const selectedTryAtHomeTotal =
-    selectedTryAtHomeDressCount + selectedTryAtHomeEarringCount;
-
-  const continueTryAtHome = () => {
-    if (selectedTryAtHomeTotal <= 0) return;
-
-    const selectedProducts = (items ?? []).filter((product) =>
-      tryAtHomeIds.has(String(product.id)),
-    );
-
-    if (selectedProducts.length === 0) return;
-
-    /*
-     * Keep one normal cart line per selected product.
-     *
-     * - If it is already in the cart, simply mark that existing line as
-     *   Try at Home instead of adding another copy.
-     * - If it is not in the cart, use the existing addProduct() helper.
-     *
-     * Combo child rows are deliberately ignored because the Cart page already
-     * prevents combo children from becoming Try at Home items.
-     */
-    selectedProducts.forEach((product) => {
-      const productId = String(product.id);
-      const currentCart = readCart();
-
-      const existingIndex = currentCart.findIndex((cartItem) => {
-        const record = cartItem as typeof cartItem & {
-          is_combo_item?: boolean;
-          combo_parent_id?: string;
-        };
-
-        return (
-          String(cartItem.id) === productId &&
-          record.is_combo_item !== true &&
-          !String(record.combo_parent_id || '').trim()
-        );
-      });
-
-      if (existingIndex >= 0) {
-        const nextCart = currentCart.map((cartItem, index) =>
-          index === existingIndex
-            ? {
-                ...cartItem,
-                tryAtHome: true,
-                try_at_home: true,
-              }
-            : cartItem,
-        );
-
-        writeCart(nextCart);
-        return;
-      }
-
-      addProduct(product, {
-        tryAtHome: true,
-      });
-    });
-
-    router.push('/cart');
-  };
-
   useEffect(() => {
     setMounted(true);
-
-    try {
-      const stored = window.localStorage.getItem(
-        'spotc_try_at_home_ids',
-      );
-      const parsed = stored ? JSON.parse(stored) : [];
-
-      if (Array.isArray(parsed)) {
-        setTryAtHomeIds(
-          new Set(
-            parsed
-              .map((value) => String(value))
-              .filter(Boolean),
-          ),
-        );
-      }
-    } catch {
-      // Ignore malformed local Try at Home state.
-    }
   }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
-
-    try {
-      window.localStorage.setItem(
-        'spotc_try_at_home_ids',
-        JSON.stringify(Array.from(tryAtHomeIds)),
-      );
-    } catch {
-      // Local storage is optional; checkout still validates the booking.
-    }
-  }, [mounted, tryAtHomeIds]);
 
   useEffect(() => {
     let active = true;
@@ -1872,28 +1677,9 @@ export function ProductGrid({
     mainCategories,
   ]);
 
-  const prioritizedProducts = useMemo(() => {
-    if (tryAtHomeIds.size === 0) {
-      return filteredProducts;
-    }
-
-    const selectedProducts: BusinessProduct[] = [];
-    const remainingProducts: BusinessProduct[] = [];
-
-    for (const product of filteredProducts) {
-      if (tryAtHomeIds.has(String(product.id))) {
-        selectedProducts.push(product);
-      } else {
-        remainingProducts.push(product);
-      }
-    }
-
-    return [...selectedProducts, ...remainingProducts];
-  }, [filteredProducts, tryAtHomeIds]);
-
   const visibleProducts = useMemo(
-    () => prioritizedProducts.slice(0, visibleCount),
-    [prioritizedProducts, visibleCount],
+    () => filteredProducts.slice(0, visibleCount),
+    [filteredProducts, visibleCount],
   );
 
   useEffect(() => {
@@ -1905,7 +1691,7 @@ export function ProductGrid({
 
     if (
       !node ||
-      visibleCount >= prioritizedProducts.length ||
+      visibleCount >= filteredProducts.length ||
       typeof IntersectionObserver === 'undefined'
     ) {
       return;
@@ -1930,7 +1716,7 @@ export function ProductGrid({
     observer.observe(node);
 
     return () => observer.disconnect();
-  }, [visibleCount, prioritizedProducts.length]);
+  }, [visibleCount, filteredProducts.length]);
 
   const getLoggedInUser = async (): Promise<User | null> => {
     /*
@@ -2612,136 +2398,6 @@ export function ProductGrid({
           document.body,
         )}
 
-      {mounted &&
-        showTryAtHomeInfo &&
-        createPortal(
-          <div
-            className="try-at-home-info-backdrop"
-            role="presentation"
-            onClick={() => setShowTryAtHomeInfo(false)}
-          >
-            <div
-              className="try-at-home-info-modal"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="try-at-home-info-title"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="try-at-home-info-header">
-                <strong id="try-at-home-info-title">
-                  {t('Try at Home')}
-                </strong>
-                <button
-                  type="button"
-                  className="try-at-home-info-close"
-                  aria-label={t('Close')}
-                  onClick={() => setShowTryAtHomeInfo(false)}
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className="try-at-home-info-content">
-                <p>
-                  {language === 'ta'
-                    ? 'வீட்டிலேயே பொருட்களை பார்த்து/முயற்சி செய்து வாங்கலாம்.'
-                    : 'Select eligible items and try them at home before you decide to buy.'}
-                </p>
-                <ul>
-                  <li>
-                    {language === 'ta'
-                      ? '₹100 மற்றும் அதற்கு மேற்பட்ட dresses.'
-                      : 'Dresses priced ₹100 and above are eligible.'}
-                  </li>
-                  <li>
-                    {language === 'ta'
-                      ? '₹80 மற்றும் அதற்கு மேற்பட்ட earrings.'
-                      : 'Earrings priced ₹80 and above are eligible.'}
-                  </li>
-                  <li>
-                    {language === 'ta'
-                      ? 'ஒரே booking-ல் அதிகபட்சம் 2 dresses மற்றும் 2 earrings தேர்வு செய்யலாம்.'
-                      : 'Choose up to 2 dresses and up to 2 earrings in one booking.'}
-                  </li>
-                  <li>
-                    {language === 'ta'
-                      ? 'ஒரு user-க்கு ஒரு நாளில் 1 Try at Home booking மட்டும்.'
-                      : 'One Try at Home booking per user per day.'}
-                  </li>
-                  <li>
-                    {language === 'ta'
-                      ? 'Checkout-ல் கிடைக்கும் நேர slot-ஐ தேர்வு செய்யலாம்.'
-                      : 'Choose an available Try at Home time slot at checkout.'}
-                  </li>
-                </ul>
-              </div>
-
-              <button
-                type="button"
-                className="try-at-home-info-done"
-                onClick={() => setShowTryAtHomeInfo(false)}
-              >
-                {t('Got it')}
-              </button>
-            </div>
-          </div>,
-          document.body,
-        )}
-
-      {selectedTryAtHomeTotal > 0 && (
-        <div
-          className="try-at-home-selection-summary"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="try-at-home-selection-summary__copy">
-            <strong>
-              {language === 'ta'
-                ? `🏠 Try at Home · ${selectedTryAtHomeTotal} தேர்வு`
-                : `🏠 Try at Home · ${selectedTryAtHomeTotal} selected`}
-            </strong>
-
-            <span>
-              {language === 'ta'
-                ? `Dress ${selectedTryAtHomeDressCount}/2 · Earrings ${selectedTryAtHomeEarringCount}/2`
-                : `Dresses ${selectedTryAtHomeDressCount}/2 · Earrings ${selectedTryAtHomeEarringCount}/2`}
-            </span>
-          </div>
-
-          <div className="try-at-home-selection-summary__actions">
-            <button
-              type="button"
-              className="try-at-home-selection-summary__info"
-              onClick={() => setShowTryAtHomeInfo(true)}
-            >
-              {language === 'ta' ? 'விவரம்' : 'How it works'}
-            </button>
-
-            <button
-              type="button"
-              className="try-at-home-selection-summary__continue"
-              onClick={continueTryAtHome}
-              aria-label={
-                language === 'ta'
-                  ? `தேர்வு செய்த ${selectedTryAtHomeTotal} பொருட்களுடன் தொடரவும்`
-                  : `Continue with ${selectedTryAtHomeTotal} selected ${
-                      selectedTryAtHomeTotal === 1 ? 'item' : 'items'
-                    }`
-              }
-            >
-              <span>
-                {language === 'ta'
-                  ? `${selectedTryAtHomeTotal} பொருட்களுடன் தொடரவும்`
-                  : `Continue with ${selectedTryAtHomeTotal} ${
-                      selectedTryAtHomeTotal === 1 ? 'Item' : 'Items'
-                    }`}
-              </span>
-              <span aria-hidden="true">→</span>
-            </button>
-          </div>
-        </div>
-      )}
-
       <section
         className={`product-grid rich ${
           hideBusinessName
@@ -2857,58 +2513,21 @@ export function ProductGrid({
 
                 <div className="product-try-home-row">
                   {tryAtHomeEligible ? (
-                    <div className="product-try-home-left">
-                      <label
-                        className={`product-try-home-option ${
-                          tryAtHomeIds.has(String(item.id))
-                            ? 'is-selected'
-                            : ''
-                        }`}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={tryAtHomeIds.has(String(item.id))}
-                          onChange={() => toggleTryAtHome(item)}
-                          aria-label={`${t('Try at home')} · ${localizedTitleOf(item)}`}
-                        />
-                        <span>
-                          {tryAtHomeIds.has(String(item.id))
-                            ? language === 'ta'
-                              ? `✓ தேர்வு · ${
-                                  tryAtHomeKind === 'dress'
-                                    ? selectedTryAtHomeDressCount
-                                    : selectedTryAtHomeEarringCount
-                                }/2`
-                              : `✓ Selected · ${
-                                  tryAtHomeKind === 'dress'
-                                    ? selectedTryAtHomeDressCount
-                                    : selectedTryAtHomeEarringCount
-                                }/2`
-                            : language === 'ta'
-                              ? '🏠 வீட்டில் முயற்சி'
-                              : '🏠 Try at Home'}
-                        </span>
-                      </label>
-
-                      <button
-                        type="button"
-                        className="product-try-home-info-button"
-                        aria-label={t('Try at Home information')}
-                        title={t('Try at Home information')}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setShowTryAtHomeInfo(true);
-                        }}
-                      >
-                        <Info size={15} strokeWidth={2} aria-hidden="true" />
-                      </button>
-                    </div>
+                    <span
+                      className="product-try-home-available"
+                      aria-label={
+                        language === 'ta'
+                          ? 'Try at Home கிடைக்கும்'
+                          : 'Try at Home available'
+                      }
+                    >
+                      {language === 'ta'
+                        ? '🏠 Try at Home கிடைக்கும்'
+                        : '🏠 Try at Home Available'}
+                    </span>
                   ) : (
                     <span aria-hidden="true" />
                   )}
-
                 </div>
 
 <div className="product-actions">
@@ -2945,7 +2564,7 @@ export function ProductGrid({
                               size: '',
                               color: '',
                               qty: 1,
-                              tryAtHome: tryAtHomeIds.has(String(item.id)),
+                              tryAtHome: false,
                               action: 'cart',
                             }),
                           );
@@ -2960,7 +2579,7 @@ export function ProductGrid({
                       }
 
                       addProduct(item, {
-                        tryAtHome: tryAtHomeIds.has(String(item.id)),
+                        tryAtHome: false,
                       });
                       alert(t('1 product added'));
                     }}
@@ -3002,7 +2621,7 @@ export function ProductGrid({
                               size: '',
                               color: '',
                               qty: 1,
-                              tryAtHome: tryAtHomeIds.has(String(item.id)),
+                              tryAtHome: false,
                               action: 'buy',
                             }),
                           );
@@ -3055,7 +2674,7 @@ export function ProductGrid({
 
                       if (!alreadyInCart) {
                         addProduct(item, {
-                          tryAtHome: tryAtHomeIds.has(String(item.id)),
+                          tryAtHome: false,
                         });
                       }
 
@@ -3398,146 +3017,23 @@ export function ProductGrid({
           gap: 6px;
         }
 
-        .product-card.rich .product-try-home-left {
-          width: 100%;
-          min-width: 0;
-          display: flex !important;
-          align-items: center !important;
-          gap: 6px !important;
-        }
-
-        .product-card.rich .product-try-home-option {
-          flex: 1 1 auto;
-          width: auto;
-          max-width: 150px;
-        }
-
-        .product-card.rich .product-try-home-option {
-          position: relative;
-          min-width: 0;
+        .product-card.rich .product-try-home-available {
           min-height: 30px;
           padding: 0 10px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 5px;
-          border: 1.5px solid #b8b8b8;
-          border-radius: 999px;
-          background: #ffffff;
-          color: #171717;
-          font-size: 12px;
-          font-weight: 800;
-          line-height: 1;
-          white-space: nowrap;
-          cursor: pointer;
-          user-select: none;
-          box-sizing: border-box;
-          transition:
-            border-color 160ms ease,
-            background 160ms ease,
-            color 160ms ease,
-            box-shadow 160ms ease;
-        }
-
-        /*
-         * Keep the real checkbox for state/accessibility, but hide the tiny
-         * browser checkbox visually. The whole pill is the tap target.
-         */
-        .product-card.rich .product-try-home-option input {
-          position: absolute;
-          width: 1px;
-          height: 1px;
-          margin: 0;
-          opacity: 0;
-          pointer-events: none;
-        }
-
-        .product-card.rich .product-try-home-option:hover {
-          border-color: #198754;
-          background: #f5fbf7;
-        }
-
-        .product-card.rich .product-try-home-option.is-selected {
-          border-color: #198754;
-          background: #e8f7ee;
-          color: #0f6a39;
-          box-shadow: inset 0 0 0 1px rgba(25, 135, 84, 0.08);
-        }
-
-        .try-at-home-selection-summary {
-          width: 100%;
-          margin: 10px 0 14px;
-          padding: 10px 12px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
           border: 1px solid #bfe4cd;
-          border-radius: 12px;
+          border-radius: 999px;
           background: #eefaf3;
-          box-sizing: border-box;
-        }
-
-        .try-at-home-selection-summary__copy {
-          min-width: 0;
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-        }
-
-        .try-at-home-selection-summary__copy strong {
           color: #125f36;
-          font-size: 13px;
-          line-height: 1.2;
-        }
-
-        .try-at-home-selection-summary__copy span {
-          color: #456253;
-          font-size: 12px;
-          line-height: 1.2;
-        }
-
-        .try-at-home-selection-summary__actions {
-          flex: 0 0 auto;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .try-at-home-selection-summary__info {
-          flex: 0 0 auto;
-          min-height: 34px;
-          padding: 0 12px;
-          border: 1px solid #9fd4b3;
-          border-radius: 999px;
-          background: #ffffff;
-          color: #125f36;
-          font-size: 12px;
-          font-weight: 700;
-          cursor: pointer;
-        }
-
-        .try-at-home-selection-summary__continue {
-          min-height: 36px;
-          padding: 0 14px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 7px;
-          border: 0;
-          border-radius: 999px;
-          background: #147a43;
-          color: #ffffff;
           font-size: 12px;
           font-weight: 800;
           line-height: 1;
           white-space: nowrap;
-          cursor: pointer;
-          box-shadow: 0 4px 12px rgba(20, 122, 67, 0.18);
-        }
-
-        .try-at-home-selection-summary__continue:hover {
-          background: #106a39;
+          box-sizing: border-box;
+          cursor: default;
+          user-select: none;
         }
 
         @media (max-width: 700px) {
@@ -3548,55 +3044,16 @@ export function ProductGrid({
             gap: 6px;
           }
 
-          .product-card.rich .product-try-home-option {
+          .product-card.rich .product-try-home-available {
             min-height: 29px;
             padding: 0 8px;
-            gap: 4px;
-            font-size: 11px;
-            white-space: nowrap;
-            max-width: none;
-          }
-
-          .try-at-home-selection-summary {
-            margin-top: 8px;
-            margin-bottom: 11px;
-            padding: 9px 10px;
-            gap: 8px;
-            align-items: flex-start;
-          }
-
-          .try-at-home-selection-summary__actions {
-            display: grid;
-            grid-template-columns: auto auto;
-            gap: 6px;
-          }
-
-          .try-at-home-selection-summary__continue {
-            min-height: 32px;
-            padding: 0 10px;
-            gap: 5px;
             font-size: 11px;
           }
 
-          .try-at-home-selection-summary__copy strong {
-            font-size: 12px;
-          }
 
-          .try-at-home-selection-summary__copy span {
-            font-size: 11px;
-          }
 
-          .try-at-home-selection-summary__info {
-            min-height: 30px;
-            padding: 0 9px;
-            font-size: 11px;
-          }
 
-          .product-card.rich .product-try-home-option input {
-            width: 15px;
-            height: 15px;
-            flex-basis: 15px;
-          }
+
 
           .product-card.rich .product-stock-text {
             font-size: 11px;
@@ -4413,34 +3870,6 @@ export function ProductGrid({
             }
           }
 
-
-
-          .product-card.rich .product-try-home-left {
-            width: 100% !important;
-            display: flex !important;
-            align-items: center !important;
-            gap: 6px !important;
-            min-width: 0;
-          }
-
-          .product-card.rich .product-try-home-info-button {
-            width: 20px;
-            height: 20px;
-            padding: 0;
-            border: 0;
-            border-radius: 999px;
-            background: transparent;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            color: #555;
-            flex: 0 0 auto;
-          }
-
-          .product-card.rich .product-try-home-info-button:hover {
-            background: rgba(0, 0, 0, 0.06);
-          }
 
           .try-at-home-info-backdrop {
             position: fixed;
