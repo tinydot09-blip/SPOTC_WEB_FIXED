@@ -18,6 +18,13 @@ export type CartItem = {
   combo_original_price?: number;
   combo_price?: number;
   try_at_home?: boolean;
+  tryAtHome?: boolean;
+
+  // Preserve customer-facing price metadata for normal/main products.
+  mrp?: number;
+  old_price?: number;
+  original_price?: number;
+  discount?: number;
 };
 
 const CART_KEY = 'spotc_cart';
@@ -72,6 +79,100 @@ function stockQuantityOf(
     product.stock_qty ??
       product.stock_quantity,
   );
+}
+
+function numericValue(
+  value: unknown,
+): number | undefined {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ''
+  ) {
+    return undefined;
+  }
+
+  const number = Number(value);
+
+  return Number.isFinite(number)
+    ? number
+    : undefined;
+}
+
+type ProductPriceRecord = BusinessProduct & {
+  mrp?: unknown;
+  old_price?: unknown;
+  oldPrice?: unknown;
+  original_price?: unknown;
+  originalPrice?: unknown;
+  compare_at_price?: unknown;
+  compareAtPrice?: unknown;
+  list_price?: unknown;
+  listPrice?: unknown;
+  discount?: unknown;
+};
+
+function originalPriceOf(
+  product: BusinessProduct,
+): number | undefined {
+  const record = product as ProductPriceRecord;
+  const sellingPrice = priceOf(product);
+
+  const candidates = [
+    record.mrp,
+    record.old_price,
+    record.oldPrice,
+    record.original_price,
+    record.originalPrice,
+    record.compare_at_price,
+    record.compareAtPrice,
+    record.list_price,
+    record.listPrice,
+  ];
+
+  for (const candidate of candidates) {
+    const value = numericValue(candidate);
+
+    if (
+      value !== undefined &&
+      value > sellingPrice
+    ) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+function discountPercentOf(
+  product: BusinessProduct,
+  originalPrice?: number,
+): number | undefined {
+  const record = product as ProductPriceRecord;
+  const direct = numericValue(record.discount);
+
+  if (
+    direct !== undefined &&
+    direct > 0
+  ) {
+    return Math.round(direct);
+  }
+
+  const sellingPrice = priceOf(product);
+
+  if (
+    originalPrice !== undefined &&
+    originalPrice > sellingPrice &&
+    sellingPrice > 0
+  ) {
+    return Math.round(
+      ((originalPrice - sellingPrice) /
+        originalPrice) *
+        100,
+    );
+  }
+
+  return undefined;
 }
 
 function freeGiftCountPerItemOf(
@@ -248,7 +349,21 @@ export function readCart(): CartItem[] {
               Number.isFinite(Number(item.combo_price))
                 ? Number(item.combo_price)
                 : undefined,
-            try_at_home: item.try_at_home === true,
+            try_at_home:
+              item.try_at_home === true ||
+              item.tryAtHome === true,
+            tryAtHome:
+              item.try_at_home === true ||
+              item.tryAtHome === true,
+
+            mrp:
+              numericValue(item.mrp),
+            old_price:
+              numericValue(item.old_price),
+            original_price:
+              numericValue(item.original_price),
+            discount:
+              numericValue(item.discount),
           };
 
         const key =
@@ -453,7 +568,21 @@ export function writeCart(
             Number.isFinite(Number(item.combo_price))
               ? Number(item.combo_price)
               : undefined,
-          try_at_home: item.try_at_home === true,
+          try_at_home:
+            item.try_at_home === true ||
+            item.tryAtHome === true,
+          tryAtHome:
+            item.try_at_home === true ||
+            item.tryAtHome === true,
+
+          mrp:
+            numericValue(item.mrp),
+          old_price:
+            numericValue(item.old_price),
+          original_price:
+            numericValue(item.original_price),
+          discount:
+            numericValue(item.discount),
         };
 
       const key =
@@ -556,6 +685,24 @@ export function addProduct(
   const availableStock =
     stockQuantityOf(product);
 
+  /*
+   * Only normal/main products use the product's own MRP here.
+   * Combo children keep using combo_original_price so the cart
+   * continues to show the intended combo saving percentage.
+   */
+  const productOriginalPrice =
+    options?.isComboItem === true
+      ? undefined
+      : originalPriceOf(product);
+
+  const productDiscount =
+    options?.isComboItem === true
+      ? undefined
+      : discountPercentOf(
+          product,
+          productOriginalPrice,
+        );
+
   if (
     availableStock !== undefined &&
     availableStock <= 0
@@ -600,6 +747,18 @@ export function addProduct(
     existingItem.combo_original_price = options?.comboOriginalPrice;
     existingItem.combo_price = options?.comboPrice;
     existingItem.try_at_home = options?.tryAtHome === true;
+    existingItem.tryAtHome = options?.tryAtHome === true;
+
+    if (!isComboItem) {
+      existingItem.mrp = productOriginalPrice;
+      existingItem.old_price = productOriginalPrice;
+      existingItem.original_price = productOriginalPrice;
+      existingItem.discount = productDiscount;
+
+      // Keep selected product variation data current.
+      existingItem.size = size;
+      existingItem.color = color;
+    }
 
     if (isComboItem) {
       existingItem.qty = 1;
@@ -659,6 +818,24 @@ export function addProduct(
       combo_original_price: options?.comboOriginalPrice,
       combo_price: options?.comboPrice,
       try_at_home: options?.tryAtHome === true,
+      tryAtHome: options?.tryAtHome === true,
+
+      mrp:
+        isComboItem
+          ? undefined
+          : productOriginalPrice,
+      old_price:
+        isComboItem
+          ? undefined
+          : productOriginalPrice,
+      original_price:
+        isComboItem
+          ? undefined
+          : productOriginalPrice,
+      discount:
+        isComboItem
+          ? undefined
+          : productDiscount,
 
       businessId:
         businessIdOf(
