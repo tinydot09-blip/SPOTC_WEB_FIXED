@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Banknote,
+  Clock3,
   Gift,
   Loader2,
   MapPin,
@@ -36,6 +37,27 @@ import {
 
 const money = (value: number) =>
   `₹${Math.round(value).toLocaleString('en-IN')}`;
+
+type TryAtHomeCartItem = CartItem & {
+  try_at_home?: boolean;
+  tryAtHome?: boolean;
+};
+
+const isTryAtHomeCartItem = (item: CartItem): boolean => {
+  const meta = item as TryAtHomeCartItem;
+
+  return (
+    meta.try_at_home === true ||
+    meta.tryAtHome === true
+  );
+};
+
+type SavedTryAtHomeSlot = {
+  id?: string;
+  label?: string;
+  startMinutes?: number;
+  date?: string;
+};
 
 
 type AddressDeliveryStatus =
@@ -265,6 +287,10 @@ export default function CheckoutPage() {
     useState<Record<string, SavedGiftBundle>>({});
   const [selectedDeliveryId, setSelectedDeliveryId] =
     useState<DeliveryOptionId>('instant');
+  const [tryAtHomeDate, setTryAtHomeDate] =
+    useState('');
+  const [tryAtHomeSlot, setTryAtHomeSlot] =
+    useState<SavedTryAtHomeSlot | null>(null);
   const [loading, setLoading] = useState(true);
   const [placing, setPlacing] = useState(false);
   const checkoutTrackedRef = useRef('');
@@ -288,6 +314,43 @@ export default function CheckoutPage() {
       }
 
       setItems(cart);
+
+      const hasTryAtHomeCartItems =
+        cart.some((item) =>
+          isTryAtHomeCartItem(item),
+        );
+
+      if (hasTryAtHomeCartItems) {
+        const savedTryAtHomeDate =
+          window.localStorage.getItem(
+            'spotc-try-at-home-date',
+          ) || '';
+
+        const savedTryAtHomeSlotRaw =
+          window.localStorage.getItem(
+            'spotc-try-at-home-slot',
+          );
+
+        let parsedTryAtHomeSlot:
+          SavedTryAtHomeSlot | null = null;
+
+        if (savedTryAtHomeSlotRaw) {
+          try {
+            parsedTryAtHomeSlot =
+              JSON.parse(
+                savedTryAtHomeSlotRaw,
+              ) as SavedTryAtHomeSlot;
+          } catch {
+            parsedTryAtHomeSlot = null;
+          }
+        }
+
+        setTryAtHomeDate(savedTryAtHomeDate);
+        setTryAtHomeSlot(parsedTryAtHomeSlot);
+      } else {
+        setTryAtHomeDate('');
+        setTryAtHomeSlot(null);
+      }
 
       const nextGiftBundles: Record<
         string,
@@ -372,10 +435,17 @@ export default function CheckoutPage() {
         option.id === selectedDeliveryId,
     ) ?? DELIVERY_OPTIONS[0];
 
+  const tryAtHomeItems = items.filter((item) =>
+    isTryAtHomeCartItem(item),
+  );
+
+  const hasTryAtHomeItems =
+    tryAtHomeItems.length > 0;
+
   const delivery =
-    items.length > 0
-      ? selectedDelivery.fee
-      : 0;
+    items.length === 0 || hasTryAtHomeItems
+      ? 0
+      : selectedDelivery.fee;
 
   const total = subtotal + delivery;
 
@@ -415,8 +485,12 @@ export default function CheckoutPage() {
           (sum, item) => sum + Math.max(1, Number(item.qty) || 1),
           0,
         ),
-        selected_delivery_id: selectedDelivery.id,
-        selected_delivery_title: selectedDelivery.title,
+        selected_delivery_id: hasTryAtHomeItems
+          ? 'try_at_home'
+          : selectedDelivery.id,
+        selected_delivery_title: hasTryAtHomeItems
+          ? 'Try at Home'
+          : selectedDelivery.title,
         page_path: '/checkout',
       });
 
@@ -454,7 +528,9 @@ export default function CheckoutPage() {
         (item) =>
           `${item.id}:${item.qty}:${item.price}:${item.size}:${item.color}`,
       ),
-      selectedDelivery.id,
+      hasTryAtHomeItems ? 'try_at_home' : selectedDelivery.id,
+      tryAtHomeDate,
+      tryAtHomeSlot?.id || '',
       deliverySignature,
     ].join('|');
 
@@ -463,7 +539,9 @@ export default function CheckoutPage() {
     sendGa4Event('add_shipping_info', {
       currency: 'INR',
       value: total,
-      shipping_tier: selectedDelivery.title,
+      shipping_tier: hasTryAtHomeItems
+        ? 'Try at Home'
+        : selectedDelivery.title,
       delivery_status: 'available',
       delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
       distance_band: distanceBand,
@@ -476,11 +554,14 @@ export default function CheckoutPage() {
     addressDeliveryCheck.distanceKm,
     addressDeliveryCheck.status,
     canDeliverToAddress,
+    hasTryAtHomeItems,
     items,
     loading,
     selectedDelivery.id,
     selectedDelivery.title,
     total,
+    tryAtHomeDate,
+    tryAtHomeSlot?.id,
   ]);
 
   const place = async () => {
@@ -504,8 +585,19 @@ export default function CheckoutPage() {
       delivery_available: canDeliverToAddress,
       delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
       distance_band: distanceBand,
-      selected_delivery_id: selectedDelivery.id,
-      selected_delivery_title: selectedDelivery.title,
+      selected_delivery_id: hasTryAtHomeItems
+        ? 'try_at_home'
+        : selectedDelivery.id,
+      selected_delivery_title: hasTryAtHomeItems
+        ? 'Try at Home'
+        : selectedDelivery.title,
+      try_at_home: hasTryAtHomeItems,
+      try_at_home_date: hasTryAtHomeItems
+        ? tryAtHomeDate
+        : undefined,
+      try_at_home_slot: hasTryAtHomeItems
+        ? tryAtHomeSlot?.id
+        : undefined,
       items: items.map(ga4ItemFromCart),
     });
 
@@ -573,12 +665,22 @@ export default function CheckoutPage() {
           },
           address: selectedAddress,
           deliveryOption: {
-            id: selectedDelivery.id,
-            title: selectedDelivery.title,
-            deliveryWindow: selectedDelivery.deliveryWindow,
+            id: hasTryAtHomeItems
+              ? 'try_at_home'
+              : selectedDelivery.id,
+            title: hasTryAtHomeItems
+              ? 'Try at Home'
+              : selectedDelivery.title,
+            deliveryWindow: hasTryAtHomeItems
+              ? `${tryAtHomeDate}${
+                  tryAtHomeSlot?.label
+                    ? ` · ${tryAtHomeSlot.label}`
+                    : ''
+                }`
+              : selectedDelivery.deliveryWindow,
             fee:
               groupIndex === 0
-                ? selectedDelivery.fee
+                ? delivery
                 : 0,
           },
           freeGifts: Object.values(giftBundles)
@@ -875,6 +977,26 @@ export default function CheckoutPage() {
             )}
 
 
+            {hasTryAtHomeItems && (
+              <section className="try-at-home-checkout-card">
+                <Clock3 />
+
+                <div>
+                  <strong>Try at Home</strong>
+                  <small>
+                    {tryAtHomeDate || 'Selected date'}
+                    {tryAtHomeSlot?.label
+                      ? ` · ${tryAtHomeSlot.label}`
+                      : ''}
+                  </small>
+                  <span>
+                    {tryAtHomeItems.length} eligible item
+                    {tryAtHomeItems.length === 1 ? '' : 's'} included
+                  </span>
+                </div>
+              </section>
+            )}
+
             <section className="payment-card">
               <Banknote />
 
@@ -912,12 +1034,32 @@ export default function CheckoutPage() {
               <strong>{money(total)}</strong>
             </p>
 
-            <div className="delivery-banner">
-              <Truck />
+            <div
+              className={`delivery-banner ${
+                hasTryAtHomeItems ? 'try-at-home' : ''
+              }`}
+            >
+              {hasTryAtHomeItems ? (
+                <Clock3 />
+              ) : (
+                <Truck />
+              )}
 
               <span>
-                <strong>{selectedDelivery.title}</strong>
-                <small>{selectedDelivery.deliveryWindow}</small>
+                <strong>
+                  {hasTryAtHomeItems
+                    ? 'Try at Home'
+                    : selectedDelivery.title}
+                </strong>
+                <small>
+                  {hasTryAtHomeItems
+                    ? `${tryAtHomeDate || 'Selected date'}${
+                        tryAtHomeSlot?.label
+                          ? ` · ${tryAtHomeSlot.label}`
+                          : ''
+                      }`
+                    : selectedDelivery.deliveryWindow}
+                </small>
               </span>
             </div>
 
@@ -1134,6 +1276,41 @@ export default function CheckoutPage() {
           font-size: 18px;
         }
 
+        .try-at-home-checkout-card {
+          padding: 18px;
+          display: flex;
+          align-items: center;
+          gap: 13px;
+          border: 1px solid #a8d5b8;
+          border-radius: 22px;
+          color: #185f39;
+          background: #f1faf4;
+          box-shadow: 0 12px 32px rgba(22, 134, 72, 0.06);
+        }
+
+        .try-at-home-checkout-card > svg {
+          flex: 0 0 auto;
+          color: #168648;
+        }
+
+        .try-at-home-checkout-card strong,
+        .try-at-home-checkout-card small,
+        .try-at-home-checkout-card span {
+          display: block;
+        }
+
+        .try-at-home-checkout-card small {
+          margin-top: 4px;
+          color: #4b7c5f;
+        }
+
+        .try-at-home-checkout-card span {
+          margin-top: 5px;
+          color: #168648;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
         .payment-card {
           padding: 18px;
           display: flex;
@@ -1236,6 +1413,11 @@ export default function CheckoutPage() {
           gap: 9px;
           border-radius: 13px;
           color: #147a41;
+          background: #edf9f1;
+        }
+
+        .delivery-banner.try-at-home {
+          border: 1px solid #b8dfc5;
           background: #edf9f1;
         }
 
