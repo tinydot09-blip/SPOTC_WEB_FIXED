@@ -209,6 +209,38 @@ export default function ComboPage() {
       // Continue with safe defaults.
     }
 
+    // FAST COMBO ENTRY
+    // ProductGrid keeps the catalogue in memory. Use it immediately so tapping
+    // "Choose Combo" does not wait for another full Firestore catalogue load.
+    try {
+      const browserCache = (
+        window as typeof window & {
+          __spotcProductsCache?: BusinessProduct[];
+          __spotcProductsCacheAt?: number;
+        }
+      ).__spotcProductsCache;
+
+      if (Array.isArray(browserCache) && browserCache.length > 0) {
+        const cachedBaseProduct = browserCache.find(
+          (item) => String(item.id) === String(id),
+        );
+
+        if (cachedBaseProduct) {
+          setBaseProduct(cachedBaseProduct);
+          setProducts(
+            browserCache.filter(
+              (item) =>
+                String(item.id) !== String(cachedBaseProduct.id) &&
+                isComboProduct(item),
+            ),
+          );
+        }
+      }
+    } catch {
+      // Fall back to the normal data request below.
+    }
+
+    // Refresh in the background so stock/prices still stay current.
     Promise.all([getProductById(String(id)), getProducts()])
       .then(([loadedBaseProduct, allProducts]) => {
         if (!active) return;
@@ -230,8 +262,11 @@ export default function ComboPage() {
       })
       .catch(() => {
         if (!active) return;
-        setBaseProduct(null);
-        setProducts([]);
+
+        // If the cached catalogue already painted the combo page, keep it.
+        // Only show the error state when there was no usable cached product.
+        setBaseProduct((current) => current ?? null);
+        setProducts((current) => current);
       });
 
     return () => {
@@ -531,7 +566,7 @@ export default function ComboPage() {
           </button>
 
           <div>
-            <small>COMBO PRICES UNLOCKED</small>
+            <small>18% COMBO OFFER UNLOCKED</small>
             <h1>Choose up to 5 favourites</h1>
           </div>
 
@@ -624,7 +659,10 @@ export default function ComboPage() {
                     <span className="combo-price">
                       <b>₹{Math.round(comboPrice)}</b>
                       {normalPrice > comboPrice && (
-                        <del>₹{Math.round(normalPrice)}</del>
+                        <>
+                          <del>₹{Math.round(normalPrice)}</del>
+                          <span className="combo-off-badge">18% OFF</span>
+                        </>
                       )}
                     </span>
 
@@ -692,7 +730,7 @@ export default function ComboPage() {
                 </div>
 
                 <div className="combo-savings">
-                  <small>You save</small>
+                  <small>18% combo saving</small>
                   <strong>₹{Math.round(selectedSavings)}</strong>
                 </div>
               </div>
@@ -706,7 +744,7 @@ export default function ComboPage() {
           <div className="combo-footer-copy">
             <strong>
               {selectedIds.length
-                ? `You save ₹${Math.round(selectedSavings)}`
+                ? `18% OFF · You save ₹${Math.round(selectedSavings)}`
                 : '0 of 5 selected'}
             </strong>
             <span>
@@ -998,6 +1036,20 @@ export default function ComboPage() {
         .combo-price del {
           color: #888;
           font-size: 12px;
+        }
+
+        .combo-off-badge {
+          display: inline-flex;
+          align-items: center;
+          min-height: 22px;
+          padding: 0 7px;
+          border-radius: 999px;
+          background: #eef9ef;
+          color: #0b8f3d;
+          font-size: 10px;
+          font-weight: 900;
+          line-height: 1;
+          white-space: nowrap;
         }
 
         .combo-product-copy small {

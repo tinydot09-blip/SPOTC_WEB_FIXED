@@ -2551,8 +2551,36 @@ export function ProductGrid({
                 {comboEligible && (
                   <Link
                     href={`/combo/${encodeURIComponent(String(item.id))}?action=cart`}
+                    prefetch={true}
                     className="product-image-gift-badge"
                     aria-label={`${t('Choose Combo')} · ${localizedTitleOf(item)}`}
+                    onClick={() => {
+                      try {
+                        window.sessionStorage.setItem(
+                          `spotc-combo-base:${item.id}`,
+                          JSON.stringify({
+                            productId: String(item.id),
+                            size: '',
+                            color: '',
+                            qty: 1,
+                            tryAtHome: false,
+                            action: 'cart',
+                          }),
+                        );
+
+                        const browserCache = window as typeof window & {
+                          __spotcProductsCache?: BusinessProduct[];
+                          __spotcProductsCacheAt?: number;
+                        };
+
+                        if (items && items.length > 0) {
+                          browserCache.__spotcProductsCache = items;
+                          browserCache.__spotcProductsCacheAt = Date.now();
+                        }
+                      } catch {
+                        // Navigation still works even if browser storage is unavailable.
+                      }
+                    }}
                   >
                     <Gift size={16} strokeWidth={2.4} aria-hidden="true" />
                     <span>
