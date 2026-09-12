@@ -2655,10 +2655,6 @@ export function ProductGrid({
           const tryAtHomeKind = tryAtHomeKindOf(item);
           const tryAtHomeEligible = tryAtHomeKind !== null;
           const image = imageOf(item);
-          const stock = numberValue(
-            item.stock_qty ??
-              item.stock_quantity,
-          );
           const isSaving =
             savingId === item.id;
 
@@ -2811,13 +2807,6 @@ export function ProductGrid({
                     <span aria-hidden="true" />
                   )}
 
-                  <small className="product-stock-text">
-                    {stock > 0
-                      ? language === 'ta'
-                        ? `${stock} மட்டும் உள்ளது`
-                        : `${stock} left`
-                      : t('Out of stock')}
-                  </small>
                 </div>
 
 <div className="product-actions">
@@ -3303,53 +3292,74 @@ export function ProductGrid({
           margin: 7px 0 10px;
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          gap: 10px;
+          justify-content: flex-start;
+          gap: 6px;
+        }
+
+        .product-card.rich .product-try-home-left {
+          width: 100%;
+          min-width: 0;
+          display: flex !important;
+          align-items: center !important;
+          gap: 6px !important;
         }
 
         .product-card.rich .product-try-home-option {
+          flex: 1 1 auto;
+          width: auto;
+          max-width: 150px;
+        }
+
+        .product-card.rich .product-try-home-option {
+          position: relative;
           min-width: 0;
+          min-height: 30px;
+          padding: 0 10px;
           display: inline-flex;
           align-items: center;
-          gap: 7px;
-          color: #171717;
-          font-size: 12px;
-          font-weight: 700;
-          line-height: 1.2;
-          cursor: pointer;
-          user-select: none;
-        }
-
-        .product-card.rich .product-try-home-option input {
-          width: 17px;
-          height: 17px;
-          margin: 0;
-          flex: 0 0 17px;
-          accent-color: #171717;
-          cursor: pointer;
-        }
-
-        .product-card.rich .product-try-home-option {
-          min-height: 28px;
-          padding: 0 8px;
-          border: 1px solid #d9d9d9;
+          justify-content: center;
+          gap: 5px;
+          border: 1.5px solid #b8b8b8;
           border-radius: 999px;
           background: #ffffff;
+          color: #171717;
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1;
+          white-space: nowrap;
+          cursor: pointer;
+          user-select: none;
+          box-sizing: border-box;
           transition:
             border-color 160ms ease,
             background 160ms ease,
+            color 160ms ease,
             box-shadow 160ms ease;
+        }
+
+        /*
+         * Keep the real checkbox for state/accessibility, but hide the tiny
+         * browser checkbox visually. The whole pill is the tap target.
+         */
+        .product-card.rich .product-try-home-option input {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          margin: 0;
+          opacity: 0;
+          pointer-events: none;
+        }
+
+        .product-card.rich .product-try-home-option:hover {
+          border-color: #198754;
+          background: #f5fbf7;
         }
 
         .product-card.rich .product-try-home-option.is-selected {
           border-color: #198754;
-          background: #eaf8f0;
-          color: #116638;
+          background: #e8f7ee;
+          color: #0f6a39;
           box-shadow: inset 0 0 0 1px rgba(25, 135, 84, 0.08);
-        }
-
-        .product-card.rich .product-try-home-option.is-selected input {
-          accent-color: #198754;
         }
 
         .try-at-home-selection-summary {
@@ -3407,10 +3417,12 @@ export function ProductGrid({
           }
 
           .product-card.rich .product-try-home-option {
-            gap: 5px;
-            min-height: 26px;
-            padding: 0 6px;
+            min-height: 29px;
+            padding: 0 8px;
+            gap: 4px;
             font-size: 11px;
+            white-space: nowrap;
+            max-width: none;
           }
 
           .try-at-home-selection-summary {
@@ -4258,9 +4270,10 @@ export function ProductGrid({
 
 
           .product-card.rich .product-try-home-left {
-            display: inline-flex !important;
+            width: 100% !important;
+            display: flex !important;
             align-items: center !important;
-            gap: 5px !important;
+            gap: 6px !important;
             min-width: 0;
           }
 
