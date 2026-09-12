@@ -549,6 +549,45 @@ function itemUnitPrice(item: DocumentData): number {
   );
 }
 
+function isComboOrderItem(item: DocumentData): boolean {
+  return (
+    item.is_combo_item === true ||
+    text(item.combo_parent_id) !== ''
+  );
+}
+
+function isTryAtHomeOrderItem(item: DocumentData): boolean {
+  return (
+    item.try_at_home === true ||
+    item.tryAtHome === true
+  );
+}
+
+function itemOriginalPrice(item: DocumentData): number {
+  return Math.max(
+    0,
+    numberValue(
+      item.combo_original_price ??
+        item.original_price ??
+        item.old_price ??
+        item.mrp ??
+        item.price ??
+        0,
+    ),
+  );
+}
+
+function itemDiscountPercent(item: DocumentData): number {
+  const price = itemUnitPrice(item);
+  const original = itemOriginalPrice(item);
+
+  if (price <= 0 || original <= price) return 0;
+
+  return Math.round(
+    ((original - price) / original) * 100,
+  );
+}
+
 function itemLineTotal(item: DocumentData): number {
   const stored = numberValue(
     item.subtotal ??
@@ -655,6 +694,20 @@ function deliveryBookingInfo(
   let window = rawWindow;
 
   if (
+    id.includes('try_at_home') ||
+    id.includes('try at home') ||
+    title.toLowerCase().includes('try at home') ||
+    data.is_try_at_home === true ||
+    data.try_at_home === true ||
+    text(data.fulfillment_type).toLowerCase() === 'try_at_home'
+  ) {
+    id = 'try_at_home';
+    title = 'Try at Home';
+    window =
+      text(data.try_at_home_window) ||
+      window ||
+      'Try at Home booking time not saved';
+  } else if (
     id.includes('instant') ||
     title.toLowerCase().includes('instant')
   ) {
@@ -2815,6 +2868,19 @@ if (!response.ok) {
             const bookedDelivery =
               deliveryBookingInfo(row.data);
 
+            const isTryAtHomeOrder =
+              bookedDelivery.id === 'try_at_home' ||
+              row.data.is_try_at_home === true ||
+              row.data.try_at_home === true ||
+              text(row.data.fulfillment_type).toLowerCase() ===
+                'try_at_home';
+
+            const tryAtHomeItems =
+              items.filter(isTryAtHomeOrderItem);
+
+            const comboItems =
+              items.filter(isComboOrderItem);
+
             const bookedSubtotal =
               orderSubtotal(row.data);
 
@@ -2874,6 +2940,27 @@ if (!response.ok) {
                     </span>
                   </div>
                 </div>
+
+                {isTryAtHomeOrder && (
+                  <div style={tryAtHomeOrderBanner}>
+                    <div>
+                      <div style={tryAtHomeOrderEyebrow}>
+                        🏠 TRY AT HOME
+                      </div>
+                      <strong style={tryAtHomeOrderTitle}>
+                        {bookedDelivery.window}
+                      </strong>
+                    </div>
+
+                    <div style={tryAtHomeOrderCount}>
+                      {tryAtHomeItems.length ||
+                        numberValue(
+                          row.data.try_at_home_item_count,
+                        )}{' '}
+                      item(s)
+                    </div>
+                  </div>
+                )}
 
                 <div style={orderMetaGrid}>
                   <div>
@@ -3052,6 +3139,23 @@ if (!response.ok) {
                                   )}
                               </div>
 
+                              {(isComboOrderItem(item) ||
+                                isTryAtHomeOrderItem(item)) && (
+                                <div style={itemBadgeRow}>
+                                  {isComboOrderItem(item) && (
+                                    <span style={comboItemBadge}>
+                                      COMBO PRICE
+                                    </span>
+                                  )}
+
+                                  {isTryAtHomeOrderItem(item) && (
+                                    <span style={tryAtHomeItemBadge}>
+                                      TRY AT HOME
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
                               <div
                                 style={itemSub}
                               >
@@ -3065,6 +3169,23 @@ if (!response.ok) {
                                   ? ` • SKU ${product.sku}`
                                   : ''}
                               </div>
+
+                              {isComboOrderItem(item) &&
+                                itemOriginalPrice(item) >
+                                  itemUnitPrice(item) && (
+                                  <div style={comboPriceMeta}>
+                                    Original ₹
+                                    {itemOriginalPrice(item).toFixed(0)}
+                                    {' • '}
+                                    {itemDiscountPercent(item)}% OFF
+                                    {' • '}
+                                    Save ₹
+                                    {(
+                                      itemOriginalPrice(item) -
+                                      itemUnitPrice(item)
+                                    ).toFixed(0)}
+                                  </div>
+                                )}
                             </div>
 
                             <div
@@ -3184,6 +3305,31 @@ if (!response.ok) {
                         {bookedDelivery.window}
                       </small>
                     </div>
+
+                    {isTryAtHomeOrder && (
+                      <div style={bookingSummaryCell}>
+                        <span style={metaLabel}>
+                          Try at Home items
+                        </span>
+                        <strong>
+                          {tryAtHomeItems.length ||
+                            numberValue(
+                              row.data.try_at_home_item_count,
+                            )}
+                        </strong>
+                      </div>
+                    )}
+
+                    {comboItems.length > 0 && (
+                      <div style={bookingSummaryCell}>
+                        <span style={metaLabel}>
+                          Combo items
+                        </span>
+                        <strong>
+                          {comboItems.length}
+                        </strong>
+                      </div>
+                    )}
 
                     <div style={bookingSummaryCell}>
                       <span style={metaLabel}>
@@ -4463,6 +4609,76 @@ const discountText: React.CSSProperties = {
 
 const itemsWrap: React.CSSProperties = {
   padding: '0 16px',
+};
+
+const tryAtHomeOrderBanner: React.CSSProperties = {
+  margin: '0 16px 14px',
+  padding: '13px 14px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 12,
+  flexWrap: 'wrap',
+  border: '1px solid #a8d5b8',
+  borderRadius: 12,
+  background: '#f0faf3',
+};
+
+const tryAtHomeOrderEyebrow: React.CSSProperties = {
+  color: '#137333',
+  fontSize: 11,
+  fontWeight: 900,
+  letterSpacing: '.06em',
+};
+
+const tryAtHomeOrderTitle: React.CSSProperties = {
+  display: 'block',
+  marginTop: 4,
+  color: '#185f39',
+  fontSize: 14,
+};
+
+const tryAtHomeOrderCount: React.CSSProperties = {
+  padding: '6px 9px',
+  borderRadius: 999,
+  background: '#dff3e6',
+  color: '#137333',
+  fontSize: 11,
+  fontWeight: 800,
+};
+
+const itemBadgeRow: React.CSSProperties = {
+  marginTop: 5,
+  display: 'flex',
+  gap: 5,
+  flexWrap: 'wrap',
+};
+
+const comboItemBadge: React.CSSProperties = {
+  display: 'inline-flex',
+  padding: '3px 6px',
+  borderRadius: 999,
+  background: '#fff2df',
+  color: '#a8550a',
+  fontSize: 9,
+  fontWeight: 900,
+};
+
+const tryAtHomeItemBadge: React.CSSProperties = {
+  display: 'inline-flex',
+  padding: '3px 6px',
+  borderRadius: 999,
+  background: '#e8f7ed',
+  color: '#137333',
+  fontSize: 9,
+  fontWeight: 900,
+};
+
+const comboPriceMeta: React.CSSProperties = {
+  marginTop: 4,
+  color: '#a8550a',
+  fontSize: 10,
+  fontWeight: 700,
 };
 
 const itemRow: React.CSSProperties = {
