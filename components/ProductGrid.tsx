@@ -1813,9 +1813,28 @@ export function ProductGrid({
     mainCategories,
   ]);
 
+  const prioritizedProducts = useMemo(() => {
+    if (tryAtHomeIds.size === 0) {
+      return filteredProducts;
+    }
+
+    const selectedProducts: BusinessProduct[] = [];
+    const remainingProducts: BusinessProduct[] = [];
+
+    for (const product of filteredProducts) {
+      if (tryAtHomeIds.has(String(product.id))) {
+        selectedProducts.push(product);
+      } else {
+        remainingProducts.push(product);
+      }
+    }
+
+    return [...selectedProducts, ...remainingProducts];
+  }, [filteredProducts, tryAtHomeIds]);
+
   const visibleProducts = useMemo(
-    () => filteredProducts.slice(0, visibleCount),
-    [filteredProducts, visibleCount],
+    () => prioritizedProducts.slice(0, visibleCount),
+    [prioritizedProducts, visibleCount],
   );
 
   useEffect(() => {
@@ -1827,7 +1846,7 @@ export function ProductGrid({
 
     if (
       !node ||
-      visibleCount >= filteredProducts.length ||
+      visibleCount >= prioritizedProducts.length ||
       typeof IntersectionObserver === 'undefined'
     ) {
       return;
@@ -1852,7 +1871,7 @@ export function ProductGrid({
     observer.observe(node);
 
     return () => observer.disconnect();
-  }, [visibleCount, filteredProducts.length]);
+  }, [visibleCount, prioritizedProducts.length]);
 
   const getLoggedInUser = async (): Promise<User | null> => {
     /*
