@@ -2484,12 +2484,12 @@ const styles = `
     transition: transform 160ms ease;
   }
 
-  .spotc-try-at-home-switch-row.selected
+  .spotc-global-try-at-home.selected
     .spotc-try-at-home-switch {
     background: #159447;
   }
 
-  .spotc-try-at-home-switch-row.selected
+  .spotc-global-try-at-home.selected
     .spotc-try-at-home-switch > span {
     transform: translateX(18px);
   }
@@ -3344,7 +3344,7 @@ const styles = `
       height: 16px;
     }
 
-    .spotc-try-at-home-switch-row.selected
+    .spotc-global-try-at-home.selected
       .spotc-try-at-home-switch > span {
       transform: translateX(18px);
     }
