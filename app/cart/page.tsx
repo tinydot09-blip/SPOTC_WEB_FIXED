@@ -62,6 +62,10 @@ type CartPriceMeta = CartItem & {
   oldPrice?: unknown;
   original_price?: unknown;
   originalPrice?: unknown;
+  compare_at_price?: unknown;
+  compareAtPrice?: unknown;
+  list_price?: unknown;
+  listPrice?: unknown;
 };
 
 const cartMrpOf = (item: CartItem): number => {
@@ -72,6 +76,10 @@ const cartMrpOf = (item: CartItem): number => {
     meta.oldPrice,
     meta.original_price,
     meta.originalPrice,
+    meta.compare_at_price,
+    meta.compareAtPrice,
+    meta.list_price,
+    meta.listPrice,
     isComboCartItem(item)
       ? comboMetaOf(item).combo_original_price
       : undefined,
@@ -1514,7 +1522,7 @@ export default function CartPage() {
                                   <h3>{item.title}</h3>
 
                                   {(item.size || item.color) && (
-                                    <p>
+                                    <p className="spotc-product-variation">
                                       {[
                                         item.size && `Size: ${item.size}`,
                                         item.color && `Colour: ${item.color}`,
@@ -2911,6 +2919,13 @@ const styles = `
     font-size: 18px;
     line-height: 1.35;
     font-weight: 600;
+  }
+
+  .spotc-product-variation {
+    margin: 6px 0 0;
+    color: #7a726b;
+    font-size: 13px;
+    line-height: 1.35;
   }
 
   .spotc-product-copy p {
