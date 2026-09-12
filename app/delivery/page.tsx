@@ -40,6 +40,8 @@ type DeliveryItem = {
   image?: string;
   size?: string;
   color?: string;
+  isComboItem: boolean;
+  isTryAtHome: boolean;
 };
 
 type DeliveryGift = {
@@ -74,6 +76,9 @@ type DeliveryOrder = {
   deliveryNote: string;
   deliveryTitle: string;
   deliveryWindow: string;
+  isTryAtHome: boolean;
+  tryAtHomeWindow: string;
+  tryAtHomeItemCount: number;
   total: number;
   paymentMethod: string;
   paymentStatus: string;
@@ -141,6 +146,14 @@ function readItems(value: unknown): DeliveryItem[] {
         text(data.product_image),
       size: text(data.size),
       color: text(data.color),
+      isComboItem:
+        data.is_combo_item === true ||
+        Boolean(text(data.combo_parent_id)),
+      isTryAtHome:
+        data.is_combo_item !== true &&
+        !Boolean(text(data.combo_parent_id)) &&
+        (data.try_at_home === true ||
+          data.tryAtHome === true),
     };
   });
 }
@@ -265,6 +278,36 @@ function mapOrder(
     addressObject.longitude ?? raw.longitude ?? raw.delivery_longitude,
   );
 
+  const deliveryId = text(
+    raw.delivery_option_id ??
+      raw.delivery_option ??
+      raw.delivery_slot_id ??
+      raw.delivery_slot ??
+      raw.delivery_type ??
+      raw.fulfillment_type,
+  ).toLowerCase();
+
+  const savedDeliveryTitle =
+    text(raw.delivery_option_title) ||
+    text(raw.delivery_title);
+
+  const isTryAtHome =
+    raw.is_try_at_home === true ||
+    raw.try_at_home === true ||
+    deliveryId.includes('try_at_home') ||
+    deliveryId.includes('try at home') ||
+    savedDeliveryTitle.toLowerCase().includes('try at home') ||
+    text(raw.fulfillment_type).toLowerCase() === 'try_at_home';
+
+  const savedDeliveryWindow =
+    text(raw.delivery_window) ||
+    text(raw.delivery_time_window) ||
+    text(raw.estimated_delivery);
+
+  const tryAtHomeWindow =
+    text(raw.try_at_home_window) ||
+    savedDeliveryWindow;
+
   return {
     id,
     orderNumber:
@@ -289,13 +332,17 @@ function mapOrder(
       text(addressObject.delivery_note) ||
       text(raw.delivery_note),
     deliveryTitle:
-      text(raw.delivery_option_title) ||
-      text(raw.delivery_title) ||
-      'Delivery',
+      isTryAtHome
+        ? 'Try at Home'
+        : savedDeliveryTitle || 'Delivery',
     deliveryWindow:
-      text(raw.delivery_window) ||
-      text(raw.delivery_time_window) ||
-      text(raw.estimated_delivery),
+      isTryAtHome
+        ? tryAtHomeWindow
+        : savedDeliveryWindow,
+    isTryAtHome,
+    tryAtHomeWindow,
+    tryAtHomeItemCount:
+      numberValue(raw.try_at_home_item_count),
     total: numberValue(
       raw.total ??
         raw.total_amount ??
@@ -1051,6 +1098,26 @@ export default function DeliveryDashboardPage() {
                     </div>
                   )}
 
+                  {order.isTryAtHome && (
+                    <div style={tryAtHomeBanner}>
+                      <strong>🏠 TRY AT HOME APPOINTMENT</strong>
+                      <span>
+                        {order.tryAtHomeWindow ||
+                          'Booking time not saved'}
+                      </span>
+                      <small>
+                        {order.items.filter(
+                          (item) =>
+                            item.isTryAtHome &&
+                            !item.isComboItem,
+                        ).length ||
+                          order.tryAtHomeItemCount ||
+                          0}{' '}
+                        main item(s) to try
+                      </small>
+                    </div>
+                  )}
+
                   <div style={orderTop}>
                     <div>
                       <div style={orderNumber}>{order.orderNumber}</div>
@@ -1084,8 +1151,19 @@ export default function DeliveryDashboardPage() {
                     </div>
                   </div>
 
-                  <div style={deliverySlotBox}>
-                    <strong>{order.deliveryTitle}</strong>
+                  <div
+                    style={{
+                      ...deliverySlotBox,
+                      ...(order.isTryAtHome
+                        ? tryAtHomeSlotBox
+                        : {}),
+                    }}
+                  >
+                    <strong>
+                      {order.isTryAtHome
+                        ? '🏠 Try at Home'
+                        : order.deliveryTitle}
+                    </strong>
                     {order.deliveryWindow && (
                       <span>{order.deliveryWindow}</span>
                     )}
@@ -1307,6 +1385,24 @@ export default function DeliveryDashboardPage() {
                           )}
                           <div>
                             <div style={itemTitle}>{item.title}</div>
+
+                            {(item.isComboItem ||
+                              item.isTryAtHome) && (
+                              <div style={itemBadges}>
+                                {item.isComboItem && (
+                                  <span style={comboItemBadge}>
+                                    COMBO ITEM
+                                  </span>
+                                )}
+                                {!item.isComboItem &&
+                                  item.isTryAtHome && (
+                                  <span style={tryAtHomeItemBadge}>
+                                    🏠 TRY AT HOME
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
                             <div style={smallMuted}>
                               Qty {item.quantity}
                               {item.size ? ` · Size ${item.size}` : ''}
@@ -1381,7 +1477,9 @@ export default function DeliveryDashboardPage() {
                           >
                             {busy
                               ? 'Updating…'
-                              : 'Start Delivery'}
+                              : order.isTryAtHome
+                                ? 'Start Try at Home Visit'
+                                : 'Start Delivery'}
                           </button>
                         )}
 
@@ -1720,6 +1818,50 @@ const failedBanner: React.CSSProperties = {
   fontWeight: 800,
   textAlign: 'center',
 };
+const tryAtHomeBanner: React.CSSProperties = {
+  margin: 14,
+  marginBottom: 10,
+  padding: 13,
+  border: '2px solid #8fd1a5',
+  borderRadius: 11,
+  background: '#eaf8ef',
+  color: '#126b38',
+  display: 'grid',
+  gap: 3,
+  fontSize: 12,
+};
+
+const tryAtHomeSlotBox: React.CSSProperties = {
+  border: '2px solid #8fd1a5',
+  background: '#eaf8ef',
+  color: '#126b38',
+};
+
+const itemBadges: React.CSSProperties = {
+  marginTop: 5,
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 5,
+};
+
+const comboItemBadge: React.CSSProperties = {
+  padding: '3px 6px',
+  borderRadius: 999,
+  background: '#fff1dc',
+  color: '#9a5700',
+  fontSize: 9,
+  fontWeight: 800,
+};
+
+const tryAtHomeItemBadge: React.CSSProperties = {
+  padding: '3px 6px',
+  borderRadius: 999,
+  background: '#e8f7ed',
+  color: '#137333',
+  fontSize: 9,
+  fontWeight: 800,
+};
+
 const orderTop: React.CSSProperties = {
   padding: 15,
   display: 'flex',
