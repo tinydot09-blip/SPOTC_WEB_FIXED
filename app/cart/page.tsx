@@ -684,36 +684,34 @@ export default function CartPage() {
       return Boolean(parentId) && parentIds.has(parentId);
     });
 
-    const savedGlobalTryAtHome =
-      window.localStorage.getItem(
-        GLOBAL_TRY_AT_HOME_KEY,
-      );
-
-    const shouldEnableGlobalTryAtHome =
-      savedGlobalTryAtHome === 'true';
-
+    /*
+     * Try at Home must NEVER auto-open when Cart loads.
+     * Every fresh Cart visit starts with the global switch OFF.
+     * This also clears any old/stale per-item Try-at-Home flags.
+     */
     const normalizedCartItems =
       applyGlobalTryAtHomeSelection(
         validatedCartItems,
-        shouldEnableGlobalTryAtHome,
+        false,
       );
 
     writeCart(normalizedCartItems);
     setItems(normalizedCartItems);
-    setGlobalTryAtHomeEnabled(
-      shouldEnableGlobalTryAtHome,
-    );
+    setGlobalTryAtHomeEnabled(false);
+    setTryAtHomeSlotConfirmed(false);
 
-    if (shouldEnableGlobalTryAtHome) {
-      window.localStorage.setItem(
-        GLOBAL_TRY_AT_HOME_KEY,
-        'true',
-      );
-    } else {
-      window.localStorage.removeItem(
-        GLOBAL_TRY_AT_HOME_KEY,
-      );
-    }
+    window.localStorage.removeItem(
+      GLOBAL_TRY_AT_HOME_KEY,
+    );
+    window.localStorage.removeItem(
+      'spotc-try-at-home-date',
+    );
+    window.localStorage.removeItem(
+      'spotc-try-at-home-slot-id',
+    );
+    window.localStorage.removeItem(
+      'spotc-try-at-home-slot',
+    );
 
     // Cart is now the only source of truth for Try at Home selection.
     // Remove the legacy ProductGrid selection key so stale selections
@@ -725,39 +723,14 @@ export default function CartPage() {
     }
 
     const todayKey = localDateKey(new Date());
-    const savedTryAtHomeDate =
-      window.localStorage.getItem('spotc-try-at-home-date');
-    const nextTryAtHomeDate =
-      savedTryAtHomeDate && savedTryAtHomeDate >= todayKey
-        ? savedTryAtHomeDate
-        : todayKey;
 
-    setSelectedTryAtHomeDate(nextTryAtHomeDate);
-
-    const savedTryAtHomeSlotId =
-      window.localStorage.getItem('spotc-try-at-home-slot-id');
-    const savedTryAtHomeSlot =
-      TRY_AT_HOME_SLOTS.find(
-        (slot) => slot.id === savedTryAtHomeSlotId,
-      );
-
-    if (
-      savedTryAtHomeSlot &&
-      isTryAtHomeSlotAvailable(
-        savedTryAtHomeSlot,
-        nextTryAtHomeDate,
+    setSelectedTryAtHomeDate(todayKey);
+    setSelectedTryAtHomeSlotId(
+      preferredTryAtHomeSlotId(
+        todayKey,
         new Date(),
-      )
-    ) {
-      setSelectedTryAtHomeSlotId(savedTryAtHomeSlot.id);
-    } else {
-      setSelectedTryAtHomeSlotId(
-        preferredTryAtHomeSlotId(
-          nextTryAtHomeDate,
-          new Date(),
-        ),
-      );
-    }
+      ),
+    );
 
     const nextGiftBundles: Record<
       string,
