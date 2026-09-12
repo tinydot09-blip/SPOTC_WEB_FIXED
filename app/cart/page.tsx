@@ -350,8 +350,8 @@ const DELIVERY_OPTIONS: DeliveryOption[] = [
   {
     id: 'overnight',
     title: 'Night Slot',
-    orderWindow: 'Order between 6 PM – 6 AM',
-    deliveryWindow: 'Delivery between 6 AM – 8 AM',
+    orderWindow: 'Order before 6 PM',
+    deliveryWindow: 'Delivery tomorrow between 6 AM – 8 AM',
     fee: 0,
   },
 ];
@@ -375,7 +375,11 @@ const isDeliveryOptionAvailable = (
     return hour >= 12 && hour < 18;
   }
 
-  return hour >= 18 || hour < 6;
+  if (id === 'overnight') {
+    return hour < 18;
+  }
+
+  return false;
 };
 
 const preferredDeliveryOptionId = (
