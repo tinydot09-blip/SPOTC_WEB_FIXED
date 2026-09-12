@@ -1219,6 +1219,12 @@ export default function DashboardOrders() {
   function canCancelItem(
     view: OrderView,
   ): boolean {
+    // Combo child items belong to the main product.
+    // Only the main product can be cancelled.
+    if (view.item.isComboItem) {
+      return false;
+    }
+
     const status =
       visibleItemStatus(
         view.parent,
@@ -2361,7 +2367,8 @@ export default function DashboardOrders() {
                             COMBO PRICE
                           </em>
                         )}
-                        {view.item.isTryAtHome && (
+                        {!view.item.isComboItem &&
+                          view.item.isTryAtHome && (
                           <em className="try-home">
                             🏠 TRY AT HOME
                           </em>
@@ -2410,21 +2417,23 @@ export default function DashboardOrders() {
                       )}
                     </small>
 
-                    <small
-                      className={`simple-order-delivery-line ${
-                        view.parent.isTryAtHome
-                          ? 'try-home'
-                          : ''
-                      }`}
-                    >
-                      {view.parent.isTryAtHome
-                        ? '🏠 Try at Home'
-                        : view.parent.deliveryTitle}
-                      {' · '}
-                      {view.parent.isTryAtHome
-                        ? view.parent.tryAtHomeWindow
-                        : view.parent.deliveryWindow}
-                    </small>
+                    {!view.item.isComboItem && (
+                      <small
+                        className={`simple-order-delivery-line ${
+                          view.parent.isTryAtHome
+                            ? 'try-home'
+                            : ''
+                        }`}
+                      >
+                        {view.parent.isTryAtHome
+                          ? '🏠 Try at Home'
+                          : view.parent.deliveryTitle}
+                        {' · '}
+                        {view.parent.isTryAtHome
+                          ? view.parent.tryAtHomeWindow
+                          : view.parent.deliveryWindow}
+                      </small>
+                    )}
 
                     {view.gifts.length >
                       0 && (
@@ -2564,52 +2573,54 @@ export default function DashboardOrders() {
               </button>
             </header>
 
-            <section
-              className={`simple-details-cancel-top ${
-                canCancelItem(
-                  selected,
-                )
-                  ? 'active'
-                  : ''
-              }`}
-            >
-              <div>
-                <strong>
-                  Cancel this product
-                </strong>
-                <span>
-                  {cancelHelpText(
+            {!selected.item.isComboItem && (
+              <section
+                className={`simple-details-cancel-top ${
+                  canCancelItem(
                     selected,
-                  )}
-                </span>
-              </div>
-
-              {canCancelItem(
-                selected,
-              ) && (
-                <button
-                  type="button"
-                  disabled={
-                    cancellingKey ===
-                    selected.key
-                  }
-                  onClick={() =>
-                    void cancelItem(
+                  )
+                    ? 'active'
+                    : ''
+                }`}
+              >
+                <div>
+                  <strong>
+                    Cancel this product
+                  </strong>
+                  <span>
+                    {cancelHelpText(
                       selected,
-                    )
-                  }
-                >
-                  {cancellingKey ===
-                  selected.key
-                    ? 'Cancelling…'
-                    : `Cancel · ${formatCancelCountdown(
-                        cancelSecondsLeft(
-                          selected,
-                        ),
-                      )}`}
-                </button>
-              )}
-            </section>
+                    )}
+                  </span>
+                </div>
+
+                {canCancelItem(
+                  selected,
+                ) && (
+                  <button
+                    type="button"
+                    disabled={
+                      cancellingKey ===
+                      selected.key
+                    }
+                    onClick={() =>
+                      void cancelItem(
+                        selected,
+                      )
+                    }
+                  >
+                    {cancellingKey ===
+                    selected.key
+                      ? 'Cancelling…'
+                      : `Cancel · ${formatCancelCountdown(
+                          cancelSecondsLeft(
+                            selected,
+                          ),
+                        )}`}
+                  </button>
+                )}
+              </section>
+            )}
 
             <div className="simple-details-status">
               <span>
@@ -2689,29 +2700,40 @@ export default function DashboardOrders() {
 
             <section className="simple-details-delivery">
               <div>
-                <small>
-                  {selected.parent.isTryAtHome
-                    ? 'Try at Home booking'
-                    : 'Delivery option'}
-                </small>
-                <strong>
-                  {selected.parent.isTryAtHome
-                    ? '🏠 Try at Home'
-                    : selected.parent.deliveryTitle}
-                </strong>
-                <p>
-                  {selected.parent.isTryAtHome
-                    ? selected.parent.tryAtHomeWindow
-                    : selected.parent.deliveryWindow}
-                </p>
-                {selected.parent.isTryAtHome && (
-                  <small className="simple-details-try-count">
-                    {selected.parent.tryAtHomeItemCount ||
-                      selected.parent.items.filter(
-                        (item) => item.isTryAtHome,
-                      ).length}{' '}
-                    item(s) selected
-                  </small>
+                {!selected.item.isComboItem ? (
+                  <>
+                    <small>
+                      {selected.parent.isTryAtHome
+                        ? 'Try at Home booking'
+                        : 'Delivery option'}
+                    </small>
+                    <strong>
+                      {selected.parent.isTryAtHome
+                        ? '🏠 Try at Home'
+                        : selected.parent.deliveryTitle}
+                    </strong>
+                    <p>
+                      {selected.parent.isTryAtHome
+                        ? selected.parent.tryAtHomeWindow
+                        : selected.parent.deliveryWindow}
+                    </p>
+                    {selected.parent.isTryAtHome && (
+                      <small className="simple-details-try-count">
+                        {selected.parent.tryAtHomeItemCount ||
+                          selected.parent.items.filter(
+                            (item) =>
+                              item.isTryAtHome &&
+                              !item.isComboItem,
+                          ).length}{' '}
+                        item(s) selected
+                      </small>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <small>Combo item</small>
+                    <strong>Included with main product</strong>
+                  </>
                 )}
               </div>
 
@@ -2775,7 +2797,8 @@ export default function DashboardOrders() {
                           COMBO PRICE
                         </em>
                       )}
-                      {selected.item.isTryAtHome && (
+                      {!selected.item.isComboItem &&
+                        selected.item.isTryAtHome && (
                         <em className="try-home">
                           🏠 TRY AT HOME
                         </em>
