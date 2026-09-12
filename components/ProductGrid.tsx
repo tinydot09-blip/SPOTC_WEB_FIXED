@@ -26,7 +26,7 @@ import {
 } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 
-import { addProduct } from '@/lib/cart';
+import { addProduct, readCart, writeCart } from '@/lib/cart';
 import { getProducts } from '@/lib/data';
 import {
   db,
@@ -1280,6 +1280,65 @@ export function ProductGrid({
 
   const selectedTryAtHomeTotal =
     selectedTryAtHomeDressCount + selectedTryAtHomeEarringCount;
+
+  const continueTryAtHome = () => {
+    if (selectedTryAtHomeTotal <= 0) return;
+
+    const selectedProducts = (items ?? []).filter((product) =>
+      tryAtHomeIds.has(String(product.id)),
+    );
+
+    if (selectedProducts.length === 0) return;
+
+    /*
+     * Keep one normal cart line per selected product.
+     *
+     * - If it is already in the cart, simply mark that existing line as
+     *   Try at Home instead of adding another copy.
+     * - If it is not in the cart, use the existing addProduct() helper.
+     *
+     * Combo child rows are deliberately ignored because the Cart page already
+     * prevents combo children from becoming Try at Home items.
+     */
+    selectedProducts.forEach((product) => {
+      const productId = String(product.id);
+      const currentCart = readCart();
+
+      const existingIndex = currentCart.findIndex((cartItem) => {
+        const record = cartItem as typeof cartItem & {
+          is_combo_item?: boolean;
+          combo_parent_id?: string;
+        };
+
+        return (
+          String(cartItem.id) === productId &&
+          record.is_combo_item !== true &&
+          !String(record.combo_parent_id || '').trim()
+        );
+      });
+
+      if (existingIndex >= 0) {
+        const nextCart = currentCart.map((cartItem, index) =>
+          index === existingIndex
+            ? {
+                ...cartItem,
+                tryAtHome: true,
+                try_at_home: true,
+              }
+            : cartItem,
+        );
+
+        writeCart(nextCart);
+        return;
+      }
+
+      addProduct(product, {
+        tryAtHome: true,
+      });
+    });
+
+    router.push('/cart');
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -2649,13 +2708,37 @@ export function ProductGrid({
             </span>
           </div>
 
-          <button
-            type="button"
-            className="try-at-home-selection-summary__info"
-            onClick={() => setShowTryAtHomeInfo(true)}
-          >
-            {language === 'ta' ? 'விவரம்' : 'How it works'}
-          </button>
+          <div className="try-at-home-selection-summary__actions">
+            <button
+              type="button"
+              className="try-at-home-selection-summary__info"
+              onClick={() => setShowTryAtHomeInfo(true)}
+            >
+              {language === 'ta' ? 'விவரம்' : 'How it works'}
+            </button>
+
+            <button
+              type="button"
+              className="try-at-home-selection-summary__continue"
+              onClick={continueTryAtHome}
+              aria-label={
+                language === 'ta'
+                  ? `தேர்வு செய்த ${selectedTryAtHomeTotal} பொருட்களுடன் தொடரவும்`
+                  : `Continue with ${selectedTryAtHomeTotal} selected ${
+                      selectedTryAtHomeTotal === 1 ? 'item' : 'items'
+                    }`
+              }
+            >
+              <span>
+                {language === 'ta'
+                  ? `${selectedTryAtHomeTotal} பொருட்களுடன் தொடரவும்`
+                  : `Continue with ${selectedTryAtHomeTotal} ${
+                      selectedTryAtHomeTotal === 1 ? 'Item' : 'Items'
+                    }`}
+              </span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -3414,10 +3497,17 @@ export function ProductGrid({
           line-height: 1.2;
         }
 
+        .try-at-home-selection-summary__actions {
+          flex: 0 0 auto;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
         .try-at-home-selection-summary__info {
           flex: 0 0 auto;
-          min-height: 32px;
-          padding: 0 11px;
+          min-height: 34px;
+          padding: 0 12px;
           border: 1px solid #9fd4b3;
           border-radius: 999px;
           background: #ffffff;
@@ -3425,6 +3515,29 @@ export function ProductGrid({
           font-size: 12px;
           font-weight: 700;
           cursor: pointer;
+        }
+
+        .try-at-home-selection-summary__continue {
+          min-height: 36px;
+          padding: 0 14px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          border: 0;
+          border-radius: 999px;
+          background: #147a43;
+          color: #ffffff;
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1;
+          white-space: nowrap;
+          cursor: pointer;
+          box-shadow: 0 4px 12px rgba(20, 122, 67, 0.18);
+        }
+
+        .try-at-home-selection-summary__continue:hover {
+          background: #106a39;
         }
 
         @media (max-width: 700px) {
@@ -3449,6 +3562,20 @@ export function ProductGrid({
             margin-bottom: 11px;
             padding: 9px 10px;
             gap: 8px;
+            align-items: flex-start;
+          }
+
+          .try-at-home-selection-summary__actions {
+            display: grid;
+            grid-template-columns: auto auto;
+            gap: 6px;
+          }
+
+          .try-at-home-selection-summary__continue {
+            min-height: 32px;
+            padding: 0 10px;
+            gap: 5px;
+            font-size: 11px;
           }
 
           .try-at-home-selection-summary__copy strong {
