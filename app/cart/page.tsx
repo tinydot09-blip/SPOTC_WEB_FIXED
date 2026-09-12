@@ -11,8 +11,6 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Clock3,
-  Minus,
-  Plus,
   ShoppingBag,
   Trash2,
   Truck,
@@ -56,6 +54,46 @@ const comboOriginalPriceOf = (item: CartItem): number => {
   return Number.isFinite(original) && original > 0
     ? original
     : Number(item.price) || 0;
+};
+
+type CartPriceMeta = CartItem & {
+  mrp?: unknown;
+  old_price?: unknown;
+  oldPrice?: unknown;
+  original_price?: unknown;
+  originalPrice?: unknown;
+};
+
+const cartMrpOf = (item: CartItem): number => {
+  const meta = item as CartPriceMeta;
+  const candidates = [
+    meta.mrp,
+    meta.old_price,
+    meta.oldPrice,
+    meta.original_price,
+    meta.originalPrice,
+    isComboCartItem(item)
+      ? comboMetaOf(item).combo_original_price
+      : undefined,
+  ];
+
+  for (const candidate of candidates) {
+    const value = Number(candidate);
+    if (Number.isFinite(value) && value > 0) {
+      return value;
+    }
+  }
+
+  return Number(item.price) || 0;
+};
+
+const cartDiscountPercentOf = (item: CartItem): number => {
+  const price = Number(item.price) || 0;
+  const mrp = cartMrpOf(item);
+
+  if (mrp <= price || price <= 0) return 0;
+
+  return Math.round(((mrp - price) / mrp) * 100);
 };
 
 type TryAtHomeCartItem = CartItem & {
@@ -1438,6 +1476,10 @@ export default function CartPage() {
                             <small>SPOTC COLLECTION</small>
                             <strong>Picked With Love</strong>
                           </div>
+
+                          <em>
+                            {groupLines.length} item{groupLines.length === 1 ? '' : 's'}
+                          </em>
                         </div>
                       )}
 
@@ -1445,6 +1487,8 @@ export default function CartPage() {
                         {groupLines.map(({ item, index, isChild }) => {
                           const comboItem = isComboCartItem(item);
                           const comboOriginalPrice = comboOriginalPriceOf(item);
+                          const itemMrp = cartMrpOf(item);
+                          const itemDiscount = cartDiscountPercentOf(item);
                           const tryAtHomeKind =
                             !isChild ? tryAtHomeKindOf(item) : null;
                           const tryAtHomeSelected =
@@ -1480,29 +1524,6 @@ export default function CartPage() {
                                     </p>
                                   )}
 
-                                  {tryAtHomeKind && (
-                                    <button
-                                      type="button"
-                                      role="switch"
-                                      aria-checked={tryAtHomeSelected}
-                                      className={`spotc-try-at-home-switch-row ${
-                                        tryAtHomeSelected ? 'selected' : ''
-                                      }`}
-                                      onClick={() => toggleTryAtHome(index)}
-                                    >
-                                      <span className="spotc-try-at-home-switch-label">
-                                        🏠 Try at Home
-                                      </span>
-
-                                      <span
-                                        className="spotc-try-at-home-switch"
-                                        aria-hidden="true"
-                                      >
-                                        <span />
-                                      </span>
-                                    </button>
-                                  )}
-
                                   <div className="spotc-product-price-row">
                                     <strong>
                                       {money(
@@ -1511,12 +1532,15 @@ export default function CartPage() {
                                       )}
                                     </strong>
 
-                                    {comboItem &&
-                                      comboOriginalPrice > item.price && (
-                                        <del>
-                                          {money(comboOriginalPrice)}
-                                        </del>
-                                      )}
+                                    {itemMrp > item.price && (
+                                      <del>{money(itemMrp)}</del>
+                                    )}
+
+                                    {itemDiscount > 0 && (
+                                      <span className="spotc-discount-badge">
+                                        {itemDiscount}% OFF
+                                      </span>
+                                    )}
 
                                     {comboItem && (
                                       <span className="spotc-combo-price-badge">
@@ -1534,66 +1558,30 @@ export default function CartPage() {
                                 </div>
 
                                 <div className="spotc-cart-controls">
-                                  {!comboItem &&
-                                    (item.stockQty === undefined ||
-                                      item.stockQty > 1) && (
-                                      <div
-                                        className="spotc-cart-quantity"
-                                        aria-label="Product quantity"
+                                  <div className="spotc-cart-controls-left">
+                                    {tryAtHomeKind && (
+                                      <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={tryAtHomeSelected}
+                                        className={`spotc-try-at-home-switch-row ${
+                                          tryAtHomeSelected ? 'selected' : ''
+                                        }`}
+                                        onClick={() => toggleTryAtHome(index)}
                                       >
-                                        <button
-                                          type="button"
-                                          aria-label="Decrease quantity"
-                                          disabled={
-                                            Math.max(
-                                              1,
-                                              Number(item.qty) || 1,
-                                            ) <= 1
-                                          }
-                                          onClick={() =>
-                                            updateItemQuantity(
-                                              index,
-                                              Math.max(
-                                                1,
-                                                Number(item.qty) || 1,
-                                              ) - 1,
-                                            )
-                                          }
-                                        >
-                                          <Minus size={16} />
-                                        </button>
+                                        <span className="spotc-try-at-home-switch-label">
+                                          🏠 Try at Home
+                                        </span>
 
-                                        <strong>
-                                          {Math.max(
-                                            1,
-                                            Number(item.qty) || 1,
-                                          )}
-                                        </strong>
-
-                                        <button
-                                          type="button"
-                                          aria-label="Increase quantity"
-                                          disabled={
-                                            item.stockQty !== undefined &&
-                                            Math.max(
-                                              1,
-                                              Number(item.qty) || 1,
-                                            ) >= item.stockQty
-                                          }
-                                          onClick={() =>
-                                            updateItemQuantity(
-                                              index,
-                                              Math.max(
-                                                1,
-                                                Number(item.qty) || 1,
-                                              ) + 1,
-                                            )
-                                          }
+                                        <span
+                                          className="spotc-try-at-home-switch"
+                                          aria-hidden="true"
                                         >
-                                          <Plus size={16} />
-                                        </button>
-                                      </div>
+                                          <span />
+                                        </span>
+                                      </button>
                                     )}
+                                  </div>
 
                                   <button
                                     type="button"
@@ -2138,7 +2126,7 @@ const styles = `
     min-height: 66px;
     padding: 12px 16px;
     display: grid;
-    grid-template-columns: 38px minmax(0, 1fr);
+    grid-template-columns: 38px minmax(0, 1fr) auto;
     align-items: center;
     gap: 11px;
     border-bottom: 1px solid #eee2d5;
@@ -2957,6 +2945,20 @@ const styles = `
     font-weight: 500;
   }
 
+  .spotc-discount-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 8px;
+    border-radius: 999px;
+    color: #087c36;
+    background: #e9f8ee;
+    font-size: 11px;
+    font-weight: 850;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
   .spotc-combo-price-badge {
     padding: 3px 7px;
     border-radius: 999px;
@@ -2984,46 +2986,18 @@ const styles = `
 
   .spotc-cart-controls {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 11px;
+    justify-content: space-between;
+    gap: 14px;
   }
 
-  .spotc-cart-quantity {
-    min-width: 126px;
-    height: 42px;
-    display: grid;
-    grid-template-columns: 38px minmax(38px, 1fr) 38px;
+  .spotc-cart-controls-left {
+    min-width: 0;
+    display: flex;
     align-items: center;
-    overflow: hidden;
-    border: 1px solid #d6cec5;
-    border-radius: 12px;
-    background: #ffffff;
+    justify-content: flex-start;
   }
 
-  .spotc-cart-quantity button {
-    height: 100%;
-    display: grid;
-    place-items: center;
-    border: 0;
-    color: #25211d;
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .spotc-cart-quantity button:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-  }
-
-  .spotc-cart-quantity > strong {
-    margin: 0;
-    color: #171717;
-    font-size: 16px;
-    font-weight: 800;
-    text-align: center;
-  }
 
   .spotc-remove-button {
     padding: 7px 10px;
@@ -3420,7 +3394,7 @@ const styles = `
     .spotc-cart-group-head {
       min-height: 60px;
       padding: 10px 12px;
-      grid-template-columns: 34px minmax(0, 1fr);
+      grid-template-columns: 34px minmax(0, 1fr) auto;
       gap: 9px;
     }
 
@@ -3503,17 +3477,17 @@ const styles = `
       display: flex;
       flex-direction: row;
       align-items: center;
-      justify-content: flex-end;
+      justify-content: space-between;
       gap: 10px;
-      padding-top: 2px;
+      padding-top: 10px;
       border-top: 1px solid #f0ebe5;
     }
 
-    .spotc-cart-quantity {
-      min-width: 116px;
-      height: 40px;
-      grid-template-columns: 36px minmax(36px, 1fr) 36px;
+    .spotc-cart-controls-left {
+      flex: 1 1 auto;
+      justify-content: flex-start;
     }
+
 
     .spotc-remove-button {
       min-height: 40px;
@@ -3569,11 +3543,6 @@ const styles = `
       gap: 8px;
     }
 
-    .spotc-cart-quantity {
-      min-width: 108px;
-      height: 38px;
-      grid-template-columns: 34px minmax(34px, 1fr) 34px;
-    }
 
     .spotc-remove-button {
       min-height: 38px;
