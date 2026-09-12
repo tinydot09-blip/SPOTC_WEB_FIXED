@@ -58,6 +58,123 @@ const comboOriginalPriceOf = (item: CartItem): number => {
     : Number(item.price) || 0;
 };
 
+type TryAtHomeCartItem = CartItem & {
+  try_at_home?: boolean;
+  tryAtHome?: boolean;
+};
+
+const tryAtHomeMetaOf = (item: CartItem): TryAtHomeCartItem =>
+  item as TryAtHomeCartItem;
+
+const isTryAtHomeCartItem = (
+  item: CartItem,
+  selectedIds: Set<string>,
+): boolean => {
+  // Combo children must never inherit Try at Home automatically.
+  if (isComboCartItem(item)) return false;
+
+  const meta = tryAtHomeMetaOf(item);
+
+  return (
+    meta.try_at_home === true ||
+    meta.tryAtHome === true ||
+    selectedIds.has(String(item.id))
+  );
+};
+
+type TryAtHomeSlot = {
+  id: string;
+  label: string;
+  startMinutes: number;
+};
+
+const formatTryAtHomeTime = (minutes: number): string => {
+  const hours24 = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  const suffix = hours24 >= 12 ? 'PM' : 'AM';
+  const hours12 = hours24 % 12 || 12;
+
+  return `${hours12}:${String(mins).padStart(2, '0')} ${suffix}`;
+};
+
+const TRY_AT_HOME_SLOTS: TryAtHomeSlot[] = Array.from(
+  { length: 18 },
+  (_, index) => {
+    const startMinutes = 9 * 60 + index * 30;
+    const endMinutes = startMinutes + 30;
+
+    return {
+      id: `${startMinutes}-${endMinutes}`,
+      label: `${formatTryAtHomeTime(startMinutes)} – ${formatTryAtHomeTime(endMinutes)}`,
+      startMinutes,
+    };
+  },
+);
+
+const localDateKey = (date: Date): string => {
+  const local = new Date(
+    date.getTime() - date.getTimezoneOffset() * 60_000,
+  );
+  return local.toISOString().slice(0, 10);
+};
+
+const dateFromLocalKey = (value: string): Date => {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, Math.max(0, month - 1), day);
+};
+
+const formatTryAtHomeMonth = (value: string): string =>
+  dateFromLocalKey(value).toLocaleDateString('en-IN', {
+    month: 'long',
+    year: 'numeric',
+  });
+
+const formatTryAtHomeWeekday = (value: string): string =>
+  dateFromLocalKey(value).toLocaleDateString('en-IN', {
+    weekday: 'short',
+  });
+
+const formatTryAtHomeDay = (value: string): string =>
+  dateFromLocalKey(value).toLocaleDateString('en-IN', {
+    day: 'numeric',
+  });
+
+const tryAtHomeDateOptions = (
+  start: Date = new Date(),
+  count = 7,
+): string[] =>
+  Array.from({ length: count }, (_, index) => {
+    const date = new Date(start);
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() + index);
+    return localDateKey(date);
+  });
+
+const isTryAtHomeSlotAvailable = (
+  slot: TryAtHomeSlot,
+  selectedDate: string,
+  now: Date = new Date(),
+): boolean => {
+  const todayKey = localDateKey(now);
+
+  if (selectedDate > todayKey) return true;
+  if (selectedDate < todayKey) return false;
+
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  return slot.startMinutes > nowMinutes;
+};
+
+const preferredTryAtHomeSlotId = (
+  selectedDate: string,
+  now: Date = new Date(),
+): string => {
+  const nextSlot = TRY_AT_HOME_SLOTS.find((slot) =>
+    isTryAtHomeSlotAvailable(slot, selectedDate, now),
+  );
+
+  return nextSlot?.id || '';
+};
+
 const freeGiftCountPerItemFromPrice = (
   _price: number,
 ): number => 0;
@@ -265,6 +382,23 @@ export default function CartPage() {
   const [selectedDeliveryId, setSelectedDeliveryId] =
     useState<DeliveryOptionId>('instant');
 
+  const [tryAtHomeIds, setTryAtHomeIds] =
+    useState<Set<string>>(new Set());
+
+  const [selectedTryAtHomeDate, setSelectedTryAtHomeDate] =
+    useState<string>(() => localDateKey(new Date()));
+
+  const [selectedTryAtHomeSlotId, setSelectedTryAtHomeSlotId] =
+    useState<string>(() =>
+      preferredTryAtHomeSlotId(
+        localDateKey(new Date()),
+        new Date(),
+      ),
+    );
+
+  const [tryAtHomeSlotConfirmed, setTryAtHomeSlotConfirmed] =
+    useState(false);
+
   const [deliveryClock, setDeliveryClock] =
     useState(() => new Date());
 
@@ -303,6 +437,75 @@ export default function CartPage() {
       );
     }
   };
+
+  const selectTryAtHomeDate = (value: string) => {
+    const today = localDateKey(new Date());
+    if (!value || value < today) return;
+
+    setSelectedTryAtHomeDate(value);
+    setTryAtHomeSlotConfirmed(false);
+
+    const nextSlotId = preferredTryAtHomeSlotId(
+      value,
+      new Date(),
+    );
+    setSelectedTryAtHomeSlotId(nextSlotId);
+  };
+
+  const selectTryAtHomeSlot = (slot: TryAtHomeSlot) => {
+    if (
+      !isTryAtHomeSlotAvailable(
+        slot,
+        selectedTryAtHomeDate,
+        new Date(),
+      )
+    ) {
+      return;
+    }
+
+    setSelectedTryAtHomeSlotId(slot.id);
+    setTryAtHomeSlotConfirmed(false);
+  };
+
+  const confirmTryAtHomeSlot = () => {
+    const slot = TRY_AT_HOME_SLOTS.find(
+      (item) => item.id === selectedTryAtHomeSlotId,
+    );
+
+    if (
+      !slot ||
+      !isTryAtHomeSlotAvailable(
+        slot,
+        selectedTryAtHomeDate,
+        new Date(),
+      )
+    ) {
+      return;
+    }
+
+    setTryAtHomeSlotConfirmed(true);
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(
+        'spotc-try-at-home-date',
+        selectedTryAtHomeDate,
+      );
+
+      window.localStorage.setItem(
+        'spotc-try-at-home-slot-id',
+        slot.id,
+      );
+
+      window.localStorage.setItem(
+        'spotc-try-at-home-slot',
+        JSON.stringify({
+          ...slot,
+          date: selectedTryAtHomeDate,
+        }),
+      );
+    }
+  };
+
   const viewCartTrackedRef = useRef(false);
 
   useEffect(() => {
@@ -325,6 +528,62 @@ export default function CartPage() {
     }
 
     setItems(validatedCartItems);
+
+    try {
+      const storedTryAtHomeIds =
+        window.localStorage.getItem('spotc_try_at_home_ids');
+      const parsedTryAtHomeIds =
+        storedTryAtHomeIds
+          ? JSON.parse(storedTryAtHomeIds)
+          : [];
+
+      if (Array.isArray(parsedTryAtHomeIds)) {
+        setTryAtHomeIds(
+          new Set(
+            parsedTryAtHomeIds
+              .map((value) => String(value))
+              .filter(Boolean),
+          ),
+        );
+      }
+    } catch {
+      setTryAtHomeIds(new Set());
+    }
+
+    const todayKey = localDateKey(new Date());
+    const savedTryAtHomeDate =
+      window.localStorage.getItem('spotc-try-at-home-date');
+    const nextTryAtHomeDate =
+      savedTryAtHomeDate && savedTryAtHomeDate >= todayKey
+        ? savedTryAtHomeDate
+        : todayKey;
+
+    setSelectedTryAtHomeDate(nextTryAtHomeDate);
+
+    const savedTryAtHomeSlotId =
+      window.localStorage.getItem('spotc-try-at-home-slot-id');
+    const savedTryAtHomeSlot =
+      TRY_AT_HOME_SLOTS.find(
+        (slot) => slot.id === savedTryAtHomeSlotId,
+      );
+
+    if (
+      savedTryAtHomeSlot &&
+      isTryAtHomeSlotAvailable(
+        savedTryAtHomeSlot,
+        nextTryAtHomeDate,
+        new Date(),
+      )
+    ) {
+      setSelectedTryAtHomeSlotId(savedTryAtHomeSlot.id);
+    } else {
+      setSelectedTryAtHomeSlotId(
+        preferredTryAtHomeSlotId(
+          nextTryAtHomeDate,
+          new Date(),
+        ),
+      );
+    }
 
     const nextGiftBundles: Record<
       string,
@@ -643,6 +902,35 @@ export default function CartPage() {
     [items],
   );
 
+  const tryAtHomeItems = useMemo(
+    () =>
+      items.filter((item) =>
+        isTryAtHomeCartItem(item, tryAtHomeIds),
+      ),
+    [items, tryAtHomeIds],
+  );
+
+  const hasTryAtHomeItems = tryAtHomeItems.length > 0;
+
+  const tryAtHomeDates = useMemo(
+    () => tryAtHomeDateOptions(deliveryClock, 7),
+    [deliveryClock],
+  );
+
+  const selectedTryAtHomeSlot =
+    TRY_AT_HOME_SLOTS.find(
+      (slot) => slot.id === selectedTryAtHomeSlotId,
+    ) || null;
+
+  const availableTryAtHomeSlots = TRY_AT_HOME_SLOTS.filter(
+    (slot) =>
+      isTryAtHomeSlotAvailable(
+        slot,
+        selectedTryAtHomeDate,
+        deliveryClock,
+      ),
+  );
+
   /*
    * SINGLE DELIVERY SOURCE OF TRUTH
    * --------------------------------
@@ -654,7 +942,7 @@ export default function CartPage() {
    * - GA4 checkout shipping value
    */
   const delivery =
-    items.length === 0
+    items.length === 0 || hasTryAtHomeItems
       ? 0
       : selectedDeliveryId === 'instant'
         ? 20
@@ -1086,6 +1374,12 @@ export default function CartPage() {
                                     </p>
                                   )}
 
+                                  {isTryAtHomeCartItem(item, tryAtHomeIds) && (
+                                    <span className="spotc-try-at-home-badge">
+                                      ✓ Try at Home
+                                    </span>
+                                  )}
+
                                   <div className="spotc-product-price-row">
                                     <strong>
                                       {money(
@@ -1198,6 +1492,134 @@ export default function CartPage() {
                 })}
               </div>
 
+              {hasTryAtHomeItems ? (
+                <section className="spotc-try-at-home-section">
+                  <div className="spotc-try-at-home-head">
+                    <div className="spotc-try-at-home-title">
+                      <span className="spotc-try-at-home-icon">
+                        <Clock3 size={20} />
+                      </span>
+
+                      <div>
+                        <small>TRY AT HOME</small>
+                        <h3>Choose date and time</h3>
+                        <p>
+                          Select a 30-minute visit between 9:00 AM and 6:00 PM.
+                        </p>
+                      </div>
+                    </div>
+
+                    <span className="spotc-try-at-home-count">
+                      {tryAtHomeItems.length} item
+                      {tryAtHomeItems.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+
+                  <div className="spotc-try-date-toolbar">
+                    <strong>
+                      {formatTryAtHomeMonth(selectedTryAtHomeDate)}
+                    </strong>
+                    <span>Next 7 days</span>
+                  </div>
+
+                  <div className="spotc-try-date-strip">
+                    {tryAtHomeDates.map((dateValue) => {
+                      const selected =
+                        dateValue === selectedTryAtHomeDate;
+
+                      return (
+                        <button
+                          key={dateValue}
+                          type="button"
+                          className={`spotc-try-date-card ${
+                            selected ? 'active' : ''
+                          }`}
+                          aria-pressed={selected}
+                          onClick={() =>
+                            selectTryAtHomeDate(dateValue)
+                          }
+                        >
+                          <span>
+                            {formatTryAtHomeWeekday(dateValue)}
+                          </span>
+                          <strong>
+                            {formatTryAtHomeDay(dateValue)}
+                          </strong>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="spotc-try-time-head">
+                    <strong>Select time</strong>
+                    <span>30-minute slots</span>
+                  </div>
+
+                  {availableTryAtHomeSlots.length > 0 ? (
+                    <div className="spotc-try-time-grid">
+                      {TRY_AT_HOME_SLOTS.map((slot) => {
+                        const available =
+                          isTryAtHomeSlotAvailable(
+                            slot,
+                            selectedTryAtHomeDate,
+                            deliveryClock,
+                          );
+                        const selected =
+                          available &&
+                          slot.id === selectedTryAtHomeSlotId;
+
+                        return (
+                          <button
+                            key={slot.id}
+                            type="button"
+                            disabled={!available}
+                            aria-disabled={!available}
+                            aria-pressed={selected}
+                            className={`spotc-try-time-slot ${
+                              selected ? 'active' : ''
+                            } ${
+                              !available ? 'disabled' : ''
+                            }`}
+                            onClick={() =>
+                              selectTryAtHomeSlot(slot)
+                            }
+                          >
+                            {slot.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="spotc-try-no-slots">
+                      No slots left for this date. Choose another day.
+                    </div>
+                  )}
+
+                  <div className="spotc-try-booking-footer">
+                    <div>
+                      <span className="spotc-try-free">FREE VISIT</span>
+                      <p>
+                        Try before you buy · Max 2 dresses + 2 earrings · One booking per day
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className={`spotc-try-confirm ${
+                        tryAtHomeSlotConfirmed ? 'confirmed' : ''
+                      }`}
+                      disabled={!selectedTryAtHomeSlot}
+                      onClick={confirmTryAtHomeSlot}
+                    >
+                      {tryAtHomeSlotConfirmed
+                        ? '✓ Slot Confirmed'
+                        : selectedTryAtHomeSlot
+                          ? `Confirm ${selectedTryAtHomeSlot.label}`
+                          : 'Choose another date'}
+                    </button>
+                  </div>
+                </section>
+              ) : (
               <section
                 key={selectedDeliveryId}
                 className="spotc-delivery-section"
@@ -1276,6 +1698,7 @@ export default function CartPage() {
                   })}
                 </div>
               </section>
+              )}
 
             </article>
           </section>
@@ -1320,25 +1743,80 @@ export default function CartPage() {
               </strong>
             </div>
 
-            <div className="spotc-delivery-note">
-              <Truck size={19} />
+            {hasTryAtHomeItems ? (
+              <div className="spotc-delivery-note spotc-try-at-home-note">
+                <Clock3 size={19} />
 
-              <span>
-                <strong>{selectedDelivery.title}</strong>
-                <small>{selectedDelivery.deliveryWindow}</small>
-              </span>
-            </div>
+                <span>
+                  <strong>Try at Home</strong>
+                  <small>
+                    {selectedTryAtHomeDate}
+                    {selectedTryAtHomeSlot
+                      ? ` · ${selectedTryAtHomeSlot.label}`
+                      : ''}
+                  </small>
+                </span>
+              </div>
+            ) : (
+              <div className="spotc-delivery-note">
+                <Truck size={19} />
+
+                <span>
+                  <strong>{selectedDelivery.title}</strong>
+                  <small>{selectedDelivery.deliveryWindow}</small>
+                </span>
+              </div>
+            )}
 
             <Link
               className="spotc-checkout-button"
               href="/address"
               onClick={(event) => {
+                if (hasTryAtHomeItems) {
+                  if (!selectedTryAtHomeSlot) {
+                    event.preventDefault();
+                    alert('Please choose a Try at Home date and time.');
+                    return;
+                  }
+
+                  if (!tryAtHomeSlotConfirmed) {
+                    event.preventDefault();
+                    alert('Please confirm your Try at Home slot.');
+                    return;
+                  }
+
+                  window.localStorage.setItem(
+                    'spotc-try-at-home-date',
+                    selectedTryAtHomeDate,
+                  );
+                  window.localStorage.setItem(
+                    'spotc-try-at-home-slot-id',
+                    selectedTryAtHomeSlot.id,
+                  );
+                  window.localStorage.setItem(
+                    'spotc-try-at-home-slot',
+                    JSON.stringify({
+                      ...selectedTryAtHomeSlot,
+                      date: selectedTryAtHomeDate,
+                    }),
+                  );
+                }
+
                 sendGa4Event('begin_checkout', {
                   currency: 'INR',
                   value: total,
                   shipping: delivery,
                   items: items.map(ga4ItemFromCart),
-                  delivery_option: selectedDelivery.id,
+                  delivery_option: hasTryAtHomeItems
+                    ? undefined
+                    : selectedDelivery.id,
+                  try_at_home: hasTryAtHomeItems,
+                  try_at_home_date: hasTryAtHomeItems
+                    ? selectedTryAtHomeDate
+                    : undefined,
+                  try_at_home_slot: hasTryAtHomeItems
+                    ? selectedTryAtHomeSlot?.id
+                    : undefined,
                 });
               }}
             >
@@ -1755,6 +2233,271 @@ const styles = `
   .spotc-change-gift-button-header {
     min-width: 88px;
     min-height: 38px;
+  }
+
+  .spotc-try-at-home-badge {
+    width: fit-content;
+    margin-top: 8px;
+    padding: 5px 9px;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #e8cfd8;
+    border-radius: 999px;
+    color: #943554;
+    background: #fff4f7;
+    font-size: 11px;
+    font-weight: 650;
+  }
+
+  .spotc-try-at-home-section {
+    margin-top: 16px;
+    padding: 18px;
+    border: 1px solid #eadfd8;
+    border-radius: 18px;
+    background: #ffffff;
+  }
+
+  .spotc-try-at-home-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .spotc-try-at-home-title {
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+  }
+
+  .spotc-try-at-home-icon {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    color: #b35a22;
+    background: #fff1e6;
+  }
+
+  .spotc-try-at-home-title small {
+    display: block;
+    color: #aa5b28;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+  }
+
+  .spotc-try-at-home-title h3 {
+    margin: 3px 0 0;
+    color: #2a231f;
+    font-size: 19px;
+    font-weight: 600;
+  }
+
+  .spotc-try-at-home-title p {
+    margin: 4px 0 0;
+    color: #756b64;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .spotc-try-at-home-count {
+    flex: 0 0 auto;
+    padding: 7px 10px;
+    border: 1px solid #e8ded7;
+    border-radius: 10px;
+    color: #6d625b;
+    background: #faf8f6;
+    font-size: 12px;
+  }
+
+  .spotc-try-date-toolbar {
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .spotc-try-date-toolbar strong {
+    color: #302822;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .spotc-try-date-toolbar span {
+    color: #8b8078;
+    font-size: 11px;
+  }
+
+  .spotc-try-date-strip {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: repeat(7, minmax(58px, 1fr));
+    gap: 8px;
+  }
+
+  .spotc-try-date-card {
+    min-height: 67px;
+    padding: 8px 6px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 4px;
+    border: 1px solid #ded6cf;
+    border-radius: 13px;
+    color: #625951;
+    background: #ffffff;
+    cursor: pointer;
+  }
+
+  .spotc-try-date-card span {
+    font-size: 12px;
+    font-weight: 450;
+  }
+
+  .spotc-try-date-card strong {
+    color: #29231f;
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .spotc-try-date-card.active {
+    border-color: #e47b2f;
+    color: #cf681d;
+    background: #fff7f0;
+  }
+
+  .spotc-try-date-card.active strong {
+    color: #cf681d;
+  }
+
+  .spotc-try-time-head {
+    margin-top: 18px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .spotc-try-time-head strong {
+    color: #302822;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .spotc-try-time-head span {
+    color: #8b8078;
+    font-size: 11px;
+  }
+
+  .spotc-try-time-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .spotc-try-time-slot {
+    min-width: 0;
+    min-height: 40px;
+    padding: 8px 7px;
+    border: 1px solid #e3ddd8;
+    border-radius: 999px;
+    color: #38302a;
+    background: #f9f7f5;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .spotc-try-time-slot.active {
+    border-color: #e47b2f;
+    color: #c95f16;
+    background: #fff4ea;
+  }
+
+  .spotc-try-time-slot.disabled,
+  .spotc-try-time-slot:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+  }
+
+  .spotc-try-no-slots {
+    padding: 14px;
+    border: 1px solid #eadfd8;
+    border-radius: 12px;
+    color: #785d4d;
+    background: #fff8f3;
+    font-size: 12px;
+  }
+
+  .spotc-try-booking-footer {
+    margin-top: 16px;
+    padding-top: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    border-top: 1px solid #eee7e1;
+  }
+
+  .spotc-try-booking-footer > div {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+  }
+
+  .spotc-try-booking-footer p {
+    margin: 0;
+    color: #605751;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .spotc-try-free {
+    padding: 5px 9px;
+    border: 1px solid #cfe9d8;
+    border-radius: 999px;
+    color: #177143;
+    background: #eef8f2;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .spotc-try-confirm {
+    min-height: 42px;
+    flex: 0 0 auto;
+    padding: 0 15px;
+    border: 0;
+    border-radius: 11px;
+    color: #ffffff;
+    background: #df762a;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+
+  .spotc-try-confirm.confirmed {
+    background: #17854a;
+  }
+
+  .spotc-try-confirm:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .spotc-try-at-home-note {
+    border-color: #eadfd8;
+    background: #fff8f3;
   }
 
  .spotc-delivery-section {
@@ -2326,6 +3069,64 @@ const styles = `
 
     .spotc-delivery-options {
       grid-template-columns: 1fr;
+    }
+
+    .spotc-try-at-home-section {
+      padding: 14px;
+      border-radius: 15px;
+    }
+
+    .spotc-try-at-home-head {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 11px;
+    }
+
+    .spotc-try-at-home-count {
+      width: 100%;
+      text-align: center;
+    }
+
+    .spotc-try-date-strip {
+      display: flex;
+      overflow-x: auto;
+      gap: 7px;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+
+    .spotc-try-date-strip::-webkit-scrollbar {
+      display: none;
+    }
+
+    .spotc-try-date-card {
+      min-width: 62px;
+      flex: 0 0 62px;
+    }
+
+    .spotc-try-time-head {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .spotc-try-time-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .spotc-try-time-slot {
+      min-height: 42px;
+      font-size: 11px;
+    }
+
+    .spotc-try-booking-footer {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .spotc-try-confirm {
+      width: 100%;
     }
 
     .spotc-delivery-section {
