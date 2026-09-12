@@ -1403,19 +1403,6 @@ export default function CartPage() {
 
         <div className="spotc-cart-layout">
           <section className="spotc-cart-main">
-            <div className="spotc-cart-summary">
-              <span className="spotc-summary-icon">
-                <ShoppingBag size={21} />
-              </span>
-
-              <div>
-                <strong>Your cart</strong>
-                <small>
-                  All products are sold directly by SPOTC
-                </small>
-              </div>
-            </div>
-
             <article className="spotc-products-card">
               <div className="spotc-products-card-head">
                 <div>
@@ -1451,9 +1438,6 @@ export default function CartPage() {
                             <small>SPOTC COLLECTION</small>
                             <strong>Picked With Love</strong>
                           </div>
-                          <em>
-                            {groupLines.length} item{groupLines.length === 1 ? '' : 's'}
-                          </em>
                         </div>
                       )}
 
@@ -1499,34 +1483,22 @@ export default function CartPage() {
                                   {tryAtHomeKind && (
                                     <button
                                       type="button"
-                                      role="checkbox"
+                                      role="switch"
                                       aria-checked={tryAtHomeSelected}
-                                      className={`spotc-try-at-home-choice ${
+                                      className={`spotc-try-at-home-switch-row ${
                                         tryAtHomeSelected ? 'selected' : ''
                                       }`}
                                       onClick={() => toggleTryAtHome(index)}
                                     >
-                                      <span className="spotc-try-at-home-choice-copy">
-                                        <small>🏠 TRY AT HOME AVAILABLE</small>
-                                        <strong>
-                                          {tryAtHomeSelected
-                                            ? '✓ Try at Home selected'
-                                            : `Try this ${
-                                                tryAtHomeKind === 'dress'
-                                                  ? 'dress'
-                                                  : 'earring'
-                                              } at home`}
-                                        </strong>
-                                        <em>
-                                          Free visit · Choose a 30-minute slot below
-                                        </em>
+                                      <span className="spotc-try-at-home-switch-label">
+                                        🏠 Try at Home
                                       </span>
 
                                       <span
-                                        className="spotc-try-at-home-checkbox"
+                                        className="spotc-try-at-home-switch"
                                         aria-hidden="true"
                                       >
-                                        {tryAtHomeSelected ? '✓' : ''}
+                                        <span />
                                       </span>
                                     </button>
                                   )}
@@ -1660,10 +1632,6 @@ export default function CartPage() {
                       </div>
                     </div>
 
-                    <span className="spotc-try-at-home-count">
-                      {tryAtHomeItems.length} item
-                      {tryAtHomeItems.length === 1 ? '' : 's'}
-                    </span>
                   </div>
 
                   <div className="spotc-try-date-toolbar">
@@ -2170,7 +2138,7 @@ const styles = `
     min-height: 66px;
     padding: 12px 16px;
     display: grid;
-    grid-template-columns: 38px minmax(0, 1fr) auto;
+    grid-template-columns: 38px minmax(0, 1fr);
     align-items: center;
     gap: 11px;
     border-bottom: 1px solid #eee2d5;
@@ -2386,89 +2354,77 @@ const styles = `
     min-height: 38px;
   }
 
-  .spotc-try-at-home-choice {
-    width: min(100%, 420px);
+  .spotc-try-at-home-switch-row {
+    width: fit-content;
+    min-width: 176px;
     margin-top: 10px;
-    padding: 10px 12px;
-    display: flex;
+    padding: 8px 10px;
+    display: inline-flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    border: 1px solid #bfe4cd;
-    border-radius: 14px;
-    color: #185f39;
-    background: #f3fbf6;
+    gap: 14px;
+    border: 1px solid #ded8d1;
+    border-radius: 999px;
+    color: #2f2a25;
+    background: #ffffff;
     font-family: inherit;
-    text-align: left;
     cursor: pointer;
     transition:
       border-color 160ms ease,
       background 160ms ease,
-      box-shadow 160ms ease,
-      transform 160ms ease;
+      box-shadow 160ms ease;
   }
 
-  .spotc-try-at-home-choice:hover {
-    border-color: #82c99d;
-    background: #ecf9f1;
+  .spotc-try-at-home-switch-row:hover {
+    border-color: #b7d6c2;
+    background: #fbfefc;
   }
 
-  .spotc-try-at-home-choice:active {
-    transform: translateY(1px);
+  .spotc-try-at-home-switch-row.selected {
+    border-color: #a8d5b8;
+    background: #f1faf4;
+    box-shadow: 0 0 0 2px rgba(22, 134, 72, 0.05);
   }
 
-  .spotc-try-at-home-choice.selected {
-    border-color: #168648;
-    background: #eaf8ef;
-    box-shadow: 0 0 0 2px rgba(22, 134, 72, 0.08);
-  }
-
-  .spotc-try-at-home-choice-copy {
-    min-width: 0;
-    display: grid;
-    gap: 3px;
-  }
-
-  .spotc-try-at-home-choice-copy small {
-    color: #168648;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.07em;
-  }
-
-  .spotc-try-at-home-choice-copy strong {
-    color: #184f32;
+  .spotc-try-at-home-switch-label {
+    color: #2b2926;
     font-size: 13px;
     font-weight: 750;
-    line-height: 1.25;
-  }
-
-  .spotc-try-at-home-choice-copy em {
-    color: #607268;
-    font-size: 11px;
-    font-style: normal;
-    line-height: 1.3;
-  }
-
-  .spotc-try-at-home-checkbox {
-    width: 25px;
-    height: 25px;
-    flex: 0 0 25px;
-    display: grid;
-    place-items: center;
-    border: 2px solid #71bb8d;
-    border-radius: 7px;
-    color: #ffffff;
-    background: #ffffff;
-    font-size: 15px;
-    font-weight: 900;
     line-height: 1;
+    white-space: nowrap;
   }
 
-  .spotc-try-at-home-choice.selected
-    .spotc-try-at-home-checkbox {
-    border-color: #168648;
-    background: #168648;
+  .spotc-try-at-home-switch {
+    position: relative;
+    width: 42px;
+    height: 24px;
+    flex: 0 0 42px;
+    display: block;
+    border-radius: 999px;
+    background: #d9d9d9;
+    transition: background 160ms ease;
+  }
+
+  .spotc-try-at-home-switch > span {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+    transition: transform 160ms ease;
+  }
+
+  .spotc-try-at-home-switch-row.selected
+    .spotc-try-at-home-switch {
+    background: #159447;
+  }
+
+  .spotc-try-at-home-switch-row.selected
+    .spotc-try-at-home-switch > span {
+    transform: translateX(18px);
   }
 
   .spotc-try-at-home-badge {
@@ -3281,24 +3237,6 @@ const styles = `
       text-align: right;
     }
 
-    /* MOBILE: enlarge only the cart product/shop block */
-    .spotc-cart-summary {
-      min-height: 88px;
-      padding: 18px;
-    }
-
-    .spotc-cart-summary strong {
-      font-size: 19px;
-      font-weight: 750;
-      line-height: 1.35;
-    }
-
-    .spotc-cart-summary small {
-      margin-top: 5px;
-      font-size: 15px;
-      line-height: 1.45;
-    }
-
     .spotc-products-card {
       padding: 17px;
     }
@@ -3307,18 +3245,33 @@ const styles = `
       grid-template-columns: 1fr;
     }
 
-    .spotc-try-at-home-choice {
-      width: 100%;
-      padding: 10px;
-      border-radius: 12px;
+    .spotc-try-at-home-switch-row {
+      min-width: 164px;
+      margin-top: 8px;
+      padding: 7px 9px;
+      gap: 12px;
     }
 
-    .spotc-try-at-home-choice-copy strong {
+    .spotc-try-at-home-switch-label {
       font-size: 12px;
     }
 
-    .spotc-try-at-home-choice-copy em {
-      font-size: 10px;
+    .spotc-try-at-home-switch {
+      width: 40px;
+      height: 22px;
+      flex-basis: 40px;
+    }
+
+    .spotc-try-at-home-switch > span {
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+    }
+
+    .spotc-try-at-home-switch-row.selected
+      .spotc-try-at-home-switch > span {
+      transform: translateX(18px);
     }
 
     .spotc-try-at-home-section {
@@ -3467,7 +3420,7 @@ const styles = `
     .spotc-cart-group-head {
       min-height: 60px;
       padding: 10px 12px;
-      grid-template-columns: 34px minmax(0, 1fr) auto;
+      grid-template-columns: 34px minmax(0, 1fr);
       gap: 9px;
     }
 
@@ -3550,8 +3503,10 @@ const styles = `
       display: flex;
       flex-direction: row;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-end;
       gap: 10px;
+      padding-top: 2px;
+      border-top: 1px solid #f0ebe5;
     }
 
     .spotc-cart-quantity {
@@ -3578,10 +3533,6 @@ const styles = `
       display: block;
       padding-top: 8px;
       text-align: left;
-    }
-
-    .spotc-cart-summary {
-      align-items: flex-start;
     }
 
     .spotc-products-card {
