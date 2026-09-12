@@ -51,6 +51,11 @@ type OrderItem = {
   color: string;
   status: string;
   rawIndex: number;
+
+  isComboItem: boolean;
+  comboParentId: string;
+  originalPrice: number;
+  isTryAtHome: boolean;
 };
 
 type OrderGift = {
@@ -94,6 +99,10 @@ type OrderRecord = {
   deliveryWindow: string;
   deliveredAt: Date | null;
   returnRequests: ReturnRequest[];
+
+  isTryAtHome: boolean;
+  tryAtHomeWindow: string;
+  tryAtHomeItemCount: number;
 
   // Share 5 → Get 1 FREE campaign status.
   campaignType: string;
@@ -261,6 +270,23 @@ function mapItems(value: unknown): OrderItem[] {
           'placed',
       ),
       rawIndex: index,
+
+      isComboItem:
+        record.is_combo_item === true ||
+        Boolean(textOf(record.combo_parent_id)),
+      comboParentId:
+        textOf(record.combo_parent_id),
+      originalPrice:
+        numberOf(
+          record.combo_original_price ??
+            record.original_price ??
+            record.old_price ??
+            record.mrp ??
+            record.price,
+        ),
+      isTryAtHome:
+        record.try_at_home === true ||
+        record.tryAtHome === true,
     };
   });
 }
@@ -514,6 +540,20 @@ function deliveryDisplay(
   let window = rawWindow;
 
   if (
+    id.includes('try_at_home') ||
+    id.includes('try at home') ||
+    title.toLowerCase().includes('try at home') ||
+    data.is_try_at_home === true ||
+    data.try_at_home === true ||
+    textOf(data.fulfillment_type).toLowerCase() === 'try_at_home'
+  ) {
+    id = 'try_at_home';
+    title = 'Try at Home';
+    window =
+      textOf(data.try_at_home_window) ||
+      window ||
+      'Try at Home booking time not saved';
+  } else if (
     id.includes('instant') ||
     title.toLowerCase().includes('instant')
   ) {
@@ -744,6 +784,17 @@ function mapOrder(
     ),
     returnRequests: returnRequestsFromData(data),
 
+    isTryAtHome:
+      deliveryInfo.id === 'try_at_home' ||
+      data.is_try_at_home === true ||
+      data.try_at_home === true ||
+      textOf(data.fulfillment_type).toLowerCase() === 'try_at_home',
+    tryAtHomeWindow:
+      textOf(data.try_at_home_window) ||
+      deliveryInfo.window,
+    tryAtHomeItemCount:
+      numberOf(data.try_at_home_item_count),
+
     campaignType:
       textOf(data.campaign_type),
     campaignVerificationStatus:
@@ -781,6 +832,24 @@ function formatDateTime(
       minute: '2-digit',
     },
   ).format(date);
+}
+
+function itemDiscountPercent(
+  item: OrderItem,
+): number {
+  if (
+    item.originalPrice <= 0 ||
+    item.price <= 0 ||
+    item.originalPrice <= item.price
+  ) {
+    return 0;
+  }
+
+  return Math.round(
+    ((item.originalPrice - item.price) /
+      item.originalPrice) *
+      100,
+  );
 }
 
 function statusLabel(
@@ -2284,6 +2353,22 @@ export default function DashboardOrders() {
                       }
                     </strong>
 
+                    {(view.item.isComboItem ||
+                      view.item.isTryAtHome) && (
+                      <div className="simple-order-badges">
+                        {view.item.isComboItem && (
+                          <em className="combo">
+                            COMBO PRICE
+                          </em>
+                        )}
+                        {view.item.isTryAtHome && (
+                          <em className="try-home">
+                            🏠 TRY AT HOME
+                          </em>
+                        )}
+                      </div>
+                    )}
+
                     <small className="simple-order-status-line">
                       {isShareCampaignRejected(
                         view.parent,
@@ -2325,16 +2410,20 @@ export default function DashboardOrders() {
                       )}
                     </small>
 
-                    <small className="simple-order-delivery-line">
-                      {
-                        view.parent
-                          .deliveryTitle
-                      }
+                    <small
+                      className={`simple-order-delivery-line ${
+                        view.parent.isTryAtHome
+                          ? 'try-home'
+                          : ''
+                      }`}
+                    >
+                      {view.parent.isTryAtHome
+                        ? '🏠 Try at Home'
+                        : view.parent.deliveryTitle}
                       {' · '}
-                      {
-                        view.parent
-                          .deliveryWindow
-                      }
+                      {view.parent.isTryAtHome
+                        ? view.parent.tryAtHomeWindow
+                        : view.parent.deliveryWindow}
                     </small>
 
                     {view.gifts.length >
@@ -2601,20 +2690,29 @@ export default function DashboardOrders() {
             <section className="simple-details-delivery">
               <div>
                 <small>
-                  Delivery option
+                  {selected.parent.isTryAtHome
+                    ? 'Try at Home booking'
+                    : 'Delivery option'}
                 </small>
                 <strong>
-                  {
-                    selected.parent
-                      .deliveryTitle
-                  }
+                  {selected.parent.isTryAtHome
+                    ? '🏠 Try at Home'
+                    : selected.parent.deliveryTitle}
                 </strong>
                 <p>
-                  {
-                    selected.parent
-                      .deliveryWindow
-                  }
+                  {selected.parent.isTryAtHome
+                    ? selected.parent.tryAtHomeWindow
+                    : selected.parent.deliveryWindow}
                 </p>
+                {selected.parent.isTryAtHome && (
+                  <small className="simple-details-try-count">
+                    {selected.parent.tryAtHomeItemCount ||
+                      selected.parent.items.filter(
+                        (item) => item.isTryAtHome,
+                      ).length}{' '}
+                    item(s) selected
+                  </small>
+                )}
               </div>
 
               <div>
@@ -2669,6 +2767,22 @@ export default function DashboardOrders() {
                     }
                   </strong>
 
+                  {(selected.item.isComboItem ||
+                    selected.item.isTryAtHome) && (
+                    <span className="simple-details-item-badges">
+                      {selected.item.isComboItem && (
+                        <em className="combo">
+                          COMBO PRICE
+                        </em>
+                      )}
+                      {selected.item.isTryAtHome && (
+                        <em className="try-home">
+                          🏠 TRY AT HOME
+                        </em>
+                      )}
+                    </span>
+                  )}
+
                   <small>
                     Qty{' '}
                     {
@@ -2688,6 +2802,22 @@ export default function DashboardOrders() {
                       ? ` · ${selected.item.color}`
                       : ''}
                   </small>
+
+                  {selected.item.isComboItem &&
+                    selected.item.originalPrice >
+                      selected.item.price && (
+                    <small className="simple-details-combo-saving">
+                      Original {money(selected.item.originalPrice)}
+                      {' · '}
+                      {itemDiscountPercent(selected.item)}% OFF
+                      {' · '}
+                      Save{' '}
+                      {money(
+                        selected.item.originalPrice -
+                          selected.item.price,
+                      )}
+                    </small>
+                  )}
                 </span>
 
                 <b>
@@ -3118,6 +3248,52 @@ export default function DashboardOrders() {
         .simple-order-delivery-line {
           color: #6d756f !important;
           font-size: 10px !important;
+        }
+
+        .simple-order-delivery-line.try-home {
+          color: #137333 !important;
+          font-weight: 700;
+        }
+
+        .simple-order-badges,
+        .simple-details-item-badges {
+          margin-top: 5px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 5px;
+        }
+
+        .simple-order-badges em,
+        .simple-details-item-badges em {
+          padding: 3px 6px;
+          border-radius: 999px;
+          font-size: 9px;
+          font-style: normal;
+          font-weight: 800;
+          line-height: 1.2;
+        }
+
+        .simple-order-badges em.combo,
+        .simple-details-item-badges em.combo {
+          color: #9a5700;
+          background: #fff1dc;
+        }
+
+        .simple-order-badges em.try-home,
+        .simple-details-item-badges em.try-home {
+          color: #137333;
+          background: #e8f7ed;
+        }
+
+        .simple-details-combo-saving {
+          color: #9a5700 !important;
+          font-weight: 700;
+        }
+
+        .simple-details-try-count {
+          margin-top: 6px !important;
+          color: #137333 !important;
+          font-weight: 700;
         }
 
         .simple-order-rejection {
