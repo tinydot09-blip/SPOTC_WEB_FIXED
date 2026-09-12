@@ -49,6 +49,17 @@ type OrderItem = {
   qty?: number;
   price?: number;
   subtotal?: number;
+  size?: string;
+  color?: string;
+  mrp?: number;
+  old_price?: number;
+  original_price?: number;
+  is_combo_item?: boolean;
+  combo_parent_id?: string;
+  combo_original_price?: number;
+  combo_price?: number;
+  try_at_home?: boolean;
+  tryAtHome?: boolean;
 };
 
 type OrderData = {
@@ -71,6 +82,12 @@ type OrderData = {
   delivery_time_window?: string;
   delivery_slot_time?: string;
   delivery_slot_window?: string;
+  delivery_type?: string;
+  fulfillment_type?: string;
+  is_try_at_home?: boolean;
+  try_at_home?: boolean;
+  try_at_home_window?: string;
+  try_at_home_item_count?: number;
   created_at?: unknown;
   items?: OrderItem[];
 };
@@ -143,7 +160,8 @@ type DeliveryOptionId =
   | 'instant'
   | 'morning'
   | 'afternoon'
-  | 'overnight';
+  | 'overnight'
+  | 'try_at_home';
 
 type DeliveryOption = {
   id: DeliveryOptionId;
@@ -171,6 +189,11 @@ const DELIVERY_OPTIONS: DeliveryOption[] = [
     id: 'overnight',
     title: 'Night Slot',
     deliveryWindow: 'Delivery between 6 AM – 8 AM',
+  },
+  {
+    id: 'try_at_home',
+    title: 'Try at Home',
+    deliveryWindow: 'As selected at checkout',
   },
 ];
 
@@ -240,6 +263,79 @@ const formatOrderDateTime = (
   }
 };
 
+const isComboOrderItem = (
+  item: OrderItem,
+): boolean =>
+  item.is_combo_item === true ||
+  Boolean(text(item.combo_parent_id));
+
+const isTryAtHomeOrderItem = (
+  item: OrderItem,
+): boolean =>
+  !isComboOrderItem(item) &&
+  (item.try_at_home === true ||
+    item.tryAtHome === true);
+
+const itemOriginalPrice = (
+  item: OrderItem,
+): number =>
+  Math.max(
+    0,
+    Number(
+      item.combo_original_price ??
+        item.original_price ??
+        item.old_price ??
+        item.mrp ??
+        item.price ??
+        0,
+    ) || 0,
+  );
+
+const itemDiscountPercent = (
+  item: OrderItem,
+): number => {
+  const price = Number(item.price) || 0;
+  const original = itemOriginalPrice(item);
+
+  if (price <= 0 || original <= price) {
+    return 0;
+  }
+
+  return Math.round(
+    ((original - price) / original) * 100,
+  );
+};
+
+const isTryAtHomeOrder = (
+  order: OrderData,
+): boolean => {
+  const rawId = text(
+    order.delivery_option_id ||
+      order.delivery_option ||
+      order.delivery_slot_id ||
+      order.delivery_slot ||
+      order.delivery_type ||
+      order.fulfillment_type,
+  ).toLowerCase();
+
+  const rawTitle = text(
+    order.delivery_option_title ||
+      order.delivery_title ||
+      order.delivery_slot_title ||
+      order.delivery_slot_name,
+  ).toLowerCase();
+
+  return (
+    order.is_try_at_home === true ||
+    order.try_at_home === true ||
+    rawId.includes('try_at_home') ||
+    rawId.includes('try at home') ||
+    rawTitle.includes('try at home') ||
+    text(order.fulfillment_type).toLowerCase() ===
+      'try_at_home'
+  );
+};
+
 const deliveryDetails = (
   order: OrderData,
 ): {
@@ -274,6 +370,17 @@ const deliveryDetails = (
       (rawId === 'night' &&
         option.id === 'overnight'),
   );
+
+  if (isTryAtHomeOrder(order)) {
+    return {
+      title: 'Try at Home',
+      window:
+        text(order.try_at_home_window) ||
+        savedWindow ||
+        text(order.estimated_delivery) ||
+        'Try at Home booking time not saved',
+    };
+  }
 
   if (savedTitle || savedWindow || byId) {
     return {
@@ -1019,6 +1126,13 @@ export default function OrderSuccessPage() {
             const delivery =
               deliveryDetails(order);
 
+            const tryAtHomeOrder =
+              isTryAtHomeOrder(order);
+
+            const tryAtHomeItems = (
+              order.items || []
+            ).filter(isTryAtHomeOrderItem);
+
             const orderedAt =
               formatOrderDateTime(
                 order.created_at,
@@ -1080,11 +1194,35 @@ export default function OrderSuccessPage() {
                   </b>
                 </div>
 
-                <div className="spotc-order-success__delivery">
-                  <Truck size={19} />
+                <div
+                  className={`spotc-order-success__delivery ${
+                    tryAtHomeOrder
+                      ? 'try-at-home'
+                      : ''
+                  }`}
+                >
+                  {tryAtHomeOrder ? (
+                    <Package size={19} />
+                  ) : (
+                    <Truck size={19} />
+                  )}
                   <span>
-                    <strong>{delivery.title}</strong>
+                    <strong>
+                      {tryAtHomeOrder
+                        ? '🏠 Try at Home'
+                        : delivery.title}
+                    </strong>
                     <small>{delivery.window}</small>
+                    {tryAtHomeOrder && (
+                      <small className="spotc-order-success__try-count">
+                        {tryAtHomeItems.length ||
+                          Number(
+                            order.try_at_home_item_count,
+                          ) ||
+                          0}{' '}
+                        main item(s) selected
+                      </small>
+                    )}
                   </span>
                 </div>
 
@@ -1102,6 +1240,15 @@ export default function OrderSuccessPage() {
                           Number(item.price || 0) *
                             quantity,
                       );
+
+                      const comboItem =
+                        isComboOrderItem(item);
+                      const tryAtHomeItem =
+                        isTryAtHomeOrderItem(item);
+                      const originalPrice =
+                        itemOriginalPrice(item);
+                      const discountPercent =
+                        itemDiscountPercent(item);
 
                       return (
                         <div
@@ -1127,9 +1274,47 @@ export default function OrderSuccessPage() {
                               {item.title ||
                                 'Product'}
                             </strong>
+
+                            {(comboItem ||
+                              tryAtHomeItem) && (
+                              <span className="spotc-order-success__product-badges">
+                                {comboItem && (
+                                  <em className="combo">
+                                    COMBO PRICE
+                                  </em>
+                                )}
+                                {tryAtHomeItem && (
+                                  <em className="try-home">
+                                    🏠 TRY AT HOME
+                                  </em>
+                                )}
+                              </span>
+                            )}
+
                             <small>
                               Qty {quantity}
+                              {item.size
+                                ? ` · Size ${item.size}`
+                                : ''}
+                              {item.color
+                                ? ` · ${item.color}`
+                                : ''}
                             </small>
+
+                            {comboItem &&
+                              originalPrice >
+                                Number(
+                                  item.price || 0,
+                                ) && (
+                                <small className="spotc-order-success__combo-saving">
+                                  Original{' '}
+                                  {money(
+                                    originalPrice,
+                                  )}
+                                  {' · '}
+                                  {discountPercent}% OFF
+                                </small>
+                              )}
                           </div>
 
                           <b>{money(itemTotal)}</b>
@@ -1717,6 +1902,49 @@ const styles = `
     margin-top: 3px;
     color: #756b62;
     font-size: 11px;
+  }
+
+  .spotc-order-success__delivery.try-at-home {
+    border: 1px solid #b8e0c5;
+    color: #137b40;
+    background: #edf9f1;
+  }
+
+  .spotc-order-success__try-count {
+    color: #18713e !important;
+    font-size: 10px !important;
+    font-weight: 750 !important;
+  }
+
+  .spotc-order-success__product-badges {
+    margin-top: 5px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .spotc-order-success__product-badges em {
+    padding: 3px 6px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 850;
+    line-height: 1.2;
+  }
+
+  .spotc-order-success__product-badges em.combo {
+    color: #9a5700;
+    background: #fff1dc;
+  }
+
+  .spotc-order-success__product-badges em.try-home {
+    color: #137333;
+    background: #e8f7ed;
+  }
+
+  .spotc-order-success__combo-saving {
+    color: #9a5700 !important;
+    font-weight: 700;
   }
 
   .spotc-order-success__product > b {
