@@ -1254,6 +1254,33 @@ export function ProductGrid({
 
   const categoryLabel = (value: string): string => t(value);
 
+  const selectedTryAtHomeProducts = useMemo(
+    () =>
+      (items ?? []).filter((product) =>
+        tryAtHomeIds.has(String(product.id)),
+      ),
+    [items, tryAtHomeIds],
+  );
+
+  const selectedTryAtHomeDressCount = useMemo(
+    () =>
+      selectedTryAtHomeProducts.filter(
+        (product) => tryAtHomeKindOf(product) === 'dress',
+      ).length,
+    [selectedTryAtHomeProducts],
+  );
+
+  const selectedTryAtHomeEarringCount = useMemo(
+    () =>
+      selectedTryAtHomeProducts.filter(
+        (product) => tryAtHomeKindOf(product) === 'earring',
+      ).length,
+    [selectedTryAtHomeProducts],
+  );
+
+  const selectedTryAtHomeTotal =
+    selectedTryAtHomeDressCount + selectedTryAtHomeEarringCount;
+
   useEffect(() => {
     setMounted(true);
 
@@ -2583,6 +2610,36 @@ export function ProductGrid({
           document.body,
         )}
 
+      {selectedTryAtHomeTotal > 0 && (
+        <div
+          className="try-at-home-selection-summary"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="try-at-home-selection-summary__copy">
+            <strong>
+              {language === 'ta'
+                ? `🏠 Try at Home · ${selectedTryAtHomeTotal} தேர்வு`
+                : `🏠 Try at Home · ${selectedTryAtHomeTotal} selected`}
+            </strong>
+
+            <span>
+              {language === 'ta'
+                ? `Dress ${selectedTryAtHomeDressCount}/2 · Earrings ${selectedTryAtHomeEarringCount}/2`
+                : `Dresses ${selectedTryAtHomeDressCount}/2 · Earrings ${selectedTryAtHomeEarringCount}/2`}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            className="try-at-home-selection-summary__info"
+            onClick={() => setShowTryAtHomeInfo(true)}
+          >
+            {language === 'ta' ? 'விவரம்' : 'How it works'}
+          </button>
+        </div>
+      )}
+
       <section
         className={`product-grid rich ${
           hideBusinessName
@@ -2704,7 +2761,11 @@ export function ProductGrid({
                   {tryAtHomeEligible ? (
                     <div className="product-try-home-left">
                       <label
-                        className="product-try-home-option"
+                        className={`product-try-home-option ${
+                          tryAtHomeIds.has(String(item.id))
+                            ? 'is-selected'
+                            : ''
+                        }`}
                         onClick={(event) => event.stopPropagation()}
                       >
                         <input
@@ -2713,7 +2774,23 @@ export function ProductGrid({
                           onChange={() => toggleTryAtHome(item)}
                           aria-label={`${t('Try at home')} · ${localizedTitleOf(item)}`}
                         />
-                        <span>{t('Try at home')}</span>
+                        <span>
+                          {tryAtHomeIds.has(String(item.id))
+                            ? language === 'ta'
+                              ? `✓ தேர்வு · ${
+                                  tryAtHomeKind === 'dress'
+                                    ? selectedTryAtHomeDressCount
+                                    : selectedTryAtHomeEarringCount
+                                }/2`
+                              : `✓ Selected · ${
+                                  tryAtHomeKind === 'dress'
+                                    ? selectedTryAtHomeDressCount
+                                    : selectedTryAtHomeEarringCount
+                                }/2`
+                            : language === 'ta'
+                              ? '🏠 வீட்டில் முயற்சி'
+                              : '🏠 Try at Home'}
+                        </span>
                       </label>
 
                       <button
@@ -3252,6 +3329,75 @@ export function ProductGrid({
           cursor: pointer;
         }
 
+        .product-card.rich .product-try-home-option {
+          min-height: 28px;
+          padding: 0 8px;
+          border: 1px solid #d9d9d9;
+          border-radius: 999px;
+          background: #ffffff;
+          transition:
+            border-color 160ms ease,
+            background 160ms ease,
+            box-shadow 160ms ease;
+        }
+
+        .product-card.rich .product-try-home-option.is-selected {
+          border-color: #198754;
+          background: #eaf8f0;
+          color: #116638;
+          box-shadow: inset 0 0 0 1px rgba(25, 135, 84, 0.08);
+        }
+
+        .product-card.rich .product-try-home-option.is-selected input {
+          accent-color: #198754;
+        }
+
+        .try-at-home-selection-summary {
+          width: 100%;
+          margin: 10px 0 14px;
+          padding: 10px 12px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          border: 1px solid #bfe4cd;
+          border-radius: 12px;
+          background: #eefaf3;
+          box-sizing: border-box;
+        }
+
+        .try-at-home-selection-summary__copy {
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+
+        .try-at-home-selection-summary__copy strong {
+          color: #125f36;
+          font-size: 13px;
+          line-height: 1.2;
+        }
+
+        .try-at-home-selection-summary__copy span {
+          color: #456253;
+          font-size: 12px;
+          line-height: 1.2;
+        }
+
+        .try-at-home-selection-summary__info {
+          flex: 0 0 auto;
+          min-height: 32px;
+          padding: 0 11px;
+          border: 1px solid #9fd4b3;
+          border-radius: 999px;
+          background: #ffffff;
+          color: #125f36;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
         @media (max-width: 700px) {
           .product-card.rich .product-try-home-row {
             min-height: 27px;
@@ -3262,6 +3408,29 @@ export function ProductGrid({
 
           .product-card.rich .product-try-home-option {
             gap: 5px;
+            min-height: 26px;
+            padding: 0 6px;
+            font-size: 11px;
+          }
+
+          .try-at-home-selection-summary {
+            margin-top: 8px;
+            margin-bottom: 11px;
+            padding: 9px 10px;
+            gap: 8px;
+          }
+
+          .try-at-home-selection-summary__copy strong {
+            font-size: 12px;
+          }
+
+          .try-at-home-selection-summary__copy span {
+            font-size: 11px;
+          }
+
+          .try-at-home-selection-summary__info {
+            min-height: 30px;
+            padding: 0 9px;
             font-size: 11px;
           }
 
