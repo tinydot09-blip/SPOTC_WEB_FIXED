@@ -1153,9 +1153,12 @@ export default function ComboPage() {
 
         .combo-selected-items {
           min-width: 0;
-          display: flex;
+          display: grid;
+          grid-template-columns: repeat(5, 44px);
           gap: 7px;
-          overflow-x: auto;
+          overflow: visible;
+          align-items: center;
+          justify-content: start;
         }
 
         .combo-selected-item {
@@ -1341,6 +1344,13 @@ export default function ComboPage() {
 
           .combo-summary-bottom {
             gap: 8px;
+            overflow: visible;
+          }
+
+          .combo-selected-items {
+            grid-template-columns: repeat(5, 40px);
+            gap: 6px;
+            overflow: visible;
           }
 
           .combo-selected-item {
