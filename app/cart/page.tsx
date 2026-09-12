@@ -204,6 +204,41 @@ const tryAtHomeKindOf = (
   return null;
 };
 
+const GLOBAL_TRY_AT_HOME_KEY =
+  'spotc-global-try-at-home';
+
+const applyGlobalTryAtHomeSelection = (
+  cartItems: CartItem[],
+  enabled: boolean,
+): CartItem[] => {
+  let dressCount = 0;
+  let earringCount = 0;
+
+  return cartItems.map((item) => {
+    const kind = tryAtHomeKindOf(item);
+
+    if (!enabled || !kind) {
+      return {
+        ...item,
+        tryAtHome: false,
+        try_at_home: false,
+      } as CartItem;
+    }
+
+    const selected =
+      kind === 'dress'
+        ? dressCount++ < 2
+        : earringCount++ < 2;
+
+    return {
+      ...item,
+      tryAtHome: selected,
+      try_at_home: selected,
+    } as CartItem;
+  });
+};
+
+
 type TryAtHomeSlot = {
   id: string;
   label: string;
@@ -522,6 +557,9 @@ export default function CartPage() {
   const [tryAtHomeSlotConfirmed, setTryAtHomeSlotConfirmed] =
     useState(false);
 
+  const [globalTryAtHomeEnabled, setGlobalTryAtHomeEnabled] =
+    useState(false);
+
   const [deliveryClock, setDeliveryClock] =
     useState(() => new Date());
 
@@ -646,11 +684,39 @@ export default function CartPage() {
       return Boolean(parentId) && parentIds.has(parentId);
     });
 
-    if (validatedCartItems.length !== cartItems.length) {
-      writeCart(validatedCartItems);
-    }
+    const savedGlobalTryAtHome =
+      window.localStorage.getItem(
+        GLOBAL_TRY_AT_HOME_KEY,
+      );
 
-    setItems(validatedCartItems);
+    const shouldEnableGlobalTryAtHome =
+      savedGlobalTryAtHome === 'true' ||
+      validatedCartItems.some((item) =>
+        isTryAtHomeCartItem(item),
+      );
+
+    const normalizedCartItems =
+      applyGlobalTryAtHomeSelection(
+        validatedCartItems,
+        shouldEnableGlobalTryAtHome,
+      );
+
+    writeCart(normalizedCartItems);
+    setItems(normalizedCartItems);
+    setGlobalTryAtHomeEnabled(
+      shouldEnableGlobalTryAtHome,
+    );
+
+    if (shouldEnableGlobalTryAtHome) {
+      window.localStorage.setItem(
+        GLOBAL_TRY_AT_HOME_KEY,
+        'true',
+      );
+    } else {
+      window.localStorage.removeItem(
+        GLOBAL_TRY_AT_HOME_KEY,
+      );
+    }
 
     // Cart is now the only source of truth for Try at Home selection.
     // Remove the legacy ProductGrid selection key so stale selections
@@ -701,7 +767,7 @@ export default function CartPage() {
       SavedGiftBundle
     > = {};
 
-    validatedCartItems.forEach((item) => {
+    normalizedCartItems.forEach((item) => {
       const bundle = readSavedGifts(item.id);
 
       if (bundle && bundle.gifts.length > 0) {
@@ -987,60 +1053,38 @@ export default function CartPage() {
     writeCart(nextItems);
   };
 
-  const toggleTryAtHome = (
-    itemIndex: number,
-  ) => {
-    const item = items[itemIndex];
-    if (!item) return;
-
-    const kind = tryAtHomeKindOf(item);
-    if (!kind) return;
-
-    const currentlySelected = isTryAtHomeCartItem(item);
-
-    if (!currentlySelected) {
-      const selectedOfSameKind = items.filter(
-        (candidate) =>
-          isTryAtHomeCartItem(candidate) &&
-          tryAtHomeKindOf(candidate) === kind,
-      ).length;
-
-      if (selectedOfSameKind >= 2) {
-        alert(
-          kind === 'dress'
-            ? 'You can select up to 2 dresses for Try at Home.'
-            : 'You can select up to 2 earrings for Try at Home.',
-        );
-        return;
-      }
-    }
-
-    const nextItems = items.map(
-      (currentItem, index) => {
-        if (index !== itemIndex) return currentItem;
-
-        return {
-          ...currentItem,
-          tryAtHome: !currentlySelected,
-          try_at_home: !currentlySelected,
-        } as CartItem;
-      },
-    );
+  const toggleGlobalTryAtHome = () => {
+    const nextEnabled = !globalTryAtHomeEnabled;
+    const nextItems =
+      applyGlobalTryAtHomeSelection(
+        items,
+        nextEnabled,
+      );
 
     updateCart(nextItems);
-
-    // Any change to the selected Try-at-Home products must be
-    // reconfirmed before checkout.
+    setGlobalTryAtHomeEnabled(nextEnabled);
     setTryAtHomeSlotConfirmed(false);
 
-    const stillHasTryAtHomeItems = nextItems.some(
-      (candidate) => isTryAtHomeCartItem(candidate),
-    );
-
-    if (!stillHasTryAtHomeItems && typeof window !== 'undefined') {
-      window.localStorage.removeItem('spotc-try-at-home-date');
-      window.localStorage.removeItem('spotc-try-at-home-slot-id');
-      window.localStorage.removeItem('spotc-try-at-home-slot');
+    if (typeof window !== 'undefined') {
+      if (nextEnabled) {
+        window.localStorage.setItem(
+          GLOBAL_TRY_AT_HOME_KEY,
+          'true',
+        );
+      } else {
+        window.localStorage.removeItem(
+          GLOBAL_TRY_AT_HOME_KEY,
+        );
+        window.localStorage.removeItem(
+          'spotc-try-at-home-date',
+        );
+        window.localStorage.removeItem(
+          'spotc-try-at-home-slot-id',
+        );
+        window.localStorage.removeItem(
+          'spotc-try-at-home-slot',
+        );
+      }
     }
   };
 
@@ -1067,6 +1111,14 @@ export default function CartPage() {
 
         return sum + Math.max(0, original - comboPrice) * qty;
       }, 0),
+    [items],
+  );
+
+  const hasEligibleTryAtHomeItems = useMemo(
+    () =>
+      items.some((item) =>
+        tryAtHomeKindOf(item) !== null,
+      ),
     [items],
   );
 
@@ -1460,7 +1512,31 @@ export default function CartPage() {
                   <h2>Your Items</h2>
                 </div>
 
-                
+                {hasEligibleTryAtHomeItems && (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={globalTryAtHomeEnabled}
+                    className={`spotc-global-try-at-home ${
+                      globalTryAtHomeEnabled ? 'selected' : ''
+                    }`}
+                    onClick={toggleGlobalTryAtHome}
+                  >
+                    <span className="spotc-global-try-copy">
+                      <strong>🏠 Try at Home</strong>
+                      <small>
+                        Dresses ₹100+ · Earrings ₹80+
+                      </small>
+                    </span>
+
+                    <span
+                      className="spotc-try-at-home-switch"
+                      aria-hidden="true"
+                    >
+                      <span />
+                    </span>
+                  </button>
+                )}
               </div>
 
               <div className="spotc-products-list">
@@ -1501,10 +1577,6 @@ export default function CartPage() {
                           const comboOriginalPrice = comboOriginalPriceOf(item);
                           const itemMrp = cartMrpOf(item);
                           const itemDiscount = cartDiscountPercentOf(item);
-                          const tryAtHomeKind =
-                            !isChild ? tryAtHomeKindOf(item) : null;
-                          const tryAtHomeSelected =
-                            isTryAtHomeCartItem(item);
 
                           return (
                             <div
@@ -1570,31 +1642,6 @@ export default function CartPage() {
                                 </div>
 
                                 <div className="spotc-cart-controls">
-                                  <div className="spotc-cart-controls-left">
-                                    {tryAtHomeKind && (
-                                      <button
-                                        type="button"
-                                        role="switch"
-                                        aria-checked={tryAtHomeSelected}
-                                        className={`spotc-try-at-home-switch-row ${
-                                          tryAtHomeSelected ? 'selected' : ''
-                                        }`}
-                                        onClick={() => toggleTryAtHome(index)}
-                                      >
-                                        <span className="spotc-try-at-home-switch-label">
-                                          🏠 Try at Home
-                                        </span>
-
-                                        <span
-                                          className="spotc-try-at-home-switch"
-                                          aria-hidden="true"
-                                        >
-                                          <span />
-                                        </span>
-                                      </button>
-                                    )}
-                                  </div>
-
                                   <button
                                     type="button"
                                     className="spotc-remove-button"
@@ -2354,6 +2401,57 @@ const styles = `
     min-height: 38px;
   }
 
+  .spotc-global-try-at-home {
+    min-width: 250px;
+    padding: 9px 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border: 1px solid #ded8d1;
+    border-radius: 16px;
+    color: #2f2a25;
+    background: #ffffff;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      border-color 160ms ease,
+      background 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .spotc-global-try-at-home:hover {
+    border-color: #b7d6c2;
+    background: #fbfefc;
+  }
+
+  .spotc-global-try-at-home.selected {
+    border-color: #a8d5b8;
+    background: #f1faf4;
+    box-shadow: 0 0 0 2px rgba(22, 134, 72, 0.05);
+  }
+
+  .spotc-global-try-copy {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+
+  .spotc-global-try-copy strong {
+    color: #2b2926;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.1;
+  }
+
+  .spotc-global-try-copy small {
+    color: #756b64;
+    font-size: 10px;
+    font-weight: 550;
+    line-height: 1.25;
+  }
+
   .spotc-try-at-home-switch-row {
     width: fit-content;
     min-width: 160px;
@@ -3008,7 +3106,7 @@ const styles = `
     width: 100%;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 12px;
   }
 
@@ -3201,6 +3299,18 @@ const styles = `
   }
 
   @media (max-width: 700px) {
+    .spotc-products-card-head {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .spotc-global-try-at-home {
+      width: 100%;
+      min-width: 0;
+      padding: 10px 12px;
+    }
+
+
     .spotc-cart-page {
       min-height: 0;
       padding: 20px 12px 10px;
