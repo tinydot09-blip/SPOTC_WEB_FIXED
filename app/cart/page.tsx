@@ -61,25 +61,101 @@ const comboOriginalPriceOf = (item: CartItem): number => {
 type TryAtHomeCartItem = CartItem & {
   try_at_home?: boolean;
   tryAtHome?: boolean;
+  main_category?: unknown;
+  category?: unknown;
+  sub_category?: unknown;
+  child_category?: unknown;
+  product_name?: unknown;
 };
+
+type TryAtHomeKind = 'dress' | 'earring';
 
 const tryAtHomeMetaOf = (item: CartItem): TryAtHomeCartItem =>
   item as TryAtHomeCartItem;
 
-const isTryAtHomeCartItem = (
-  item: CartItem,
-  selectedIds: Set<string>,
-): boolean => {
-  // Combo children must never inherit Try at Home automatically.
+const isTryAtHomeCartItem = (item: CartItem): boolean => {
+  // Combo children must never be Try at Home items.
   if (isComboCartItem(item)) return false;
 
   const meta = tryAtHomeMetaOf(item);
 
   return (
     meta.try_at_home === true ||
-    meta.tryAtHome === true ||
-    selectedIds.has(String(item.id))
+    meta.tryAtHome === true
   );
+};
+
+const tryAtHomeKindOf = (
+  item: CartItem,
+): TryAtHomeKind | null => {
+  if (isComboCartItem(item)) return null;
+
+  const meta = tryAtHomeMetaOf(item);
+  const price = Number(item.price) || 0;
+
+  const combined = [
+    meta.main_category,
+    meta.category,
+    meta.sub_category,
+    meta.child_category,
+    meta.product_name,
+    item.title,
+  ]
+    .map((value) => String(value ?? '').trim().toLowerCase())
+    .filter(Boolean)
+    .join(' ');
+
+  const isEarring =
+    combined.includes('earring') ||
+    combined.includes('ear ring') ||
+    combined.includes('ear stud') ||
+    combined.includes('jhumka') ||
+    combined.includes('jhumki');
+
+  if (isEarring && price >= 80) {
+    return 'earring';
+  }
+
+  const looksLikeToy =
+    combined.includes('toy') ||
+    combined.includes('doll') ||
+    combined.includes('gun') ||
+    combined.includes('car toy') ||
+    combined.includes('magic slate') ||
+    combined.includes('fidget');
+
+  if (looksLikeToy) {
+    return null;
+  }
+
+  const isDress =
+    combined.includes('girl dress') ||
+    combined.includes('girls dress') ||
+    combined.includes('girls wear') ||
+    combined.includes('kids wear') ||
+    combined.includes('frock') ||
+    combined.includes('kurti') ||
+    combined.includes('lehenga') ||
+    combined.includes('salwar') ||
+    combined.includes('palazzo') ||
+    combined.includes('co-ord') ||
+    combined.includes('coord') ||
+    combined.includes('top and skirt') ||
+    combined.includes('top & skirt') ||
+    (
+      (combined.includes('girl') || combined.includes('girls')) &&
+      (
+        combined.includes('top') ||
+        combined.includes('dress') ||
+        combined.includes('set')
+      )
+    );
+
+  if (isDress && price >= 100) {
+    return 'dress';
+  }
+
+  return null;
 };
 
 type TryAtHomeSlot = {
@@ -382,9 +458,6 @@ export default function CartPage() {
   const [selectedDeliveryId, setSelectedDeliveryId] =
     useState<DeliveryOptionId>('instant');
 
-  const [tryAtHomeIds, setTryAtHomeIds] =
-    useState<Set<string>>(new Set());
-
   const [selectedTryAtHomeDate, setSelectedTryAtHomeDate] =
     useState<string>(() => localDateKey(new Date()));
 
@@ -529,25 +602,13 @@ export default function CartPage() {
 
     setItems(validatedCartItems);
 
+    // Cart is now the only source of truth for Try at Home selection.
+    // Remove the legacy ProductGrid selection key so stale selections
+    // can never re-activate Try at Home in the cart.
     try {
-      const storedTryAtHomeIds =
-        window.localStorage.getItem('spotc_try_at_home_ids');
-      const parsedTryAtHomeIds =
-        storedTryAtHomeIds
-          ? JSON.parse(storedTryAtHomeIds)
-          : [];
-
-      if (Array.isArray(parsedTryAtHomeIds)) {
-        setTryAtHomeIds(
-          new Set(
-            parsedTryAtHomeIds
-              .map((value) => String(value))
-              .filter(Boolean),
-          ),
-        );
-      }
+      window.localStorage.removeItem('spotc_try_at_home_ids');
     } catch {
-      setTryAtHomeIds(new Set());
+      // localStorage is optional; cart flags still remain the source of truth.
     }
 
     const todayKey = localDateKey(new Date());
@@ -876,6 +937,63 @@ export default function CartPage() {
     writeCart(nextItems);
   };
 
+  const toggleTryAtHome = (
+    itemIndex: number,
+  ) => {
+    const item = items[itemIndex];
+    if (!item) return;
+
+    const kind = tryAtHomeKindOf(item);
+    if (!kind) return;
+
+    const currentlySelected = isTryAtHomeCartItem(item);
+
+    if (!currentlySelected) {
+      const selectedOfSameKind = items.filter(
+        (candidate) =>
+          isTryAtHomeCartItem(candidate) &&
+          tryAtHomeKindOf(candidate) === kind,
+      ).length;
+
+      if (selectedOfSameKind >= 2) {
+        alert(
+          kind === 'dress'
+            ? 'You can select up to 2 dresses for Try at Home.'
+            : 'You can select up to 2 earrings for Try at Home.',
+        );
+        return;
+      }
+    }
+
+    const nextItems = items.map(
+      (currentItem, index) => {
+        if (index !== itemIndex) return currentItem;
+
+        return {
+          ...currentItem,
+          tryAtHome: !currentlySelected,
+          try_at_home: !currentlySelected,
+        } as CartItem;
+      },
+    );
+
+    updateCart(nextItems);
+
+    // Any change to the selected Try-at-Home products must be
+    // reconfirmed before checkout.
+    setTryAtHomeSlotConfirmed(false);
+
+    const stillHasTryAtHomeItems = nextItems.some(
+      (candidate) => isTryAtHomeCartItem(candidate),
+    );
+
+    if (!stillHasTryAtHomeItems && typeof window !== 'undefined') {
+      window.localStorage.removeItem('spotc-try-at-home-date');
+      window.localStorage.removeItem('spotc-try-at-home-slot-id');
+      window.localStorage.removeItem('spotc-try-at-home-slot');
+    }
+  };
+
   const subtotal = useMemo(
     () =>
       items.reduce(
@@ -905,9 +1023,9 @@ export default function CartPage() {
   const tryAtHomeItems = useMemo(
     () =>
       items.filter((item) =>
-        isTryAtHomeCartItem(item, tryAtHomeIds),
+        isTryAtHomeCartItem(item),
       ),
-    [items, tryAtHomeIds],
+    [items],
   );
 
   const hasTryAtHomeItems = tryAtHomeItems.length > 0;
@@ -1343,6 +1461,10 @@ export default function CartPage() {
                         {groupLines.map(({ item, index, isChild }) => {
                           const comboItem = isComboCartItem(item);
                           const comboOriginalPrice = comboOriginalPriceOf(item);
+                          const tryAtHomeKind =
+                            !isChild ? tryAtHomeKindOf(item) : null;
+                          const tryAtHomeSelected =
+                            isTryAtHomeCartItem(item);
 
                           return (
                             <div
@@ -1374,10 +1496,39 @@ export default function CartPage() {
                                     </p>
                                   )}
 
-                                  {isTryAtHomeCartItem(item, tryAtHomeIds) && (
-                                    <span className="spotc-try-at-home-badge">
-                                      ✓ Try at Home
-                                    </span>
+                                  {tryAtHomeKind && (
+                                    <button
+                                      type="button"
+                                      role="checkbox"
+                                      aria-checked={tryAtHomeSelected}
+                                      className={`spotc-try-at-home-choice ${
+                                        tryAtHomeSelected ? 'selected' : ''
+                                      }`}
+                                      onClick={() => toggleTryAtHome(index)}
+                                    >
+                                      <span className="spotc-try-at-home-choice-copy">
+                                        <small>🏠 TRY AT HOME AVAILABLE</small>
+                                        <strong>
+                                          {tryAtHomeSelected
+                                            ? '✓ Try at Home selected'
+                                            : `Try this ${
+                                                tryAtHomeKind === 'dress'
+                                                  ? 'dress'
+                                                  : 'earring'
+                                              } at home`}
+                                        </strong>
+                                        <em>
+                                          Free visit · Choose a 30-minute slot below
+                                        </em>
+                                      </span>
+
+                                      <span
+                                        className="spotc-try-at-home-checkbox"
+                                        aria-hidden="true"
+                                      >
+                                        {tryAtHomeSelected ? '✓' : ''}
+                                      </span>
+                                    </button>
                                   )}
 
                                   <div className="spotc-product-price-row">
@@ -2235,6 +2386,91 @@ const styles = `
     min-height: 38px;
   }
 
+  .spotc-try-at-home-choice {
+    width: min(100%, 420px);
+    margin-top: 10px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid #bfe4cd;
+    border-radius: 14px;
+    color: #185f39;
+    background: #f3fbf6;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      border-color 160ms ease,
+      background 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+
+  .spotc-try-at-home-choice:hover {
+    border-color: #82c99d;
+    background: #ecf9f1;
+  }
+
+  .spotc-try-at-home-choice:active {
+    transform: translateY(1px);
+  }
+
+  .spotc-try-at-home-choice.selected {
+    border-color: #168648;
+    background: #eaf8ef;
+    box-shadow: 0 0 0 2px rgba(22, 134, 72, 0.08);
+  }
+
+  .spotc-try-at-home-choice-copy {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+
+  .spotc-try-at-home-choice-copy small {
+    color: #168648;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+  }
+
+  .spotc-try-at-home-choice-copy strong {
+    color: #184f32;
+    font-size: 13px;
+    font-weight: 750;
+    line-height: 1.25;
+  }
+
+  .spotc-try-at-home-choice-copy em {
+    color: #607268;
+    font-size: 11px;
+    font-style: normal;
+    line-height: 1.3;
+  }
+
+  .spotc-try-at-home-checkbox {
+    width: 25px;
+    height: 25px;
+    flex: 0 0 25px;
+    display: grid;
+    place-items: center;
+    border: 2px solid #71bb8d;
+    border-radius: 7px;
+    color: #ffffff;
+    background: #ffffff;
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .spotc-try-at-home-choice.selected
+    .spotc-try-at-home-checkbox {
+    border-color: #168648;
+    background: #168648;
+  }
+
   .spotc-try-at-home-badge {
     width: fit-content;
     margin-top: 8px;
@@ -3069,6 +3305,20 @@ const styles = `
 
     .spotc-delivery-options {
       grid-template-columns: 1fr;
+    }
+
+    .spotc-try-at-home-choice {
+      width: 100%;
+      padding: 10px;
+      border-radius: 12px;
+    }
+
+    .spotc-try-at-home-choice-copy strong {
+      font-size: 12px;
+    }
+
+    .spotc-try-at-home-choice-copy em {
+      font-size: 10px;
     }
 
     .spotc-try-at-home-section {
