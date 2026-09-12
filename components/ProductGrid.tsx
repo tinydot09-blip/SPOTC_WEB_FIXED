@@ -1144,6 +1144,7 @@ export function ProductGrid({
   const [compareBusy, setCompareBusy] =
     useState(false);
   const [mounted, setMounted] = useState(false);
+  const [showTryAtHomeInfo, setShowTryAtHomeInfo] = useState(false);
   const [visibleCount, setVisibleCount] =
     useState(INITIAL_VISIBLE_PRODUCTS);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -2398,6 +2399,82 @@ export function ProductGrid({
           document.body,
         )}
 
+      {mounted &&
+        showTryAtHomeInfo &&
+        createPortal(
+          <div
+            className="try-at-home-info-backdrop"
+            role="presentation"
+            onClick={() => setShowTryAtHomeInfo(false)}
+          >
+            <div
+              className="try-at-home-info-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="try-at-home-info-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="try-at-home-info-header">
+                <strong id="try-at-home-info-title">
+                  {t('Try at Home')}
+                </strong>
+                <button
+                  type="button"
+                  className="try-at-home-info-close"
+                  aria-label={t('Close')}
+                  onClick={() => setShowTryAtHomeInfo(false)}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="try-at-home-info-content">
+                <p>
+                  {language === 'ta'
+                    ? 'வீட்டிலேயே பொருட்களை பார்த்து/முயற்சி செய்து வாங்கலாம்.'
+                    : 'Select eligible items and try them at home before you decide to buy.'}
+                </p>
+                <ul>
+                  <li>
+                    {language === 'ta'
+                      ? '₹100 மற்றும் அதற்கு மேற்பட்ட dresses.'
+                      : 'Dresses priced ₹100 and above are eligible.'}
+                  </li>
+                  <li>
+                    {language === 'ta'
+                      ? '₹80 மற்றும் அதற்கு மேற்பட்ட earrings.'
+                      : 'Earrings priced ₹80 and above are eligible.'}
+                  </li>
+                  <li>
+                    {language === 'ta'
+                      ? 'ஒரே booking-ல் அதிகபட்சம் 2 dresses மற்றும் 2 earrings தேர்வு செய்யலாம்.'
+                      : 'Choose up to 2 dresses and up to 2 earrings in one booking.'}
+                  </li>
+                  <li>
+                    {language === 'ta'
+                      ? 'ஒரு user-க்கு ஒரு நாளில் 1 Try at Home booking மட்டும்.'
+                      : 'One Try at Home booking per user per day.'}
+                  </li>
+                  <li>
+                    {language === 'ta'
+                      ? 'Cart-ல் கிடைக்கும் நேர slot-ஐ தேர்வு செய்யலாம்.'
+                      : 'Choose an available Try at Home time slot in the cart.'}
+                  </li>
+                </ul>
+              </div>
+
+              <button
+                type="button"
+                className="try-at-home-info-done"
+                onClick={() => setShowTryAtHomeInfo(false)}
+              >
+                {t('Got it')}
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
+
       <section
         className={`product-grid rich ${
           hideBusinessName
@@ -2513,18 +2590,34 @@ export function ProductGrid({
 
                 <div className="product-try-home-row">
                   {tryAtHomeEligible ? (
-                    <span
-                      className="product-try-home-available"
-                      aria-label={
-                        language === 'ta'
-                          ? 'Try at Home கிடைக்கும்'
-                          : 'Try at Home available'
-                      }
-                    >
-                      {language === 'ta'
-                        ? '🏠 Try at Home கிடைக்கும்'
-                        : '🏠 Try at Home Available'}
-                    </span>
+                    <div className="product-try-home-left">
+                      <span
+                        className="product-try-home-available"
+                        aria-label={
+                          language === 'ta'
+                            ? 'Try at Home கிடைக்கும்'
+                            : 'Try at Home available'
+                        }
+                      >
+                        {language === 'ta'
+                          ? '🏠 Try at Home கிடைக்கும்'
+                          : '🏠 Try at Home Available'}
+                      </span>
+
+                      <button
+                        type="button"
+                        className="product-try-home-info-button"
+                        aria-label={t('Try at Home information')}
+                        title={t('Try at Home information')}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setShowTryAtHomeInfo(true);
+                        }}
+                      >
+                        <Info size={15} strokeWidth={2} aria-hidden="true" />
+                      </button>
+                    </div>
                   ) : (
                     <span aria-hidden="true" />
                   )}
@@ -3034,6 +3127,107 @@ export function ProductGrid({
           box-sizing: border-box;
           cursor: default;
           user-select: none;
+        }
+
+        .product-card.rich .product-try-home-left {
+          width: 100%;
+          min-width: 0;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .product-card.rich .product-try-home-info-button {
+          width: 20px;
+          height: 20px;
+          padding: 0;
+          border: 0;
+          border-radius: 999px;
+          background: transparent;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          color: #555;
+          flex: 0 0 auto;
+        }
+
+        .product-card.rich .product-try-home-info-button:hover {
+          background: rgba(0, 0, 0, 0.06);
+        }
+
+        .try-at-home-info-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 10000;
+          background: rgba(0, 0, 0, 0.42);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+        }
+
+        .try-at-home-info-modal {
+          width: min(420px, 100%);
+          background: #fff;
+          border-radius: 16px;
+          padding: 18px;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.22);
+        }
+
+        .try-at-home-info-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 10px;
+        }
+
+        .try-at-home-info-header strong {
+          font-size: 18px;
+          line-height: 1.2;
+        }
+
+        .try-at-home-info-close {
+          width: 32px;
+          height: 32px;
+          border: 0;
+          background: transparent;
+          border-radius: 999px;
+          font-size: 25px;
+          line-height: 1;
+          cursor: pointer;
+        }
+
+        .try-at-home-info-content {
+          font-size: 14px;
+          line-height: 1.5;
+          color: #333;
+        }
+
+        .try-at-home-info-content p {
+          margin: 0 0 10px;
+        }
+
+        .try-at-home-info-content ul {
+          margin: 0;
+          padding-left: 20px;
+        }
+
+        .try-at-home-info-content li + li {
+          margin-top: 6px;
+        }
+
+        .try-at-home-info-done {
+          width: 100%;
+          margin-top: 16px;
+          min-height: 42px;
+          border: 0;
+          border-radius: 10px;
+          background: #171717;
+          color: #fff;
+          font-weight: 700;
+          cursor: pointer;
         }
 
         @media (max-width: 700px) {
