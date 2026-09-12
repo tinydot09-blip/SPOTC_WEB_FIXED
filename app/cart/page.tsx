@@ -690,10 +690,7 @@ export default function CartPage() {
       );
 
     const shouldEnableGlobalTryAtHome =
-      savedGlobalTryAtHome === 'true' ||
-      validatedCartItems.some((item) =>
-        isTryAtHomeCartItem(item),
-      );
+      savedGlobalTryAtHome === 'true';
 
     const normalizedCartItems =
       applyGlobalTryAtHomeSelection(
@@ -1524,9 +1521,6 @@ export default function CartPage() {
                   >
                     <span className="spotc-global-try-copy">
                       <strong>🏠 Try at Home</strong>
-                      <small>
-                        Dresses ₹100+ · Earrings ₹80+
-                      </small>
                     </span>
 
                     <span
@@ -2402,34 +2396,42 @@ const styles = `
   }
 
   .spotc-global-try-at-home {
-    min-width: 250px;
-    padding: 9px 12px;
+    min-width: 220px;
+    min-height: 54px;
+    padding: 10px 14px;
     display: inline-flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    border: 1px solid #ded8d1;
+    gap: 18px;
+    border: 1.5px solid #8fcba5;
     border-radius: 16px;
-    color: #2f2a25;
-    background: #ffffff;
+    color: #215f3d;
+    background: #f4fbf6;
+    box-shadow: 0 4px 14px rgba(22, 134, 72, 0.08);
     font-family: inherit;
     text-align: left;
     cursor: pointer;
     transition:
       border-color 160ms ease,
       background 160ms ease,
-      box-shadow 160ms ease;
+      box-shadow 160ms ease,
+      transform 160ms ease;
   }
 
   .spotc-global-try-at-home:hover {
-    border-color: #b7d6c2;
-    background: #fbfefc;
+    border-color: #55ad76;
+    background: #eef9f2;
+    box-shadow: 0 6px 18px rgba(22, 134, 72, 0.12);
+  }
+
+  .spotc-global-try-at-home:active {
+    transform: translateY(1px);
   }
 
   .spotc-global-try-at-home.selected {
-    border-color: #a8d5b8;
-    background: #f1faf4;
-    box-shadow: 0 0 0 2px rgba(22, 134, 72, 0.05);
+    border-color: #168648;
+    background: #e9f8ee;
+    box-shadow: 0 0 0 3px rgba(22, 134, 72, 0.09);
   }
 
   .spotc-global-try-copy {
@@ -2439,17 +2441,11 @@ const styles = `
   }
 
   .spotc-global-try-copy strong {
-    color: #2b2926;
-    font-size: 13px;
-    font-weight: 800;
+    color: #17663a;
+    font-size: 14px;
+    font-weight: 850;
     line-height: 1.1;
-  }
-
-  .spotc-global-try-copy small {
-    color: #756b64;
-    font-size: 10px;
-    font-weight: 550;
-    line-height: 1.25;
+    white-space: nowrap;
   }
 
   .spotc-try-at-home-switch-row {
