@@ -22,6 +22,7 @@ import {
   clearCart,
   readCart,
   saveOrder,
+  writeCart,
   type CartItem,
 } from '@/lib/cart';
 import {
@@ -703,6 +704,72 @@ export default function CheckoutPage() {
     tryAtHomeSlot?.id,
   ]);
 
+  const removeCheckoutItem = (
+    itemToRemove: CartItem,
+  ) => {
+    if (placing) return;
+
+    const removingTryAtHome =
+      isTryAtHomeCartItem(itemToRemove);
+
+    if (
+      removingTryAtHome &&
+      tryAtHomeItems.length <= 1
+    ) {
+      window.alert(
+        'At least 1 Try at Home item is required. To cancel Try at Home, please go back to the cart.',
+      );
+      return;
+    }
+
+    const nextItems = items.filter(
+      (item) =>
+        !(
+          String(item.id) ===
+            String(itemToRemove.id) &&
+          String(item.size || '') ===
+            String(itemToRemove.size || '') &&
+          String(item.color || '') ===
+            String(itemToRemove.color || '')
+        ),
+    );
+
+    if (!nextItems.length) {
+      router.push('/cart');
+      return;
+    }
+
+    writeCart(nextItems);
+    setItems(nextItems);
+
+    setGiftBundles((current) => {
+      const next = { ...current };
+      delete next[String(itemToRemove.id)];
+
+      try {
+        window.localStorage.removeItem(
+          `spotc-free-gifts:${itemToRemove.id}`,
+        );
+      } catch {
+        // Checkout can continue even if storage cleanup fails.
+      }
+
+      return next;
+    });
+
+    sendGa4Event('remove_from_cart', {
+      currency: 'INR',
+      value:
+        (Number(itemToRemove.price) || 0) *
+        Math.max(
+          1,
+          Number(itemToRemove.qty) || 1,
+        ),
+      items: [ga4ItemFromCart(itemToRemove)],
+      page_path: '/checkout',
+    });
+  };
+
   const place = async () => {
     if (
       placing ||
@@ -1061,7 +1128,30 @@ export default function CheckoutPage() {
                       </small>
                     </div>
 
-                    <b>{money(item.price * item.qty)}</b>
+                    <div className="checkout-item-actions">
+                      <b>{money(item.price * item.qty)}</b>
+
+                      {isTryAtHomeCartItem(item) && (
+                        <button
+                          type="button"
+                          className="checkout-remove-item"
+                          onClick={() =>
+                            removeCheckoutItem(item)
+                          }
+                          disabled={
+                            placing ||
+                            tryAtHomeItems.length <= 1
+                          }
+                          title={
+                            tryAtHomeItems.length <= 1
+                              ? 'At least 1 Try at Home item is required'
+                              : 'Remove this item'
+                          }
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
 
@@ -1410,6 +1500,31 @@ export default function CheckoutPage() {
           object-fit: cover;
           border-radius: 14px;
           background: #f1eee9;
+        }
+
+        .checkout-item-actions {
+          display: flex;
+          align-items: flex-end;
+          flex-direction: column;
+          gap: 7px;
+        }
+
+        .checkout-item-actions .checkout-remove-item {
+          min-height: auto;
+          padding: 0;
+          border: 0;
+          border-radius: 0;
+          color: #c24132;
+          background: transparent;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .checkout-item-actions .checkout-remove-item:disabled {
+          color: #aaa39b;
+          cursor: not-allowed;
+          opacity: 0.7;
         }
 
         .checkout-item small,
