@@ -90,6 +90,15 @@ type OrderData = {
   try_at_home_item_count?: number;
   created_at?: unknown;
   items?: OrderItem[];
+  customer_name?: string;
+  customer_phone?: string;
+  customer_email?: string;
+  user_name?: string;
+  user_phone?: string;
+  phone?: string;
+  address?: unknown;
+  delivery_address?: unknown;
+  shipping_address?: unknown;
 };
 
 type SavedFreeGift = {
@@ -495,6 +504,112 @@ const whatsappHref = (
   `https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(
     message,
   )}`;
+
+const orderCustomerName = (order: OrderData): string =>
+  text(order.customer_name || order.user_name);
+
+const orderCustomerPhone = (order: OrderData): string =>
+  text(order.customer_phone || order.user_phone || order.phone);
+
+const orderAddressText = (order: OrderData): string => {
+  const raw =
+    order.delivery_address ??
+    order.shipping_address ??
+    order.address;
+
+  if (!raw) return '';
+
+  if (typeof raw === 'string') return text(raw);
+
+  if (typeof raw !== 'object') return text(raw);
+
+  const value = raw as Record<string, unknown>;
+  const parts = [
+    value.full_address,
+    value.address,
+    value.house_no,
+    value.houseNo,
+    value.street,
+    value.landmark,
+    value.area,
+    value.city,
+    value.pincode,
+    value.state,
+    value.country,
+  ]
+    .map(text)
+    .filter(Boolean);
+
+  return [...new Set(parts)].join(', ');
+};
+
+const orderPlacedWhatsAppMessage = (
+  order: OrderData,
+): string => {
+  const number =
+    text(order.order_number) || text(order.id);
+  const customerName = orderCustomerName(order);
+  const customerPhone = orderCustomerPhone(order);
+  const address = orderAddressText(order);
+  const delivery = deliveryDetails(order);
+  const tryAtHomeOrder = isTryAtHomeOrder(order);
+
+  const itemLines = (order.items || []).map((item) => {
+    const quantity = Math.max(
+      1,
+      Number(item.quantity ?? item.qty) || 1,
+    );
+    const itemTotal =
+      Number(item.subtotal) ||
+      Number(item.price || 0) * quantity;
+    const details = [
+      item.size ? `Size ${item.size}` : '',
+      item.color ? item.color : '',
+      `Qty ${quantity}`,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
+    return `• ${text(item.title) || 'Product'} — ${money(
+      itemTotal,
+    )}${details ? ` (${details})` : ''}`;
+  });
+
+  return [
+    'Hi SPOTC, I have placed an order.',
+    `Order ID: #${number}`,
+    customerName ? `Customer: ${customerName}` : '',
+    customerPhone ? `Phone: ${customerPhone}` : '',
+    '',
+    'Product(s):',
+    ...itemLines,
+    '',
+    tryAtHomeOrder
+      ? `Try at Home: ${delivery.window}`
+      : `Delivery: ${delivery.title} — ${delivery.window}`,
+    address ? `Delivery Address: ${address}` : '',
+    `Total: ${money(Number(order.total || 0))}`,
+    `Payment: ${text(order.payment_method) || 'Cash on Delivery'}`,
+    'Please confirm availability for my order.',
+  ]
+    .filter((line, index, all) => {
+      if (line !== '') return true;
+      return index > 0 && all[index - 1] !== '';
+    })
+    .join('\n');
+};
+
+const openOrderConfirmationWhatsApp = (
+  order: OrderData,
+): void => {
+  if (typeof window === 'undefined') return;
+
+  window.open(
+    whatsappHref(orderPlacedWhatsAppMessage(order)),
+    '_blank',
+    'noopener,noreferrer',
+  );
+};
 
 const sendGa4Event = (
   eventName: string,
@@ -1081,15 +1196,15 @@ export default function OrderSuccessPage() {
             <button
               type="button"
               className="spotc-order-success__whatsapp-button"
-              onClick={() =>
-                setWhatsappOrderNumber(
-                  text(orders[0]?.order_number) ||
-                    text(orders[0]?.id),
-                )
-              }
+              onClick={() => {
+                const firstOrder = orders[0];
+                if (firstOrder) {
+                  openOrderConfirmationWhatsApp(firstOrder);
+                }
+              }}
             >
               <MessageCircle size={17} />
-              <span>WhatsApp</span>
+              <span>Send Order on WhatsApp</span>
             </button>
 
             <a href={`mailto:${SUPPORT_EMAIL}`}>
@@ -1153,13 +1268,11 @@ export default function OrderSuccessPage() {
                     type="button"
                     className="spotc-order-success__order-whatsapp"
                     onClick={() =>
-                      setWhatsappOrderNumber(
-                        orderNumber,
-                      )
+                      openOrderConfirmationWhatsApp(order)
                     }
                   >
                     <MessageCircle size={16} />
-                    Need help?
+                    Send Order
                   </button>
                 </header>
 
