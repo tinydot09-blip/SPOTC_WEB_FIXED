@@ -5,6 +5,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   runTransaction,
@@ -14,7 +15,7 @@ import {
   type DocumentData,
   type DocumentReference,
 } from 'firebase/firestore';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { auth, db } from '@/lib/firebase';
 
@@ -862,6 +863,49 @@ export default function AdminOrdersPage() {
   const [previewImage, setPreviewImage] =
     useState<{ src: string; title: string } | null>(null);
 
+  const orderListenerReadyRef = useRef(false);
+
+  function playNewOrderBeep() {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as typeof window & {
+          webkitAudioContext?: typeof AudioContext;
+        }).webkitAudioContext;
+
+      if (!AudioContextClass) return;
+
+      const audioContext = new AudioContextClass();
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+      gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(
+        0.35,
+        audioContext.currentTime + 0.02,
+      );
+      gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        audioContext.currentTime + 0.45,
+      );
+
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.46);
+
+      oscillator.addEventListener('ended', () => {
+        void audioContext.close();
+      });
+    } catch (error) {
+      console.error('New order beep failed:', error);
+    }
+  }
+
   async function loadData(showLoader = true) {
     if (!db) {
       setLoading(false);
@@ -951,6 +995,36 @@ export default function AdminOrdersPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!db) return;
+
+    orderListenerReadyRef.current = false;
+
+    const unsubscribe = onSnapshot(
+      collection(db, 'Orders'),
+      (snapshot) => {
+        if (!orderListenerReadyRef.current) {
+          orderListenerReadyRef.current = true;
+          return;
+        }
+
+        const hasNewOrder = snapshot
+          .docChanges()
+          .some((change) => change.type === 'added');
+
+        if (!hasNewOrder) return;
+
+        playNewOrderBeep();
+        void loadData(false);
+      },
+      (error) => {
+        console.error('New order listener failed:', error);
+      },
+    );
+
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
