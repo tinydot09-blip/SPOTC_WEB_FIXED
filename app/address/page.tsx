@@ -41,10 +41,7 @@ import {
 import { requireGoogleLogin } from '@/lib/auth';
 import { db, firebaseReady } from '@/lib/firebase';
 import PageLoader from '@/components/PageLoader';
-import {
-  distanceKm,
-  SPOTC_DELIVERY_CENTER,
-} from '@/lib/delivery-radius';
+import { isDeliveryPincode } from '@/lib/delivery-radius';
 
 const EMPTY: AddressInput = {
   fullName: '',
@@ -92,224 +89,11 @@ const cleanPincode = (value: string) =>
   value.replace(/\D/g, '').slice(0, 6);
 
 
-type ReverseGeocodeAddress = {
-  house_number?: string;
-  road?: string;
-  pedestrian?: string;
-  footway?: string;
-  neighbourhood?: string;
-  suburb?: string;
-  quarter?: string;
-  village?: string;
-  town?: string;
-  city?: string;
-  municipality?: string;
-  county?: string;
-  state?: string;
-  postcode?: string;
-  country?: string;
-};
-
-type ReverseGeocodeResponse = {
-  display_name?: string;
-  address?: ReverseGeocodeAddress;
-};
-
-const reverseGeocode = async (
-  latitude: number,
-  longitude: number,
-): Promise<ReverseGeocodeResponse> => {
-  const params = new URLSearchParams({
-    format: 'jsonv2',
-    lat: String(latitude),
-    lon: String(longitude),
-    zoom: '18',
-    addressdetails: '1',
-    'accept-language': 'en',
-  });
-
-  const response = await fetch(
-    `https://nominatim.openstreetmap.org/reverse?${params.toString()}`,
-    {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-      },
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      `Reverse geocoding failed with status ${response.status}.`,
-    );
-  }
-
-  return (await response.json()) as ReverseGeocodeResponse;
-};
-
-
-type ForwardGeocodeResponse = Array<{
-  lat?: string;
-  lon?: string;
-  display_name?: string;
-}>;
-
 const SERVICE_AREA_MESSAGE =
   'Coming Soon to Your Area!';
 
 const BROWSE_MESSAGE =
-  'We currently deliver in Karamadai, Teacher Colony, EB Colony & Gandhinagar.';
-
-const forwardGeocode = async (
-  address: AddressInput,
-): Promise<{ latitude: number; longitude: number } | null> => {
-  const parts = {
-    houseNo: String(address.houseNo || '').trim(),
-    street: String(address.street || '').trim(),
-    landmark: String(address.landmark || '').trim(),
-    area: String(address.area || '').trim(),
-    city: String(address.city || '').trim(),
-    pincode: String(address.pincode || '').trim(),
-    state: String(address.state || 'Tamil Nadu').trim(),
-    country: String(address.country || 'India').trim(),
-  };
-
-  const queries = [
-    [
-      parts.houseNo,
-      parts.street,
-      parts.landmark,
-      parts.area,
-      parts.city,
-      parts.pincode,
-      parts.state,
-      parts.country,
-    ],
-    [
-      parts.area,
-      'Karamadai',
-      parts.pincode,
-      parts.state,
-      parts.country,
-    ],
-    [
-      parts.area,
-      parts.pincode,
-      'Coimbatore',
-      parts.state,
-      parts.country,
-    ],
-    [
-      'Karamadai',
-      parts.pincode,
-      parts.state,
-      parts.country,
-    ],
-  ]
-    .map((items) =>
-      items.filter(Boolean).join(', '),
-    )
-    .filter(
-      (value, index, array) =>
-        value && array.indexOf(value) === index,
-    );
-
-  for (const query of queries) {
-    try {
-      const params = new URLSearchParams({
-        format: 'jsonv2',
-        q: query,
-        limit: '1',
-        countrycodes: 'in',
-        'accept-language': 'en',
-      });
-
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?${params.toString()}`,
-        {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-          },
-        },
-      );
-
-      if (!response.ok) {
-        continue;
-      }
-
-      const results =
-        (await response.json()) as ForwardGeocodeResponse;
-
-      const first = results[0];
-
-      if (!first?.lat || !first?.lon) {
-        continue;
-      }
-
-      const latitude = Number(first.lat);
-      const longitude = Number(first.lon);
-
-      if (
-        Number.isFinite(latitude) &&
-        Number.isFinite(longitude)
-      ) {
-        return { latitude, longitude };
-      }
-    } catch (error) {
-      console.warn(
-        'Address geocode attempt failed:',
-        query,
-        error,
-      );
-    }
-  }
-
-  return null;
-};
-
-const coordinatesFromAddress = (
-  address: SavedAddress,
-): { latitude: number; longitude: number } | null => {
-  const raw =
-    address as SavedAddress & Record<string, unknown>;
-
-  const latitude = Number(
-    raw.latitude ??
-      raw.lat ??
-      raw.delivery_lat,
-  );
-
-  const longitude = Number(
-    raw.longitude ??
-      raw.lng ??
-      raw.lon ??
-      raw.delivery_lng,
-  );
-
-  if (
-    !Number.isFinite(latitude) ||
-    !Number.isFinite(longitude) ||
-    latitude === 0 ||
-    longitude === 0
-  ) {
-    return null;
-  }
-
-  return { latitude, longitude };
-};
-
-const isInsideDeliveryArea = (
-  latitude: number,
-  longitude: number,
-): boolean =>
-  distanceKm(
-    { latitude, longitude },
-    {
-      latitude: SPOTC_DELIVERY_CENTER.latitude,
-      longitude: SPOTC_DELIVERY_CENTER.longitude,
-    },
-  ) <= SPOTC_DELIVERY_CENTER.radiusKm;
+  'We currently deliver in Karamadai & Mettupalayam service areas.';
 
 export default function AddressPage() {
   const router = useRouter();
@@ -337,9 +121,6 @@ export default function AddressPage() {
 
   const [formError, setFormError] =
     useState('');
-
-  const [locating, setLocating] =
-    useState(false);
 
   const [editingId, setEditingId] =
     useState<string | null>(null);
@@ -426,26 +207,9 @@ export default function AddressPage() {
     key: K,
     value: AddressInput[K],
   ) => {
-    const locationFields: Array<keyof AddressInput> = [
-      'houseNo',
-      'street',
-      'landmark',
-      'area',
-      'city',
-      'pincode',
-      'state',
-      'country',
-    ];
-
     setForm((current) => ({
       ...current,
       [key]: value,
-      ...(locationFields.includes(key)
-        ? {
-            latitude: null,
-            longitude: null,
-          }
-        : {}),
     }));
 
     if (formError) {
@@ -460,22 +224,7 @@ export default function AddressPage() {
       return;
     }
 
-    const coordinates =
-      coordinatesFromAddress(address);
-
-    if (!coordinates) {
-      setFormError(
-        'Please edit this address and verify its location before using it for delivery.',
-      );
-      return;
-    }
-
-    if (
-      !isInsideDeliveryArea(
-        coordinates.latitude,
-        coordinates.longitude,
-      )
-    ) {
+    if (!isDeliveryPincode(address.pincode)) {
       setFormError(
         `${SERVICE_AREA_MESSAGE} ${BROWSE_MESSAGE}`,
       );
@@ -638,218 +387,6 @@ export default function AddressPage() {
     }));
   };
 
-  const useCurrentLocation = async () => {
-    if (locating) {
-      return;
-    }
-
-    if (
-      typeof navigator === 'undefined' ||
-      !navigator.geolocation
-    ) {
-      setFormError(
-        'Location is not supported on this device. Please add the address manually.',
-      );
-      setFormOpen(true);
-      return;
-    }
-
-    setLocating(true);
-    setFormError('');
-
-    try {
-      const position =
-        await new Promise<GeolocationPosition>(
-          (resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(
-              resolve,
-              reject,
-              {
-                enableHighAccuracy: true,
-                timeout: 15000,
-                maximumAge: 30000,
-              },
-            );
-          },
-        );
-
-      const latitude =
-        position.coords.latitude;
-
-      const longitude =
-        position.coords.longitude;
-
-      const result =
-        await reverseGeocode(
-          latitude,
-          longitude,
-        );
-
-      const address =
-        result.address || {};
-
-      const houseNo =
-        String(
-          address.house_number || '',
-        ).trim();
-
-      const street =
-        String(
-          address.road ||
-            address.pedestrian ||
-            address.footway ||
-            '',
-        ).trim();
-
-      const area =
-        String(
-          address.neighbourhood ||
-            address.suburb ||
-            address.quarter ||
-            address.village ||
-            '',
-        ).trim();
-
-      const city =
-        String(
-          address.city ||
-            address.town ||
-            address.municipality ||
-            address.village ||
-            address.county ||
-            '',
-        ).trim();
-
-      const pincode =
-        cleanPincode(
-          String(
-            address.postcode || '',
-          ),
-        );
-
-      const state =
-        String(
-          address.state ||
-            'Tamil Nadu',
-        ).trim();
-
-      const country =
-        String(
-          address.country ||
-            'India',
-        ).trim();
-
-      const selectedAddress =
-        addresses.find(
-          (item) =>
-            item.id === selectedId,
-        );
-
-      setForm({
-        ...EMPTY,
-
-        fullName:
-          user?.displayName ||
-          selectedAddress?.fullName ||
-          '',
-
-        phone:
-          selectedAddress?.phone ||
-          '',
-
-        addressType:
-          selectedAddress?.addressType ||
-          form.addressType ||
-          'Home',
-
-        houseNo,
-
-        street,
-
-        landmark: '',
-
-        area,
-
-        city,
-
-        pincode,
-
-        state,
-
-        country,
-
-        deliveryNote: '',
-
-        latitude,
-
-        longitude,
-      });
-
-      setFormOpen(true);
-
-      if (
-        !houseNo ||
-        !area ||
-        !city ||
-        !pincode
-      ) {
-        setFormError(
-          'Location found. Please check and complete any missing address fields before saving.',
-        );
-      }
-    } catch (error) {
-      console.error(
-        'Current location lookup failed:',
-        error,
-      );
-
-      let message =
-        'Unable to find your current address. Please try again or add the address manually.';
-
-      if (
-        typeof GeolocationPositionError !==
-          'undefined' &&
-        error instanceof
-          GeolocationPositionError
-      ) {
-        if (
-          error.code ===
-          error.PERMISSION_DENIED
-        ) {
-          message =
-            'Location permission is blocked. Allow location access in your browser, or add the address manually.';
-        } else if (
-          error.code ===
-          error.POSITION_UNAVAILABLE
-        ) {
-          message =
-            'Your current location is unavailable. Please try again or add the address manually.';
-        } else if (
-          error.code ===
-          error.TIMEOUT
-        ) {
-          message =
-            'Location request timed out. Please try again or add the address manually.';
-        }
-      }
-
-      setForm((current) => ({
-        ...EMPTY,
-        fullName:
-          current.fullName ||
-          user?.displayName ||
-          '',
-        phone:
-          current.phone || '',
-      }));
-
-      setFormError(message);
-      setFormOpen(true);
-    } finally {
-      setLocating(false);
-    }
-  };
-
   const validateForm = (): string => {
     if (!form.fullName.trim()) {
       return 'Enter the full name.';
@@ -886,6 +423,10 @@ export default function AddressPage() {
       return 'Enter a valid 6-digit pincode.';
     }
 
+    if (!isDeliveryPincode(form.pincode)) {
+      return `${SERVICE_AREA_MESSAGE} ${BROWSE_MESSAGE}`;
+    }
+
     return '';
   };
 
@@ -910,7 +451,7 @@ export default function AddressPage() {
     setFormError('');
 
     try {
-      let nextAddress: AddressInput = {
+      const nextAddress: AddressInput = {
         ...form,
         fullName: form.fullName.trim(),
         phone: form.phone.trim(),
@@ -919,102 +460,20 @@ export default function AddressPage() {
         landmark: form.landmark.trim(),
         area: form.area.trim(),
         city: form.city.trim(),
-        pincode: form.pincode.trim(),
+        pincode: cleanPincode(form.pincode),
         state:
           String(form.state || 'Tamil Nadu').trim(),
         country:
           String(form.country || 'India').trim(),
         deliveryNote:
           form.deliveryNote.trim(),
+
+        // GPS is no longer used for delivery eligibility.
+        latitude: null,
+        longitude: null,
       };
 
-      let latitude = Number(nextAddress.latitude);
-      let longitude = Number(nextAddress.longitude);
-
-      let hasCoordinates =
-        Number.isFinite(latitude) &&
-        Number.isFinite(longitude) &&
-        latitude !== 0 &&
-        longitude !== 0;
-
-      /*
-       * Keep the flow simple for the customer:
-       * when Save is tapped, try browser GPS automatically once.
-       * No separate "Verify Current Location" button.
-       */
-      if (
-        !hasCoordinates &&
-        typeof navigator !== 'undefined' &&
-        navigator.geolocation
-      ) {
-        try {
-          const position =
-            await new Promise<GeolocationPosition>(
-              (resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(
-                  resolve,
-                  reject,
-                  {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 60_000,
-                  },
-                );
-              },
-            );
-
-          latitude =
-            position.coords.latitude;
-          longitude =
-            position.coords.longitude;
-
-          hasCoordinates = true;
-
-          nextAddress = {
-            ...nextAddress,
-            latitude,
-            longitude,
-          };
-        } catch (error) {
-          console.warn(
-            'Automatic location check failed:',
-            error,
-          );
-        }
-      }
-
-      /*
-       * If GPS is not available/allowed, fall back to address lookup.
-       * The lookup is only a backup; delivery approval is still based
-       * on coordinates, never on the city name returned by the map.
-       */
-      if (!hasCoordinates) {
-        const coordinates =
-          await forwardGeocode(nextAddress);
-
-        if (!coordinates) {
-          setFormError(
-            'We could not check this address location automatically. Please allow location access and tap Save & Use Address again.',
-          );
-          return;
-        }
-
-        latitude = coordinates.latitude;
-        longitude = coordinates.longitude;
-
-        nextAddress = {
-          ...nextAddress,
-          latitude,
-          longitude,
-        };
-      }
-
-      if (
-        !isInsideDeliveryArea(
-          latitude,
-          longitude,
-        )
-      ) {
+      if (!isDeliveryPincode(nextAddress.pincode)) {
         setFormError(
           `${SERVICE_AREA_MESSAGE} ${BROWSE_MESSAGE}`,
         );
@@ -1042,8 +501,8 @@ export default function AddressPage() {
             country: nextAddress.country,
             delivery_note:
               nextAddress.deliveryNote,
-            latitude,
-            longitude,
+            latitude: null,
+            longitude: null,
             is_active: true,
             updated_at: serverTimestamp(),
           },
@@ -1059,8 +518,8 @@ export default function AddressPage() {
           ...(previous || ({} as SavedAddress)),
           ...nextAddress,
           id: editingId,
-          latitude,
-          longitude,
+          latitude: null,
+          longitude: null,
           isDefault: true,
         };
 
@@ -1077,8 +536,8 @@ export default function AddressPage() {
               ? {
                   ...item,
                   ...nextAddress,
-                  latitude,
-                  longitude,
+                  latitude: null,
+                  longitude: null,
                   isDefault: true,
                 }
               : {
@@ -1094,11 +553,7 @@ export default function AddressPage() {
           await createAddress(
             db,
             user,
-            {
-              ...nextAddress,
-              latitude,
-              longitude,
-            },
+            nextAddress,
             addresses,
           );
 
@@ -1151,19 +606,11 @@ export default function AddressPage() {
         item.id === selectedId,
     ) || null;
 
-  const selectedCoordinates =
-    selectedSavedAddress
-      ? coordinatesFromAddress(
-          selectedSavedAddress,
-        )
-      : null;
-
   const selectedAddressIsDeliverable =
     Boolean(
-      selectedCoordinates &&
-        isInsideDeliveryArea(
-          selectedCoordinates.latitude,
-          selectedCoordinates.longitude,
+      selectedSavedAddress &&
+        isDeliveryPincode(
+          selectedSavedAddress.pincode,
         ),
     );
 
@@ -1198,42 +645,12 @@ export default function AddressPage() {
               </div>
             )}
 
-            <button
-              type="button"
-              className="location-card"
-              disabled={locating}
-              onClick={() =>
-                void useCurrentLocation()
-              }
-            >
-              {locating ? (
-                <Loader2 className="spin" />
-              ) : (
-                <MapPin />
-              )}
-
-              <span>
-                {locating
-                  ? 'Finding your address…'
-                  : 'Use Current Location'}
-              </span>
-            </button>
-
             <section className="saved-addresses">
               {addresses.map(
                 (address) => {
-                  const coordinates =
-                    coordinatesFromAddress(
-                      address,
-                    );
-
                   const available =
-                    Boolean(
-                      coordinates &&
-                        isInsideDeliveryArea(
-                          coordinates.latitude,
-                          coordinates.longitude,
-                        ),
+                    isDeliveryPincode(
+                      address.pincode,
                     );
 
                   return (
@@ -1283,7 +700,7 @@ export default function AddressPage() {
 
                           {!available && (
                             <small className="address-unavailable-text">
-                              Not available for delivery — edit this address.
+                              PIN code is outside our delivery area — edit this address.
                             </small>
                           )}
                         </span>
@@ -1684,7 +1101,7 @@ export default function AddressPage() {
               </div>
             ) : (
               <p className="delivery-check-note">
-                Delivery area will be checked automatically when you save.
+                Delivery availability will be checked using your PIN code when you save.
               </p>
             )}
 
@@ -1725,7 +1142,6 @@ export default function AddressPage() {
         }
 
         button,
-        .location-card,
         .saved-address,
         .add-address-card,
         .continue-address,
@@ -1793,7 +1209,6 @@ export default function AddressPage() {
           line-height: 1.1;
         }
 
-        .location-card,
         .add-address-card,
         .saved-address {
           width: 100%;
@@ -1813,18 +1228,7 @@ export default function AddressPage() {
             background 0.18s ease;
         }
 
-        .location-card:disabled {
-          opacity: 0.72;
-          cursor: wait;
-        }
 
-        .location-card:disabled:hover {
-          border-color: #e3dbd2;
-          background: #ffffff;
-          box-shadow: none;
-        }
-
-        .location-card:hover,
         .add-address-card:hover,
         .saved-address:hover {
           border-color: #cabfb4;

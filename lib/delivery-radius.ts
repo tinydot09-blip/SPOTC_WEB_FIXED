@@ -1,19 +1,50 @@
 'use client';
 
 /* =========================================================
-   SPOTC DELIVERY AREA
+   SPOTC DELIVERY AREA — PIN CODE BASED
    ========================================================= */
 
-export const SPOTC_DELIVERY_CENTER = {
-  latitude: 11.2625206,
-  longitude: 76.9536029,
-  radiusKm: 5,
-} as const;
+/*
+ * SPOTC delivery is now based on the customer's PIN code.
+ *
+ * No browser GPS is required.
+ * No distance/radius calculation is required.
+ *
+ * Coverage:
+ * - Karamadai
+ * - Mettupalayam
+ * - Surrounding Mettupalayam Taluk service areas
+ */
 
-export type Coordinates = {
-  latitude: number;
-  longitude: number;
-};
+export const SPOTC_DELIVERY_PINCODES = [
+  '641104',
+  '641301',
+  '641302',
+  '641305',
+  '641113',
+  '638459',
+] as const;
+
+/* =========================================================
+   PIN CODE CHECK
+   ========================================================= */
+
+export function isDeliveryPincode(
+  pincode: string | null | undefined,
+): boolean {
+  if (!pincode) {
+    return false;
+  }
+
+  const cleanPincode = String(pincode)
+    .replace(/\D/g, '')
+    .trim();
+
+  return SPOTC_DELIVERY_PINCODES.includes(
+    cleanPincode as
+      (typeof SPOTC_DELIVERY_PINCODES)[number],
+  );
+}
 
 /* =========================================================
    DELIVERY STATUS
@@ -28,8 +59,39 @@ export type DeliveryAvailabilityStatus =
   | 'unavailable';
 
 /* =========================================================
-   DISTANCE CALCULATION
+   LEGACY COMPATIBILITY
    ========================================================= */
+
+/*
+ * Keep this type so older components that import Coordinates
+ * do not break.
+ */
+
+export type Coordinates = {
+  latitude: number;
+  longitude: number;
+};
+
+/*
+ * Keep the old delivery-center export temporarily so any
+ * existing component importing it continues to compile.
+ *
+ * IMPORTANT:
+ * This is NOT used to decide whether delivery is available.
+ */
+
+export const SPOTC_DELIVERY_CENTER = {
+  latitude: 11.2625206,
+  longitude: 76.9536029,
+  radiusKm: 0,
+} as const;
+
+/*
+ * Keep distanceKm temporarily for compatibility with any
+ * existing page that still imports it.
+ *
+ * We will remove its usage from the Address page next.
+ */
 
 const toRadians = (value: number): number =>
   (value * Math.PI) / 180;
@@ -72,20 +134,10 @@ export function distanceKm(
    ========================================================= */
 
 /*
- * IMPORTANT:
+ * Browsing, Add to Cart and Buy Now remain available.
  *
- * We DO NOT request browser GPS/location here.
- *
- * Customers are allowed to:
- * - browse products
- * - add products to cart
- * - use Buy Now
- *
- * The actual 5 km delivery-area check is performed later
- * using the customer's selected delivery address at checkout.
- *
- * The old API shape is kept so existing components such as
- * ProductGrid and AppShell continue to compile.
+ * Final delivery eligibility will be checked using the
+ * customer's PIN code on the Delivery Address page.
  */
 
 export function useDeliveryAvailability(): {
@@ -97,32 +149,23 @@ export function useDeliveryAvailability(): {
   requestLocation: () => void;
   radiusKm: number;
 } {
-  const status: DeliveryAvailabilityStatus =
-    'available';
-
   return {
-    status,
+    status: 'available',
 
     distanceKm: null,
 
     coordinates: null,
 
-    /*
-     * Do not block Add to Cart / Buy Now based on GPS.
-     */
     canPurchase: true,
 
     message: '',
 
     /*
-     * Compatibility function.
-     *
-     * Existing components may still call requestLocation().
-     * It intentionally does nothing, so the browser will
-     * NOT show a location permission popup.
+     * Kept only for compatibility.
+     * It intentionally does NOT request GPS.
      */
     requestLocation: () => {},
 
-    radiusKm: SPOTC_DELIVERY_CENTER.radiusKm,
+    radiusKm: 0,
   };
 }

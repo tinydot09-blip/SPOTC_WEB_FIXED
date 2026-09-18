@@ -29,7 +29,7 @@ import { requireGoogleLogin } from '@/lib/auth';
 import { db, firebaseReady } from '@/lib/firebase';
 import PageLoader from '@/components/PageLoader';
 import { groupCartByBusiness } from '@/lib/delivery';
-import { distanceKm, SPOTC_DELIVERY_CENTER } from '@/lib/delivery-radius';
+import { isDeliveryPincode } from '@/lib/delivery-radius';
 import {
   createBusinessOrder,
   type CreatedOrder,
@@ -62,68 +62,21 @@ type SavedTryAtHomeSlot = {
 
 type AddressDeliveryStatus =
   | 'available'
-  | 'outside'
-  | 'location_missing';
+  | 'outside';
 
-const addressCoordinate = (
-  address: SavedAddress,
-  keys: string[],
-): number | null => {
-  const raw = address as SavedAddress & Record<string, unknown>;
-
-  for (const key of keys) {
-    const value = Number(raw[key]);
-
-    if (Number.isFinite(value) && value !== 0) {
-      return value;
-    }
-  }
-
-  return null;
-};
-
-const getAddressDeliveryCheck = (address: SavedAddress | null) => {
+const getAddressDeliveryCheck = (
+  address: SavedAddress | null,
+) => {
   if (!address) {
     return {
-      status: 'location_missing' as AddressDeliveryStatus,
-      distanceKm: null as number | null,
+      status: 'outside' as AddressDeliveryStatus,
     };
   }
-
-  const latitude = addressCoordinate(address, [
-    'latitude',
-    'lat',
-    'delivery_lat',
-  ]);
-
-  const longitude = addressCoordinate(address, [
-    'longitude',
-    'lng',
-    'lon',
-    'delivery_lng',
-  ]);
-
-  if (latitude == null || longitude == null) {
-    return {
-      status: 'location_missing' as AddressDeliveryStatus,
-      distanceKm: null as number | null,
-    };
-  }
-
-  const calculatedDistance = distanceKm(
-    { latitude, longitude },
-    {
-      latitude: SPOTC_DELIVERY_CENTER.latitude,
-      longitude: SPOTC_DELIVERY_CENTER.longitude,
-    },
-  );
 
   return {
-    status:
-      calculatedDistance <= SPOTC_DELIVERY_CENTER.radiusKm
-        ? ('available' as AddressDeliveryStatus)
-        : ('outside' as AddressDeliveryStatus),
-    distanceKm: calculatedDistance,
+    status: isDeliveryPincode(address.pincode)
+      ? ('available' as AddressDeliveryStatus)
+      : ('outside' as AddressDeliveryStatus),
   };
 };
 
@@ -264,18 +217,6 @@ const ga4ItemFromCart = (item: CartItem) => ({
   price: Number(item.price) || 0,
   quantity: Math.max(1, Number(item.qty) || 1),
 });
-
-const getDistanceBand = (distance: number | null): string => {
-  if (distance === null || !Number.isFinite(distance)) return 'unknown';
-  if (distance <= 1) return '0_1km';
-  if (distance <= 2) return '1_2km';
-  if (distance <= 3) return '2_3km';
-  if (distance <= 4) return '3_4km';
-  if (distance <= 5) return '4_5km';
-  if (distance <= 7) return '5_7km';
-  if (distance <= 10) return '7_10km';
-  return 'over_10km';
-};
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -467,58 +408,79 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (loading || !items.length || !address) return;
 
-    const distanceBand = getDistanceBand(addressDeliveryCheck.distanceKm);
     const deliverySignature = [
       formatAddress(address),
+      address.pincode || '',
       addressDeliveryCheck.status,
-      distanceBand,
     ].join('|');
 
-    if (deliveryCheckTrackedRef.current !== deliverySignature) {
+    if (
+      deliveryCheckTrackedRef.current !==
+      deliverySignature
+    ) {
       sendGa4Event('checkout_delivery_check', {
-        delivery_status: addressDeliveryCheck.status,
-        delivery_available: canDeliverToAddress,
-        delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
-        distance_band: distanceBand,
+        delivery_status:
+          addressDeliveryCheck.status,
+        delivery_available:
+          canDeliverToAddress,
+        delivery_pincode:
+          address.pincode || '',
         cart_value: total,
         cart_item_count: items.reduce(
-          (sum, item) => sum + Math.max(1, Number(item.qty) || 1),
+          (sum, item) =>
+            sum +
+            Math.max(
+              1,
+              Number(item.qty) || 1,
+            ),
           0,
         ),
-        selected_delivery_id: hasTryAtHomeItems
-          ? 'try_at_home'
-          : selectedDelivery.id,
-        selected_delivery_title: hasTryAtHomeItems
-          ? 'Try at Home'
-          : selectedDelivery.title,
+        selected_delivery_id:
+          hasTryAtHomeItems
+            ? 'try_at_home'
+            : selectedDelivery.id,
+        selected_delivery_title:
+          hasTryAtHomeItems
+            ? 'Try at Home'
+            : selectedDelivery.title,
         page_path: '/checkout',
       });
 
-      deliveryCheckTrackedRef.current = deliverySignature;
+      deliveryCheckTrackedRef.current =
+        deliverySignature;
     }
 
     if (
       !canDeliverToAddress &&
-      deliveryBlockedTrackedRef.current !== deliverySignature
+      deliveryBlockedTrackedRef.current !==
+        deliverySignature
     ) {
-      sendGa4Event('checkout_delivery_blocked', {
-        block_reason:
-          addressDeliveryCheck.status === 'outside'
-            ? 'outside_5km'
-            : 'location_missing',
-        delivery_status: addressDeliveryCheck.status,
-        delivery_available: false,
-        delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
-        distance_band: distanceBand,
-        cart_value: total,
-        cart_item_count: items.reduce(
-          (sum, item) => sum + Math.max(1, Number(item.qty) || 1),
-          0,
-        ),
-        page_path: '/checkout',
-      });
+      sendGa4Event(
+        'checkout_delivery_blocked',
+        {
+          block_reason:
+            'pincode_not_serviceable',
+          delivery_status:
+            addressDeliveryCheck.status,
+          delivery_available: false,
+          delivery_pincode:
+            address.pincode || '',
+          cart_value: total,
+          cart_item_count: items.reduce(
+            (sum, item) =>
+              sum +
+              Math.max(
+                1,
+                Number(item.qty) || 1,
+              ),
+            0,
+          ),
+          page_path: '/checkout',
+        },
+      );
 
-      deliveryBlockedTrackedRef.current = deliverySignature;
+      deliveryBlockedTrackedRef.current =
+        deliverySignature;
     }
 
     if (!canDeliverToAddress) return;
@@ -528,13 +490,20 @@ export default function CheckoutPage() {
         (item) =>
           `${item.id}:${item.qty}:${item.price}:${item.size}:${item.color}`,
       ),
-      hasTryAtHomeItems ? 'try_at_home' : selectedDelivery.id,
+      hasTryAtHomeItems
+        ? 'try_at_home'
+        : selectedDelivery.id,
       tryAtHomeDate,
       tryAtHomeSlot?.id || '',
       deliverySignature,
     ].join('|');
 
-    if (checkoutTrackedRef.current === checkoutSignature) return;
+    if (
+      checkoutTrackedRef.current ===
+      checkoutSignature
+    ) {
+      return;
+    }
 
     sendGa4Event('add_shipping_info', {
       currency: 'INR',
@@ -543,15 +512,15 @@ export default function CheckoutPage() {
         ? 'Try at Home'
         : selectedDelivery.title,
       delivery_status: 'available',
-      delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
-      distance_band: distanceBand,
+      delivery_pincode:
+        address.pincode || '',
       items: items.map(ga4ItemFromCart),
     });
 
-    checkoutTrackedRef.current = checkoutSignature;
+    checkoutTrackedRef.current =
+      checkoutSignature;
   }, [
     address,
-    addressDeliveryCheck.distanceKm,
     addressDeliveryCheck.status,
     canDeliverToAddress,
     hasTryAtHomeItems,
@@ -575,55 +544,55 @@ export default function CheckoutPage() {
       return;
     }
 
-    const distanceBand = getDistanceBand(addressDeliveryCheck.distanceKm);
-
     sendGa4Event('order_place_attempt', {
       currency: 'INR',
       value: total,
       payment_type: 'Cash on Delivery',
-      delivery_status: addressDeliveryCheck.status,
-      delivery_available: canDeliverToAddress,
-      delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
-      distance_band: distanceBand,
-      selected_delivery_id: hasTryAtHomeItems
-        ? 'try_at_home'
-        : selectedDelivery.id,
-      selected_delivery_title: hasTryAtHomeItems
-        ? 'Try at Home'
-        : selectedDelivery.title,
+      delivery_status:
+        addressDeliveryCheck.status,
+      delivery_available:
+        canDeliverToAddress,
+      delivery_pincode:
+        address.pincode || '',
+      selected_delivery_id:
+        hasTryAtHomeItems
+          ? 'try_at_home'
+          : selectedDelivery.id,
+      selected_delivery_title:
+        hasTryAtHomeItems
+          ? 'Try at Home'
+          : selectedDelivery.title,
       try_at_home: hasTryAtHomeItems,
-      try_at_home_date: hasTryAtHomeItems
-        ? tryAtHomeDate
-        : undefined,
-      try_at_home_slot: hasTryAtHomeItems
-        ? tryAtHomeSlot?.id
-        : undefined,
+      try_at_home_date:
+        hasTryAtHomeItems
+          ? tryAtHomeDate
+          : undefined,
+      try_at_home_slot:
+        hasTryAtHomeItems
+          ? tryAtHomeSlot?.id
+          : undefined,
       items: items.map(ga4ItemFromCart),
     });
 
     if (!canDeliverToAddress) {
-      sendGa4Event('checkout_delivery_blocked', {
-        block_reason:
-          addressDeliveryCheck.status === 'outside'
-            ? 'outside_5km'
-            : 'location_missing',
-        delivery_status: addressDeliveryCheck.status,
-        delivery_available: false,
-        delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
-        distance_band: distanceBand,
-        cart_value: total,
-        page_path: '/checkout',
-      });
+      sendGa4Event(
+        'checkout_delivery_blocked',
+        {
+          block_reason:
+            'pincode_not_serviceable',
+          delivery_status:
+            addressDeliveryCheck.status,
+          delivery_available: false,
+          delivery_pincode:
+            address.pincode || '',
+          cart_value: total,
+          page_path: '/checkout',
+        },
+      );
 
-      if (addressDeliveryCheck.status === 'outside') {
-        window.alert(
-          'Delivery is currently available only in Karamadai, Teacher Colony, EB Colony and Gandhinagar. This address is outside our delivery area.',
-        );
-      } else {
-        window.alert(
-          'Please verify this delivery address location before placing the order.',
-        );
-      }
+      window.alert(
+        'Delivery is currently available only for selected Karamadai and Mettupalayam PIN codes. Please change your delivery address.',
+      );
 
       return;
     }
@@ -633,8 +602,8 @@ export default function CheckoutPage() {
       value: total,
       payment_type: 'Cash on Delivery',
       delivery_status: 'available',
-      delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
-      distance_band: distanceBand,
+      delivery_pincode:
+        address.pincode || '',
       items: items.map(ga4ItemFromCart),
     });
 
@@ -803,28 +772,21 @@ export default function CheckoutPage() {
           </button>
         </section>
 
-        {addressDeliveryCheck.status !== 'available' && (
+        {addressDeliveryCheck.status !==
+          'available' && (
           <section
-            className={`address-delivery-warning ${
-              addressDeliveryCheck.status === 'outside'
-                ? 'is-outside'
-                : 'is-missing'
-            }`}
+            className="address-delivery-warning is-outside"
             role="alert"
           >
             <MapPin />
 
             <div>
               <strong>
-                {addressDeliveryCheck.status === 'outside'
-                  ? 'Delivery not available at this address yet'
-                  : 'Verify delivery location'}
+                Delivery not available for this PIN code yet
               </strong>
 
               <p>
-                {addressDeliveryCheck.status === 'outside'
-                  ? 'Delivery is currently available only in Karamadai, Teacher Colony, EB Colony and Gandhinagar. This address is outside our delivery area.'
-                  : 'This saved address does not have a verified map location. Please edit and verify the address before ordering.'}
+                SPOTC currently delivers to selected Karamadai and Mettupalayam PIN codes. Please choose a serviceable delivery address.
               </p>
 
               <small>
@@ -835,24 +797,24 @@ export default function CheckoutPage() {
             <button
               type="button"
               onClick={() => {
-                sendGa4Event('checkout_change_address', {
-                  reason:
-                    addressDeliveryCheck.status === 'outside'
-                      ? 'outside_5km'
-                      : 'location_missing',
-                  delivery_status: addressDeliveryCheck.status,
-                  delivery_radius_km: SPOTC_DELIVERY_CENTER.radiusKm,
-                  distance_band: getDistanceBand(
-                    addressDeliveryCheck.distanceKm,
-                  ),
-                  page_path: '/checkout',
-                });
+                sendGa4Event(
+                  'checkout_change_address',
+                  {
+                    reason:
+                      'pincode_not_serviceable',
+                    delivery_status:
+                      addressDeliveryCheck.status,
+                    delivery_pincode:
+                      address.pincode || '',
+                    page_path:
+                      '/checkout',
+                  },
+                );
+
                 router.push('/address');
               }}
             >
-              {addressDeliveryCheck.status === 'outside'
-                ? 'Change address'
-                : 'Verify address'}
+              Change address
             </button>
           </section>
         )}
@@ -1069,9 +1031,7 @@ export default function CheckoutPage() {
               title={
                 canDeliverToAddress
                   ? 'Place cash on delivery order'
-                  : addressDeliveryCheck.status === 'outside'
-                    ? 'Delivery is not available at this address yet'
-                    : 'Verify the delivery address location first'
+                  : 'Delivery is not available for this PIN code yet'
               }
             >
               {placing ? (
@@ -1080,9 +1040,7 @@ export default function CheckoutPage() {
                   Placing Order…
                 </>
               ) : !canDeliverToAddress ? (
-                addressDeliveryCheck.status === 'outside'
-                  ? 'Delivery unavailable at this address'
-                  : 'Verify address to order'
+                'Delivery unavailable for this PIN code'
               ) : (
                 `Place COD Order · ${money(total)}`
               )}
