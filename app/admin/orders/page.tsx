@@ -2339,8 +2339,21 @@ if (!response.ok) {
       row.data.inventory_state,
     );
 
+    const hasTryAtHomeReservation =
+      orderItems(row.data).some(
+        isTryAtHomeOrderItem,
+      );
+
+    const shouldReleaseReservation =
+      inventoryState === 'reserved' ||
+      (
+        hasTryAtHomeReservation &&
+        inventoryState !== 'sold' &&
+        status !== 'delivered'
+      );
+
     const warning =
-      inventoryState === 'reserved'
+      shouldReleaseReservation
         ? '\n\nReserved stock will be released before deleting this order.'
         : inventoryState === 'sold' || status === 'delivered'
           ? '\n\nThis order has already affected sold stock. The order record will be deleted, but stock and Sold Qty will NOT be reversed.'
@@ -2364,7 +2377,7 @@ if (!response.ok) {
         row.id,
       );
 
-      if (inventoryState === 'reserved') {
+      if (shouldReleaseReservation) {
         await runTransaction(
           firestore,
           async (transaction) => {
@@ -2385,10 +2398,38 @@ if (!response.ok) {
                 liveOrder.inventory_state,
               );
 
+            const liveHasTryAtHomeReservation =
+              orderItems(liveOrder).some(
+                isTryAtHomeOrderItem,
+              );
+
+            const liveShouldReleaseReservation =
+              liveInventoryState === 'reserved' ||
+              (
+                liveHasTryAtHomeReservation &&
+                liveInventoryState !== 'sold' &&
+                normalizeStatus(
+                  liveOrder.order_status,
+                ) !== 'delivered'
+              );
+
             const quantitiesByProduct =
               new Map<string, number>();
 
             for (const item of orderItems(liveOrder)) {
+              /*
+               * Normal reserved orders reserve every order item.
+               * Try-at-Home checkout reserves only Try-at-Home items,
+               * so release only those items when inventory_state was
+               * not yet marked as "reserved".
+               */
+              if (
+                liveInventoryState !== 'reserved' &&
+                !isTryAtHomeOrderItem(item)
+              ) {
+                continue;
+              }
+
               const productId =
                 productIdFromItem(item);
 
@@ -2402,7 +2443,7 @@ if (!response.ok) {
               );
             }
 
-            if (liveInventoryState === 'reserved') {
+            if (liveShouldReleaseReservation) {
               const productSnaps = new Map<
                 string,
                 {
@@ -2480,6 +2521,12 @@ if (!response.ok) {
                       currentStock -
                         nextReserved >
                       0,
+                    reservation_status:
+                      nextReserved > 0
+                        ? 'partially_reserved'
+                        : 'available',
+                    reserved_for_try_at_home:
+                      nextReserved > 0,
                     updated_at:
                       serverTimestamp(),
                   },
