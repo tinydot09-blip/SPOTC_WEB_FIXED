@@ -103,6 +103,7 @@ type OrderRecord = {
   isTryAtHome: boolean;
   tryAtHomeWindow: string;
   tryAtHomeItemCount: number;
+  inventoryState: string;
 
   // Share 5 → Get 1 FREE campaign status.
   campaignType: string;
@@ -794,6 +795,8 @@ function mapOrder(
       deliveryInfo.window,
     tryAtHomeItemCount:
       numberOf(data.try_at_home_item_count),
+    inventoryState:
+      textOf(data.inventory_state).toLowerCase(),
 
     campaignType:
       textOf(data.campaign_type),
@@ -1669,6 +1672,117 @@ export default function DashboardOrders() {
           const allCancelled =
             activeItems.length === 0;
 
+          /*
+           * Try-at-Home checkout reserves inventory immediately.
+           * When the CUSTOMER cancels a Try-at-Home item, release that
+           * product reservation in the same Firestore transaction.
+           *
+           * If Admin already marked inventory_state='released', do not
+           * release it a second time.
+           */
+          const rawCancelledItem =
+            rawItems[
+              view.item.rawIndex
+            ] as DocumentData;
+
+          const cancelledItemIsTryAtHome =
+            rawCancelledItem.try_at_home === true ||
+            rawCancelledItem.tryAtHome === true ||
+            view.item.isTryAtHome;
+
+          if (
+            cancelledItemIsTryAtHome &&
+            textOf(data.inventory_state)
+              .toLowerCase() !== 'released'
+          ) {
+            const productId =
+              textOf(
+                rawCancelledItem.product_id ??
+                  rawCancelledItem.productId ??
+                  rawCancelledItem.id,
+              ) ||
+              view.item.productId;
+
+            if (productId) {
+              const productRef = doc(
+                db,
+                'BusinessProducts',
+                productId,
+              );
+
+              const productSnapshot =
+                await transaction.get(
+                  productRef,
+                );
+
+              if (productSnapshot.exists()) {
+                const productData =
+                  productSnapshot.data();
+
+                const stock = Math.max(
+                  0,
+                  numberOf(
+                    productData.stock_qty ??
+                      productData.stock_quantity,
+                  ),
+                );
+
+                const currentReserved =
+                  Math.max(
+                    0,
+                    numberOf(
+                      productData.reserved_qty,
+                    ),
+                  );
+
+                const releaseQty =
+                  Math.max(
+                    1,
+                    numberOf(
+                      rawCancelledItem.quantity ??
+                        rawCancelledItem.qty ??
+                        rawCancelledItem.count,
+                    ) || 1,
+                  );
+
+                const nextReserved =
+                  Math.max(
+                    0,
+                    currentReserved -
+                      releaseQty,
+                  );
+
+                transaction.update(
+                  productRef,
+                  {
+                    reserved_qty:
+                      nextReserved,
+                    available_qty:
+                      Math.max(
+                        0,
+                        stock -
+                          nextReserved,
+                      ),
+                    reservation_status:
+                      nextReserved <= 0
+                        ? 'available'
+                        : nextReserved >= stock
+                          ? 'reserved'
+                          : 'partially_reserved',
+                    reserved_for_try_at_home:
+                      nextReserved > 0,
+                    is_in_stock:
+                      stock -
+                        nextReserved >
+                      0,
+                    updated_at:
+                      serverTimestamp(),
+                  },
+                );
+              }
+            }
+          }
+
           transaction.update(
             orderRef,
             {
@@ -1699,6 +1813,10 @@ export default function DashboardOrders() {
                       serverTimestamp(),
                     cancelled_by:
                       'customer',
+                    inventory_state:
+                      'released',
+                    inventory_released_at:
+                      serverTimestamp(),
                   }
                 : {}),
               ...giftUpdates,
