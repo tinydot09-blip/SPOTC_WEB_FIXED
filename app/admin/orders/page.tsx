@@ -1434,10 +1434,29 @@ if (!response.ok) {
           const items =
             orderItems(liveOrder);
 
+          /*
+           * Try-at-Home checkout already reserves its Try-at-Home items.
+           * Treat that checkout reservation as the order's reserved state,
+           * even when older orders did not save inventory_state='reserved'.
+           */
+          const hasTryAtHomeReservation =
+            items.some(isTryAtHomeOrderItem);
+
+          const inventoryItems =
+            hasTryAtHomeReservation
+              ? items.filter(isTryAtHomeOrderItem)
+              : items;
+
+          const effectiveInventoryState: InventoryState =
+            hasTryAtHomeReservation &&
+            liveInventoryState === 'none'
+              ? 'reserved'
+              : liveInventoryState;
+
           const quantitiesByProduct =
             new Map<string, number>();
 
-          for (const item of items) {
+          for (const item of inventoryItems) {
             const productId =
               productIdFromItem(item);
 
@@ -1486,7 +1505,7 @@ if (!response.ok) {
           }
 
           let nextInventoryState =
-            liveInventoryState;
+            effectiveInventoryState;
 
           const movingIntoReservedFlow =
             nextStatus === 'confirmed' ||
@@ -1498,8 +1517,8 @@ if (!response.ok) {
           if (
             movingIntoReservedFlow &&
             (
-              liveInventoryState === 'none' ||
-              liveInventoryState === 'released'
+              effectiveInventoryState === 'none' ||
+              effectiveInventoryState === 'released'
             )
           ) {
             for (const [
@@ -1583,7 +1602,7 @@ if (!response.ok) {
 
           if (
             nextStatus === 'cancelled' &&
-            liveInventoryState ===
+            effectiveInventoryState ===
               'reserved'
           ) {
             for (const [
@@ -1650,7 +1669,7 @@ if (!response.ok) {
 
           if (
             nextStatus === 'delivered' &&
-            liveInventoryState !== 'sold'
+            effectiveInventoryState !== 'sold'
           ) {
             if (
               liveInventoryState !==
