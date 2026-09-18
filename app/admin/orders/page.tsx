@@ -864,9 +864,11 @@ export default function AdminOrdersPage() {
     useState<{ src: string; title: string } | null>(null);
 
   const orderListenerReadyRef = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const [audioReady, setAudioReady] = useState(false);
 
-  function playNewOrderBeep() {
-    if (typeof window === 'undefined') return;
+  async function ensureOrderAudio(): Promise<AudioContext | null> {
+    if (typeof window === 'undefined') return null;
 
     try {
       const AudioContextClass =
@@ -875,31 +877,53 @@ export default function AdminOrdersPage() {
           webkitAudioContext?: typeof AudioContext;
         }).webkitAudioContext;
 
-      if (!AudioContextClass) return;
+      if (!AudioContextClass) return null;
 
-      const audioContext = new AudioContextClass();
-      const oscillator = audioContext.createOscillator();
-      const gain = audioContext.createGain();
+      let audioContext = audioContextRef.current;
 
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
-      gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
-      gain.gain.exponentialRampToValueAtTime(
-        0.35,
-        audioContext.currentTime + 0.02,
-      );
-      gain.gain.exponentialRampToValueAtTime(
-        0.0001,
-        audioContext.currentTime + 0.45,
-      );
+      if (!audioContext || audioContext.state === 'closed') {
+        audioContext = new AudioContextClass();
+        audioContextRef.current = audioContext;
+      }
 
-      oscillator.connect(gain);
-      gain.connect(audioContext.destination);
-      oscillator.start();
-      oscillator.stop(audioContext.currentTime + 0.46);
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
 
-      oscillator.addEventListener('ended', () => {
-        void audioContext.close();
+      if (audioContext.state === 'running') {
+        setAudioReady(true);
+      }
+
+      return audioContext;
+    } catch (error) {
+      console.error('Order alert audio could not be enabled:', error);
+      return null;
+    }
+  }
+
+  async function playNewOrderBeep() {
+    const audioContext = await ensureOrderAudio();
+    if (!audioContext || audioContext.state !== 'running') return;
+
+    try {
+      const now = audioContext.currentTime;
+
+      // Two short tones make a new order easier to notice.
+      [0, 0.22].forEach((delay) => {
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        const start = now + delay;
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(880, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.4, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
+
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.start(start);
+        oscillator.stop(start + 0.17);
       });
     } catch (error) {
       console.error('New order beep failed:', error);
@@ -2742,6 +2766,15 @@ if (!response.ok) {
         </div>
 
         <div style={headerActions}>
+          <button
+            type="button"
+            onClick={() => void playNewOrderBeep()}
+            style={refreshButton}
+            title="Click once after opening Admin Orders to enable browser sound"
+          >
+            {audioReady ? '🔊 Sound Ready' : '🔊 Test Sound'}
+          </button>
+
           <button
             type="button"
             onClick={() =>
