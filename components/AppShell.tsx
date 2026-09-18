@@ -435,7 +435,6 @@ export function AppShell({
   pathname.startsWith('/admin') ||
   pathname.startsWith('/dashboard') ||
   pathname.startsWith('/compare-online') ||
-  pathname.startsWith('/order-success') ||
   pathname.startsWith('/complete-profile') ||
   pathname.startsWith('/profile') ||
   pathname.startsWith('/circle/');

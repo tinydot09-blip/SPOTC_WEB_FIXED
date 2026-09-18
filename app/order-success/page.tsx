@@ -2292,4 +2292,42 @@ const styles = `
       border-radius: 18px;
     }
   }
+
+
+  /* ORDER SUCCESS READABILITY */
+  .spotc-order-success__hero > small { font-size: 13px; }
+  .spotc-order-success__hero p { font-size: 17px; }
+  .spotc-order-success__grand-total span { font-size: 16px; }
+  .spotc-order-success__grand-total strong { font-size: 24px; }
+  .spotc-order-success__support-head small { font-size: 11px; }
+  .spotc-order-success__support-head h2 { font-size: 23px; }
+  .spotc-order-success__support-head span { font-size: 14px; }
+  .spotc-order-success__address { font-size: 15px; }
+  .spotc-order-success__support-actions a,
+  .spotc-order-success__support-actions button { font-size: 14px; }
+  .spotc-order-success__support-details { font-size: 14px; }
+  .spotc-order-success__order-head small { font-size: 11px; }
+  .spotc-order-success__order-head strong { font-size: 18px; }
+  .spotc-order-success__order-whatsapp { font-size: 13px; }
+  .spotc-order-success__meta span { font-size: 15px; }
+  .spotc-order-success__meta > b { font-size: 21px; }
+  .spotc-order-success__delivery { font-size: 15px; }
+  .spotc-order-success__delivery strong { font-size: 16px; }
+  .spotc-order-success__delivery small { font-size: 15px; }
+  .spotc-order-success__try-count { font-size: 13px !important; }
+  .spotc-order-success__product strong { font-size: 16px; white-space: normal; line-height: 1.35; }
+  .spotc-order-success__product small { font-size: 14px; line-height: 1.4; }
+  .spotc-order-success__product-badges em { font-size: 11px; }
+  .spotc-order-success__product > b { font-size: 17px; }
+
+  @media (max-width: 700px) {
+    .spotc-order-success { padding-top: 26px; }
+    .spotc-order-success__hero h1 { font-size: clamp(32px, 9vw, 44px); }
+    .spotc-order-success__hero p { font-size: 16px; }
+    .spotc-order-success__order-card,
+    .spotc-order-success__support-card { padding: 17px; }
+    .spotc-order-success__product { grid-template-columns: 64px minmax(0, 1fr) auto; }
+    .spotc-order-success__product img,
+    .spotc-order-success__product-fallback { width: 64px; height: 64px; }
+  }
 `;
