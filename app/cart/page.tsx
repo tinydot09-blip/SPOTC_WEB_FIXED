@@ -554,9 +554,6 @@ export default function CartPage() {
       ),
     );
 
-  const [tryAtHomeSlotConfirmed, setTryAtHomeSlotConfirmed] =
-    useState(false);
-
   const [globalTryAtHomeEnabled, setGlobalTryAtHomeEnabled] =
     useState(false);
 
@@ -604,8 +601,6 @@ export default function CartPage() {
     if (!value || value < today) return;
 
     setSelectedTryAtHomeDate(value);
-    setTryAtHomeSlotConfirmed(false);
-
     const nextSlotId = preferredTryAtHomeSlotId(
       value,
       new Date(),
@@ -625,26 +620,6 @@ export default function CartPage() {
     }
 
     setSelectedTryAtHomeSlotId(slot.id);
-    setTryAtHomeSlotConfirmed(false);
-  };
-
-  const confirmTryAtHomeSlot = () => {
-    const slot = TRY_AT_HOME_SLOTS.find(
-      (item) => item.id === selectedTryAtHomeSlotId,
-    );
-
-    if (
-      !slot ||
-      !isTryAtHomeSlotAvailable(
-        slot,
-        selectedTryAtHomeDate,
-        new Date(),
-      )
-    ) {
-      return;
-    }
-
-    setTryAtHomeSlotConfirmed(true);
 
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(
@@ -698,7 +673,6 @@ export default function CartPage() {
     writeCart(normalizedCartItems);
     setItems(normalizedCartItems);
     setGlobalTryAtHomeEnabled(false);
-    setTryAtHomeSlotConfirmed(false);
 
     window.localStorage.removeItem(
       GLOBAL_TRY_AT_HOME_KEY,
@@ -1033,7 +1007,6 @@ export default function CartPage() {
 
     updateCart(nextItems);
     setGlobalTryAtHomeEnabled(nextEnabled);
-    setTryAtHomeSlotConfirmed(false);
 
     if (typeof window !== 'undefined') {
       if (nextEnabled) {
@@ -1735,21 +1708,6 @@ export default function CartPage() {
                         Try before you buy · Max 2 dresses + 2 earrings · One booking per day
                       </p>
                     </div>
-
-                    <button
-                      type="button"
-                      className={`spotc-try-confirm ${
-                        tryAtHomeSlotConfirmed ? 'confirmed' : ''
-                      }`}
-                      disabled={!selectedTryAtHomeSlot}
-                      onClick={confirmTryAtHomeSlot}
-                    >
-                      {tryAtHomeSlotConfirmed
-                        ? '✓ Slot Confirmed'
-                        : selectedTryAtHomeSlot
-                          ? `Confirm ${selectedTryAtHomeSlot.label}`
-                          : 'Choose another date'}
-                    </button>
                   </div>
                 </section>
               ) : (
@@ -1909,12 +1867,6 @@ export default function CartPage() {
                   if (!selectedTryAtHomeSlot) {
                     event.preventDefault();
                     alert('Please choose a Try at Home date and time.');
-                    return;
-                  }
-
-                  if (!tryAtHomeSlotConfirmed) {
-                    event.preventDefault();
-                    alert('Please confirm your Try at Home slot.');
                     return;
                   }
 
@@ -2731,29 +2683,6 @@ const styles = `
     font-weight: 600;
   }
 
-  .spotc-try-confirm {
-    min-height: 42px;
-    flex: 0 0 auto;
-    padding: 0 15px;
-    border: 0;
-    border-radius: 11px;
-    color: #ffffff;
-    background: #df762a;
-    font-family: inherit;
-    font-size: 12px;
-    font-weight: 650;
-    cursor: pointer;
-  }
-
-  .spotc-try-confirm.confirmed {
-    background: #17854a;
-  }
-
-  .spotc-try-confirm:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
   .spotc-try-at-home-note {
     border-color: #eadfd8;
     background: #fff8f3;
@@ -3401,10 +3330,6 @@ const styles = `
     .spotc-try-booking-footer {
       align-items: stretch;
       flex-direction: column;
-    }
-
-    .spotc-try-confirm {
-      width: 100%;
     }
 
     .spotc-delivery-section {
