@@ -1342,7 +1342,8 @@ export function ProductGrid({
           : cachedProducts,
       );
       setError(null);
-      return;
+      // Keep rendering the cache immediately, but continue below and
+      // refresh from Firestore so newly reserved products update quickly.
     }
 
     let active = true;
@@ -2489,6 +2490,25 @@ export function ProductGrid({
           const comboEligible = isComboEligible(item, price);
           const tryAtHomeKind = tryAtHomeKindOf(item);
           const tryAtHomeEligible = tryAtHomeKind !== null;
+          const stockQty = Math.max(
+            0,
+            numberValue(
+              item.stock_qty ??
+                item.stock_quantity,
+            ),
+          );
+          const reservedQty = Math.max(
+            0,
+            numberValue(
+              (item as BusinessProduct & {
+                reserved_qty?: number;
+              }).reserved_qty,
+            ),
+          );
+          const isReserved =
+            tryAtHomeEligible &&
+            stockQty > 0 &&
+            reservedQty >= stockQty;
           const image = imageOf(item);
           const isSaving =
             savingId === item.id;
@@ -2652,6 +2672,19 @@ export function ProductGrid({
                 </div>
 
 <div className="product-actions">
+                  {isReserved ? (
+                    <button
+                      type="button"
+                      className="product-reserved-button"
+                      disabled
+                      aria-disabled="true"
+                      title="This product is reserved for Try at Home"
+                    >
+                      <span>RESERVED</span>
+                    </button>
+                  ) : (
+                    <>
+
                   <button
                     type="button"
                     className="product-add-button product-add-to-cart-button"
@@ -2805,6 +2838,9 @@ export function ProductGrid({
                     <ShoppingBag size={16} />
                     <span>{delivery.canPurchase ? t('Buy Now') : t('Browse')}</span>
                   </button>
+
+                    </>
+                  )}
                 </div>
               </div>
             </article>
@@ -2913,6 +2949,19 @@ export function ProductGrid({
         .product-buy-now-button:disabled {
           opacity: 0.55 !important;
           cursor: not-allowed !important;
+        }
+
+        .product-card.rich .product-reserved-button {
+          width: 100%;
+          min-height: 42px;
+          border: 1px solid #d9a441;
+          border-radius: 11px;
+          background: #fff4cf;
+          color: #7a5200;
+          font-size: 13px;
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          cursor: not-allowed;
         }
 
         .product-card.rich .product-actions {

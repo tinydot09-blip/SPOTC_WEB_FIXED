@@ -12,6 +12,11 @@ import {
   Truck,
 } from 'lucide-react';
 import type { User } from 'firebase/auth';
+import {
+  doc,
+  runTransaction,
+  serverTimestamp,
+} from 'firebase/firestore';
 
 import {
   clearCart,
@@ -217,6 +222,171 @@ const ga4ItemFromCart = (item: CartItem) => ({
   price: Number(item.price) || 0,
   quantity: Math.max(1, Number(item.qty) || 1),
 });
+
+
+const reserveTryAtHomeProducts = async ({
+  firestore,
+  items,
+  userUid,
+  tryAtHomeDate,
+  tryAtHomeSlot,
+}: {
+  firestore: NonNullable<typeof db>;
+  items: CartItem[];
+  userUid: string;
+  tryAtHomeDate: string;
+  tryAtHomeSlot: SavedTryAtHomeSlot | null;
+}) => {
+  const reservationItems = items.filter((item) =>
+    isTryAtHomeCartItem(item),
+  );
+
+  if (!reservationItems.length) {
+    return [] as Array<{ productId: string; qty: number }>;
+  }
+
+  const reservedLines = reservationItems.map((item) => ({
+    productId: String(item.id),
+    qty: Math.max(1, Number(item.qty) || 1),
+  }));
+
+  await runTransaction(firestore, async (transaction) => {
+    // Read every product first. Firestore transactions require reads before writes.
+    const snapshots = [];
+
+    for (const line of reservedLines) {
+      const productRef = doc(
+        firestore,
+        'BusinessProducts',
+        line.productId,
+      );
+      const productSnap = await transaction.get(productRef);
+
+      snapshots.push({
+        ...line,
+        productRef,
+        productSnap,
+      });
+    }
+
+    for (const line of snapshots) {
+      if (!line.productSnap.exists()) {
+        throw new Error(
+          'One of your Try at Home products is no longer available.',
+        );
+      }
+
+      const product = line.productSnap.data();
+      const stock = Math.max(
+        0,
+        Number(
+          product.stock_qty ??
+            product.stock_quantity ??
+            0,
+        ) || 0,
+      );
+      const alreadyReserved = Math.max(
+        0,
+        Number(product.reserved_qty ?? 0) || 0,
+      );
+      const available = Math.max(0, stock - alreadyReserved);
+
+      if (
+        product.is_in_stock === false ||
+        available < line.qty
+      ) {
+        throw new Error(
+          `${String(product.title || 'A Try at Home product')} is already reserved or out of stock. Please choose another product.`,
+        );
+      }
+
+      const nextReserved = alreadyReserved + line.qty;
+
+      transaction.update(line.productRef, {
+        reserved_qty: nextReserved,
+        available_qty: Math.max(0, stock - nextReserved),
+        reservation_status:
+          nextReserved >= stock ? 'reserved' : 'partially_reserved',
+        reserved_for_try_at_home: true,
+        reserved_by_uid: userUid,
+        reserved_try_at_home_date: tryAtHomeDate,
+        reserved_try_at_home_slot_id:
+          tryAtHomeSlot?.id || '',
+        reserved_try_at_home_slot_label:
+          tryAtHomeSlot?.label || '',
+        reserved_at: serverTimestamp(),
+      });
+    }
+  });
+
+  return reservedLines;
+};
+
+const releaseTryAtHomeProducts = async ({
+  firestore,
+  reservedLines,
+}: {
+  firestore: NonNullable<typeof db>;
+  reservedLines: Array<{ productId: string; qty: number }>;
+}) => {
+  if (!reservedLines.length) return;
+
+  try {
+    await runTransaction(firestore, async (transaction) => {
+      const snapshots = [];
+
+      for (const line of reservedLines) {
+        const productRef = doc(
+          firestore,
+          'BusinessProducts',
+          line.productId,
+        );
+        const productSnap = await transaction.get(productRef);
+
+        snapshots.push({
+          ...line,
+          productRef,
+          productSnap,
+        });
+      }
+
+      for (const line of snapshots) {
+        if (!line.productSnap.exists()) continue;
+
+        const product = line.productSnap.data();
+        const stock = Math.max(
+          0,
+          Number(
+            product.stock_qty ??
+              product.stock_quantity ??
+              0,
+          ) || 0,
+        );
+        const alreadyReserved = Math.max(
+          0,
+          Number(product.reserved_qty ?? 0) || 0,
+        );
+        const nextReserved = Math.max(
+          0,
+          alreadyReserved - line.qty,
+        );
+
+        transaction.update(line.productRef, {
+          reserved_qty: nextReserved,
+          available_qty: Math.max(0, stock - nextReserved),
+          reservation_status:
+            nextReserved > 0 ? 'partially_reserved' : 'available',
+          reserved_for_try_at_home: nextReserved > 0,
+        });
+      }
+    });
+  } catch (releaseError) {
+    console.error(
+      'Unable to roll back Try at Home reservation:',
+      releaseError,
+    );
+  }
+};
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -613,7 +783,23 @@ export default function CheckoutPage() {
 
     setPlacing(true);
 
+    let reservedTryAtHomeLines: Array<{
+      productId: string;
+      qty: number;
+    }> = [];
+
     try {
+      if (hasTryAtHomeItems) {
+        reservedTryAtHomeLines =
+          await reserveTryAtHomeProducts({
+            firestore,
+            items,
+            userUid: currentUser.uid,
+            tryAtHomeDate,
+            tryAtHomeSlot,
+          });
+      }
+
       const created: CreatedOrder[] = [];
 
       for (const [groupIndex, group] of groups.entries()) {
@@ -710,12 +896,31 @@ export default function CheckoutPage() {
 
       clearCart();
 
+      if (
+        typeof window !== 'undefined' &&
+        reservedTryAtHomeLines.length > 0
+      ) {
+        const productCacheWindow =
+          window as typeof window & {
+            __spotcProductsCacheAt?: number;
+          };
+
+        productCacheWindow.__spotcProductsCacheAt = 0;
+      }
+
       router.push(
         `/order-success?ids=${encodeURIComponent(
           created.map((order) => order.documentId).join(','),
         )}`,
       );
     } catch (error) {
+      if (reservedTryAtHomeLines.length > 0) {
+        await releaseTryAtHomeProducts({
+          firestore,
+          reservedLines: reservedTryAtHomeLines,
+        });
+      }
+
       console.error('SPOTC order placement failed:', error);
 
       const message =
