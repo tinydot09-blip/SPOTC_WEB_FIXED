@@ -947,6 +947,45 @@ export default function CheckoutPage() {
           total: order.total,
           created_at: new Date().toISOString(),
         });
+
+        // Notify the customer and admin after the order has been created.
+        // Notification failure must never cancel or roll back a successful order.
+        try {
+          const idToken = await currentUser.getIdToken();
+
+          const notificationResponse = await fetch(
+            '/api/notifications/order-placed',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${idToken}`,
+              },
+              body: JSON.stringify({
+                orderId: order.documentId,
+              }),
+            },
+          );
+
+          if (!notificationResponse.ok) {
+            const notificationResult = (await notificationResponse
+              .json()
+              .catch(() => null)) as
+              | { error?: string }
+              | null;
+
+            console.warn(
+              '[SPOTC] Order placed notification was not delivered:',
+              notificationResult?.error ||
+                `HTTP ${notificationResponse.status}`,
+            );
+          }
+        } catch (notificationError) {
+          console.warn(
+            '[SPOTC] Order placed notification failed:',
+            notificationError,
+          );
+        }
       }
 
       if (typeof window !== 'undefined') {
