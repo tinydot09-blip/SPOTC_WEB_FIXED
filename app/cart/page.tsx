@@ -411,7 +411,9 @@ const isDeliveryOptionAvailable = (
   }
 
   if (id === 'overnight') {
-    return hour < 18;
+    // Night Slot can be booked at any time.
+    // Delivery remains tomorrow between 6 AM – 8 AM.
+    return true;
   }
 
   return false;
