@@ -632,21 +632,51 @@ export default function DeliveryDashboardPage() {
     setMessage('');
 
     try {
-      await updateDoc(
-        doc(deliveryDb, 'Orders', failureOrder.id),
-        {
-          delivery_status: 'not_delivered',
-          delivery_assignment_status: 'not_delivered',
-          delivery_failure_reason: failureReason,
-          delivery_failed_at: serverTimestamp(),
-          delivery_failed_by: rider.uid,
-          delivery_failed_by_name: rider.name,
-          updated_at: serverTimestamp(),
+      const user = deliveryAuth.currentUser;
+      if (!user) {
+        throw new Error(
+          'Delivery login expired. Please sign in again.',
+        );
+      }
+
+      const idToken = await user.getIdToken();
+
+      const response = await fetch('/api/delivery/not-delivered', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
         },
-      );
+        body: JSON.stringify({
+          orderId: failureOrder.id,
+          reason: failureReason,
+        }),
+      });
+
+      const raw = await response.text();
+      let result: {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+      } = {};
+
+      try {
+        result = raw ? JSON.parse(raw) : {};
+      } catch {
+        // Keep raw response for diagnostics.
+      }
+
+      if (!response.ok || !result.ok) {
+        throw new Error(
+          result.error ||
+            raw ||
+            `Not Delivered update failed (${response.status}).`,
+        );
+      }
 
       setMessage(
-        `${failureOrder.orderNumber}: Not Delivered — ${failureReason}.`,
+        result.message ||
+          `${failureOrder.orderNumber}: Not Delivered — ${failureReason}.`,
       );
       setFailureOrder(null);
     } catch (error) {
