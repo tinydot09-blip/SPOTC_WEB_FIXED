@@ -593,47 +593,67 @@ export default function ComboPage() {
   const finish = (includeCombo: boolean) => {
     if (!baseProduct) return;
 
-    ensureBaseProductInCart(baseProduct, {
-      ...baseState,
-      action,
-    });
-
-    if (includeCombo) {
-      selectedProducts.forEach((comboProduct) => {
-        const comboPrice = comboPriceOf(comboProduct);
-        if (comboPrice <= 0) return;
-
-        const pricedProduct = {
-          ...comboProduct,
-          price: comboPrice,
-          selling_price: comboPrice,
-          sell_price: comboPrice,
-          combo_price: comboPrice,
-          is_combo_item: true,
-          combo_parent_id: String(baseProduct.id),
-          combo_original_price: customerPriceOf(comboProduct),
-        } as BusinessProduct;
-
-        addProduct(pricedProduct, {
-          qty: 1,
-          price: comboPrice,
-          isComboItem: true,
-          comboParentId: String(baseProduct.id),
-          comboOriginalPrice: customerPriceOf(comboProduct),
-          comboPrice,
-        });
-      });
-    }
-
     try {
-      window.sessionStorage.removeItem(
-        `spotc-combo-base:${baseProduct.id}`,
-      );
-    } catch {
-      // Nothing to clean up.
-    }
+      // Always add the main/base product first.
+      ensureBaseProductInCart(baseProduct, {
+        ...baseState,
+        action,
+      });
 
-        router.push('/cart');
+      // Add combo products only when the customer taps Continue.
+      if (includeCombo) {
+        selectedProducts.forEach((comboProduct) => {
+          const comboPrice = comboPriceOf(comboProduct);
+          if (comboPrice <= 0) return;
+
+          const pricedProduct = {
+            ...comboProduct,
+            price: comboPrice,
+            selling_price: comboPrice,
+            sell_price: comboPrice,
+            combo_price: comboPrice,
+            is_combo_item: true,
+            combo_parent_id: String(baseProduct.id),
+            combo_original_price: customerPriceOf(comboProduct),
+          } as BusinessProduct;
+
+          addProduct(pricedProduct, {
+            qty: 1,
+            price: comboPrice,
+            isComboItem: true,
+            comboParentId: String(baseProduct.id),
+            comboOriginalPrice: customerPriceOf(comboProduct),
+            comboPrice,
+          });
+        });
+      }
+
+      try {
+        window.sessionStorage.removeItem(
+          `spotc-combo-base:${baseProduct.id}`,
+        );
+      } catch {
+        // Ignore storage cleanup errors.
+      }
+
+      // Add to Cart flow -> Cart.
+      if (action === 'cart') {
+        window.location.assign('/cart');
+        return;
+      }
+
+      // Buy Now flow -> Checkout directly.
+      window.location.assign('/checkout');
+    } catch (error) {
+      console.error('Finishing combo failed:', error);
+
+      // Strong navigation fallback so Skip Combo never looks unresponsive.
+      if (action === 'buy') {
+        window.location.assign('/checkout');
+      } else {
+        window.location.assign('/cart');
+      }
+    }
   };
 
   if (baseProduct === undefined) {
