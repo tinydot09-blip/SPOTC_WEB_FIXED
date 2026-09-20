@@ -402,6 +402,7 @@ export default function ComboPage() {
           'body header',
           'body nav',
           '.mobile-bottom-nav',
+          '.mobileBottomNav',
           '.bottom-nav',
           '.mobile-nav',
           '.app-bottom-nav',
@@ -594,13 +595,11 @@ export default function ComboPage() {
     if (!baseProduct) return;
 
     try {
-      // Always add the main/base product first.
       ensureBaseProductInCart(baseProduct, {
         ...baseState,
         action,
       });
 
-      // Add combo products only when the customer taps Continue.
       if (includeCombo) {
         selectedProducts.forEach((comboProduct) => {
           const comboPrice = comboPriceOf(comboProduct);
@@ -636,23 +635,10 @@ export default function ComboPage() {
         // Ignore storage cleanup errors.
       }
 
-      // Add to Cart flow -> Cart.
-      if (action === 'cart') {
-        window.location.assign('/cart');
-        return;
-      }
-
-      // Buy Now flow -> Checkout directly.
-      window.location.assign('/checkout');
+      window.location.assign(action === 'buy' ? '/checkout' : '/cart');
     } catch (error) {
       console.error('Finishing combo failed:', error);
-
-      // Strong navigation fallback so Skip Combo never looks unresponsive.
-      if (action === 'buy') {
-        window.location.assign('/checkout');
-      } else {
-        window.location.assign('/cart');
-      }
+      window.location.assign(action === 'buy' ? '/checkout' : '/cart');
     }
   };
 
