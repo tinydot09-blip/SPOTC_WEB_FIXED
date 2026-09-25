@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import {
-  Sparkles,
   CircleUserRound,
   LayoutDashboard,
   LogOut,
@@ -33,7 +32,6 @@ import { useDeliveryAvailability } from '@/lib/delivery-radius';
 import { getProducts } from '@/lib/data';
 import type { BusinessProduct } from '@/lib/types';
 import { useSpotcLanguage } from '@/components/LanguageProvider';
-import { AiAssistant } from '@/components/AiAssistant';
 
 const getProfileCompletionPercentageLocal = (
   profile: Partial<SpotcUserProfile> | null,
@@ -411,7 +409,7 @@ export function AppShell({
   const [menuOpen, setMenuOpen] =
     useState(false);
 
-  const [aiAssistantOpen, setAiAssistantOpen] =
+  const [searchOpen, setSearchOpen] =
     useState(false);
 
   const [cartCount, setCartCount] =
@@ -427,6 +425,7 @@ export function AppShell({
 
   const searchBoxRef =
     useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const accountMenuRef =
     useRef<HTMLDivElement>(null);
@@ -439,8 +438,6 @@ export function AppShell({
   pathname.startsWith('/profile') ||
   pathname.startsWith('/circle/');
 
-  const mobileNavAtTop =
-  pathname.startsWith('/offers');
 
   const profileCompletion = useMemo(
     () => getProfileCompletionPercentageLocal(spotcProfile),
@@ -776,6 +773,7 @@ export function AppShell({
   const chooseSearchSuggestion = (value: string) => {
     setSearchValue(value);
     setSearchFocused(false);
+    setSearchOpen(false);
 
     if (pathname.startsWith('/shop')) {
       window.dispatchEvent(
@@ -788,6 +786,16 @@ export function AppShell({
 
     router.push(`/shop?search=${encodeURIComponent(value)}`);
   };
+
+  useEffect(() => {
+    if (searchOpen) {
+      searchInputRef.current?.focus();
+    }
+  }, [searchOpen]);
+
+  useEffect(() => {
+    setSearchOpen(false);
+  }, [pathname]);
 
   const handleSearch = (
     value: string,
@@ -960,88 +968,6 @@ if (!signedInUser) {
     );
   })}
 </nav>
-
-          <div
-            className="spotc-header-search-wrap"
-            ref={searchBoxRef}
-          >
-            <div className="spotc-header-search">
-              <Search
-                size={17}
-                strokeWidth={2}
-              />
-
-              <input
-                type="text"
-                inputMode="search"
-                enterKeyHint="search"
-                value={searchValue}
-                placeholder={searchPlaceholder}
-                aria-label={searchPlaceholder}
-                autoComplete="off"
-                onFocus={() => setSearchFocused(true)}
-                onChange={(event) => {
-                  setSearchFocused(true);
-                  handleSearch(event.target.value);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    setSearchFocused(false);
-                  }
-
-                  if (
-                    event.key === 'Enter' &&
-                    searchValue.trim()
-                  ) {
-                    chooseSearchSuggestion(searchValue.trim());
-                  }
-                }}
-              />
-
-              {searchValue.length > 0 && (
-                <button
-                  type="button"
-                  aria-label="Clear search"
-                  onClick={() => {
-                    handleSearch('');
-                    setSearchFocused(false);
-                  }}
-                >
-                  <X size={16} />
-                </button>
-              )}
-            </div>
-
-            {searchFocused &&
-              searchValue.trim().length > 0 &&
-              searchSuggestions.length > 0 && (
-                <div
-                  className="spotc-search-suggestions"
-                  role="listbox"
-                  aria-label="Search suggestions"
-                >
-                  {searchSuggestions.map((suggestion) => (
-                    <button
-                      key={suggestion.label}
-                      type="button"
-                      className="spotc-search-suggestion"
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() =>
-                        chooseSearchSuggestion(suggestion.label)
-                      }
-                    >
-                      <Search size={17} strokeWidth={2} />
-                      <span>
-                        <strong>{suggestion.label}</strong>
-                        {suggestion.secondary && (
-                          <small>{suggestion.secondary}</small>
-                        )}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-          </div>
 
           <div className="spotc-header-account-actions">
             <div
@@ -1288,19 +1214,106 @@ if (!signedInUser) {
         {children}
       </main>
 
-      <AiAssistant
-        open={aiAssistantOpen}
-        onClose={() => setAiAssistantOpen(false)}
-        language={language}
-      />
+      {searchOpen && (
+        <div id="spotc-bottom-search" className="spotc-bottom-search-panel" role="search">
+          <button
+            type="button"
+            className="spotc-bottom-search-close"
+            aria-label="Close search"
+            onClick={() => {
+              setSearchOpen(false);
+              setSearchFocused(false);
+            }}
+          >
+            <X size={18} />
+          </button>
+          <div
+            className="spotc-header-search-wrap"
+            ref={searchBoxRef}
+          >
+            <div className="spotc-header-search">
+              <Search
+                size={17}
+                strokeWidth={2}
+              />
 
-      <nav
-        className={
-          mobileNavAtTop
-            ? 'spotc-mobile-navigation spotc-mobile-navigation-top'
-            : 'spotc-mobile-navigation spotc-mobile-navigation-bottom'
-        }
-      >
+              <input
+                ref={searchInputRef}
+                type="text"
+                inputMode="search"
+                enterKeyHint="search"
+                value={searchValue}
+                placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
+                autoComplete="off"
+                onFocus={() => setSearchFocused(true)}
+                onChange={(event) => {
+                  setSearchFocused(true);
+                  handleSearch(event.target.value);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setSearchFocused(false);
+                  }
+
+                  if (
+                    event.key === 'Enter' &&
+                    searchValue.trim()
+                  ) {
+                    chooseSearchSuggestion(searchValue.trim());
+                  }
+                }}
+              />
+
+              {searchValue.length > 0 && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => {
+                    handleSearch('');
+                    setSearchFocused(false);
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+
+            {searchFocused &&
+              searchValue.trim().length > 0 &&
+              searchSuggestions.length > 0 && (
+                <div
+                  className="spotc-search-suggestions"
+                  role="listbox"
+                  aria-label="Search suggestions"
+                >
+                  {searchSuggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.label}
+                      type="button"
+                      className="spotc-search-suggestion"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() =>
+                        chooseSearchSuggestion(suggestion.label)
+                      }
+                    >
+                      <Search size={17} strokeWidth={2} />
+                      <span>
+                        <strong>{suggestion.label}</strong>
+                        {suggestion.secondary && (
+                          <small>{suggestion.secondary}</small>
+                        )}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+          </div>
+
+        </div>
+      )}
+
+      <nav className="spotc-mobile-navigation spotc-mobile-navigation-bottom">
         <Link
           href="/shop"
           className={
@@ -1323,18 +1336,34 @@ if (!signedInUser) {
 
         <button
           type="button"
-          className="spotc-mobile-nav-link spotc-mobile-ai-nav-button spotc-mobile-ai-link"
-          aria-label="Open SPOTC AI Assistant"
-          aria-haspopup="dialog"
-          aria-expanded={aiAssistantOpen}
-          onClick={() => setAiAssistantOpen(true)}
+          className={searchOpen
+            ? 'spotc-mobile-nav-link spotc-mobile-search-link spotc-mobile-nav-link-active'
+            : 'spotc-mobile-nav-link spotc-mobile-search-link'}
+          aria-label="Search products"
+          aria-expanded={searchOpen}
+          aria-controls="spotc-bottom-search"
+          onClick={() => {
+            setSearchOpen((open) => !open);
+            setSearchFocused(true);
+          }}
         >
-          <span className="spotc-mobile-ai-icon" aria-hidden="true">
-            <Sparkles />
-          </span>
-          <span className="spotc-mobile-ai-label">AI Assistance</span>
-          <small>Ask Anything</small>
+          <Search className="spotc-mobile-nav-icon" aria-hidden="true" />
+          <span>Search</span>
         </button>
+
+        <a
+          href="https://wa.me/918072098066?text=Hi%20SPOTC%2C%20I%20need%20help."
+          target="_blank"
+          rel="noopener noreferrer"
+          className="spotc-mobile-nav-link spotc-mobile-whatsapp-link"
+          aria-label="Chat with SPOTC on WhatsApp"
+        >
+          <svg className="spotc-mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z" />
+            <path d="M8.5 8.5c.6 3.1 2 4.5 5 5 .4.1.8 0 1.1-.3l.7-.7 2 1-.5 1.3c-.3.8-1.1 1.3-2 1.2-4.3-.5-6.8-3-7.3-7.3-.1-.9.4-1.7 1.2-2l1.3-.5 1 2-.7.7c-.3.3-.4.7-.3 1.1" />
+          </svg>
+          <span>WhatsApp</span>
+        </a>
 
         <Link
           href="/offers"
@@ -1538,8 +1567,7 @@ if (!signedInUser) {
   grid-template-columns:
     220px
     auto
-    minmax(320px, 1fr)
-    auto;
+    minmax(0, 1fr);
 
   align-items: center;
   gap: 24px;
@@ -1797,6 +1825,7 @@ if (!signedInUser) {
         .spotc-header-account-actions {
           position: relative;
           z-index: 5001;
+          justify-self: end;
           display: flex;
           align-items: center;
           justify-content: flex-end;
@@ -2147,6 +2176,36 @@ if (!signedInUser) {
 
         }
 
+        .spotc-bottom-search-panel {
+          position: fixed;
+          right: 12px;
+          bottom: calc(84px + env(safe-area-inset-bottom, 0px) + 8px);
+          left: 12px;
+          z-index: 6000;
+          max-width: 520px;
+          margin: 0 auto;
+          padding: 12px 44px 12px 12px;
+          border: 1px solid #e9dfd3;
+          border-radius: 16px;
+          background: #fff;
+          box-shadow: 0 12px 35px rgba(0, 0, 0, .2);
+        }
+
+        .spotc-bottom-search-close {
+          position: absolute;
+          top: 13px;
+          right: 12px;
+          display: grid;
+          place-items: center;
+          width: 32px;
+          height: 32px;
+          border: 0;
+          border-radius: 50%;
+          background: #f5f2ed;
+          color: #222;
+          cursor: pointer;
+        }
+
         .spotc-mobile-navigation {
           display: none;
         }
@@ -2160,8 +2219,7 @@ if (!signedInUser) {
             );
             grid-template-columns:
               auto
-              minmax(180px, 1fr)
-              auto;
+              minmax(0, 1fr);
             gap: 12px;
           }
 
@@ -2216,17 +2274,17 @@ if (!signedInUser) {
             max-width: 100%;
             grid-template-columns:
               auto
-              minmax(0, 1fr)
-              auto;
+              minmax(0, 1fr);
             gap: 6px;
           }
 
           .spotc-search-suggestions {
-            position: fixed;
-            top: 58px;
-            left: 8px;
-            right: 8px;
-            max-height: min(60vh, 430px);
+            position: absolute;
+            top: auto;
+            bottom: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            max-height: min(50vh, 430px);
             border-radius: 12px;
           }
 
@@ -2344,8 +2402,8 @@ if (!signedInUser) {
 
   display: grid;
   grid-template-columns:
-    repeat(3, minmax(0, 1fr));
-  grid-template-areas: "shop ai offers";
+    repeat(4, minmax(0, 1fr));
+  grid-template-areas: "shop search whatsapp offers";
   align-items: stretch;
   gap: 0;
 
@@ -2403,8 +2461,12 @@ if (!signedInUser) {
   grid-area: shop;
 }
 
-.spotc-mobile-ai-link {
-  grid-area: ai;
+.spotc-mobile-search-link {
+  grid-area: search;
+}
+
+.spotc-mobile-whatsapp-link {
+  grid-area: whatsapp;
 }
 
 .spotc-mobile-offers-link {
