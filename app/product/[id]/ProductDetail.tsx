@@ -2159,7 +2159,6 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
   };
 
   const addToCart = () => {
-    if (openComboPage('cart')) return;
     if (!validatePurchaseOptions()) return;
 
     saveSelectedGiftsForCart();
@@ -2183,7 +2182,7 @@ const rawStock = numberValue(record.stock_qty ?? record.stock_quantity);
       spotc_action: 'add_to_cart',
     });
 
-    alert(`${qty} ${qty === 1 ? 'product' : 'products'} added to cart`);
+    router.push('/cart');
   };
 
   const buyNow = () => {

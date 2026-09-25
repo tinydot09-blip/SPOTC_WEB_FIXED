@@ -2708,34 +2708,10 @@ export function ProductGrid({
                         return;
                       }
 
-                      if (comboEligible) {
-
-                        try {
-                          window.sessionStorage.setItem(
-                            `spotc-combo-base:${item.id}`,
-                            JSON.stringify({
-                              productId: String(item.id),
-                              size: '',
-                              color: '',
-                              qty: 1,
-                              tryAtHome: false,
-                              action: 'cart',
-                            }),
-                          );
-                        } catch {
-                          // Combo page can still load the product.
-                        }
-
-                        router.push(
-                          `/combo/${encodeURIComponent(String(item.id))}?action=cart`,
-                        );
-                        return;
-                      }
-
                       addProduct(item, {
                         tryAtHome: false,
                       });
-                      alert(t('1 product added'));
+                      router.push('/cart');
                     }}
                   >
                     <ShoppingBag size={16} />

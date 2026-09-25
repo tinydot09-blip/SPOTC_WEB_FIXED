@@ -1,17 +1,13 @@
 'use client';
-
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Check, Gift, Search } from 'lucide-react';
-
 import { addProduct, readCart, updateCartQuantity, writeCart } from '@/lib/cart';
 import { getProductById, getProducts } from '@/lib/data';
 import type { BusinessProduct } from '@/lib/types';
 import type { CartItem } from '@/lib/cart';
 import { imageOf, text, titleOf } from '@/lib/utils';
-
 type ProductRecord = BusinessProduct & Record<string, unknown>;
-
 type ComboBaseState = {
   productId: string;
   size: string;
@@ -20,13 +16,11 @@ type ComboBaseState = {
   tryAtHome: boolean;
   action: 'cart' | 'buy';
 };
-
 const numberValue = (value: unknown): number | null => {
   if (value === null || value === undefined || value === '') return null;
   const parsed = Number(String(value).replace(/[₹,%]/g, '').trim());
   return Number.isFinite(parsed) ? parsed : null;
 };
-
 const booleanValue = (value: unknown): boolean | null => {
   if (typeof value === 'boolean') return value;
   const normalized = String(value ?? '').trim().toLowerCase();
@@ -34,10 +28,8 @@ const booleanValue = (value: unknown): boolean | null => {
   if (['false', 'no', '0'].includes(normalized)) return false;
   return null;
 };
-
 const customerPriceOf = (product: BusinessProduct): number => {
   const record = product as ProductRecord;
-
   const candidates = [
     record.offer_price,
     record.offerPrice,
@@ -52,19 +44,15 @@ const customerPriceOf = (product: BusinessProduct): number => {
     record.mrp,
     record.old_price,
   ];
-
   for (const candidate of candidates) {
     const value = numberValue(candidate);
     if (value !== null && value > 0) return value;
   }
-
   return 0;
 };
-
 const originalPriceOf = (product: BusinessProduct): number => {
   const record = product as ProductRecord;
   const sellingPrice = customerPriceOf(product);
-
   const candidates = [
     record.mrp,
     record.old_price,
@@ -76,20 +64,16 @@ const originalPriceOf = (product: BusinessProduct): number => {
     record.list_price,
     record.listPrice,
   ];
-
   for (const candidate of candidates) {
     const value = numberValue(candidate);
     if (value !== null && value > sellingPrice) {
       return value;
     }
   }
-
   return sellingPrice;
 };
-
 const productColorOf = (product: BusinessProduct): string => {
   const record = product as ProductRecord;
-
   const direct = text(
     record.color ||
       record.colour ||
@@ -99,23 +83,17 @@ const productColorOf = (product: BusinessProduct): string => {
       record.colour_name ||
       '',
   ).trim();
-
   if (direct) return direct;
-
   if (Array.isArray(record.colors) && record.colors.length > 0) {
     return text(record.colors[0]).trim();
   }
-
   if (Array.isArray(record.colours) && record.colours.length > 0) {
     return text(record.colours[0]).trim();
   }
-
   return '';
 };
-
 const productSizeOf = (product: BusinessProduct): string => {
   const record = product as ProductRecord;
-
   return text(
     record.size ||
       record.selected_size ||
@@ -123,62 +101,48 @@ const productSizeOf = (product: BusinessProduct): string => {
       '',
   ).trim();
 };
-
 const comboPriceOf = (product: BusinessProduct): number => {
   const sellingPrice = customerPriceOf(product);
   if (sellingPrice <= 0) return 0;
-
   // Internal launch combo pricing rule.
   // Keep the percentage out of customer-facing UI.
   return Math.max(1, Math.round(sellingPrice * 0.82));
 };
-
 const categoryOf = (product: BusinessProduct): string => {
   const record = product as ProductRecord;
-
   return text(
     record.main_category ||
       record.category ||
       record.sub_category,
   ).trim();
 };
-
 const isComboProduct = (product: BusinessProduct): boolean => {
   const record = product as ProductRecord;
-
   const stock = numberValue(
     record.stock_qty ?? record.stock_quantity,
   );
-
   const active =
     booleanValue(record.isActive ?? record.is_active) !== false;
-
   const inStock =
     booleanValue(record.is_in_stock) !== false &&
     !(stock !== null && stock <= 0);
-
   return active && inStock && customerPriceOf(product) > 0;
 };
-
 const ensureBaseProductInCart = (
   product: BusinessProduct,
   base: ComboBaseState,
 ) => {
   const selectedColor = base.color || productColorOf(product);
   const selectedSize = base.size || productSizeOf(product);
-
   const existing = readCart().find(
     (item) =>
       String(item.id) === String(product.id) &&
       (item.size || '') === selectedSize &&
       (item.color || '') === selectedColor,
   );
-
   const desiredQty = Math.max(1, Number(base.qty) || 1);
-
   if (existing) {
     const existingQty = Math.max(1, Number(existing.qty) || 1);
-
     if (desiredQty > existingQty) {
       updateCartQuantity(
         String(product.id),
@@ -195,22 +159,18 @@ const ensureBaseProductInCart = (
       tryAtHome: base.tryAtHome,
     });
   }
-
   // Preserve the hero/main product metadata that the cart UI needs.
   // This fixes missing MRP/discount and missing colour after a combo is added.
   const originalPrice = originalPriceOf(product);
   const sellingPrice = customerPriceOf(product);
   const productRecord = product as ProductRecord;
-
   const nextCart = readCart().map((item) => {
     if (String(item.id) !== String(product.id)) {
       return item;
     }
-
     if ((item.size || '') !== selectedSize) {
       return item;
     }
-
     return {
       ...item,
       color: item.color || selectedColor,
@@ -234,22 +194,16 @@ const ensureBaseProductInCart = (
           : productRecord.discount,
     };
   });
-
   writeCart(nextCart);
 };
-
-
 const stableComboHash = (value: string): number => {
   let hash = 2166136261;
-
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-
   return hash >>> 0;
 };
-
 const shuffledComboProducts = (
   items: BusinessProduct[],
   seed: string,
@@ -261,19 +215,15 @@ const shuffledComboProducts = (
     const bKey = stableComboHash(
       `${seed}|${String(b.id)}|${titleOf(b)}|${categoryOf(b)}`,
     );
-
     return aKey - bKey;
   });
-
 export default function ComboPage() {
   const params = useParams<{ id: string | string[] }>();
   const router = useRouter();
   const searchParams = useSearchParams();
-
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const action =
     searchParams.get('action') === 'buy' ? 'buy' : 'cart';
-
   const [baseProduct, setBaseProduct] =
     useState<BusinessProduct | null | undefined>(undefined);
   const [products, setProducts] = useState<BusinessProduct[]>([]);
@@ -289,18 +239,14 @@ export default function ComboPage() {
     tryAtHome: false,
     action,
   });
-
   useEffect(() => {
     let active = true;
-
     try {
       const raw = window.sessionStorage.getItem(
         `spotc-combo-base:${id}`,
       );
-
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<ComboBaseState>;
-
         setBaseState({
           productId: String(id || ''),
           size: String(parsed.size || ''),
@@ -313,7 +259,6 @@ export default function ComboPage() {
     } catch {
       // Continue with safe defaults.
     }
-
     // FAST COMBO ENTRY
     // ProductGrid keeps the catalogue in memory. Use it immediately so tapping
     // "Choose Combo" does not wait for another full Firestore catalogue load.
@@ -324,12 +269,10 @@ export default function ComboPage() {
           __spotcProductsCacheAt?: number;
         }
       ).__spotcProductsCache;
-
       if (Array.isArray(browserCache) && browserCache.length > 0) {
         const cachedBaseProduct = browserCache.find(
           (item) => String(item.id) === String(id),
         );
-
         if (cachedBaseProduct) {
           setBaseProduct(cachedBaseProduct);
           setProducts(
@@ -344,19 +287,15 @@ export default function ComboPage() {
     } catch {
       // Fall back to the normal data request below.
     }
-
     // Refresh in the background so stock/prices still stay current.
     Promise.all([getProductById(String(id)), getProducts()])
       .then(([loadedBaseProduct, allProducts]) => {
         if (!active) return;
-
         setBaseProduct(loadedBaseProduct);
-
         if (!loadedBaseProduct) {
           setProducts([]);
           return;
         }
-
         setProducts(
           allProducts.filter(
             (item) =>
@@ -367,36 +306,27 @@ export default function ComboPage() {
       })
       .catch(() => {
         if (!active) return;
-
         // If the cached catalogue already painted the combo page, keep it.
         // Only show the error state when there was no usable cached product.
         setBaseProduct((current) => current ?? null);
         setProducts((current) => current);
       });
-
     return () => {
       active = false;
     };
   }, [id, action]);
-
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
     const hiddenElements = new Map<HTMLElement, string>();
-
     const applyMobileComboChrome = () => {
       const isMobile = window.matchMedia('(max-width: 800px)').matches;
-
       hiddenElements.forEach((previousDisplay, element) => {
         element.style.display = previousDisplay;
       });
       hiddenElements.clear();
-
       if (!isMobile) return;
-
       const comboRoot = document.querySelector('.combo-page');
       if (!comboRoot) return;
-
       const candidates = document.querySelectorAll<HTMLElement>(
         [
           'body header',
@@ -412,14 +342,11 @@ export default function ComboPage() {
           '[data-bottom-nav]',
         ].join(','),
       );
-
       candidates.forEach((element) => {
         if (comboRoot.contains(element)) return;
-
         const classText = String(element.className || '').toLowerCase();
         const elementText = (element.textContent || '').toLowerCase();
         const style = window.getComputedStyle(element);
-
         const looksLikeAppChrome =
           element.tagName === 'HEADER' ||
           element.tagName === 'NAV' ||
@@ -435,45 +362,35 @@ export default function ComboPage() {
               elementText.includes('ai assistance')
             )
           );
-
         if (!looksLikeAppChrome) return;
-
         hiddenElements.set(element, element.style.display);
         element.style.display = 'none';
       });
     };
-
     const frame = window.requestAnimationFrame(applyMobileComboChrome);
     window.addEventListener('resize', applyMobileComboChrome);
-
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', applyMobileComboChrome);
-
       hiddenElements.forEach((previousDisplay, element) => {
         element.style.display = previousDisplay;
       });
       hiddenElements.clear();
     };
   }, []);
-
   useEffect(() => {
     if (typeof window === 'undefined' || !id) return;
-
     try {
       const raw = window.localStorage.getItem(`spotc-saved-combo:${id}`);
       if (!raw) return;
-
       const parsed = JSON.parse(raw) as { selectedIds?: unknown };
       if (!Array.isArray(parsed.selectedIds)) return;
-
       const validIds = parsed.selectedIds
         .map((value) => String(value))
         .filter((value) =>
           products.some((product) => String(product.id) === value),
         )
         .slice(0, 5);
-
       if (validIds.length) {
         setSelectedIds(validIds);
       }
@@ -481,10 +398,8 @@ export default function ComboPage() {
       // Ignore invalid saved combo data.
     }
   }, [id, products]);
-
   const saveComboSelection = () => {
     if (typeof window === 'undefined' || !id) return;
-
     try {
       window.localStorage.setItem(
         `spotc-saved-combo:${id}`,
@@ -500,7 +415,6 @@ export default function ComboPage() {
       window.setTimeout(() => setSavedMessage(''), 1500);
     }
   };
-
   const categories = useMemo(
     () => [
       'All',
@@ -510,20 +424,15 @@ export default function ComboPage() {
     ],
     [products],
   );
-
   const visibleProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
-
     const filtered = products.filter((item) => {
       const itemCategory = categoryOf(item);
       const matchesCategory =
         category === 'All' || itemCategory === category;
-
       if (!matchesCategory) return false;
       if (!q) return true;
-
       const record = item as ProductRecord;
-
       return [
         titleOf(item),
         itemCategory,
@@ -534,7 +443,6 @@ export default function ComboPage() {
         .toLowerCase()
         .includes(q);
     });
-
     // Stable shuffle for every category so similar colour/style variants
     // are mixed instead of following Firestore upload/order sequence.
     // The order stays stable while this combo page is open/revisited.
@@ -543,7 +451,6 @@ export default function ComboPage() {
       `${String(id || '')}|${category}|${q || 'browse'}`,
     );
   }, [products, category, search, id]);
-
   const selectedProducts = useMemo(
     () =>
       products.filter((item) =>
@@ -551,7 +458,6 @@ export default function ComboPage() {
       ),
     [products, selectedIds],
   );
-
   const selectedSavings = useMemo(
     () =>
       selectedProducts.reduce((total, item) => {
@@ -561,7 +467,6 @@ export default function ComboPage() {
       }, 0),
     [selectedProducts],
   );
-
   const selectedComboTotal = useMemo(
     () =>
       selectedProducts.reduce(
@@ -570,7 +475,6 @@ export default function ComboPage() {
       ),
     [selectedProducts],
   );
-
   const payableTotal = useMemo(
     () =>
       baseProduct
@@ -578,33 +482,26 @@ export default function ComboPage() {
         : selectedComboTotal,
     [baseProduct, selectedComboTotal],
   );
-
   const toggleProduct = (productId: string) => {
     setSelectedIds((current) => {
       if (current.includes(productId)) {
         return current.filter((idValue) => idValue !== productId);
       }
-
       if (current.length >= 5) return current;
-
       return [...current, productId];
     });
   };
-
   const finish = (includeCombo: boolean) => {
     if (!baseProduct) return;
-
     try {
       ensureBaseProductInCart(baseProduct, {
         ...baseState,
         action,
       });
-
       if (includeCombo) {
         selectedProducts.forEach((comboProduct) => {
           const comboPrice = comboPriceOf(comboProduct);
           if (comboPrice <= 0) return;
-
           const pricedProduct = {
             ...comboProduct,
             price: comboPrice,
@@ -615,7 +512,6 @@ export default function ComboPage() {
             combo_parent_id: String(baseProduct.id),
             combo_original_price: customerPriceOf(comboProduct),
           } as BusinessProduct;
-
           addProduct(pricedProduct, {
             qty: 1,
             price: comboPrice,
@@ -626,7 +522,6 @@ export default function ComboPage() {
           });
         });
       }
-
       try {
         window.sessionStorage.removeItem(
           `spotc-combo-base:${baseProduct.id}`,
@@ -634,14 +529,12 @@ export default function ComboPage() {
       } catch {
         // Ignore storage cleanup errors.
       }
-
-      window.location.assign(action === 'buy' ? '/checkout' : '/cart');
+      window.location.assign('/cart');
     } catch (error) {
       console.error('Finishing combo failed:', error);
-      window.location.assign(action === 'buy' ? '/checkout' : '/cart');
+      alert('Unable to update your cart. Please try again.');
     }
   };
-
   if (baseProduct === undefined) {
     return (
       <main className="combo-page combo-loading">
@@ -649,7 +542,6 @@ export default function ComboPage() {
       </main>
     );
   }
-
   if (!baseProduct) {
     return (
       <main className="combo-page combo-empty-page">
@@ -660,9 +552,7 @@ export default function ComboPage() {
       </main>
     );
   }
-
   const basePrice = customerPriceOf(baseProduct);
-
   return (
     <main className="combo-page">
       <div className="combo-shell">
@@ -675,28 +565,23 @@ export default function ComboPage() {
           >
             <ArrowLeft />
           </button>
-
           <div>
             <small>18% COMBO OFFER UNLOCKED</small>
             <h1>Choose up to 5 favourites</h1>
           </div>
-
           <strong className="combo-count">
             {selectedIds.length} / 5
           </strong>
         </header>
-
         <section className="combo-base-card">
           <img
             src={imageOf(baseProduct)}
             alt={titleOf(baseProduct)}
           />
-
           <div className="combo-base-copy">
             <small>YOUR ITEM</small>
             <strong>{titleOf(baseProduct)}</strong>
             <b>₹{Math.round(basePrice)}</b>
-
             {baseState.tryAtHome && (
               <span className="combo-try-badge">
                 ✓ Try at Home
@@ -704,7 +589,6 @@ export default function ComboPage() {
             )}
           </div>
         </section>
-
         <div className="combo-search">
           <Search aria-hidden="true" />
           <input
@@ -714,7 +598,6 @@ export default function ComboPage() {
             aria-label="Search combo products"
           />
         </div>
-
         <div className="combo-categories">
           {categories.map((categoryName) => (
             <button
@@ -729,7 +612,6 @@ export default function ComboPage() {
             </button>
           ))}
         </div>
-
         <section className="combo-grid">
           {visibleProducts.length ? (
             visibleProducts.map((item) => {
@@ -739,7 +621,6 @@ export default function ComboPage() {
               const normalPrice = customerPriceOf(item);
               const disabled =
                 selectedIds.length >= 5 && !selected;
-
               return (
                 <button
                   type="button"
@@ -756,17 +637,14 @@ export default function ComboPage() {
                       src={imageOf(item)}
                       alt={titleOf(item)}
                     />
-
                     {selected && (
                       <span className="combo-check">
                         <Check aria-hidden="true" />
                       </span>
                     )}
                   </span>
-
                   <span className="combo-product-copy">
                     <strong>{titleOf(item)}</strong>
-
                     <span className="combo-price">
                       <b>₹{Math.round(comboPrice)}</b>
                       {normalPrice > comboPrice && (
@@ -776,7 +654,6 @@ export default function ComboPage() {
                         </>
                       )}
                     </span>
-
                     <small>
                       {selected ? 'Selected' : 'Choose Combo'}
                     </small>
@@ -796,7 +673,6 @@ export default function ComboPage() {
           )}
         </section>
       </div>
-
       {selectedProducts.length > 0 && (
         <section
           className="combo-selected-strip"
@@ -811,7 +687,6 @@ export default function ComboPage() {
                   <strong>₹{Math.round(payableTotal)}</strong>
                 </div>
               </div>
-
               <div
                 className="combo-progress"
                 aria-label={`${selectedProducts.length} of 5 combo items selected`}
@@ -823,7 +698,6 @@ export default function ComboPage() {
                   />
                 ))}
               </div>
-
               <div className="combo-summary-bottom">
                 <div className="combo-selected-items">
                   {selectedProducts.map((item) => (
@@ -839,7 +713,6 @@ export default function ComboPage() {
                     </button>
                   ))}
                 </div>
-
                 <div className="combo-savings">
                   <small>18% combo saving</small>
                   <strong>₹{Math.round(selectedSavings)}</strong>
@@ -849,7 +722,6 @@ export default function ComboPage() {
           </div>
         </section>
       )}
-
       <footer className="combo-footer">
         <div className="combo-footer-inner">
           <div className="combo-footer-copy">
@@ -864,7 +736,6 @@ export default function ComboPage() {
                 : 'You can continue without a combo.'}
             </span>
           </div>
-
           <div className="combo-footer-actions">
             <button
               type="button"
@@ -873,7 +744,6 @@ export default function ComboPage() {
             >
               Skip Combo
             </button>
-
             <button
               type="button"
               className="combo-save"
@@ -882,7 +752,6 @@ export default function ComboPage() {
             >
               {savedMessage || 'Save'}
             </button>
-
             <button
               type="button"
               className="combo-continue"
@@ -894,7 +763,6 @@ export default function ComboPage() {
           </div>
         </div>
       </footer>
-
       <style jsx>{`
         .combo-page {
           min-height: 100vh;
@@ -902,13 +770,11 @@ export default function ComboPage() {
           padding-bottom: 104px;
           color: #171717;
         }
-
         .combo-shell {
           width: min(1180px, calc(100% - 32px));
           margin: 0 auto;
           padding: 24px 0 36px;
         }
-
         .combo-topbar {
           display: grid;
           grid-template-columns: 44px 1fr auto;
@@ -916,7 +782,6 @@ export default function ComboPage() {
           gap: 14px;
           margin-bottom: 18px;
         }
-
         .combo-back {
           width: 42px;
           height: 42px;
@@ -927,12 +792,10 @@ export default function ComboPage() {
           place-items: center;
           cursor: pointer;
         }
-
         .combo-back :global(svg) {
           width: 20px;
           height: 20px;
         }
-
         .combo-topbar small {
           display: block;
           margin-bottom: 3px;
@@ -941,13 +804,11 @@ export default function ComboPage() {
           letter-spacing: 0.08em;
           color: #8a6200;
         }
-
         .combo-topbar h1 {
           margin: 0;
           font-size: clamp(22px, 3vw, 32px);
           line-height: 1.1;
         }
-
         .combo-count {
           padding: 9px 13px;
           border-radius: 999px;
@@ -955,7 +816,6 @@ export default function ComboPage() {
           color: #fff;
           white-space: nowrap;
         }
-
         .combo-base-card {
           display: grid;
           grid-template-columns: 94px 1fr;
@@ -966,7 +826,6 @@ export default function ComboPage() {
           border-radius: 16px;
           background: #fff;
         }
-
         .combo-base-card img {
           width: 94px;
           height: 94px;
@@ -974,7 +833,6 @@ export default function ComboPage() {
           border-radius: 12px;
           background: #f2f2f2;
         }
-
         .combo-base-copy {
           min-width: 0;
           display: flex;
@@ -983,23 +841,19 @@ export default function ComboPage() {
           justify-content: center;
           gap: 4px;
         }
-
         .combo-base-copy > small {
           font-size: 10px;
           font-weight: 900;
           letter-spacing: 0.08em;
           color: #777;
         }
-
         .combo-base-copy > strong {
           font-size: 15px;
           line-height: 1.25;
         }
-
         .combo-base-copy > b {
           font-size: 18px;
         }
-
         .combo-try-badge {
           margin-top: 2px;
           padding: 4px 8px;
@@ -1008,7 +862,6 @@ export default function ComboPage() {
           font-size: 11px;
           font-weight: 800;
         }
-
         .combo-search {
           min-height: 46px;
           display: flex;
@@ -1020,13 +873,11 @@ export default function ComboPage() {
           border-radius: 13px;
           background: #fff;
         }
-
         .combo-search :global(svg) {
           width: 18px;
           height: 18px;
           color: #666;
         }
-
         .combo-search input {
           width: 100%;
           border: 0;
@@ -1034,7 +885,6 @@ export default function ComboPage() {
           background: transparent;
           font: inherit;
         }
-
         .combo-categories {
           display: flex;
           gap: 8px;
@@ -1042,11 +892,9 @@ export default function ComboPage() {
           padding: 2px 0 14px;
           scrollbar-width: none;
         }
-
         .combo-categories::-webkit-scrollbar {
           display: none;
         }
-
         .combo-categories button {
           flex: 0 0 auto;
           border: 1px solid #ddd;
@@ -1056,19 +904,16 @@ export default function ComboPage() {
           font-weight: 700;
           cursor: pointer;
         }
-
         .combo-categories button.active {
           border-color: #171717;
           background: #171717;
           color: #fff;
         }
-
         .combo-grid {
           display: grid;
           grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 14px;
         }
-
         .combo-product-card {
           border: 1px solid #e4e4e4;
           border-radius: 16px;
@@ -1078,31 +923,26 @@ export default function ComboPage() {
           text-align: left;
           cursor: pointer;
         }
-
         .combo-product-card.selected {
           border: 2px solid #159447;
           box-shadow: 0 0 0 1px rgba(21, 148, 71, 0.08);
         }
-
         .combo-product-card:disabled {
           opacity: 0.48;
           cursor: not-allowed;
         }
-
         .combo-image-wrap {
           display: block;
           position: relative;
           aspect-ratio: 1 / 1;
           background: #f2f2f2;
         }
-
         .combo-image-wrap img {
           display: block;
           width: 100%;
           height: 100%;
           object-fit: cover;
         }
-
         .combo-check {
           position: absolute;
           top: 9px;
@@ -1115,40 +955,33 @@ export default function ComboPage() {
           background: #171717;
           color: #fff;
         }
-
         .combo-check :global(svg) {
           width: 17px;
           height: 17px;
         }
-
         .combo-product-copy {
           display: block;
           padding: 11px;
         }
-
         .combo-product-copy > strong {
           display: block;
           min-height: 36px;
           font-size: 13px;
           line-height: 1.35;
         }
-
         .combo-price {
           display: flex;
           align-items: baseline;
           gap: 7px;
           margin-top: 6px;
         }
-
         .combo-price b {
           font-size: 17px;
         }
-
         .combo-price del {
           color: #888;
           font-size: 12px;
         }
-
         .combo-off-badge {
           display: inline-flex;
           align-items: center;
@@ -1162,13 +995,11 @@ export default function ComboPage() {
           line-height: 1;
           white-space: nowrap;
         }
-
         .combo-product-copy small {
           display: block;
           margin-top: 7px;
           font-weight: 800;
         }
-
         .combo-no-products {
           grid-column: 1 / -1;
           min-height: 220px;
@@ -1182,11 +1013,9 @@ export default function ComboPage() {
           background: #fff;
           color: #666;
         }
-
         .combo-no-products p {
           margin: 0;
         }
-
         .combo-selected-strip {
           position: fixed;
           left: 0;
@@ -1197,71 +1026,59 @@ export default function ComboPage() {
           border-top: 1px solid #d7eadc;
           box-shadow: 0 -8px 26px rgba(0, 0, 0, 0.06);
         }
-
         .combo-selected-strip-inner {
           width: min(1180px, calc(100% - 32px));
           margin: 0 auto;
           padding: 12px 0;
         }
-
         .combo-summary-main {
           display: grid;
           gap: 10px;
         }
-
         .combo-summary-top {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 16px;
         }
-
         .combo-summary-top > strong {
           font-size: 18px;
           line-height: 1.1;
         }
-
         .combo-summary-total {
           display: flex;
           align-items: baseline;
           gap: 8px;
         }
-
         .combo-summary-total small {
           color: #666;
           font-size: 12px;
           font-weight: 700;
         }
-
         .combo-summary-total strong {
           font-size: 26px;
           line-height: 1;
           letter-spacing: -0.02em;
         }
-
         .combo-progress {
           display: grid;
           grid-template-columns: repeat(5, 1fr);
           gap: 5px;
         }
-
         .combo-progress span {
           height: 5px;
           border-radius: 999px;
           background: #d7ded9;
         }
-
         .combo-progress span.active {
           background: #159447;
         }
-
         .combo-summary-bottom {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 12px;
         }
-
         .combo-selected-items {
           min-width: 0;
           display: grid;
@@ -1271,7 +1088,6 @@ export default function ComboPage() {
           align-items: center;
           justify-content: start;
         }
-
         .combo-selected-item {
           position: relative;
           flex: 0 0 auto;
@@ -1284,14 +1100,12 @@ export default function ComboPage() {
           box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);
           cursor: pointer;
         }
-
         .combo-selected-item img {
           width: 100%;
           height: 100%;
           object-fit: cover;
           border-radius: 10px;
         }
-
         .combo-selected-item span {
           position: absolute;
           top: -6px;
@@ -1307,7 +1121,6 @@ export default function ComboPage() {
           font-weight: 900;
           line-height: 1;
         }
-
         .combo-savings {
           flex: 0 0 auto;
           display: flex;
@@ -1316,19 +1129,16 @@ export default function ComboPage() {
           padding-left: 12px;
           border-left: 1px solid #cfe3d5;
         }
-
         .combo-savings small {
           color: #52705b;
           font-size: 12px;
           font-weight: 700;
         }
-
         .combo-savings strong {
           color: #0b8f3d;
           font-size: 22px;
           line-height: 1;
         }
-
         .combo-footer {
           position: fixed;
           left: 0;
@@ -1338,7 +1148,6 @@ export default function ComboPage() {
           border-top: 1px solid #ddd;
           background: rgba(255, 255, 255, 0.97);
         }
-
         .combo-footer-inner {
           width: min(1180px, calc(100% - 32px));
           min-height: 86px;
@@ -1348,22 +1157,18 @@ export default function ComboPage() {
           justify-content: space-between;
           gap: 18px;
         }
-
         .combo-footer-copy {
           display: grid;
           gap: 2px;
         }
-
         .combo-footer-copy span {
           color: #666;
           font-size: 12px;
         }
-
         .combo-footer-actions {
           display: flex;
           gap: 10px;
         }
-
         .combo-footer-actions button {
           min-height: 44px;
           padding: 0 18px;
@@ -1371,34 +1176,28 @@ export default function ComboPage() {
           font-weight: 800;
           cursor: pointer;
         }
-
         .combo-skip {
           border: 1px solid #d8d8d8;
           background: #fff;
         }
-
         .combo-save {
           border: 1px solid #171717;
           background: #fff;
           color: #171717;
         }
-
         .combo-save:disabled {
           opacity: 0.4;
           cursor: not-allowed;
         }
-
         .combo-continue {
           border: 1px solid #171717;
           background: #171717;
           color: #fff;
         }
-
         .combo-continue:disabled {
           opacity: 0.4;
           cursor: not-allowed;
         }
-
         .combo-loading,
         .combo-empty-page {
           display: grid;
@@ -1406,81 +1205,64 @@ export default function ComboPage() {
           align-content: center;
           gap: 12px;
         }
-
         @media (max-width: 800px) {
           .combo-shell {
             width: min(100% - 20px, 680px);
             padding-top: 12px;
           }
-
           .combo-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 10px;
           }
-
           .combo-topbar {
             grid-template-columns: 40px 1fr auto;
             gap: 9px;
           }
-
           .combo-topbar h1 {
             font-size: 20px;
           }
-
           .combo-count {
             padding: 7px 10px;
             font-size: 12px;
           }
-
           .combo-selected-strip {
             bottom: 64px;
           }
-
           .combo-selected-strip-inner {
             width: 100%;
             padding: 10px 12px;
           }
-
           .combo-summary-main {
             gap: 8px;
           }
-
           .combo-summary-top > strong {
             font-size: 17px;
           }
-
           .combo-summary-total strong {
             font-size: 24px;
           }
-
           .combo-summary-bottom {
             gap: 8px;
             overflow: visible;
           }
-
           .combo-selected-items {
             grid-template-columns: repeat(5, 40px);
             gap: 6px;
             overflow: visible;
           }
-
           .combo-selected-item {
             width: 40px;
             height: 40px;
           }
-
           .combo-savings {
             padding-left: 9px;
           }
-
           .combo-savings small {
             font-size: 11px;
           }
-
           .combo-savings strong {
             font-size: 20px;
           }
-
           .combo-footer-inner {
             width: 100%;
             padding: 10px;
@@ -1489,26 +1271,21 @@ export default function ComboPage() {
             flex-direction: column;
             gap: 8px;
           }
-
           .combo-footer-copy {
             display: none;
           }
-
           .combo-footer-actions {
             width: 100%;
           }
-
           .combo-footer-actions button {
             flex: 1;
             min-width: 0;
             padding: 0 8px;
             font-size: 12px;
           }
-
           .combo-page {
             padding-bottom: 170px;
           }
-
           .combo-page:not(:has(.combo-selected-strip)) {
             padding-bottom: 76px;
           }
