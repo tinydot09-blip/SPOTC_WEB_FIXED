@@ -1,5 +1,4 @@
 'use client';
-
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -11,13 +10,12 @@ import {
   Package,
   Truck,
 } from 'lucide-react';
-import type { User } from 'firebase/auth';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import {
   doc,
   runTransaction,
   serverTimestamp,
 } from 'firebase/firestore';
-
 import {
   clearCart,
   readCart,
@@ -32,7 +30,7 @@ import {
   type SavedAddress,
 } from '@/lib/addresses';
 import { requireGoogleLogin } from '@/lib/auth';
-import { db, firebaseReady } from '@/lib/firebase';
+import { auth, db, firebaseReady } from '@/lib/firebase';
 import PageLoader from '@/components/PageLoader';
 import { groupCartByBusiness } from '@/lib/delivery';
 import { isDeliveryPincode } from '@/lib/delivery-radius';
@@ -40,36 +38,28 @@ import {
   createBusinessOrder,
   type CreatedOrder,
 } from '@/lib/orders';
-
 const money = (value: number) =>
   `₹${Math.round(value).toLocaleString('en-IN')}`;
-
 type TryAtHomeCartItem = CartItem & {
   try_at_home?: boolean;
   tryAtHome?: boolean;
 };
-
 const isTryAtHomeCartItem = (item: CartItem): boolean => {
   const meta = item as TryAtHomeCartItem;
-
   return (
     meta.try_at_home === true ||
     meta.tryAtHome === true
   );
 };
-
 type SavedTryAtHomeSlot = {
   id?: string;
   label?: string;
   startMinutes?: number;
   date?: string;
 };
-
-
 type AddressDeliveryStatus =
   | 'available'
   | 'outside';
-
 const getAddressDeliveryCheck = (
   address: SavedAddress | null,
 ) => {
@@ -78,27 +68,23 @@ const getAddressDeliveryCheck = (
       status: 'outside' as AddressDeliveryStatus,
     };
   }
-
   return {
     status: isDeliveryPincode(address.pincode)
       ? ('available' as AddressDeliveryStatus)
       : ('outside' as AddressDeliveryStatus),
   };
 };
-
 type DeliveryOptionId =
   | 'instant'
   | 'morning'
   | 'afternoon'
   | 'overnight';
-
 type DeliveryOption = {
   id: DeliveryOptionId;
   title: string;
   deliveryWindow: string;
   fee: number;
 };
-
 const DELIVERY_OPTIONS: DeliveryOption[] = [
   {
     id: 'instant',
@@ -125,7 +111,6 @@ const DELIVERY_OPTIONS: DeliveryOption[] = [
     fee: 0,
   },
 ];
-
 type SavedFreeGift = {
   id: string;
   title: string;
@@ -134,36 +119,29 @@ type SavedFreeGift = {
   price: number;
   is_free_gift: boolean;
 };
-
 type SavedGiftBundle = {
   product_id: string;
   quantity: number;
   entitlement: number;
   gifts: SavedFreeGift[];
 };
-
 const readSavedGifts = (
   productId: string,
 ): SavedGiftBundle | null => {
   if (typeof window === 'undefined') {
     return null;
   }
-
   try {
     const raw = window.localStorage.getItem(
       `spotc-free-gifts:${productId}`,
     );
-
     if (!raw) {
       return null;
     }
-
     const parsed = JSON.parse(raw) as Partial<SavedGiftBundle>;
-
     if (!parsed || !Array.isArray(parsed.gifts)) {
       return null;
     }
-
     return {
       product_id: String(parsed.product_id || productId),
       quantity: Number(parsed.quantity) || 1,
@@ -192,24 +170,20 @@ const readSavedGifts = (
     return null;
   }
 };
-
 const sendGa4Event = (
   eventName: string,
   parameters: Record<string, unknown>,
 ) => {
   if (typeof window === 'undefined') return;
-
   const gtag = (
     window as typeof window & {
       gtag?: (...args: unknown[]) => void;
     }
   ).gtag;
-
   if (typeof gtag === 'function') {
     gtag('event', eventName, parameters);
   }
 };
-
 const ga4ItemFromCart = (item: CartItem) => ({
   item_id: String(item.id),
   item_name: String(item.title || 'SPOTC Product'),
@@ -223,8 +197,6 @@ const ga4ItemFromCart = (item: CartItem) => ({
   price: Number(item.price) || 0,
   quantity: Math.max(1, Number(item.qty) || 1),
 });
-
-
 const reserveTryAtHomeProducts = async ({
   firestore,
   items,
@@ -241,20 +213,16 @@ const reserveTryAtHomeProducts = async ({
   const reservationItems = items.filter((item) =>
     isTryAtHomeCartItem(item),
   );
-
   if (!reservationItems.length) {
     return [] as Array<{ productId: string; qty: number }>;
   }
-
   const reservedLines = reservationItems.map((item) => ({
     productId: String(item.id),
     qty: Math.max(1, Number(item.qty) || 1),
   }));
-
   await runTransaction(firestore, async (transaction) => {
     // Read every product first. Firestore transactions require reads before writes.
     const snapshots = [];
-
     for (const line of reservedLines) {
       const productRef = doc(
         firestore,
@@ -262,21 +230,18 @@ const reserveTryAtHomeProducts = async ({
         line.productId,
       );
       const productSnap = await transaction.get(productRef);
-
       snapshots.push({
         ...line,
         productRef,
         productSnap,
       });
     }
-
     for (const line of snapshots) {
       if (!line.productSnap.exists()) {
         throw new Error(
           'One of your Try at Home products is no longer available.',
         );
       }
-
       const product = line.productSnap.data();
       const stock = Math.max(
         0,
@@ -291,7 +256,6 @@ const reserveTryAtHomeProducts = async ({
         Number(product.reserved_qty ?? 0) || 0,
       );
       const available = Math.max(0, stock - alreadyReserved);
-
       if (
         product.is_in_stock === false ||
         available < line.qty
@@ -300,9 +264,7 @@ const reserveTryAtHomeProducts = async ({
           `${String(product.title || 'A Try at Home product')} is already reserved or out of stock. Please choose another product.`,
         );
       }
-
       const nextReserved = alreadyReserved + line.qty;
-
       transaction.update(line.productRef, {
         reserved_qty: nextReserved,
         available_qty: Math.max(0, stock - nextReserved),
@@ -319,10 +281,8 @@ const reserveTryAtHomeProducts = async ({
       });
     }
   });
-
   return reservedLines;
 };
-
 const releaseTryAtHomeProducts = async ({
   firestore,
   reservedLines,
@@ -331,11 +291,9 @@ const releaseTryAtHomeProducts = async ({
   reservedLines: Array<{ productId: string; qty: number }>;
 }) => {
   if (!reservedLines.length) return;
-
   try {
     await runTransaction(firestore, async (transaction) => {
       const snapshots = [];
-
       for (const line of reservedLines) {
         const productRef = doc(
           firestore,
@@ -343,17 +301,14 @@ const releaseTryAtHomeProducts = async ({
           line.productId,
         );
         const productSnap = await transaction.get(productRef);
-
         snapshots.push({
           ...line,
           productRef,
           productSnap,
         });
       }
-
       for (const line of snapshots) {
         if (!line.productSnap.exists()) continue;
-
         const product = line.productSnap.data();
         const stock = Math.max(
           0,
@@ -371,7 +326,6 @@ const releaseTryAtHomeProducts = async ({
           0,
           alreadyReserved - line.qty,
         );
-
         transaction.update(line.productRef, {
           reserved_qty: nextReserved,
           available_qty: Math.max(0, stock - nextReserved),
@@ -388,10 +342,8 @@ const releaseTryAtHomeProducts = async ({
     );
   }
 };
-
 export default function CheckoutPage() {
   const router = useRouter();
-
   const [user, setUser] = useState<User | null>(null);
   const [items, setItems] = useState<CartItem[]>([]);
   const [address, setAddress] = useState<SavedAddress | null>(null);
@@ -405,47 +357,39 @@ export default function CheckoutPage() {
     useState<SavedTryAtHomeSlot | null>(null);
   const [loading, setLoading] = useState(true);
   const [placing, setPlacing] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const [loginError, setLoginError] = useState('');
   const checkoutTrackedRef = useRef('');
   const deliveryCheckTrackedRef = useRef('');
   const deliveryBlockedTrackedRef = useRef('');
-
   const groups = useMemo(
     () => groupCartByBusiness(items),
     [items],
   );
-
   useEffect(() => {
     let active = true;
-
     const prepareCheckout = async () => {
       const cart = readCart();
-
       if (!cart.length) {
         router.replace('/cart');
         return;
       }
-
       setItems(cart);
-
       const hasTryAtHomeCartItems =
         cart.some((item) =>
           isTryAtHomeCartItem(item),
         );
-
       if (hasTryAtHomeCartItems) {
         const savedTryAtHomeDate =
           window.localStorage.getItem(
             'spotc-try-at-home-date',
           ) || '';
-
         const savedTryAtHomeSlotRaw =
           window.localStorage.getItem(
             'spotc-try-at-home-slot',
           );
-
         let parsedTryAtHomeSlot:
           SavedTryAtHomeSlot | null = null;
-
         if (savedTryAtHomeSlotRaw) {
           try {
             parsedTryAtHomeSlot =
@@ -456,34 +400,27 @@ export default function CheckoutPage() {
             parsedTryAtHomeSlot = null;
           }
         }
-
         setTryAtHomeDate(savedTryAtHomeDate);
         setTryAtHomeSlot(parsedTryAtHomeSlot);
       } else {
         setTryAtHomeDate('');
         setTryAtHomeSlot(null);
       }
-
       const nextGiftBundles: Record<
         string,
         SavedGiftBundle
       > = {};
-
       cart.forEach((item) => {
         const bundle = readSavedGifts(item.id);
-
         if (bundle && bundle.gifts.length > 0) {
           nextGiftBundles[item.id] = bundle;
         }
       });
-
       setGiftBundles(nextGiftBundles);
-
       const savedDeliveryId =
         window.localStorage.getItem(
           'spotc-delivery-option',
         ) as DeliveryOptionId | null;
-
       if (
         savedDeliveryId &&
         DELIVERY_OPTIONS.some(
@@ -493,98 +430,116 @@ export default function CheckoutPage() {
       ) {
         setSelectedDeliveryId(savedDeliveryId);
       }
-
       if (!firebaseReady || !db) {
         setLoading(false);
         return;
       }
-
       const firestore = db;
-
-      const currentUser = await requireGoogleLogin();
-
-      if (!currentUser || !active) {
+      // Wait for Firebase to restore an existing session. Never open a popup
+      // while rendering: mobile browsers require a direct customer tap.
+      const currentUser = auth
+        ? await new Promise<User | null>((resolve, reject) => {
+            const unsubscribe = onAuthStateChanged(
+              auth,
+              (sessionUser) => {
+                unsubscribe();
+                resolve(sessionUser);
+              },
+              (error) => {
+                unsubscribe();
+                reject(error);
+              },
+            );
+          })
+        : null;
+      if (!currentUser || currentUser.isAnonymous || !active) {
         setLoading(false);
         return;
       }
-
       setUser(currentUser);
-
       const addressList = await loadUserAddresses(
         firestore,
         currentUser,
       );
-
       const selectedAddress = selectedAddressFrom(addressList);
-
       if (!selectedAddress) {
         router.replace('/address');
         return;
       }
-
       setAddress(selectedAddress);
-
       if (active) {
         setLoading(false);
       }
     };
-
-    void prepareCheckout();
-
+    void prepareCheckout().catch((error) => {
+      console.error('Preparing checkout failed:', error);
+      if (active) setLoading(false);
+    });
     return () => {
       active = false;
     };
   }, [router]);
-
+  const signInForCheckout = async () => {
+    if (signingIn || !db) return;
+    setSigningIn(true);
+    setLoginError('');
+    try {
+      // This call starts directly from the button tap.
+      const currentUser = await requireGoogleLogin();
+      if (!currentUser) return;
+      setUser(currentUser);
+      const addressList = await loadUserAddresses(db, currentUser);
+      const selectedAddress = selectedAddressFrom(addressList);
+      if (!selectedAddress) {
+        router.push('/address');
+        return;
+      }
+      setAddress(selectedAddress);
+    } catch (error) {
+      setLoginError(
+        error instanceof Error ? error.message : 'Google sign in failed. Please try again.',
+      );
+    } finally {
+      setSigningIn(false);
+    }
+  };
   const subtotal = groups.reduce(
     (sum, group) => sum + group.subtotal,
     0,
   );
-
   const selectedDelivery =
     DELIVERY_OPTIONS.find(
       (option) =>
         option.id === selectedDeliveryId,
     ) ?? DELIVERY_OPTIONS[0];
-
   const tryAtHomeItems = items.filter((item) =>
     isTryAtHomeCartItem(item),
   );
-
   const hasTryAtHomeItems =
     tryAtHomeItems.length > 0;
-
   const delivery =
     items.length === 0 || hasTryAtHomeItems
       ? 0
       : selectedDelivery.fee;
-
   const total = subtotal + delivery;
-
   const addressDeliveryCheck = useMemo(
     () => getAddressDeliveryCheck(address),
     [address],
   );
-
   const canDeliverToAddress =
     addressDeliveryCheck.status === 'available';
-
   const selectedFreeGifts = Object.values(
     giftBundles,
   ).flatMap((bundle) => bundle.gifts);
-
   const totalFreeGifts =
     selectedFreeGifts.length;
-
   useEffect(() => {
     if (loading || !items.length || !address) return;
-
     const deliverySignature = [
       formatAddress(address),
       address.pincode || '',
       addressDeliveryCheck.status,
     ].join('|');
-
     if (
       deliveryCheckTrackedRef.current !==
       deliverySignature
@@ -616,11 +571,9 @@ export default function CheckoutPage() {
             : selectedDelivery.title,
         page_path: '/checkout',
       });
-
       deliveryCheckTrackedRef.current =
         deliverySignature;
     }
-
     if (
       !canDeliverToAddress &&
       deliveryBlockedTrackedRef.current !==
@@ -649,13 +602,10 @@ export default function CheckoutPage() {
           page_path: '/checkout',
         },
       );
-
       deliveryBlockedTrackedRef.current =
         deliverySignature;
     }
-
     if (!canDeliverToAddress) return;
-
     const checkoutSignature = [
       ...items.map(
         (item) =>
@@ -668,14 +618,12 @@ export default function CheckoutPage() {
       tryAtHomeSlot?.id || '',
       deliverySignature,
     ].join('|');
-
     if (
       checkoutTrackedRef.current ===
       checkoutSignature
     ) {
       return;
     }
-
     sendGa4Event('add_shipping_info', {
       currency: 'INR',
       value: total,
@@ -687,7 +635,6 @@ export default function CheckoutPage() {
         address.pincode || '',
       items: items.map(ga4ItemFromCart),
     });
-
     checkoutTrackedRef.current =
       checkoutSignature;
   }, [
@@ -703,15 +650,12 @@ export default function CheckoutPage() {
     tryAtHomeDate,
     tryAtHomeSlot?.id,
   ]);
-
   const removeCheckoutItem = (
     itemToRemove: CartItem,
   ) => {
     if (placing) return;
-
     const removingTryAtHome =
       isTryAtHomeCartItem(itemToRemove);
-
     if (
       removingTryAtHome &&
       tryAtHomeItems.length <= 1
@@ -721,7 +665,6 @@ export default function CheckoutPage() {
       );
       return;
     }
-
     const nextItems = items.filter(
       (item) =>
         !(
@@ -733,19 +676,15 @@ export default function CheckoutPage() {
             String(itemToRemove.color || '')
         ),
     );
-
     if (!nextItems.length) {
       router.push('/cart');
       return;
     }
-
     writeCart(nextItems);
     setItems(nextItems);
-
     setGiftBundles((current) => {
       const next = { ...current };
       delete next[String(itemToRemove.id)];
-
       try {
         window.localStorage.removeItem(
           `spotc-free-gifts:${itemToRemove.id}`,
@@ -753,10 +692,8 @@ export default function CheckoutPage() {
       } catch {
         // Checkout can continue even if storage cleanup fails.
       }
-
       return next;
     });
-
     sendGa4Event('remove_from_cart', {
       currency: 'INR',
       value:
@@ -769,7 +706,6 @@ export default function CheckoutPage() {
       page_path: '/checkout',
     });
   };
-
   const place = async () => {
     if (
       placing ||
@@ -780,7 +716,6 @@ export default function CheckoutPage() {
     ) {
       return;
     }
-
     sendGa4Event('order_place_attempt', {
       currency: 'INR',
       value: total,
@@ -810,7 +745,6 @@ export default function CheckoutPage() {
           : undefined,
       items: items.map(ga4ItemFromCart),
     });
-
     if (!canDeliverToAddress) {
       sendGa4Event(
         'checkout_delivery_blocked',
@@ -826,14 +760,11 @@ export default function CheckoutPage() {
           page_path: '/checkout',
         },
       );
-
       window.alert(
         'Delivery is currently available only for selected Karamadai and Mettupalayam PIN codes. Please change your delivery address.',
       );
-
       return;
     }
-
     sendGa4Event('add_payment_info', {
       currency: 'INR',
       value: total,
@@ -843,18 +774,14 @@ export default function CheckoutPage() {
         address.pincode || '',
       items: items.map(ga4ItemFromCart),
     });
-
     const firestore = db;
     const currentUser = user;
     const selectedAddress = address;
-
     setPlacing(true);
-
     let reservedTryAtHomeLines: Array<{
       productId: string;
       qty: number;
     }> = [];
-
     try {
       if (hasTryAtHomeItems) {
         reservedTryAtHomeLines =
@@ -866,9 +793,7 @@ export default function CheckoutPage() {
             tryAtHomeSlot,
           });
       }
-
       const created: CreatedOrder[] = [];
-
       for (const [groupIndex, group] of groups.entries()) {
         const order = await createBusinessOrder({
           db: firestore,
@@ -936,9 +861,7 @@ export default function CheckoutPage() {
             status: 'pending_delivery',
           },
         });
-
         created.push(order);
-
         saveOrder({
           id: order.orderNumber,
           order_document_id: order.documentId,
@@ -947,16 +870,16 @@ export default function CheckoutPage() {
           total: order.total,
           created_at: new Date().toISOString(),
         });
-
         // Notify the customer and admin after the order has been created.
         // Notification failure must never cancel or roll back a successful order.
+        const notifyOrder = async (): Promise<void> => {
         try {
           const idToken = await currentUser.getIdToken();
-
           const notificationResponse = await fetch(
             '/api/notifications/order-placed',
             {
               method: 'POST',
+              keepalive: true,
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${idToken}`,
@@ -966,14 +889,12 @@ export default function CheckoutPage() {
               }),
             },
           );
-
           if (!notificationResponse.ok) {
             const notificationResult = (await notificationResponse
               .json()
               .catch(() => null)) as
               | { error?: string }
               | null;
-
             console.warn(
               '[SPOTC] Order placed notification was not delivered:',
               notificationResult?.error ||
@@ -986,8 +907,14 @@ export default function CheckoutPage() {
             notificationError,
           );
         }
+        };
+        // Keep the notification in flight, but do not keep the buyer on
+        // "Placing Order" indefinitely after Firestore saved the order.
+        await Promise.race([
+          notifyOrder(),
+          new Promise<void>((resolve) => window.setTimeout(resolve, 2500)),
+        ]);
       }
-
       if (typeof window !== 'undefined') {
         window.sessionStorage.setItem(
           'spotc-ga4-checkout-snapshot',
@@ -999,9 +926,7 @@ export default function CheckoutPage() {
           }),
         );
       }
-
       clearCart();
-
       if (
         typeof window !== 'undefined' &&
         reservedTryAtHomeLines.length > 0
@@ -1010,10 +935,8 @@ export default function CheckoutPage() {
           window as typeof window & {
             __spotcProductsCacheAt?: number;
           };
-
         productCacheWindow.__spotcProductsCacheAt = 0;
       }
-
       router.push(
         `/order-success?ids=${encodeURIComponent(
           created.map((order) => order.documentId).join(','),
@@ -1026,37 +949,34 @@ export default function CheckoutPage() {
           reservedLines: reservedTryAtHomeLines,
         });
       }
-
       console.error('SPOTC order placement failed:', error);
-
       const message =
         error instanceof Error && error.message
           ? error.message
           : 'Unable to place your order. Please try again.';
-
       alert(`Unable to place your order.\n\n${message}`);
     } finally {
       setPlacing(false);
     }
   };
-
   if (loading) {
     return <PageLoader />;
   }
-
   if (!address || !user || !db) {
     return (
       <main className="checkout-state">
         <MapPin />
-        <h1>Delivery address required</h1>
-
-        <button onClick={() => router.push('/address')}>
-          Select Address
+        <h1>{!user ? 'Sign in to continue checkout' : 'Delivery address required'}</h1>
+        {loginError && <p role="alert">{loginError}</p>}
+        <button type="button" disabled={signingIn} onClick={() => {
+          if (!user) void signInForCheckout();
+          else router.push('/address');
+        }}>
+          {!user ? signingIn ? 'Signing in…' : 'Continue with Google' : 'Select Address'}
         </button>
       </main>
     );
   }
-
   return (
     <main className="checkout-page">
       <div className="checkout-shell">
@@ -1065,24 +985,19 @@ export default function CheckoutPage() {
             <small>CHECKOUT</small>
             <h1>Order Summary</h1>
           </div>
-
           <span>Cash on Delivery</span>
         </header>
-
         <section className="selected-address">
           <MapPin />
-
           <div>
             <strong>Deliver to {address.addressType}</strong>
             <p>{formatAddress(address)}</p>
             <small>{address.phone}</small>
           </div>
-
           <button onClick={() => router.push('/address')}>
             Change
           </button>
         </section>
-
         {addressDeliveryCheck.status !==
           'available' && (
           <section
@@ -1090,21 +1005,17 @@ export default function CheckoutPage() {
             role="alert"
           >
             <MapPin />
-
             <div>
               <strong>
                 Delivery not available for this PIN code yet
               </strong>
-
               <p>
                 SPOTC currently delivers to selected Karamadai and Mettupalayam PIN codes. Please choose a serviceable delivery address.
               </p>
-
               <small>
                 You can still browse all SPOTC products.
               </small>
             </div>
-
             <button
               type="button"
               onClick={() => {
@@ -1121,7 +1032,6 @@ export default function CheckoutPage() {
                       '/checkout',
                   },
                 );
-
                 router.push('/address');
               }}
             >
@@ -1129,7 +1039,6 @@ export default function CheckoutPage() {
             </button>
           </section>
         )}
-
         <div className="checkout-grid">
           <section className="checkout-main">
             {groups.map((group, groupIndex) => (
@@ -1139,10 +1048,8 @@ export default function CheckoutPage() {
                     <small>SHOP</small>
                     <h2>{group.businessName}</h2>
                   </div>
-
                   <span>{group.totalQuantity} items</span>
                 </header>
-
                 {group.items.map((item, index) => (
                   <div
                     className="checkout-item"
@@ -1155,10 +1062,8 @@ export default function CheckoutPage() {
                         <Package />
                       </span>
                     )}
-
                     <div>
                       <strong>{item.title}</strong>
-
                       <small>
                         Qty {item.qty}
                         {item.size
@@ -1166,10 +1071,8 @@ export default function CheckoutPage() {
                           : ''}
                       </small>
                     </div>
-
                     <div className="checkout-item-actions">
                       <b>{money(item.price * item.qty)}</b>
-
                       {isTryAtHomeCartItem(item) && (
                         <button
                           type="button"
@@ -1193,13 +1096,11 @@ export default function CheckoutPage() {
                     </div>
                   </div>
                 ))}
-
                 <div className="shop-bill">
                   <p>
                     <span>Subtotal</span>
                     <strong>{money(group.subtotal)}</strong>
                   </p>
-
                   <p>
                     <span>Delivery</span>
                     <strong>
@@ -1210,7 +1111,6 @@ export default function CheckoutPage() {
                       )}
                     </strong>
                   </p>
-
                   <p className="shop-total">
                     <span>Shop total</span>
                     <strong>
@@ -1225,26 +1125,20 @@ export default function CheckoutPage() {
                 </div>
               </article>
             ))}
-
             {totalFreeGifts > 0 && (
               <section className="free-gift-card">
                 <div className="free-gift-card-head">
                   <Gift />
-
                   <div>
                     <strong>
                       {totalFreeGifts} FREE Gift
                       {totalFreeGifts === 1 ? '' : 's'} Included
                     </strong>
-
                     <small>
                       Your selected gifts are included at no extra cost
                     </small>
                   </div>
-
-
                 </div>
-
                 <div className="free-gift-checkout-list">
                   {selectedFreeGifts.map((gift) => (
                     <article
@@ -1261,7 +1155,6 @@ export default function CheckoutPage() {
                           <Gift />
                         )}
                       </div>
-
                       <div>
                         <strong>{gift.title}</strong>
                         <span>FREE</span>
@@ -1271,12 +1164,9 @@ export default function CheckoutPage() {
                 </div>
               </section>
             )}
-
-
             {hasTryAtHomeItems && (
               <section className="try-at-home-checkout-card">
                 <Clock3 />
-
                 <div>
                   <strong>Try at Home</strong>
                   <small>
@@ -1292,10 +1182,8 @@ export default function CheckoutPage() {
                 </div>
               </section>
             )}
-
             <section className="payment-card">
               <Banknote />
-
               <div>
                 <strong>Cash on Delivery</strong>
                 <small>
@@ -1303,33 +1191,25 @@ export default function CheckoutPage() {
                 </small>
               </div>
             </section>
-
           </section>
-
           <aside className="final-bill">
             <h2>Bill Details</h2>
-
             <p>
               <span>Subtotal</span>
               <strong>{money(subtotal)}</strong>
             </p>
-
             <p>
               <span>Delivery</span>
               <strong>{money(delivery)}</strong>
             </p>
-
             <p>
               <span>Platform Fee</span>
               <strong>₹0</strong>
             </p>
-
-
             <p className="final-total">
               <span>Total Payable</span>
               <strong>{money(total)}</strong>
             </p>
-
             <div
               className={`delivery-banner ${
                 hasTryAtHomeItems ? 'try-at-home' : ''
@@ -1340,7 +1220,6 @@ export default function CheckoutPage() {
               ) : (
                 <Truck />
               )}
-
               <span>
                 <strong>
                   {hasTryAtHomeItems
@@ -1358,7 +1237,6 @@ export default function CheckoutPage() {
                 </small>
               </span>
             </div>
-
             <button
               onClick={() => void place()}
               disabled={placing || !canDeliverToAddress}
@@ -1382,35 +1260,29 @@ export default function CheckoutPage() {
           </aside>
         </div>
       </div>
-
       <style jsx>{`
         .checkout-page {
           min-height: 0;
           padding: 28px 20px 20px;
           background: #f7f5f1;
         }
-
         .checkout-shell {
           width: min(1240px, 100%);
           margin: auto;
         }
-
         .checkout-head {
           display: flex;
           align-items: end;
           justify-content: space-between;
           margin-bottom: 20px;
         }
-
         .checkout-head small {
           color: #d66d0d;
           letter-spacing: 0.12em;
         }
-
         .checkout-head h1 {
           margin: 5px 0 0;
         }
-
         .selected-address,
         .payment-card,
         .free-gift-card,
@@ -1421,7 +1293,6 @@ export default function CheckoutPage() {
           background: #fff;
           box-shadow: 0 12px 32px rgba(48, 34, 22, 0.05);
         }
-
         .selected-address {
           padding: 20px;
           display: grid;
@@ -1430,13 +1301,11 @@ export default function CheckoutPage() {
           gap: 14px;
           margin-bottom: 20px;
         }
-
         .selected-address p,
         .selected-address small {
           margin: 5px 0 0;
           color: #746a61;
         }
-
         .selected-address button {
           border: 0;
           color: #d66d0d;
@@ -1444,8 +1313,6 @@ export default function CheckoutPage() {
           font-weight: 600;
           cursor: pointer;
         }
-
-
         .address-delivery-warning {
           margin: -4px 0 20px;
           padding: 16px 18px;
@@ -1457,28 +1324,23 @@ export default function CheckoutPage() {
           border-radius: 16px;
           background: #fff8e8;
         }
-
         .address-delivery-warning > svg {
           color: #d97706;
         }
-
         .address-delivery-warning strong,
         .address-delivery-warning p,
         .address-delivery-warning small {
           display: block;
         }
-
         .address-delivery-warning p {
           margin: 4px 0 0;
           color: #6f5a3f;
           line-height: 1.45;
         }
-
         .address-delivery-warning small {
           margin-top: 4px;
           color: #8a704f;
         }
-
         .address-delivery-warning button {
           min-height: 40px;
           padding: 0 14px;
@@ -1489,38 +1351,31 @@ export default function CheckoutPage() {
           font-weight: 600;
           cursor: pointer;
         }
-
         .address-delivery-warning.is-outside {
           border-color: #efb0a8;
           background: #fff4f2;
         }
-
         .address-delivery-warning.is-outside > svg {
           color: #c24132;
         }
-
         .checkout-grid {
           display: grid;
           grid-template-columns: minmax(0, 1fr) 340px;
           gap: 20px;
           align-items: start;
         }
-
         .checkout-main {
           display: grid;
           gap: 18px;
         }
-
         .checkout-shop {
           padding: 20px;
         }
-
         .checkout-shop > header {
           display: flex;
           justify-content: space-between;
           margin-bottom: 15px;
         }
-
         .checkout-item {
           padding: 13px 0;
           display: grid;
@@ -1529,7 +1384,6 @@ export default function CheckoutPage() {
           gap: 13px;
           border-top: 1px solid #eee8e1;
         }
-
         .checkout-item img,
         .checkout-item > span {
           width: 64px;
@@ -1540,14 +1394,12 @@ export default function CheckoutPage() {
           border-radius: 14px;
           background: #f1eee9;
         }
-
         .checkout-item-actions {
           display: flex;
           align-items: flex-end;
           flex-direction: column;
           gap: 7px;
         }
-
         .checkout-item-actions .checkout-remove-item {
           min-height: auto;
           padding: 0;
@@ -1559,40 +1411,34 @@ export default function CheckoutPage() {
           font-weight: 700;
           cursor: pointer;
         }
-
         .checkout-item-actions .checkout-remove-item:disabled {
           color: #aaa39b;
           cursor: not-allowed;
           opacity: 0.7;
         }
-
         .checkout-item small,
         .payment-card small {
           display: block;
           margin-top: 5px;
           color: #766d64;
         }
-
         .shop-bill {
           margin-top: 12px;
           padding: 15px;
           border-radius: 15px;
           background: #faf8f5;
         }
-
         .shop-bill p,
         .final-bill p {
           display: flex;
           justify-content: space-between;
         }
-
         .shop-total,
         .final-total {
           padding-top: 12px;
           border-top: 1px solid #e7e0d8;
           font-size: 18px;
         }
-
         .try-at-home-checkout-card {
           padding: 18px;
           display: flex;
@@ -1604,66 +1450,54 @@ export default function CheckoutPage() {
           background: #f1faf4;
           box-shadow: 0 12px 32px rgba(22, 134, 72, 0.06);
         }
-
         .try-at-home-checkout-card > svg {
           flex: 0 0 auto;
           color: #168648;
         }
-
         .try-at-home-checkout-card strong,
         .try-at-home-checkout-card small,
         .try-at-home-checkout-card span {
           display: block;
         }
-
         .try-at-home-checkout-card small {
           margin-top: 4px;
           color: #4b7c5f;
         }
-
         .try-at-home-checkout-card span {
           margin-top: 5px;
           color: #168648;
           font-size: 12px;
           font-weight: 700;
         }
-
         .payment-card {
           padding: 18px;
           display: flex;
           align-items: center;
           gap: 13px;
         }
-
         .free-gift-card {
           padding: 18px;
         }
-
         .free-gift-card-head {
           display: grid;
           grid-template-columns: auto minmax(0, 1fr);
           align-items: center;
           gap: 13px;
         }
-
         .free-gift-card-head > svg {
           color: #168648;
         }
-
         .free-gift-card-head strong,
         .free-gift-card-head small {
           display: block;
         }
-
         .free-gift-card-head strong {
           font-weight: 400;
         }
-
         .free-gift-card-head small {
           margin-top: 4px;
           color: #766d64;
         }
-
         .free-gift-checkout-list {
           margin-top: 14px;
           display: grid;
@@ -1671,7 +1505,6 @@ export default function CheckoutPage() {
             repeat(2, minmax(0, 1fr));
           gap: 10px;
         }
-
         .free-gift-checkout-item {
           min-width: 0;
           padding: 10px;
@@ -1683,7 +1516,6 @@ export default function CheckoutPage() {
           border-radius: 13px;
           background: #f7fcf8;
         }
-
         .free-gift-checkout-image {
           width: 54px;
           height: 54px;
@@ -1694,20 +1526,17 @@ export default function CheckoutPage() {
           color: #6f9178;
           background: #ffffff;
         }
-
         .free-gift-checkout-image img {
           width: 100%;
           height: 100%;
           object-fit: contain;
         }
-
         .free-gift-checkout-item strong {
           display: block;
           font-size: 13px;
           line-height: 1.35;
           font-weight: 400;
         }
-
         .free-gift-checkout-item span {
           display: inline-block;
           margin-top: 5px;
@@ -1715,13 +1544,11 @@ export default function CheckoutPage() {
           font-size: 12px;
           font-weight: 500;
         }
-
         .final-bill {
           position: sticky;
           top: 92px;
           padding: 20px;
         }
-
         .delivery-banner {
           margin: 16px 0;
           padding: 13px;
@@ -1732,27 +1559,22 @@ export default function CheckoutPage() {
           color: #147a41;
           background: #edf9f1;
         }
-
         .delivery-banner.try-at-home {
           border: 1px solid #b8dfc5;
           background: #edf9f1;
         }
-
         .delivery-banner > span {
           min-width: 0;
         }
-
         .delivery-banner strong,
         .delivery-banner small {
           display: block;
         }
-
         .delivery-banner small {
           margin-top: 2px;
           color: #4b7c5f;
           font-size: 12px;
         }
-
         .final-bill button {
           width: 100%;
           min-height: 50px;
@@ -1767,12 +1589,10 @@ export default function CheckoutPage() {
           font-weight: 700;
           cursor: pointer;
         }
-
         .final-bill button:disabled {
           cursor: not-allowed;
           opacity: 0.72;
         }
-
         .checkout-state {
           min-height: 100vh;
           display: grid;
@@ -1781,7 +1601,6 @@ export default function CheckoutPage() {
           gap: 12px;
           background: #f7f5f1;
         }
-
         .checkout-state button {
           padding: 11px 16px;
           border: 0;
@@ -1790,55 +1609,44 @@ export default function CheckoutPage() {
           background: #22c55e;
           cursor: pointer;
         }
-
         .spin {
           animation: spin 0.8s linear infinite;
         }
-
         @keyframes spin {
           to {
             transform: rotate(360deg);
           }
         }
-
         :global(body:has(.checkout-page) .spotc-footer) {
           margin-top: 0 !important;
         }
-
         @media (max-width: 900px) {
           .checkout-grid {
             grid-template-columns: 1fr;
           }
-
           .final-bill {
             position: static;
           }
         }
-
         @media (max-width: 620px) {
           .address-delivery-warning {
             grid-template-columns: auto minmax(0, 1fr);
           }
-
           .address-delivery-warning button {
             grid-column: 1 / -1;
             width: 100%;
           }
-
           .checkout-page {
             padding:
               18px 12px 10px;
           }
-
           .free-gift-checkout-list {
             grid-template-columns: 1fr;
           }
-
           .free-gift-card-head {
             grid-template-columns:
               auto minmax(0, 1fr);
           }
-
         }
       `}</style>
     </main>
