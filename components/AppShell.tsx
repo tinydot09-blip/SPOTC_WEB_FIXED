@@ -2463,6 +2463,21 @@ if (!signedInUser) {
 
 .spotc-mobile-search-link {
   grid-area: search;
+  margin: 0 !important;
+  border: 0 !important;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  box-shadow: none !important;
+  font-family: inherit;
+  text-align: center;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.spotc-mobile-search-link:focus-visible {
+  outline: 2px solid #f5bd4d;
+  outline-offset: -3px;
 }
 
 .spotc-mobile-whatsapp-link {
