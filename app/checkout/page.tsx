@@ -964,16 +964,28 @@ export default function CheckoutPage() {
   }
   if (!address || !user || !db) {
     return (
-      <main className="checkout-state">
-        <MapPin />
-        <h1>{!user ? 'Sign in to continue checkout' : 'Delivery address required'}</h1>
-        {loginError && <p role="alert">{loginError}</p>}
-        <button type="button" disabled={signingIn} onClick={() => {
-          if (!user) void signInForCheckout();
-          else router.push('/address');
-        }}>
-          {!user ? signingIn ? 'Signing in…' : 'Continue with Google' : 'Select Address'}
-        </button>
+      <main style={{ minHeight: 'calc(100dvh - 190px)', padding: '32px 16px', background: '#f7f5f1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <section style={{ width: '100%', maxWidth: 460, padding: '32px 24px', borderRadius: 20, background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.06)', textAlign: 'center' }}>
+          <MapPin size={32} color="#168447" aria-hidden="true" />
+          <h1 style={{ margin: '16px 0 8px', fontSize: 'clamp(24px, 5vw, 32px)', lineHeight: 1.2 }}>
+            {!user ? 'Sign in to continue checkout' : 'Delivery address required'}
+          </h1>
+          <p style={{ margin: '0 0 24px', color: '#666', lineHeight: 1.5 }}>
+            {!user ? 'Sign in to use your delivery address and place your COD order.' : 'Select an address to check delivery and place your order.'}
+          </p>
+          {loginError && <p role="alert" style={{ color: '#b42318', marginBottom: 16 }}>{loginError}</p>}
+          <button
+            type="button"
+            disabled={signingIn}
+            onClick={() => {
+              if (!user) void signInForCheckout();
+              else router.push('/address');
+            }}
+            style={{ width: '100%', minHeight: 52, border: 0, borderRadius: 12, background: '#22c55e', color: '#fff', fontSize: 16, fontWeight: 700, opacity: signingIn ? 0.7 : 1, cursor: signingIn ? 'wait' : 'pointer' }}
+          >
+            {!user ? signingIn ? 'Signing in…' : 'Continue with Google' : 'Select Address'}
+          </button>
+        </section>
       </main>
     );
   }
