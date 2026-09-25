@@ -505,6 +505,31 @@ export function AppShell({
     }
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    let unsubscribe = () => {};
+
+    void Promise.all([
+      import('firebase/auth'),
+      import('@/lib/firebase'),
+    ])
+      .then(([{ onAuthStateChanged }, { auth }]) => {
+        if (cancelled || !auth) return;
+
+        unsubscribe = onAuthStateChanged(auth, (user) => {
+          setFirebaseUser(user && !user.isAnonymous ? user : null);
+        });
+      })
+      .catch((error) => {
+        console.error('SPOTC account status load failed:', error);
+      });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
 
   useEffect(() => {
     if (!firebaseUser) {
@@ -1927,9 +1952,9 @@ if (!signedInUser) {
         .spotc-account-trigger-logged-in {
           border: 2px solid
             #fff !important;
-          background: #222 !important;
+          background: #188447 !important;
           box-shadow: 0 0 0 1px
-            #cfc7bb !important;
+            #188447 !important;
         }
 
         .spotc-account-trigger img {
