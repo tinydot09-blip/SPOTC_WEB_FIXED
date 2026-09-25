@@ -385,7 +385,7 @@ const DELIVERY_OPTIONS: DeliveryOption[] = [
   {
     id: 'overnight',
     title: 'Night Slot',
-    orderWindow: 'Order before 6 PM',
+    orderWindow: 'Order between 6 PM – 6 AM',
     deliveryWindow: 'Delivery tomorrow between 6 AM – 8 AM',
     fee: 0,
   },
