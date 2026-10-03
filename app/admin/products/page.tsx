@@ -2392,7 +2392,7 @@ export default function AdminProductsPage() {
     }
 
     setGeneratingPosterId(row.id);
-    setMessage('Generating 1080 × 1350 product poster…');
+    setMessage('Creating premium 1080 × 1350 SPOTC product poster…');
 
     try {
       const [imageFile, logoImage] = await Promise.all([
@@ -2402,13 +2402,17 @@ export default function AdminProductsPage() {
         ),
         loadImageFromSource(SPOTC_POSTER_LOGO_DATA_URL),
       ]);
+
       const image = await loadImageFromFile(imageFile);
 
       const canvas = document.createElement('canvas');
       canvas.width = POSTER_WIDTH;
       canvas.height = POSTER_HEIGHT;
+
       const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Browser could not create poster canvas.');
+      if (!ctx) {
+        throw new Error('Browser could not create poster canvas.');
+      }
 
       const title = titleOf(row.data);
       const price = displayPriceOf(row.data);
@@ -2417,293 +2421,413 @@ export default function AdminProductsPage() {
       const giftCount = freeGiftCountOf(row.data);
 
       // ==========================================================
-      // SPOTC SHARE POSTER — 1080 × 1350
-      // Layout follows the approved reference: real logo, large
-      // edge-to-edge product photo, compact product/offer details,
-      // delivery areas, address, WhatsApp, website and ORDER NOW.
+      // SPOTC PREMIUM PRODUCT POSTER — 1080 × 1350
+      // Keep this function self-contained so the existing product
+      // management code, Firestore logic and poster controls remain
+      // unchanged.
       // ==========================================================
+
+      const PINK = '#ec0a4f';
+      const NAVY = '#10244a';
+      const TEXT = '#171a1f';
+      const MUTED = '#667085';
+      const LIGHT = '#f7f8fa';
+      const BORDER = '#e6e8ec';
+      const GOLD = '#ffd21f';
+      const GREEN = '#16a34a';
+
+      // Background.
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, POSTER_WIDTH, POSTER_HEIGHT);
 
-      // ---------- EXACT SPOTC LOGO ----------
-      // Uses the supplied SPOTC logo + tagline image embedded in this file,
-      // so no /public asset or network request is needed.
-      drawImageContain(ctx, logoImage, 38, 22, 525, 145);
+      // ----------------------------------------------------------
+      // HEADER
+      // ----------------------------------------------------------
 
-      // ---------- 15 MIN DELIVERY BADGE ----------
-      const deliveryX = 700;
-      const deliveryY = 44;
-      const deliveryW = 330;
+      drawImageContain(ctx, logoImage, 44, 22, 430, 112);
+
+      // Small brand line.
+      ctx.fillStyle = MUTED;
+      ctx.font = '600 18px Arial, sans-serif';
+      ctx.fillText('LOCAL SHOPPING • KARAMADAI', 50, 139);
+
+      // Premium delivery badge.
+      const deliveryX = 738;
+      const deliveryY = 30;
+      const deliveryW = 300;
       const deliveryH = 112;
-      drawRoundedBox(ctx, deliveryX, deliveryY, deliveryW, deliveryH, 26, '#ec0a4f');
 
-      // Speed/clock icon.
+      drawRoundedBox(
+        ctx,
+        deliveryX,
+        deliveryY,
+        deliveryW,
+        deliveryH,
+        26,
+        PINK,
+      );
+
+      // Speed lines + clock icon.
       ctx.save();
       ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 7;
       ctx.lineCap = 'round';
+      ctx.lineWidth = 6;
+
       ctx.beginPath();
-      ctx.arc(deliveryX + 68, deliveryY + 56, 28, 0, Math.PI * 2);
+      ctx.moveTo(deliveryX + 22, deliveryY + 40);
+      ctx.lineTo(deliveryX + 45, deliveryY + 40);
+      ctx.moveTo(deliveryX + 14, deliveryY + 56);
+      ctx.lineTo(deliveryX + 45, deliveryY + 56);
+      ctx.moveTo(deliveryX + 22, deliveryY + 72);
+      ctx.lineTo(deliveryX + 45, deliveryY + 72);
       ctx.stroke();
+
+      ctx.lineWidth = 6;
       ctx.beginPath();
-      ctx.moveTo(deliveryX + 68, deliveryY + 56);
-      ctx.lineTo(deliveryX + 68, deliveryY + 36);
-      ctx.moveTo(deliveryX + 68, deliveryY + 56);
-      ctx.lineTo(deliveryX + 83, deliveryY + 64);
+      ctx.arc(deliveryX + 82, deliveryY + 56, 29, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.lineWidth = 5;
+
       ctx.beginPath();
-      ctx.moveTo(deliveryX + 18, deliveryY + 41);
-      ctx.lineTo(deliveryX + 35, deliveryY + 41);
-      ctx.moveTo(deliveryX + 12, deliveryY + 56);
-      ctx.lineTo(deliveryX + 33, deliveryY + 56);
-      ctx.moveTo(deliveryX + 19, deliveryY + 72);
-      ctx.lineTo(deliveryX + 37, deliveryY + 72);
+      ctx.moveTo(deliveryX + 82, deliveryY + 56);
+      ctx.lineTo(deliveryX + 82, deliveryY + 37);
+      ctx.moveTo(deliveryX + 82, deliveryY + 56);
+      ctx.lineTo(deliveryX + 98, deliveryY + 65);
       ctx.stroke();
       ctx.restore();
 
-      ctx.fillStyle = '#ffd21f';
-      ctx.font = '900 42px Arial, sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText('15', deliveryX + 120, deliveryY + 58);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '900 27px Arial, sans-serif';
-      ctx.fillText('MIN', deliveryX + 179, deliveryY + 58);
-      ctx.font = '900 24px Arial, sans-serif';
-      ctx.fillText('DELIVERY*', deliveryX + 120, deliveryY + 91);
+      ctx.fillStyle = GOLD;
+      ctx.font = '900 39px Arial, sans-serif';
+      ctx.fillText('15', deliveryX + 127, deliveryY + 55);
 
-      // ---------- LARGE PRODUCT IMAGE ----------
-      // IMPORTANT: cover is intentional. It removes the blurred/empty side bars
-      // and makes the product photo fill the poster like the approved reference.
-      const imageX = 24;
-      const imageY = 185;
-      const imageW = 1032;
-      const imageH = 625;
-      drawImageCover(ctx, image, imageX, imageY, imageW, imageH);
-      roundedRectPath(ctx, imageX, imageY, imageW, imageH, 28);
-      ctx.strokeStyle = '#f2c5d3';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '900 26px Arial, sans-serif';
+      ctx.fillText('MIN', deliveryX + 180, deliveryY + 55);
+
+      ctx.font = '800 23px Arial, sans-serif';
+      ctx.fillText('DELIVERY*', deliveryX + 127, deliveryY + 86);
+
+      // Header divider.
+      ctx.strokeStyle = BORDER;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(42, 157);
+      ctx.lineTo(1038, 157);
+      ctx.stroke();
+
+      // ----------------------------------------------------------
+      // HERO PRODUCT AREA
+      // ----------------------------------------------------------
+
+      const heroX = 42;
+      const heroY = 178;
+      const heroW = 996;
+      const heroH = 610;
+
+      // Soft premium frame.
+      drawRoundedBox(
+        ctx,
+        heroX,
+        heroY,
+        heroW,
+        heroH,
+        32,
+        '#f5f6f8',
+        '#e4e6ea',
+        2,
+      );
+
+      // Keep the product photo large and clean.
+      // Cover removes distracting side bars while keeping the product
+      // visually dominant, matching the existing poster behavior.
+      drawImageCover(
+        ctx,
+        image,
+        heroX + 10,
+        heroY + 10,
+        heroW - 20,
+        heroH - 20,
+      );
+
+      // Fine inner border.
+      roundedRectPath(
+        ctx,
+        heroX + 10,
+        heroY + 10,
+        heroW - 20,
+        heroH - 20,
+        26,
+      );
+      ctx.strokeStyle = 'rgba(255,255,255,.85)';
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // ---------- PRODUCT NAME ----------
+      // ----------------------------------------------------------
+      // PRODUCT NAME
+      // ----------------------------------------------------------
+
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#0b1c46';
-      ctx.font = '800 25px Arial, sans-serif';
-      const titleEndY = drawWrappedText(ctx, title, 540, 852, 940, 31, 2);
+      ctx.fillStyle = NAVY;
+      ctx.font = '900 28px Arial, sans-serif';
+
+      const titleEndY = drawWrappedText(
+        ctx,
+        title,
+        540,
+        822,
+        930,
+        34,
+        2,
+      );
+
       ctx.textAlign = 'left';
 
-      // Divider under title.
-      const titleDividerY = Math.max(885, titleEndY + 8);
-      ctx.strokeStyle = '#ec0a4f';
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.moveTo(42, titleDividerY);
-      ctx.lineTo(1038, titleDividerY);
-      ctx.stroke();
+      // ----------------------------------------------------------
+      // PRICE / MRP / DISCOUNT
+      // ----------------------------------------------------------
 
-      // ---------- PRICE / MRP / OFF / GIFT ----------
-      const priceBaseY = titleDividerY + 83;
-      ctx.fillStyle = '#ec0a4f';
-      ctx.font = '900 66px Arial, sans-serif';
+      const priceSectionY = Math.max(952, titleEndY + 16);
+
+      // Price.
+      ctx.fillStyle = PINK;
+      ctx.font = '900 64px Arial, sans-serif';
+
       const priceText = price > 0 ? `₹${price}` : 'Price on request';
-      ctx.fillText(priceText, 55, priceBaseY);
+      ctx.fillText(priceText, 50, priceSectionY);
 
-      // Keep MRP and discount visually grouped with the selling price.
-      // This avoids the large empty gap visible for short prices such as ₹29 / ₹49.
-      const priceWidth = ctx.measureText(priceText).width;
-      let infoX = Math.max(190, 55 + priceWidth + 28);
-      const infoY = priceBaseY - 15;
+      let infoX = 50 + ctx.measureText(priceText).width + 28;
 
+      // MRP.
       if (mrp > 0 && price > 0 && mrp > price) {
-        ctx.fillStyle = '#6b6b6b';
-        ctx.font = '800 27px Arial, sans-serif';
-        ctx.fillText('MRP', infoX, infoY);
-        infoX += ctx.measureText('MRP').width + 18;
+        ctx.fillStyle = MUTED;
+        ctx.font = '700 23px Arial, sans-serif';
+        ctx.fillText('MRP', infoX, priceSectionY - 29);
+        infoX += ctx.measureText('MRP').width + 12;
 
         const mrpText = `₹${mrp}`;
-        ctx.fillText(mrpText, infoX, infoY);
-        const mrpW = ctx.measureText(mrpText).width;
-        ctx.strokeStyle = '#ec0a4f';
+        ctx.fillText(mrpText, infoX, priceSectionY - 29);
+
+        const mrpWidth = ctx.measureText(mrpText).width;
+
+        ctx.strokeStyle = '#98a2b3';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(infoX - 4, infoY - 12);
-        ctx.lineTo(infoX + mrpW + 5, infoY - 12);
+        ctx.moveTo(infoX - 2, priceSectionY - 37);
+        ctx.lineTo(infoX + mrpWidth + 3, priceSectionY - 37);
         ctx.stroke();
-        infoX += mrpW + 38;
+
+        infoX += mrpWidth + 28;
       }
 
+      // Discount badge.
       if (discount) {
-        ctx.fillStyle = '#ec0a4f';
-        ctx.font = '900 28px Arial, sans-serif';
-        ctx.fillText(discount, infoX, infoY);
-        infoX += ctx.measureText(discount).width + 40;
-      }
+        const discountW = Math.max(
+          104,
+          ctx.measureText(discount).width + 34,
+        );
 
-      if (giftCount > 0) {
-        const giftW = 245;
-        const giftH = 72;
-        const giftX = 790;
-        const giftY = priceBaseY - 62;
-        drawRoundedBox(ctx, giftX, giftY, giftW, giftH, 14, '#edf9f0', '#cbe8d2', 1.5);
+        drawRoundedBox(
+          ctx,
+          infoX,
+          priceSectionY - 55,
+          discountW,
+          44,
+          14,
+          '#fff0f5',
+          '#f6c2d2',
+          1.5,
+        );
 
-        // Gift icon.
-        ctx.save();
-        ctx.strokeStyle = '#1b9b49';
-        ctx.lineWidth = 4;
-        ctx.strokeRect(giftX + 22, giftY + 29, 45, 31);
-        ctx.beginPath();
-        ctx.moveTo(giftX + 44.5, giftY + 27);
-        ctx.lineTo(giftX + 44.5, giftY + 61);
-        ctx.moveTo(giftX + 18, giftY + 28);
-        ctx.lineTo(giftX + 71, giftY + 28);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.ellipse(giftX + 35, giftY + 20, 11, 7, -0.55, 0, Math.PI * 2);
-        ctx.ellipse(giftX + 54, giftY + 20, 11, 7, 0.55, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-
-        ctx.fillStyle = '#0e243f';
-        ctx.font = '900 23px Arial, sans-serif';
-        ctx.fillText(`${giftCount} GIFT${giftCount === 1 ? '' : 'S'}`, giftX + 85, giftY + 31);
+        ctx.fillStyle = PINK;
         ctx.font = '900 21px Arial, sans-serif';
-        ctx.fillText('INCLUDED', giftX + 85, giftY + 57);
+        ctx.fillText(
+          discount,
+          infoX + 17,
+          priceSectionY - 26,
+        );
       }
 
-      const offerDividerY = priceBaseY + 30;
-      ctx.strokeStyle = '#f1b6c8';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(42, offerDividerY);
-      ctx.lineTo(1038, offerDividerY);
-      ctx.stroke();
+      // Optional explicit gift badge — never invent a gift quantity.
+      if (giftCount > 0) {
+        const giftW = 220;
+        const giftX = 810;
+        const giftY = priceSectionY - 55;
 
-      // ---------- DELIVERY AREAS ----------
-      const areaY = offerDividerY + 57;
+        drawRoundedBox(
+          ctx,
+          giftX,
+          giftY,
+          giftW,
+          44,
+          14,
+          '#effaf2',
+          '#c9e9d2',
+          1.5,
+        );
+
+        ctx.fillStyle = GREEN;
+        ctx.font = '900 20px Arial, sans-serif';
+        ctx.fillText(
+          `🎁 ${giftCount} GIFT${giftCount === 1 ? '' : 'S'}`,
+          giftX + 18,
+          giftY + 29,
+        );
+      }
+
+      // ----------------------------------------------------------
+      // DELIVERY AREAS
+      // ----------------------------------------------------------
+
+      const areasY = 1008;
+
+      drawRoundedBox(
+        ctx,
+        42,
+        areasY,
+        996,
+        88,
+        20,
+        '#fff7fa',
+        '#f3d3df',
+        1.5,
+      );
+
+      // Location pin.
       ctx.save();
-      ctx.fillStyle = '#ec0a4f';
+      ctx.fillStyle = PINK;
       ctx.beginPath();
-      ctx.arc(76, areaY - 9, 20, 0, Math.PI * 2);
+      ctx.arc(77, areasY + 36, 15, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.moveTo(62, areaY + 5);
-      ctx.lineTo(76, areaY + 30);
-      ctx.lineTo(90, areaY + 5);
+      ctx.moveTo(64, areasY + 47);
+      ctx.lineTo(77, areasY + 68);
+      ctx.lineTo(90, areasY + 47);
       ctx.closePath();
       ctx.fill();
+
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(76, areaY - 9, 7, 0, Math.PI * 2);
+      ctx.arc(77, areasY + 36, 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
-      ctx.fillStyle = '#0e243f';
-      ctx.font = '900 26px Arial, sans-serif';
-      ctx.fillText('DELIVERY AREAS', 125, areaY - 2);
-      ctx.font = '500 24px Arial, sans-serif';
-      drawWrappedText(ctx, SPOTC_AREAS, 125, areaY + 36, 870, 30, 2);
+      ctx.fillStyle = NAVY;
+      ctx.font = '900 21px Arial, sans-serif';
+      ctx.fillText('DELIVERY AREAS', 112, areasY + 34);
 
-      // ---------- ADDRESS ----------
-      const addressY = areaY + 75;
-      const addressH = 96;
-      drawRoundedBox(ctx, 38, addressY, 1004, addressH, 18, '#ffffff', '#dfdfdf', 1.5);
+      ctx.fillStyle = TEXT;
+      ctx.font = '600 19px Arial, sans-serif';
+      drawWrappedText(
+        ctx,
+        SPOTC_AREAS,
+        112,
+        areasY + 62,
+        885,
+        24,
+        2,
+      );
 
+      // ----------------------------------------------------------
+      // FULL PHYSICAL ADDRESS
+      // ----------------------------------------------------------
+
+      const addressY = 1088;
+      const addressH = 92;
+
+      drawRoundedBox(
+        ctx,
+        42,
+        addressY,
+        996,
+        addressH,
+        20,
+        '#ffffff',
+        BORDER,
+        2,
+      );
+
+      // Address pin.
       ctx.save();
-      ctx.fillStyle = '#ec0a4f';
+      ctx.fillStyle = PINK;
       ctx.beginPath();
-      ctx.arc(78, addressY + 41, 18, 0, Math.PI * 2);
+      ctx.arc(76, addressY + 34, 14, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.moveTo(65, addressY + 53);
-      ctx.lineTo(78, addressY + 75);
-      ctx.lineTo(91, addressY + 53);
+      ctx.moveTo(64, addressY + 45);
+      ctx.lineTo(76, addressY + 65);
+      ctx.lineTo(88, addressY + 45);
       ctx.closePath();
       ctx.fill();
+
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(78, addressY + 41, 6, 0, Math.PI * 2);
+      ctx.arc(76, addressY + 34, 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
-      ctx.fillStyle = '#ec0a4f';
-      ctx.font = '900 18px Arial, sans-serif';
-      ctx.fillText('ADDRESS', 125, addressY + 34);
-      ctx.fillStyle = '#22252b';
-      ctx.font = '500 17px Arial, sans-serif';
-      drawWrappedText(ctx, SPOTC_FULL_ADDRESS, 125, addressY + 64, 850, 24, 2);
+      ctx.fillStyle = PINK;
+      ctx.font = '900 16px Arial, sans-serif';
+      ctx.fillText('SPOTC TECHNOLOGIES', 106, addressY + 29);
 
-      // ---------- CONTACTS: ONE COMPACT LINE BELOW ADDRESS ----------
-      // Keep all contact details on ONE baseline so they never collide with
-      // the ORDER NOW footer on the 1080 × 1350 canvas.
-      const contactY = addressY + addressH + 25;
-      const contactTextY = contactY + 8;
+      ctx.fillStyle = TEXT;
+      ctx.font = '600 16px Arial, sans-serif';
+      drawWrappedText(
+        ctx,
+        SPOTC_FULL_ADDRESS.replace('SPOTC TECHNOLOGIES, ', ''),
+        106,
+        addressY + 54,
+        900,
+        21,
+        2,
+      );
 
-      // WhatsApp icon.
-      ctx.save();
-      ctx.fillStyle = '#1bad52';
-      ctx.beginPath();
-      ctx.arc(67, contactY, 17, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2.8;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(60, contactY - 7);
-      ctx.quadraticCurveTo(58, contactY, 65, contactY + 6);
-      ctx.quadraticCurveTo(72, contactY + 12, 78, contactY + 6);
-      ctx.stroke();
-      ctx.restore();
+      // ----------------------------------------------------------
+      // CONTACT + WEBSITE
+      // ----------------------------------------------------------
 
-      ctx.fillStyle = '#138c43';
-      ctx.font = '900 15px Arial, sans-serif';
-      ctx.fillText('WHATSAPP', 92, contactTextY);
-      ctx.fillStyle = '#181b20';
-      ctx.font = '800 15px Arial, sans-serif';
-      ctx.fillText(SPOTC_PHONE, 188, contactTextY);
+      const contactY = 1205;
 
-      // Email icon + email on the same baseline.
-      ctx.save();
-      ctx.strokeStyle = '#ec0a4f';
-      ctx.lineWidth = 2.6;
-      ctx.strokeRect(410, contactY - 12, 31, 23);
-      ctx.beginPath();
-      ctx.moveTo(411, contactY - 10);
-      ctx.lineTo(425.5, contactY + 1);
-      ctx.lineTo(440, contactY - 10);
-      ctx.stroke();
-      ctx.restore();
+      // WhatsApp.
+      ctx.fillStyle = GREEN;
+      ctx.font = '800 17px Arial, sans-serif';
+      ctx.fillText('WHATSAPP', 48, contactY);
 
-      ctx.fillStyle = '#ec0a4f';
-      ctx.font = '900 15px Arial, sans-serif';
-      ctx.fillText('EMAIL', 454, contactTextY);
-      ctx.fillStyle = '#181b20';
-      ctx.font = '800 15px Arial, sans-serif';
-      ctx.fillText(SPOTC_EMAIL, 510, contactTextY);
+      ctx.fillStyle = TEXT;
+      ctx.font = '700 17px Arial, sans-serif';
+      ctx.fillText(SPOTC_PHONE, 150, contactY);
 
-      // Website icon + website on the same baseline.
-      ctx.save();
-      ctx.strokeStyle = '#ec0a4f';
-      ctx.lineWidth = 2.6;
-      ctx.beginPath();
-      ctx.arc(790, contactY, 16, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.ellipse(790, contactY, 7, 16, 0, 0, Math.PI * 2);
-      ctx.moveTo(775, contactY);
-      ctx.lineTo(805, contactY);
-      ctx.stroke();
-      ctx.restore();
+      // Email.
+      ctx.fillStyle = PINK;
+      ctx.font = '800 17px Arial, sans-serif';
+      ctx.fillText('EMAIL', 405, contactY);
 
-      ctx.fillStyle = '#ec0a4f';
-      ctx.font = '900 15px Arial, sans-serif';
-      ctx.fillText('WEBSITE', 818, contactTextY);
-      ctx.fillStyle = '#181b20';
-      ctx.font = '800 15px Arial, sans-serif';
-      ctx.fillText(SPOTC_WEBSITE, 895, contactTextY);
+      ctx.fillStyle = TEXT;
+      ctx.font = '700 17px Arial, sans-serif';
+      ctx.fillText(SPOTC_EMAIL, 465, contactY);
 
-      // ---------- ORDER NOW FOOTER ----------
-      const orderY = 1298;
-      drawRoundedBox(ctx, 38, orderY, 1004, 46, 16, '#ec0a4f');
+      // Website.
+      ctx.fillStyle = PINK;
+      ctx.font = '800 17px Arial, sans-serif';
+      ctx.fillText('WEB', 760, contactY);
+
+      ctx.fillStyle = TEXT;
+      ctx.font = '800 17px Arial, sans-serif';
+      ctx.fillText(SPOTC_WEBSITE, 805, contactY);
+
+      // ----------------------------------------------------------
+      // ORDER CTA
+      // ----------------------------------------------------------
+
+      const orderY = 1240;
+
+      drawRoundedBox(
+        ctx,
+        42,
+        orderY,
+        996,
+        72,
+        20,
+        PINK,
+      );
 
       // Cart icon.
       ctx.save();
@@ -2711,44 +2835,65 @@ export default function AdminProductsPage() {
       ctx.lineWidth = 5;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
+
       ctx.beginPath();
-      ctx.moveTo(82, orderY + 22);
-      ctx.lineTo(94, orderY + 22);
-      ctx.lineTo(104, orderY + 48);
-      ctx.lineTo(138, orderY + 48);
-      ctx.lineTo(145, orderY + 29);
-      ctx.lineTo(99, orderY + 29);
+      ctx.moveTo(73, orderY + 25);
+      ctx.lineTo(87, orderY + 25);
+      ctx.lineTo(98, orderY + 51);
+      ctx.lineTo(139, orderY + 51);
+      ctx.lineTo(147, orderY + 32);
+      ctx.lineTo(92, orderY + 32);
       ctx.stroke();
+
       ctx.beginPath();
-      ctx.arc(110, orderY + 58, 4, 0, Math.PI * 2);
-      ctx.arc(136, orderY + 58, 4, 0, Math.PI * 2);
+      ctx.arc(105, orderY + 61, 4, 0, Math.PI * 2);
+      ctx.arc(134, orderY + 61, 4, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
       ctx.fill();
       ctx.restore();
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = '900 44px Arial, sans-serif';
-      ctx.fillText('ORDER NOW', 190, orderY + 39);
+      ctx.font = '900 34px Arial, sans-serif';
+      ctx.fillText('ORDER NOW', 178, orderY + 46);
 
-      ctx.strokeStyle = 'rgba(255,255,255,.65)';
+      ctx.strokeStyle = 'rgba(255,255,255,.55)';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(705, orderY + 14);
-      ctx.lineTo(705, orderY + 58);
+      ctx.moveTo(690, orderY + 15);
+      ctx.lineTo(690, orderY + 57);
       ctx.stroke();
 
-      ctx.fillStyle = '#ffd21f';
-      ctx.font = '900 28px Arial, sans-serif';
-      ctx.fillText('SPOTC.in', 770, orderY + 36);
+      ctx.fillStyle = GOLD;
+      ctx.font = '900 27px Arial, sans-serif';
+      ctx.fillText(SPOTC_WEBSITE, 735, orderY + 44);
+
+      // Bottom note.
+      ctx.fillStyle = '#98a2b3';
+      ctx.font = '600 13px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(
+        'Local delivery • Subject to availability',
+        540,
+        1337,
+      );
+      ctx.textAlign = 'left';
+
+      // ----------------------------------------------------------
+      // EXPORT
+      // ----------------------------------------------------------
 
       const dataUrl = canvas.toDataURL('image/png');
-      const fileName = `${safeFilePart(title) || row.id}-spotc-poster.png`;
+      const fileName =
+        `${safeFilePart(title) || row.id}-spotc-poster.png`;
 
       setGeneratedPosters((current) => ({
         ...current,
         [row.id]: { dataUrl, fileName },
       }));
-      setMessage('Poster generated. Preview and Download are now enabled.');
+
+      setMessage(
+        'Premium poster generated. Preview and Download are now enabled.',
+      );
     } catch (error) {
       console.error('Poster generation failed:', error);
       setMessage(
