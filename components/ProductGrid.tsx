@@ -2526,16 +2526,17 @@ export function ProductGrid({
                 >
                   {image ? (
                     <Image
-                      src={image}
-                      alt={localizedTitleOf(item)}
-                      width={640}
-                      height={800}
-                      sizes="(max-width: 700px) 46vw, (max-width: 1100px) 31vw, 23vw"
-                      quality={68}
-                      priority={itemIndex < 2}
-                      loading={itemIndex < 2 ? 'eager' : 'lazy'}
-                      fetchPriority={itemIndex < 2 ? 'high' : 'auto'}
-                    />
+  src={image}
+  alt={localizedTitleOf(item)}
+  width={640}
+  height={800}
+  sizes="(max-width: 700px) 46vw, (max-width: 1100px) 31vw, 23vw"
+  quality={68}
+  priority={itemIndex < 2}
+  loading={itemIndex < 2 ? 'eager' : 'lazy'}
+  fetchPriority={itemIndex < 2 ? 'high' : 'auto'}
+  unoptimized
+/>
                   ) : null}
                 </Link>
 
