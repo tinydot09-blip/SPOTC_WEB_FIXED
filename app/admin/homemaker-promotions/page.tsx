@@ -58,8 +58,26 @@ function wrap(ctx: CanvasRenderingContext2D, t: string, x: number, y: number, ma
   if (lines.length === maxLines && lines.join(' ').length < words.join(' ').length) { let s = lines[maxLines - 1]; while (ctx.measureText(s + '…').width > max && s) s = s.slice(0, -1); lines[maxLines - 1] = s + '…'; }
   lines.forEach((v, i) => ctx.fillText(v, x, y + i * line)); return y + lines.length * line;
 }
-function contain(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
-  const sw = img.naturalWidth || img.width, sh = img.naturalHeight || img.height, s = Math.min(w / sw, h / sh); ctx.drawImage(img, x + (w - sw * s) / 2, y + (h - sh * s) / 2, sw * s, sh * s);
+function coverZoom(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number, zoom = 1.28) {
+  const sw = img.naturalWidth || img.width;
+  const sh = img.naturalHeight || img.height;
+  const scale = Math.max(w / sw, h / sh) * zoom;
+  const dw = sw * scale;
+  const dh = sh * scale;
+  ctx.save();
+  path(ctx, x, y, w, h, 28);
+  ctx.clip();
+  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  ctx.restore();
+}
+function fitProduct(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
+  // Product photos often contain large empty margins. Use a stronger crop for portrait images
+  // so the actual item reads immediately in a WhatsApp Status thumbnail.
+  const sw = img.naturalWidth || img.width;
+  const sh = img.naturalHeight || img.height;
+  const ratio = sw / sh;
+  const zoom = ratio < 0.82 ? 1.42 : ratio < 1.15 ? 1.30 : 1.18;
+  coverZoom(ctx, img, x, y, w, h, zoom);
 }
 async function loadImage(src: string) { return await new Promise<HTMLImageElement>((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = () => reject(new Error('Image could not be loaded')); i.src = src; }); }
 async function productImage(url: string) {
@@ -69,33 +87,138 @@ async function productImage(url: string) {
   const u = URL.createObjectURL(await r.blob()); try { return await loadImage(u); } finally { setTimeout(() => URL.revokeObjectURL(u), 1000); }
 }
 async function makePoster(p: Product, promoter: Promoter, day: number): Promise<Poster> {
-  const src = imageOf(p.data); if (!src) throw new Error('Product has no image');
+  const src = imageOf(p.data);
+  if (!src) throw new Error('Product has no image');
   const [img, logo] = await Promise.all([productImage(src), loadImage(SPOTC_LOGO)]);
-  const c = document.createElement('canvas'); c.width = W; c.height = H; const ctx = c.getContext('2d'); if (!ctx) throw new Error('Canvas unavailable');
-  const title = titleOf(p.data), price = priceOf(p.data), mrp = mrpOf(p.data), off = discountOf(p.data);
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext('2d');
+  if (!ctx) throw new Error('Canvas unavailable');
+
+  const title = titleOf(p.data);
+  const price = priceOf(p.data);
+  const mrp = mrpOf(p.data);
+  const off = discountOf(p.data);
   if (price <= 0) throw new Error(`Price missing for “${title}”. Please check the product price in Products.`);
 
-  const bg = ctx.createLinearGradient(0, 0, W, H); bg.addColorStop(0, '#fffaf6'); bg.addColorStop(0.58, '#ffffff'); bg.addColorStop(1, '#fff4f8'); ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-  contain(ctx, logo, 54, 38, 310, 88);
-  box(ctx, 772, 34, 254, 82, 28, '#ed0a4f'); ctx.fillStyle = '#ffd21f'; ctx.font = '900 34px Arial'; ctx.fillText('15 MIN', 815, 69); ctx.fillStyle = '#fff'; ctx.font = '900 21px Arial'; ctx.fillText('DELIVERY', 815, 97);
-  ctx.fillStyle = '#6b7280'; ctx.font = '700 18px Arial'; ctx.fillText("TODAY'S LOCAL PICK", 56, 153);
-  ctx.textAlign = 'right'; ctx.fillStyle = '#10244c'; ctx.font = '800 18px Arial'; ctx.fillText(`DAY ${day} • ${promoter.name}`, 1024, 153); ctx.textAlign = 'left';
+  // Premium D2C composition: one hero image, one price block, one CTA.
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#fffaf7');
+  bg.addColorStop(0.52, '#ffffff');
+  bg.addColorStop(1, '#fff5f8');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
 
-  box(ctx, 46, 181, 988, 590, 34, '#ffffff', '#f0e2e6');
-  ctx.save(); ctx.shadowColor = 'rgba(16,36,76,.12)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 12; box(ctx, 74, 208, 932, 536, 26, '#ffffff'); ctx.restore();
-  contain(ctx, img, 100, 230, 880, 492);
+  // Header
+  ctx.globalAlpha = 1;
+  ctx.drawImage(logo, 58, 42, 250, 74);
+  box(ctx, 790, 38, 238, 78, 26, '#ed0a4f');
+  ctx.fillStyle = '#ffd21f';
+  ctx.font = '900 31px Arial';
+  ctx.fillText('15 MIN', 828, 70);
+  ctx.fillStyle = '#fff';
+  ctx.font = '900 20px Arial';
+  ctx.fillText('DELIVERY', 828, 97);
 
-  ctx.textAlign = 'center'; ctx.fillStyle = '#10244c'; ctx.font = '900 34px Arial'; wrap(ctx, title, 540, 825, 900, 42, 2); ctx.textAlign = 'left';
-  box(ctx, 54, 905, 972, 134, 28, '#ffffff', '#eadfe4');
-  ctx.fillStyle = '#ed0a4f'; ctx.font = '900 68px Arial'; ctx.fillText(`₹${price.toLocaleString('en-IN')}`, 84, 987);
-  if (mrp > price) { ctx.fillStyle = '#6b7280'; ctx.font = '700 23px Arial'; ctx.fillText(`MRP ₹${mrp.toLocaleString('en-IN')}`, 390, 950); ctx.strokeStyle = '#6b7280'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(390, 942); ctx.lineTo(520, 942); ctx.stroke(); }
-  if (off) { box(ctx, 552, 920, 176, 50, 18, '#ffe6ef'); ctx.fillStyle = '#ed0a4f'; ctx.font = '900 22px Arial'; ctx.fillText(off, 576, 953); }
-  box(ctx, 752, 920, 240, 56, 18, '#10244c'); ctx.fillStyle = '#fff'; ctx.font = '900 19px Arial'; ctx.fillText('CASH ON DELIVERY', 773, 955);
+  ctx.fillStyle = '#10244c';
+  ctx.font = '800 16px Arial';
+  ctx.fillText(`DAY ${day}  •  ${promoter.name}`, 58, 150);
+  ctx.fillStyle = '#7a8494';
+  ctx.font = '700 16px Arial';
+  ctx.textAlign = 'right';
+  ctx.fillText('KARAMADAI LOCAL OFFER', 1022, 150);
+  ctx.textAlign = 'left';
 
-  ctx.fillStyle = '#6b7280'; ctx.font = '700 17px Arial'; ctx.fillText('LOCAL DELIVERY', 62, 1082); ctx.fillStyle = '#10244c'; ctx.font = '800 20px Arial'; ctx.fillText(AREAS, 62, 1112);
-  box(ctx, 54, 1150, 972, 82, 24, '#ed0a4f'); ctx.fillStyle = '#fff'; ctx.font = '900 34px Arial'; ctx.fillText('ORDER NOW', 88, 1202); ctx.fillStyle = '#ffd21f'; ctx.textAlign = 'right'; ctx.font = '900 27px Arial'; ctx.fillText(WEBSITE, 995, 1202); ctx.textAlign = 'left';
-  ctx.fillStyle = '#10244c'; ctx.fillRect(0, 1254, W, 96); ctx.fillStyle = '#fff'; ctx.font = '800 16px Arial'; ctx.fillText('SPOTC TECHNOLOGIES • KARAMADAI', 48, 1280); ctx.font = '600 12px Arial'; wrap(ctx, ADDRESS, 48, 1304, 690, 16, 2); ctx.textAlign = 'right'; ctx.font = '800 15px Arial'; ctx.fillText(`WhatsApp ${promoter.whatsapp || PHONE}`, 1028, 1280); ctx.font = '600 12px Arial'; ctx.fillText('Tap the product link to shop', 1028, 1305); ctx.textAlign = 'left';
-  return { dataUrl: c.toDataURL('image/png'), fileName: `${safe(promoter.name)}-day-${day}-${safe(title)}.png`, url: trackedUrl(p.id, promoter.ref) };
+  // Hero: use a large clean canvas and crop empty source margins so the product is the star.
+  box(ctx, 42, 178, 996, 600, 34, '#ffffff', '#eee7e9');
+  ctx.save();
+  ctx.shadowColor = 'rgba(16,36,76,.10)';
+  ctx.shadowBlur = 28;
+  ctx.shadowOffsetY = 10;
+  box(ctx, 66, 202, 948, 552, 28, '#f8f9fb');
+  ctx.restore();
+  fitProduct(ctx, img, 78, 214, 924, 528);
+
+  // Title
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#10244c';
+  ctx.font = '900 37px Arial';
+  wrap(ctx, title, 540, 835, 920, 45, 2);
+  ctx.textAlign = 'left';
+
+  // Price / offer strip
+  box(ctx, 54, 902, 972, 126, 28, '#fff', '#eadfe4');
+  ctx.fillStyle = '#ed0a4f';
+  ctx.font = '900 70px Arial';
+  ctx.fillText(`₹${price.toLocaleString('en-IN')}`, 82, 985);
+
+  let x = 430;
+  if (mrp > price) {
+    ctx.fillStyle = '#7a8494';
+    ctx.font = '700 22px Arial';
+    const mrpText = `MRP ₹${mrp.toLocaleString('en-IN')}`;
+    ctx.fillText(mrpText, x, 946);
+    const mw = ctx.measureText(mrpText).width;
+    ctx.strokeStyle = '#7a8494';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, 938);
+    ctx.lineTo(x + mw, 938);
+    ctx.stroke();
+    x += mw + 22;
+  }
+  if (off) {
+    const ow = Math.max(150, ctx.measureText(off).width + 44);
+    box(ctx, x, 918, ow, 50, 18, '#ffe7ef');
+    ctx.fillStyle = '#ed0a4f';
+    ctx.font = '900 21px Arial';
+    ctx.fillText(off, x + 22, 951);
+    x += ow + 18;
+  }
+  box(ctx, Math.min(x, 755), 918, 236, 50, 18, '#10244c');
+  ctx.fillStyle = '#fff';
+  ctx.font = '900 17px Arial';
+  ctx.fillText('CASH ON DELIVERY', Math.min(x, 755) + 20, 951);
+
+  // Local delivery + CTA
+  ctx.fillStyle = '#7a8494';
+  ctx.font = '800 15px Arial';
+  ctx.fillText('LOCAL DELIVERY', 62, 1073);
+  ctx.fillStyle = '#10244c';
+  ctx.font = '800 19px Arial';
+  ctx.fillText(AREAS, 62, 1103);
+
+  box(ctx, 54, 1132, 972, 86, 26, '#ed0a4f');
+  ctx.fillStyle = '#fff';
+  ctx.font = '900 36px Arial';
+  ctx.fillText('ORDER NOW', 86, 1187);
+  ctx.fillStyle = '#ffd21f';
+  ctx.textAlign = 'right';
+  ctx.font = '900 26px Arial';
+  ctx.fillText(WEBSITE, 994, 1187);
+  ctx.textAlign = 'left';
+
+  // Small business footer — intentionally quieter than the product and CTA.
+  ctx.fillStyle = '#10244c';
+  ctx.fillRect(0, 1250, W, 100);
+  ctx.fillStyle = '#fff';
+  ctx.font = '800 15px Arial';
+  ctx.fillText('SPOTC TECHNOLOGIES • KARAMADAI', 48, 1278);
+  ctx.font = '600 11px Arial';
+  wrap(ctx, ADDRESS, 48, 1301, 710, 15, 2);
+  ctx.textAlign = 'right';
+  ctx.font = '800 14px Arial';
+  ctx.fillText(`WhatsApp ${promoter.whatsapp || PHONE}`, 1028, 1278);
+  ctx.font = '600 11px Arial';
+  ctx.fillText('Tap the product link to shop', 1028, 1301);
+  ctx.textAlign = 'left';
+
+  return {
+    dataUrl: c.toDataURL('image/png'),
+    fileName: `${safe(promoter.name)}-day-${day}-${safe(title)}.png`,
+    url: trackedUrl(p.id, promoter.ref),
+  };
 }
 
 export default function HomemakerPromotionsPage() {
