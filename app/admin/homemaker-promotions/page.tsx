@@ -86,152 +86,129 @@ async function productImage(url: string) {
   if (!r.ok) throw new Error(`Product image download failed (${r.status})`);
   const u = URL.createObjectURL(await r.blob()); try { return await loadImage(u); } finally { setTimeout(() => URL.revokeObjectURL(u), 1000); }
 }
+function categoryOf(d: Record<string, any>, title: string): 'toy' | 'dress' | 'jewellery' | 'hair' | 'fancy' | 'general' {
+  const raw = [
+    d.category, d.category_name, d.subcategory, d.product_category,
+    d.type, d.tags, title,
+  ].map(textValue).join(' ').toLowerCase();
+  if (/toy|figurine|puzzle|game|doll|car|truck|building|educational|kids toy/.test(raw)) return 'toy';
+  if (/dress|frock|gown|kurti|shirt|tshirt|t-shirt|top|skirt|pant|jean|clothing|wear|apparel/.test(raw)) return 'dress';
+  if (/earring|earrings|jewel|jewellery|jewelry|necklace|bracelet|chain|ring|bangle/.test(raw)) return 'jewellery';
+  if (/hair|clip|clips|band|bands|scrunch|hairpin|hair pin|headband|bow/.test(raw)) return 'hair';
+  if (/fancy|accessor|purse|bag|wallet|keychain|key chain|gift/.test(raw)) return 'fancy';
+  return 'general';
+}
+
+function sceneBackground(ctx: CanvasRenderingContext2D, category: ReturnType<typeof categoryOf>) {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  if (category === 'toy') { g.addColorStop(0, '#fff7df'); g.addColorStop(.62, '#f8ead1'); g.addColorStop(1, '#d7b68a'); }
+  else if (category === 'dress') { g.addColorStop(0, '#fff4f7'); g.addColorStop(.58, '#f7e7e9'); g.addColorStop(1, '#d8c0bd'); }
+  else if (category === 'jewellery') { g.addColorStop(0, '#fffaf0'); g.addColorStop(.62, '#f1e6cf'); g.addColorStop(1, '#c9b38d'); }
+  else if (category === 'hair') { g.addColorStop(0, '#fff8fd'); g.addColorStop(.62, '#f5e4f2'); g.addColorStop(1, '#d5bfd4'); }
+  else { g.addColorStop(0, '#f9fbff'); g.addColorStop(.62, '#edf2f7'); g.addColorStop(1, '#cbd5df'); }
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  // Soft photographic light pools.
+  const lights = [[130,260,220,'rgba(255,255,255,.78)'],[920,330,260,'rgba(255,255,255,.55)'],[520,780,330,'rgba(255,255,255,.36)']];
+  for (const [x,y,r,c] of lights) { const rg=ctx.createRadialGradient(x as number,y as number,0,x as number,y as number,r as number); rg.addColorStop(0,c as string); rg.addColorStop(1,'rgba(255,255,255,0)'); ctx.fillStyle=rg; ctx.fillRect(0,0,W,H); }
+
+  // Ground / tabletop gives the product a real scene instead of a card.
+  const floorY = 830;
+  ctx.fillStyle = category === 'toy' ? '#b9895f' : category === 'jewellery' ? '#cdbb99' : '#d7c5c0';
+  ctx.fillRect(0, floorY, W, H-floorY);
+  ctx.fillStyle = 'rgba(80,50,30,.12)';
+  ctx.fillRect(0, floorY, W, 5);
+
+  // Category-specific visual props.
+  ctx.save();
+  ctx.globalAlpha = .78;
+  if (category === 'toy') {
+    ctx.strokeStyle = '#6f9a5b'; ctx.lineWidth = 7;
+    for (let x=55;x<1050;x+=105) { ctx.beginPath(); ctx.moveTo(x,760); ctx.lineTo(x,690); ctx.stroke(); ctx.beginPath(); ctx.arc(x,675,23,0,Math.PI*2); ctx.fillStyle='#83aa68'; ctx.fill(); }
+    ctx.strokeStyle='#a9784f'; ctx.lineWidth=8; for(let x=0;x<1080;x+=90){ctx.beginPath();ctx.moveTo(x,755);ctx.lineTo(x+90,700);ctx.stroke();}
+    ctx.strokeStyle='#fff8e7'; ctx.lineWidth=6; ctx.beginPath(); ctx.moveTo(25,690); ctx.lineTo(1055,690); ctx.stroke();
+  } else if (category === 'dress') {
+    ctx.strokeStyle='#b9898f'; ctx.lineWidth=8; ctx.beginPath(); ctx.arc(540,410,265,Math.PI,0); ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(275,410);ctx.lineTo(275,710);ctx.moveTo(805,410);ctx.lineTo(805,710);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.65)'; ctx.beginPath();ctx.arc(180,600,90,0,Math.PI*2);ctx.fill();
+  } else if (category === 'jewellery') {
+    ctx.fillStyle='rgba(176,132,55,.30)'; for(let i=0;i<6;i++){ctx.beginPath();ctx.arc(90+i*190,690-(i%2)*35,38,0,Math.PI*2);ctx.fill();}
+    ctx.strokeStyle='rgba(128,91,39,.45)'; ctx.lineWidth=3; ctx.beginPath();ctx.arc(540,520,220,0,Math.PI*2);ctx.stroke();
+  } else if (category === 'hair') {
+    for(let i=0;i<8;i++){ctx.fillStyle=i%2?'rgba(235,76,147,.32)':'rgba(108,72,183,.25)';ctx.beginPath();ctx.arc(110+i*125,690-(i%3)*35,34,0,Math.PI*2);ctx.fill();}
+  } else {
+    ctx.fillStyle='rgba(255,255,255,.58)'; ctx.beginPath();ctx.roundRect(65,650,950,120,30);ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawProductHero(ctx: CanvasRenderingContext2D, img: HTMLImageElement, category: ReturnType<typeof categoryOf>) {
+  const x=110,y=300,w=860,h=510;
+  ctx.save();
+  ctx.shadowColor='rgba(35,28,24,.30)'; ctx.shadowBlur=38; ctx.shadowOffsetY=25;
+  ctx.fillStyle='rgba(255,255,255,.94)'; path(ctx,x,y,w,h,34); ctx.fill();
+  ctx.restore();
+
+  // A subtle warm platform underneath the product.
+  ctx.save();
+  ctx.fillStyle=category==='toy'?'#d2a16f':category==='jewellery'?'#d6c29b':'#eee4df';
+  ctx.beginPath(); ctx.ellipse(540,800,330,46,0,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // Preserve the real product image; only crop its surrounding canvas gently.
+  const sw=img.naturalWidth||img.width, sh=img.naturalHeight||img.height;
+  const scale=Math.min((w-40)/sw,(h-40)/sh);
+  const dw=sw*scale, dh=sh*scale;
+  ctx.save(); path(ctx,x,y,w,h,34); ctx.clip();
+  ctx.drawImage(img,x+(w-dw)/2,y+(h-dh)/2,dw,dh); ctx.restore();
+}
+
 async function makePoster(p: Product, promoter: Promoter, day: number): Promise<Poster> {
-  const src = imageOf(p.data);
-  if (!src) throw new Error('Product has no image');
-  const [img, logo] = await Promise.all([productImage(src), loadImage(SPOTC_LOGO)]);
-  const c = document.createElement('canvas');
-  c.width = W;
-  c.height = H;
-  const ctx = c.getContext('2d');
-  if (!ctx) throw new Error('Canvas unavailable');
+  const src=imageOf(p.data); if(!src) throw new Error('Product has no image');
+  const [img,logo]=await Promise.all([productImage(src),loadImage(SPOTC_LOGO)]);
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const ctx=c.getContext('2d'); if(!ctx) throw new Error('Canvas unavailable');
+  const title=titleOf(p.data), price=priceOf(p.data), mrp=mrpOf(p.data), off=discountOf(p.data);
+  if(price<=0) throw new Error(`Price missing for “${title}”. Please check the product price in Products.`);
+  const category=categoryOf(p.data,title);
 
-  const title = titleOf(p.data);
-  const price = priceOf(p.data);
-  const mrp = mrpOf(p.data);
-  const off = discountOf(p.data);
-  if (price <= 0) throw new Error(`Price missing for “${title}”. Please check the product price in Products.`);
+  sceneBackground(ctx,category);
 
-  // WhatsApp-first D2C creative: visual ad, not a product information sheet.
-  const bg = ctx.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, '#fff8f3');
-  bg.addColorStop(0.55, '#fff');
-  bg.addColorStop(1, '#fff0f5');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
+  // Editorial header: logo + local availability badge.
+  ctx.save(); ctx.shadowColor='rgba(0,0,0,.10)';ctx.shadowBlur=18;box(ctx,34,28,1012,132,34,'rgba(255,255,255,.92)');ctx.restore();
+  ctx.drawImage(logo,58,48,270,78);
+  box(ctx,700,50,310,66,33,'#ffd21f'); ctx.fillStyle='#10244c';ctx.font='900 19px Arial';ctx.fillText('KARAMADAI TO METTUPALAYAM',730,91);
+  ctx.fillStyle='#10244c';ctx.font='700 15px Arial';ctx.fillText(`DAY ${day} • ${promoter.name}`,60,145);
 
-  // Soft decorative shapes — deliberately no card grid around every field.
-  ctx.globalAlpha = 0.55;
-  ctx.fillStyle = '#ffd9e6';
-  ctx.beginPath(); ctx.arc(1010, 250, 150, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#ffe9b8';
-  ctx.beginPath(); ctx.arc(90, 1110, 120, 0, Math.PI * 2); ctx.fill();
-  ctx.globalAlpha = 1;
+  // Wooden/editorial title strip inspired by the supplied reference.
+  ctx.save(); ctx.translate(540,235); ctx.rotate(-0.012); ctx.shadowColor='rgba(60,35,20,.20)';ctx.shadowBlur=16;ctx.shadowOffsetY=9;
+  box(ctx,-450,-48,900,96,18,'#b98757'); ctx.restore();
+  ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font='900 31px Arial';wrap(ctx,title,540,220,820,36,2);ctx.textAlign='left';
 
-  // Brand header.
-  ctx.drawImage(logo, 58, 42, 238, 70);
-  ctx.fillStyle = '#10244c';
-  ctx.font = '800 17px Arial';
-  ctx.fillText('Namma Area. Namma Kadai.', 60, 132);
+  drawProductHero(ctx,img,category);
 
-  box(ctx, 790, 42, 240, 76, 38, '#ed0a4f');
-  ctx.fillStyle = '#ffd21f';
-  ctx.font = '900 29px Arial';
-  ctx.fillText('15 MIN', 835, 73);
-  ctx.fillStyle = '#fff';
-  ctx.font = '900 18px Arial';
-  ctx.fillText('DELIVERY', 835, 98);
+  // Offer badge overlaps the scene like a real D2C creative.
+  ctx.save();ctx.translate(155,770);ctx.rotate(-0.10);ctx.shadowColor='rgba(0,0,0,.22)';ctx.shadowBlur=20;
+  ctx.fillStyle='#ed0a4f';ctx.beginPath();ctx.arc(0,0,102,0,Math.PI*2);ctx.fill();ctx.restore();
+  ctx.fillStyle='#ffd21f';ctx.textAlign='center';ctx.font='900 22px Arial';ctx.fillText(off||'SPECIAL',155,758);
+  ctx.fillStyle='#fff';ctx.font='900 48px Arial';ctx.fillText(off?off.replace(' OFF',''): 'OFFER',155,810);ctx.textAlign='left';
 
-  ctx.fillStyle = '#7b8493';
-  ctx.font = '800 14px Arial';
-  ctx.textAlign = 'right';
-  ctx.fillText(`DAY ${day} • ${promoter.name}`, 1024, 143);
-  ctx.textAlign = 'left';
+  // Price area is exact and code-generated — never AI-generated text.
+  ctx.fillStyle='#10244c';ctx.font='900 76px Arial';ctx.fillText(`₹${price.toLocaleString('en-IN')}`,72,920);
+  if(mrp>price){ctx.fillStyle='#666';ctx.font='700 24px Arial';const mt=`MRP ₹${mrp.toLocaleString('en-IN')}`;ctx.fillText(mt,450,897);const mw=ctx.measureText(mt).width;ctx.strokeStyle='#666';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(450,889);ctx.lineTo(450+mw,889);ctx.stroke();ctx.fillStyle='#ed0a4f';ctx.font='900 20px Arial';ctx.fillText(`Save ₹${(mrp-price).toLocaleString('en-IN')}`,450,928);}
 
-  // Product hero: keep the whole source image readable, but give it a premium photographic stage.
-  box(ctx, 52, 182, 976, 610, 42, '#ffffff');
-  ctx.save();
-  ctx.shadowColor = 'rgba(16,36,76,.16)';
-  ctx.shadowBlur = 35;
-  ctx.shadowOffsetY = 16;
-  box(ctx, 78, 208, 924, 558, 34, '#f7f3f2');
-  ctx.restore();
+  // Service promises as compact pills.
+  const pills=[['15 MIN','DELIVERY'],['COD','CASH ON DELIVERY'],['READY','STOCK']];
+  let px=72; for(const [a,b] of pills){const pw=a==='15 MIN'?250:b==='CASH ON DELIVERY'?310:220;box(ctx,px,958,pw,72,36,'rgba(255,255,255,.90)','rgba(16,36,76,.12)');ctx.fillStyle='#ed0a4f';ctx.font='900 18px Arial';ctx.fillText(a,px+20,987);ctx.fillStyle='#10244c';ctx.font='800 13px Arial';ctx.fillText(b,px+20,1012);px+=pw+14;}
 
-  // Moderate crop — the previous version over-zoomed and destroyed the product presentation.
-  const sw = img.naturalWidth || img.width;
-  const sh = img.naturalHeight || img.height;
-  const scale = Math.max(924 / sw, 558 / sh) * 1.02;
-  const dw = sw * scale;
-  const dh = sh * scale;
-  ctx.save();
-  path(ctx, 92, 222, 896, 530, 30);
-  ctx.clip();
-  ctx.drawImage(img, 92 + (896 - dw) / 2, 222 + (530 - dh) / 2, dw, dh);
-  ctx.restore();
+  // CTA.
+  box(ctx,72,1058,936,92,46,'#159447');ctx.fillStyle='#fff';ctx.font='900 38px Arial';ctx.fillText('TAP TO ORDER',110,1115);ctx.textAlign='right';ctx.fillStyle='#ffd21f';ctx.font='900 24px Arial';ctx.fillText(WEBSITE,970,1115);ctx.textAlign='left';
 
-  // Small visual kicker, not another information box.
-  ctx.fillStyle = '#ed0a4f';
-  ctx.font = '900 16px Arial';
-  ctx.fillText('TODAY’S PICK', 60, 830);
+  ctx.fillStyle='#10244c';ctx.font='800 16px Arial';ctx.fillText(AREAS,72,1192);
+  ctx.fillStyle='rgba(255,255,255,.88)';ctx.font='700 14px Arial';ctx.fillText(`WhatsApp ${promoter.whatsapp||PHONE}`,72,1225);ctx.textAlign='right';ctx.fillText('Local delivery • Product link tracks this promoter',1008,1225);ctx.textAlign='left';
+  ctx.fillStyle='rgba(16,36,76,.72)';ctx.font='500 12px Arial';wrap(ctx,ADDRESS,72,1260,936,15,2);
 
-  // Product name — clean editorial typography.
-  ctx.fillStyle = '#10244c';
-  ctx.font = '900 40px Arial';
-  wrap(ctx, title, 60, 875, 900, 47, 2);
-
-  // Price hierarchy.
-  ctx.fillStyle = '#ed0a4f';
-  ctx.font = '900 78px Arial';
-  ctx.fillText(`₹${price.toLocaleString('en-IN')}`, 60, 1012);
-
-  let x = 350;
-  if (mrp > price) {
-    ctx.fillStyle = '#7b8493';
-    ctx.font = '700 22px Arial';
-    const t = `MRP ₹${mrp.toLocaleString('en-IN')}`;
-    ctx.fillText(t, x, 1000);
-    const tw = ctx.measureText(t).width;
-    ctx.strokeStyle = '#7b8493'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(x, 993); ctx.lineTo(x + tw, 993); ctx.stroke();
-    x += tw + 24;
-  }
-  if (off) {
-    box(ctx, x, 962, 150, 52, 26, '#ffe0eb');
-    ctx.fillStyle = '#ed0a4f';
-    ctx.font = '900 20px Arial';
-    ctx.fillText(off, x + 20, 996);
-    x += 170;
-  }
-  box(ctx, x, 962, 210, 52, 26, '#10244c');
-  ctx.fillStyle = '#fff';
-  ctx.font = '900 17px Arial';
-  ctx.fillText('CASH ON DELIVERY', x + 18, 996);
-
-  // Local promise + CTA, kept visually simple.
-  ctx.fillStyle = '#10244c';
-  ctx.font = '800 17px Arial';
-  ctx.fillText('Karamadai • Teacher Colony • EB Colony • Gandhinagar', 60, 1068);
-
-  box(ctx, 60, 1094, 960, 92, 46, '#ed0a4f');
-  ctx.fillStyle = '#fff';
-  ctx.font = '900 38px Arial';
-  ctx.fillText('SHOP NOW  →', 94, 1152);
-  ctx.fillStyle = '#ffd21f';
-  ctx.textAlign = 'right';
-  ctx.font = '900 25px Arial';
-  ctx.fillText(WEBSITE, 986, 1152);
-  ctx.textAlign = 'left';
-
-  // Quiet legal/business footer.
-  ctx.fillStyle = '#10244c';
-  ctx.fillRect(0, 1232, W, 118);
-  ctx.fillStyle = '#fff';
-  ctx.font = '800 14px Arial';
-  ctx.fillText('SPOTC TECHNOLOGIES • KARAMADAI', 52, 1262);
-  ctx.font = '600 10px Arial';
-  wrap(ctx, ADDRESS, 52, 1285, 760, 14, 2);
-  ctx.textAlign = 'right';
-  ctx.font = '800 13px Arial';
-  ctx.fillText(`WhatsApp ${promoter.whatsapp || PHONE}`, 1028, 1262);
-  ctx.font = '600 10px Arial';
-  ctx.fillText('Local delivery • Tap the product link', 1028, 1285);
-  ctx.textAlign = 'left';
-
-  return {
-    dataUrl: c.toDataURL('image/png'),
-    fileName: `${safe(promoter.name)}-day-${day}-${safe(title)}.png`,
-    url: trackedUrl(p.id, promoter.ref),
-  };
+  return {dataUrl:c.toDataURL('image/png'),fileName:`${safe(promoter.name)}-day-${day}-${safe(title)}.png`,url:trackedUrl(p.id,promoter.ref)};
 }
 
 export default function HomemakerPromotionsPage() {
