@@ -102,116 +102,129 @@ async function makePoster(p: Product, promoter: Promoter, day: number): Promise<
   const off = discountOf(p.data);
   if (price <= 0) throw new Error(`Price missing for “${title}”. Please check the product price in Products.`);
 
-  // Premium D2C composition: one hero image, one price block, one CTA.
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, '#fffaf7');
-  bg.addColorStop(0.52, '#ffffff');
-  bg.addColorStop(1, '#fff5f8');
+  // WhatsApp-first D2C creative: visual ad, not a product information sheet.
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#fff8f3');
+  bg.addColorStop(0.55, '#fff');
+  bg.addColorStop(1, '#fff0f5');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  // Header
+  // Soft decorative shapes — deliberately no card grid around every field.
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = '#ffd9e6';
+  ctx.beginPath(); ctx.arc(1010, 250, 150, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ffe9b8';
+  ctx.beginPath(); ctx.arc(90, 1110, 120, 0, Math.PI * 2); ctx.fill();
   ctx.globalAlpha = 1;
-  ctx.drawImage(logo, 58, 42, 250, 74);
-  box(ctx, 790, 38, 238, 78, 26, '#ed0a4f');
+
+  // Brand header.
+  ctx.drawImage(logo, 58, 42, 238, 70);
+  ctx.fillStyle = '#10244c';
+  ctx.font = '800 17px Arial';
+  ctx.fillText('Namma Area. Namma Kadai.', 60, 132);
+
+  box(ctx, 790, 42, 240, 76, 38, '#ed0a4f');
   ctx.fillStyle = '#ffd21f';
-  ctx.font = '900 31px Arial';
-  ctx.fillText('15 MIN', 828, 70);
+  ctx.font = '900 29px Arial';
+  ctx.fillText('15 MIN', 835, 73);
   ctx.fillStyle = '#fff';
-  ctx.font = '900 20px Arial';
-  ctx.fillText('DELIVERY', 828, 97);
+  ctx.font = '900 18px Arial';
+  ctx.fillText('DELIVERY', 835, 98);
 
-  ctx.fillStyle = '#10244c';
-  ctx.font = '800 16px Arial';
-  ctx.fillText(`DAY ${day}  •  ${promoter.name}`, 58, 150);
-  ctx.fillStyle = '#7a8494';
-  ctx.font = '700 16px Arial';
+  ctx.fillStyle = '#7b8493';
+  ctx.font = '800 14px Arial';
   ctx.textAlign = 'right';
-  ctx.fillText('KARAMADAI LOCAL OFFER', 1022, 150);
+  ctx.fillText(`DAY ${day} • ${promoter.name}`, 1024, 143);
   ctx.textAlign = 'left';
 
-  // Hero: use a large clean canvas and crop empty source margins so the product is the star.
-  box(ctx, 42, 178, 996, 600, 34, '#ffffff', '#eee7e9');
+  // Product hero: keep the whole source image readable, but give it a premium photographic stage.
+  box(ctx, 52, 182, 976, 610, 42, '#ffffff');
   ctx.save();
-  ctx.shadowColor = 'rgba(16,36,76,.10)';
-  ctx.shadowBlur = 28;
-  ctx.shadowOffsetY = 10;
-  box(ctx, 66, 202, 948, 552, 28, '#f8f9fb');
+  ctx.shadowColor = 'rgba(16,36,76,.16)';
+  ctx.shadowBlur = 35;
+  ctx.shadowOffsetY = 16;
+  box(ctx, 78, 208, 924, 558, 34, '#f7f3f2');
   ctx.restore();
-  fitProduct(ctx, img, 78, 214, 924, 528);
 
-  // Title
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#10244c';
-  ctx.font = '900 37px Arial';
-  wrap(ctx, title, 540, 835, 920, 45, 2);
-  ctx.textAlign = 'left';
+  // Moderate crop — the previous version over-zoomed and destroyed the product presentation.
+  const sw = img.naturalWidth || img.width;
+  const sh = img.naturalHeight || img.height;
+  const scale = Math.max(924 / sw, 558 / sh) * 1.02;
+  const dw = sw * scale;
+  const dh = sh * scale;
+  ctx.save();
+  path(ctx, 92, 222, 896, 530, 30);
+  ctx.clip();
+  ctx.drawImage(img, 92 + (896 - dw) / 2, 222 + (530 - dh) / 2, dw, dh);
+  ctx.restore();
 
-  // Price / offer strip
-  box(ctx, 54, 902, 972, 126, 28, '#fff', '#eadfe4');
+  // Small visual kicker, not another information box.
   ctx.fillStyle = '#ed0a4f';
-  ctx.font = '900 70px Arial';
-  ctx.fillText(`₹${price.toLocaleString('en-IN')}`, 82, 985);
+  ctx.font = '900 16px Arial';
+  ctx.fillText('TODAY’S PICK', 60, 830);
 
-  let x = 430;
+  // Product name — clean editorial typography.
+  ctx.fillStyle = '#10244c';
+  ctx.font = '900 40px Arial';
+  wrap(ctx, title, 60, 875, 900, 47, 2);
+
+  // Price hierarchy.
+  ctx.fillStyle = '#ed0a4f';
+  ctx.font = '900 78px Arial';
+  ctx.fillText(`₹${price.toLocaleString('en-IN')}`, 60, 1012);
+
+  let x = 350;
   if (mrp > price) {
-    ctx.fillStyle = '#7a8494';
+    ctx.fillStyle = '#7b8493';
     ctx.font = '700 22px Arial';
-    const mrpText = `MRP ₹${mrp.toLocaleString('en-IN')}`;
-    ctx.fillText(mrpText, x, 946);
-    const mw = ctx.measureText(mrpText).width;
-    ctx.strokeStyle = '#7a8494';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x, 938);
-    ctx.lineTo(x + mw, 938);
-    ctx.stroke();
-    x += mw + 22;
+    const t = `MRP ₹${mrp.toLocaleString('en-IN')}`;
+    ctx.fillText(t, x, 1000);
+    const tw = ctx.measureText(t).width;
+    ctx.strokeStyle = '#7b8493'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, 993); ctx.lineTo(x + tw, 993); ctx.stroke();
+    x += tw + 24;
   }
   if (off) {
-    const ow = Math.max(150, ctx.measureText(off).width + 44);
-    box(ctx, x, 918, ow, 50, 18, '#ffe7ef');
+    box(ctx, x, 962, 150, 52, 26, '#ffe0eb');
     ctx.fillStyle = '#ed0a4f';
-    ctx.font = '900 21px Arial';
-    ctx.fillText(off, x + 22, 951);
-    x += ow + 18;
+    ctx.font = '900 20px Arial';
+    ctx.fillText(off, x + 20, 996);
+    x += 170;
   }
-  box(ctx, Math.min(x, 755), 918, 236, 50, 18, '#10244c');
+  box(ctx, x, 962, 210, 52, 26, '#10244c');
   ctx.fillStyle = '#fff';
   ctx.font = '900 17px Arial';
-  ctx.fillText('CASH ON DELIVERY', Math.min(x, 755) + 20, 951);
+  ctx.fillText('CASH ON DELIVERY', x + 18, 996);
 
-  // Local delivery + CTA
-  ctx.fillStyle = '#7a8494';
-  ctx.font = '800 15px Arial';
-  ctx.fillText('LOCAL DELIVERY', 62, 1073);
+  // Local promise + CTA, kept visually simple.
   ctx.fillStyle = '#10244c';
-  ctx.font = '800 19px Arial';
-  ctx.fillText(AREAS, 62, 1103);
+  ctx.font = '800 17px Arial';
+  ctx.fillText('Karamadai • Teacher Colony • EB Colony • Gandhinagar', 60, 1068);
 
-  box(ctx, 54, 1132, 972, 86, 26, '#ed0a4f');
+  box(ctx, 60, 1094, 960, 92, 46, '#ed0a4f');
   ctx.fillStyle = '#fff';
-  ctx.font = '900 36px Arial';
-  ctx.fillText('ORDER NOW', 86, 1187);
+  ctx.font = '900 38px Arial';
+  ctx.fillText('SHOP NOW  →', 94, 1152);
   ctx.fillStyle = '#ffd21f';
   ctx.textAlign = 'right';
-  ctx.font = '900 26px Arial';
-  ctx.fillText(WEBSITE, 994, 1187);
+  ctx.font = '900 25px Arial';
+  ctx.fillText(WEBSITE, 986, 1152);
   ctx.textAlign = 'left';
 
-  // Small business footer — intentionally quieter than the product and CTA.
+  // Quiet legal/business footer.
   ctx.fillStyle = '#10244c';
-  ctx.fillRect(0, 1250, W, 100);
+  ctx.fillRect(0, 1232, W, 118);
   ctx.fillStyle = '#fff';
-  ctx.font = '800 15px Arial';
-  ctx.fillText('SPOTC TECHNOLOGIES • KARAMADAI', 48, 1278);
-  ctx.font = '600 11px Arial';
-  wrap(ctx, ADDRESS, 48, 1301, 710, 15, 2);
-  ctx.textAlign = 'right';
   ctx.font = '800 14px Arial';
-  ctx.fillText(`WhatsApp ${promoter.whatsapp || PHONE}`, 1028, 1278);
-  ctx.font = '600 11px Arial';
-  ctx.fillText('Tap the product link to shop', 1028, 1301);
+  ctx.fillText('SPOTC TECHNOLOGIES • KARAMADAI', 52, 1262);
+  ctx.font = '600 10px Arial';
+  wrap(ctx, ADDRESS, 52, 1285, 760, 14, 2);
+  ctx.textAlign = 'right';
+  ctx.font = '800 13px Arial';
+  ctx.fillText(`WhatsApp ${promoter.whatsapp || PHONE}`, 1028, 1262);
+  ctx.font = '600 10px Arial';
+  ctx.fillText('Local delivery • Tap the product link', 1028, 1285);
   ctx.textAlign = 'left';
 
   return {
