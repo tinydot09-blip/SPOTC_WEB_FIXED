@@ -43,6 +43,8 @@ type DeliveryBoyInfo = {
   name: string;
   phone: string;
   vehicleNumber: string;
+  authEmail: string;
+  loginReady: boolean;
   isActive: boolean;
 };
 
@@ -973,6 +975,11 @@ export default function AdminOrdersPage() {
               name: text(data.name) || 'Delivery Boy',
               phone: text(data.phone),
               vehicleNumber: text(data.vehicle_number),
+              authEmail: text(data.auth_email),
+              loginReady: Boolean(
+                text(data.auth_email) &&
+                text(data.uid || item.id) === item.id,
+              ),
               isActive: data.is_active !== false,
             };
           })
@@ -2359,6 +2366,13 @@ if (!response.ok) {
       return;
     }
 
+    if (!selectedDeliveryBoy.loginReady) {
+      setMessage(
+        `Cannot assign ${selectedDeliveryBoy.name}: delivery login is not ready. Create/recreate this delivery boy from Admin → Delivery with a 4–6 digit PIN, then assign the order.`,
+      );
+      return;
+    }
+
     const status = normalizeStatus(
       row.data.order_status,
     );
@@ -2439,6 +2453,22 @@ if (!response.ok) {
           ) {
             throw new Error(
               'The selected account is not a delivery boy.',
+            );
+          }
+
+          // A rider must have the Firebase login created by the
+          // Admin → Delivery page before an order can be assigned.
+          // The PIN itself is never stored in Firestore.
+          const liveAuthEmail = text(
+            liveRider.auth_email,
+          );
+          const liveUid = text(
+            liveRider.uid || selectedDeliveryBoy.id,
+          );
+
+          if (!liveAuthEmail || liveUid !== selectedDeliveryBoy.id) {
+            throw new Error(
+              'This delivery boy does not have a ready login account. Create/recreate the delivery boy in Admin → Delivery with a 4–6 digit PIN, then assign the order.',
             );
           }
 
@@ -3985,10 +4015,35 @@ if (!response.ok) {
                               {deliveryBoy.phone
                                 ? ` • ${deliveryBoy.phone}`
                                 : ''}
+                              {deliveryBoy.loginReady
+                                ? ' • Login ready'
+                                : ' • Login not ready'}
                             </option>
                           ),
                         )}
                       </select>
+
+                      <span
+                        style={{
+                          alignSelf: 'center',
+                          color: deliveryBoys.some(
+                            (deliveryBoy) => !deliveryBoy.loginReady,
+                          )
+                            ? '#b45309'
+                            : '#166534',
+                          fontSize: 12,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {deliveryBoys.length === 0
+                          ? 'No active delivery boys'
+                          : deliveryBoys.every(
+                                (deliveryBoy) =>
+                                  deliveryBoy.loginReady,
+                              )
+                            ? 'All active delivery boys have login ready'
+                            : 'Some delivery boys need Admin → Delivery login setup'}
+                      </span>
 
                       <button
                         type="button"
