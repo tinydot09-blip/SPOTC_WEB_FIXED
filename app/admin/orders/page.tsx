@@ -2335,6 +2335,8 @@ if (!response.ok) {
   ) {
     if (!db || busyId) return;
 
+    // Always use the rider explicitly selected in the dropdown.
+    // If nothing has been selected yet, keep the existing rider.
     const selectedId =
       selectedDeliveryBoyByOrder[row.id] ||
       text(row.data.delivery_boy_id);
@@ -2346,11 +2348,11 @@ if (!response.ok) {
       return;
     }
 
-    const deliveryBoy = deliveryBoys.find(
+    const selectedDeliveryBoy = deliveryBoys.find(
       (item) => item.id === selectedId,
     );
 
-    if (!deliveryBoy) {
+    if (!selectedDeliveryBoy) {
       setMessage(
         'The selected delivery boy is not active. Choose another delivery boy.',
       );
@@ -2374,27 +2376,144 @@ if (!response.ok) {
     setBusyId(row.id);
     setMessage('');
 
+    // Keep the imported nullable Firebase db narrowed for the
+    // complete async transaction.
+    const firestore = db;
+
     try {
-      await updateDoc(
-        doc(db, 'Orders', row.id),
-        {
-          delivery_boy_id:
-            deliveryBoy.id,
-          delivery_boy_name:
-            deliveryBoy.name,
-          delivery_boy_phone:
-            deliveryBoy.phone,
-          delivery_boy_vehicle:
-            deliveryBoy.vehicleNumber,
-          delivery_assigned_at:
-            serverTimestamp(),
-          delivery_assignment_status:
-            'assigned',
-          updated_at:
-            serverTimestamp(),
+      const orderRef = doc(
+        firestore,
+        'Orders',
+        row.id,
+      );
+
+      const deliveryBoyRef = doc(
+        firestore,
+        'DeliveryBoys',
+        selectedDeliveryBoy.id,
+      );
+
+      let assignedName = selectedDeliveryBoy.name;
+      let assignedPhone = selectedDeliveryBoy.phone;
+      let assignedVehicle =
+        selectedDeliveryBoy.vehicleNumber;
+
+      await runTransaction(
+        firestore,
+        async (transaction) => {
+          // Read both documents inside the transaction so an old
+          // browser state cannot assign an inactive/deleted rider.
+          const orderSnap =
+            await transaction.get(orderRef);
+
+          if (!orderSnap.exists()) {
+            throw new Error(
+              'Order no longer exists. Refresh the Orders page.',
+            );
+          }
+
+          const riderSnap =
+            await transaction.get(deliveryBoyRef);
+
+          if (!riderSnap.exists()) {
+            throw new Error(
+              'The selected delivery boy no longer exists. Refresh the Orders page.',
+            );
+          }
+
+          const liveOrder =
+            orderSnap.data();
+
+          const liveRider =
+            riderSnap.data();
+
+          if (liveRider.is_active === false) {
+            throw new Error(
+              'The selected delivery boy is inactive. Refresh the Orders page and choose an active rider.',
+            );
+          }
+
+          if (
+            text(liveRider.role) &&
+            text(liveRider.role) !== 'delivery_boy'
+          ) {
+            throw new Error(
+              'The selected account is not a delivery boy.',
+            );
+          }
+
+          const liveStatus =
+            normalizeStatus(
+              liveOrder.order_status,
+            );
+
+          if (
+            liveStatus !== 'packed' &&
+            liveStatus !== 'out_for_delivery'
+          ) {
+            throw new Error(
+              `Order ${orderNumber(row)} is now ${liveStatus}. A delivery boy can only be assigned to a packed or out-for-delivery order.`,
+            );
+          }
+
+          assignedName =
+            text(liveRider.name) ||
+            selectedDeliveryBoy.name ||
+            'Delivery Boy';
+
+          assignedPhone =
+            text(liveRider.phone) ||
+            selectedDeliveryBoy.phone;
+
+          assignedVehicle =
+            text(liveRider.vehicle_number) ||
+            selectedDeliveryBoy.vehicleNumber;
+
+          /*
+           * delivery_boy_id is the authoritative field used by the
+           * Delivery app to query the rider's orders.
+           *
+           * The assigned_* fields are also written for compatibility
+           * with older Admin/order code.
+           *
+           * IMPORTANT:
+           * Do not change order_status here. A packed order must
+           * remain packed until the delivery boy takes it for delivery.
+           */
+          transaction.update(
+            orderRef,
+            {
+              delivery_boy_id:
+                selectedDeliveryBoy.id,
+              delivery_boy_name:
+                assignedName,
+              delivery_boy_phone:
+                assignedPhone,
+              delivery_boy_vehicle:
+                assignedVehicle,
+
+              assigned_delivery_boy_id:
+                selectedDeliveryBoy.id,
+              assigned_delivery_boy_name:
+                assignedName,
+              assigned_delivery_boy_phone:
+                assignedPhone,
+              assigned_delivery_boy_vehicle:
+                assignedVehicle,
+
+              delivery_assigned_at:
+                serverTimestamp(),
+              delivery_assignment_status:
+                'assigned',
+              updated_at:
+                serverTimestamp(),
+            },
+          );
         },
       );
 
+      // Clear only the temporary dropdown selection after the
+      // Firestore transaction has definitely succeeded.
       setSelectedDeliveryBoyByOrder(
         (current) => {
           const next = {
@@ -2407,16 +2526,17 @@ if (!response.ok) {
         },
       );
 
+      // Refresh the exact data shown on the Admin Orders page.
       await loadData(false);
 
       setMessage(
         `Order ${orderNumber(
           row,
-        )} assigned to ${deliveryBoy.name}.`,
+        )} assigned to ${assignedName}.`,
       );
     } catch (error) {
       console.error(
-        'Assign delivery boy failed:',
+        'Assign/reassign delivery boy failed:',
         error,
       );
 
